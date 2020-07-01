@@ -1,6 +1,6 @@
 """ Progress notyfier. """
 import math
-from time import time
+from time import time, gmtime, strftime
 
 from tqdm import tqdm
 from tqdm.notebook import tqdm as tqdm_notebook
@@ -53,7 +53,9 @@ class Notifier:
             - `n` stands for notebook version of tqdm bar.
             - `a` stands for automatic choise of appropriate tqdm bar.
             - `j` stands for graph drawing as a progress bar.
-            - otherwise, standart tqdm is used.
+            - `t` or True for standard text tqdm is used.
+            - otherwise, no progress bar will be displayed. Note that iterations,
+            as well as everything else (monitors, variables, logs) are still tracked.
     total, batch_size, n_iters, n_epochs, length : int
         Parameters to calculate total amount of iterations.
     drop_last : bool
@@ -80,7 +82,7 @@ class Notifier:
     """
     def __init__(self, bar=None, *args,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
-                 variables=None, monitors=None, monitor_kwargs=None,
+                 variables=None, monitors=None, monitor_kwargs=None, file=None,
                  plot=False, window=None, layout='h', figsize=None, **kwargs):
         data_generators = []
 
@@ -100,6 +102,15 @@ class Notifier:
         else:
             self.has_monitors = False
 
+        # Prepare file log
+        self.file = file
+        if self.file:
+            with open(self.file, 'w') as f:
+                timestamp = f'{strftime("%Y-%m-%d  %H:%M:%S", gmtime())}'
+                msg = 'Notifier started'
+                print(f'{timestamp}     {msg}', file=f)
+
+
         # Prepare containers for data
         names = []
         for generator in data_generators:
@@ -112,6 +123,7 @@ class Notifier:
 
         self.data = {name: [] for name in names}
         self.data_generators = dict(zip(names, data_generators))
+        self.timestamps = []
         self.start_monitors()
 
         # Create bar; set the number of total iterations, if possible
@@ -165,6 +177,7 @@ class Notifier:
         else:
             self.bar = self.bar_func(total=total)
 
+
     def __getattr__(self, key):
         """ Redirect everything to the underlying bar. """
         if not key in self.__dict__ and hasattr(self.bar, key):
@@ -195,11 +208,16 @@ class Notifier:
         if self.plot:
             self.update_plots(True)
 
+        if self.file:
+            self.update_file()
+
         if self.has_monitors and self.bar.n < self.bar.total:
             self.start_monitors()
 
     def update_data(self, pipeline=None, batch=None):
         """ Get data from monitor or pipeline. """
+        self.timestamps.append(gmtime())
+
         for name, generator in self.data_generators.items():
 
             if isinstance(generator, ResourceMonitor):
@@ -226,7 +244,7 @@ class Notifier:
         description = '>>>'.join(description)
         self.bar.set_description(description)
 
-    def update_plots(self, add_suptitle=False):
+    def update_plots(self, add_suptitle=False, savepath=None):
         """ Draw plots anew. """
         display.clear_output(wait=True)
         _, ax = plt.subplots(*self.layout, figsize=self.figsize)
@@ -248,10 +266,36 @@ class Notifier:
         if add_suptitle:
             title = self.format_meter(self.n, self.total, time()-self.start_t, ncols=80)
             plt.suptitle(title, y=0.99, fontsize=14)
+
+        if savepath:
+            plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
         plt.show()
 
     # Convenient alias for working inspect instance after pipeline run
     visualize = update_plots
+
+    def update_file(self):
+        with open(self.file, 'a+') as f:
+            timestamp = strftime("%Y-%m-%d  %H:%M:%S", self.timestamps[-1])
+            msg = f'Iteration {self.bar.n:5};    {self.bar.desc[:-1]}'
+            print(f'{timestamp}     {msg}', file=f)
+
+    def to_file(self, file):
+        with open(file, 'w') as f:
+            for i, timestamp in enumerate(self.timestamps):
+                timestamp_ = strftime("%Y-%m-%d  %H:%M:%S", timestamp)
+
+                description = []
+                for name, generator in self.data_generators.items():
+                    if not isinstance(generator, ResourceMonitor):
+                        value = self.data[name][i]
+                        desc = f'{name}={value:6.6}' if isinstance(value, float) else f'{name}={value:6}'
+                        description.append(desc)
+                description = '   '.join(description)
+
+                msg = f'Iteration {i:5};    {description}'
+                print(f'{timestamp_}     {msg}', file=f)
+
 
 
     def __call__(self, iterable):

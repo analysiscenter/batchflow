@@ -173,11 +173,11 @@ class Baseset:
                 self.index.reset('iter')
 
     def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
-                  bar=False, *args, **kwargs):
+                  notifier=False, *args, **kwargs):
         """ Generate batches """
         iter_params = kwargs.pop('iter_params', None)
         for ix_batch in self.index.gen_batch(batch_size, shuffle, n_iters, n_epochs, drop_last,
-                                             bar, iter_params):
+                                             notifier, iter_params):
             batch = self.create_batch(ix_batch, *args, **kwargs)
             yield batch
 

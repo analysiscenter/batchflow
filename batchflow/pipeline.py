@@ -1425,9 +1425,10 @@ class Pipeline:
 
             See :meth:`DatasetIndex.gen_batch` for details.
 
-        notifier : bool, 'n' or callable
-            Whether to show a progress bar.
-            If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
+        notifier : str, dict, or instance of `.Notifier`
+            Configuration of displayed progress bar, if any.
+            If str or dict, then parameters of `.Notifier` initialization.
+            For more details about notifying capabilities, refer to `.Notifier` documentation.
 
         prefetch : int
             a number of batches to process in advance (default=0)
@@ -1496,6 +1497,7 @@ class Pipeline:
         drop_last = kwargs.get('drop_last')
 
         if not isinstance(notifier, Notifier):
+            notifier = {'bar': notifier} if isinstance(notifier, str) else notifier
             notifier = Notifier(**notifier if isinstance(notifier, dict) else notifier,
                                 total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                 drop_last=drop_last, length=len(self._dataset.index))

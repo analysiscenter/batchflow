@@ -458,9 +458,10 @@ class DatasetIndex(Baseset):
             However, there is nothing to worry about if you don't iterate over batch items explicitly
             (i.e. `for item in batch`) or implicitly (through `batch[ix]`).
 
-        notifier : bool, 'n' or callable
-            Whether to show a progress bar.
-            If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
+        notifier : str, dict, or instance of `.Notifier`
+            Configuration of displayed progress bar, if any.
+            If str or dict, then parameters of `.Notifier` initialization.
+            For more details about notifying capabilities, refer to `.Notifier` documentation.
 
 
         Yields
@@ -494,6 +495,7 @@ class DatasetIndex(Baseset):
 
         if notifier:
             if not isinstance(notifier, Notifier):
+                notifier = {'bar': notifier} if isinstance(notifier, str) else notifier
                 notifier = Notifier(**notifier if isinstance(notifier, dict) else notifier,
                                     total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                     drop_last=drop_last, length=len(self._dataset.index))

@@ -34,7 +34,7 @@ class ResourceMonitor:
     ticks : list
         Times of function calls. Preserved between multiple runs.
     """
-    def __init__(self, function=None, frequency=0.5, **kwargs):
+    def __init__(self, function=None, frequency=0.1, **kwargs):
         self.function = function or self.get_usage
         self.frequency = frequency
         self.kwargs = kwargs
