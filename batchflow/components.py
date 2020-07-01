@@ -178,6 +178,11 @@ class BaseComponents:
         else:
             super().__setattr__(name, value)
 
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
 
 def _get_crop(source, indices):
     return source[indices] if source is not None else None

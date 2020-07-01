@@ -658,15 +658,14 @@ class FilesIndex(DatasetIndex):
         if len(paths) == 0:
             raise ValueError("`path` cannot be empty. Got '{}'.".format(path))
 
-        _all_index = None
+        _all_index = []
         _all_paths = dict()
         for one_path in paths:
             _index, _paths = self.build_from_one_path(one_path, dirs, no_ext)
-            if _all_index is None:
-                _all_index = _index
-            else:
-                _all_index = np.concatenate((_all_index, _index))
+            _all_index.append(_index)
             _all_paths.update(_paths)
+
+        _all_index = np.ravel(_all_index)
 
         if sort:
             _all_index.sort()

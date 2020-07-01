@@ -26,17 +26,17 @@ except ImportError:
     import _fake as dd
 
 from .dsindex import DatasetIndex, FilesIndex
-from .decorators import action, inbatch_parallel, any_action_failed
+# renaming apply_parallel decorator is needed as Batch.apply_parallel method is also in the same namespace
+# and can serve as a decorator too
+from .decorators import action, inbatch_parallel, any_action_failed, apply_parallel as apply_parallel_
 from .components import create_item_class, BaseComponents
+from .named_expr import P, R
 
 
 class MethodsTransformingMeta(type):
     """ A metaclass to transform all class methods in the way described below:
 
-        1. Wrap method with either `apply_transform` or `apply_transform_all`
-           depending on the value of `all` argument (from `transform_kwargs`),
-           which is set via decorator @apply_transform. Then add this
-           wrapped method to a class namespace by its original name.
+        1. Methods decorated with `@apply_parallel` are wrapped with `apply_parallel` method.
 
         2. Add the original version of the method (i.e. unwrapped) to a class
            namespace using name with underscores: `'_{}_'.format(name)`. This
@@ -46,12 +46,12 @@ class MethodsTransformingMeta(type):
     def __new__(cls, name, bases, namespace):
         namespace_ = namespace.copy()
         for object_name, object_ in namespace.items():
-            transform_kwargs = getattr(object_, 'transform_kwargs', None)
+            transform_kwargs = getattr(object_, 'apply_kwargs', None)
             if transform_kwargs is not None:
-                namespace_[object_name] = cls.apply_transform(object_, **transform_kwargs)
+                namespace_[object_name] = cls.use_apply_parallel(object_, **transform_kwargs)
 
                 disclaimer = "This is an untransformed version of `{}`.\n\n".format(object_.__qualname__)
-                object_.__doc__ = disclaimer + object_.__doc__
+                object_.__doc__ = disclaimer + (object_.__doc__ or '')
                 object_.__name__ = '_' + object_name + '_'
                 object_.__qualname__ = '.'.join(object_.__qualname__.split('.')[:-1] + [object_.__name__])
                 namespace_[object_.__name__] = object_
@@ -59,39 +59,33 @@ class MethodsTransformingMeta(type):
         return super().__new__(cls, name, bases, namespace_)
 
     @classmethod
-    def apply_transform(cls, method, **transform_kwargs):
+    def use_apply_parallel(cls, method, **apply_kwargs):
         """ Wrap passed `method` in accordance with `all` arg value """
         @functools.wraps(method)
-        def apply_transform_wrapper(self, *args, **kwargs):
-            transform = self.apply_transform
+        def apply_parallel_wrapper(self, *args, **kwargs):
+            transform = self.apply_parallel
             method_ = method.__get__(self, type(self)) # bound method to class
-            transform_kwargs_full = {**self.transform_defaults, **transform_kwargs}
-            all = transform_kwargs_full.pop('all')
-            if all:
-                transform = self.apply_transform_all
-                _ = [transform_kwargs_full.pop(keyname) for keyname in ['target', 'init', 'post']]
-            kwargs_full = {**transform_kwargs_full, **kwargs}
+            kwargs_full = {**self.apply_defaults, **apply_kwargs, **kwargs}
             return transform(method_, *args, **kwargs_full)
-        return action(apply_transform_wrapper)
+        return action(apply_parallel_wrapper)
 
 
 class Batch(metaclass=MethodsTransformingMeta):
     """ The core Batch class
 
-    Note, that if any class method is wrapped with `@apply_transform` decorator
-    than for inner calls (i.e. from other class methods) should be used version
+    Note, that if any method is wrapped with `@apply_parallel` decorator
+    than for inner calls (i.e. from other methods) should be used version
     of desired method with underscores. (For example, if there is a decorated
     `method` than you need to call `_method_` from inside of `other_method`).
     Same is applicable for all child classes of :class:`batch.Batch`.
     """
     components = None
-    # Class-specific defaults for :meth:`.Batch.apply_transform`
-    transform_defaults = dict(target='threads',
-                              init='indices',
-                              post='_assemble',
-                              src=None,
-                              dst=None,
-                              all=False)
+    # Class-specific defaults for :meth:`.Batch.apply_parallel`
+    apply_defaults = dict(target='threads',
+                          post='_assemble',
+                          src=None,
+                          dst=None,
+                          )
 
     def __init__(self, index, dataset=None, pipeline=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
@@ -210,13 +204,14 @@ class Batch(metaclass=MethodsTransformingMeta):
         batch_size : int or None
             if `None`, just merge all batches into one batch (the rest will be `None`),
             if `int`, then make one batch of `batch_size` and a batch with the rest of data.
+
         components : str, tuple or None
             if `None`, all components from initial batches will be created,
-            if `str` or `tuple`, then create thay components in new batches.
+            if `str` or `tuple`, then create these components in new batches.
+
         batch_class : Batch or None
             if `None`, created batches will be of the same class as initial batch,
             if `Batch`, created batches will be of that class.
-
 
         Returns
         -------
@@ -239,9 +234,7 @@ class Batch(metaclass=MethodsTransformingMeta):
                 _ = batch.data
             return batch
 
-        if batch_size is None:
-            break_point = len(batches)
-        else:
+        if batch_size is not None:
             break_point = len(batches) - 1
             last_batch_len = 0
             cur_size = 0
@@ -254,12 +247,14 @@ class Batch(metaclass=MethodsTransformingMeta):
 
                 cur_size += cur_batch_len
                 last_batch_len = cur_batch_len
+
         if components is None:
             components = batches[0].components or (None,)
         elif isinstance(components, str):
             components = (components, )
         new_data = list(None for _ in components)
         rest_data = list(None for _ in components)
+
         for i, comp in enumerate(components):
             none_components_in_batches = [b.get(component=comp) is None for b in batches]
             if np.all(none_components_in_batches):
@@ -268,7 +263,7 @@ class Batch(metaclass=MethodsTransformingMeta):
                 raise ValueError('Component {} is None in some batches'.format(comp))
 
             if batch_size is None:
-                new_comp = [b.get(component=comp) for b in batches[:break_point]]
+                new_comp = [b.get(component=comp) for b in batches]
             else:
                 last_batch = batches[break_point]
                 last_batch_last_index = last_batch.get_pos(None, comp, last_batch.indices[last_batch_len - 1])
@@ -424,66 +419,6 @@ class Batch(metaclass=MethodsTransformingMeta):
         """1-D ndarray: ``NumPy`` array with ``None`` values."""
         return np.array([None] * len(self.index))
 
-    def get_pos(self, data, component, index):
-        """ Return a position in data for a given index
-
-        Parameters
-        ----------
-        data : some array or tuple of arrays
-            if `None`, should return a position in :attr:`self.data <.Batch.data>`
-
-        components : None, int or str
-            - None - data has no components (e.g. just an array or pandas.DataFrame)
-            - int - a position of a data component, when components names are not defined
-                (e.g. data is a tuple)
-            - str - a name of a data component
-
-        index : any
-            an index id
-
-        Returns
-        -------
-        int
-            a position in a batch data where an item with a given index is stored
-
-        Notes
-        -----
-        It is used to read / write data from / to a given component::
-
-            batch_data = data.component[pos]
-            data.component[pos] = new_data
-
-        if `self.data` holds a numpy array, then get_pos(None, None, index) should
-        just return `self.index.get_pos(index)`
-
-        if `self.data.images` contains BATCH_SIZE images as a numpy array,
-        then `get_pos(None, 'images', index)` should return `self.index.get_pos(index)`
-
-        if `self.data.labels` is a dict {index: label}, then `get_pos(None, 'labels', index)` should return index.
-
-        if `data` is not `None`, then you need to know in advance how to get a position for a given index.
-
-        For instance, `data` is a large numpy array, and a batch is a subset of this array and
-        `batch.index` holds row numbers from a large arrays.
-        Thus, `get_pos(data, None, index)` should just return index.
-
-        A more complicated example of data:
-
-        - batch represent small crops of large images
-        - `self.data.source` holds a few large images (e.g just 5 items)
-        - `self.data.coords` holds coordinates for crops (e.g. 100 items)
-        - `self.data.image_no` holds an array of image numbers for each crop (so it also contains 100 items)
-
-        then `get_pos(None, 'source', index)` should return `self.data.image_no[self.index.get_pos(index)]`.
-        Whilst, `get_pos(data, 'source', index)` should return `data.image_no[index]`.
-        """
-        _ = component
-        if data is None: # or data is self._data:
-            pos = self.index.get_pos(index)
-        else:
-            pos = index
-        return pos
-
     def get(self, item=None, component=None):
         """ Return an item from the batch or the component """
         if item is None:
@@ -533,19 +468,8 @@ class Batch(metaclass=MethodsTransformingMeta):
         return self
 
     @action
-    def apply_transform(self, func, *args, **kwargs):
+    def apply_parallel(self, func, *args, p=None, **kwargs):
         """ Apply a function to each item in the batch.
-
-        Notes
-        -----
-        Redefine :attr:`self.transform_defaults <.Batch.transform_defaults>` in
-        child classes. This is proposed solely for the purposes of brevity — in
-        order to avoid repeated heavily loaded class methods decoration, e.g.
-        `@apply_transform(init='indices', target='for', src='images')` which in
-        most cases is actually equivalent to simple `@apply_transform` assuming
-        that the defaults are redefined for the class whose methods are being
-        transformed. Note, that if no defaults redefined those from the nearest
-        parent class will be used in :class:`batch.MethodsTransformingMeta`.
 
         Parameters
         ----------
@@ -555,9 +479,6 @@ class Batch(metaclass=MethodsTransformingMeta):
         target : str
             See :func:`~batchflow.inbatch_parallel` for details.
 
-        init : str, callable or iterable
-            See :func:`~batchflow.inbatch_parallel` for details.
-
         post : str or callable
             See :func:`~batchflow.inbatch_parallel` for details.
 
@@ -565,185 +486,104 @@ class Batch(metaclass=MethodsTransformingMeta):
             the source to get data from, can be:
             - None
             - str - a component name, e.g. 'images' or 'masks'
-            - sequence - a numpy-array, list, etc
-            - tuple of str - get data from several components
-            - list of str, sequences or tuples - apply same transform to each item in list
+            - tuple of str - several component names
+            - sequence - data as a numpy-array, data frame, etc
 
         dst : str or array
             the destination to put the result in, can be:
             - None - in this case dst is set to be same as src
             - str - a component name, e.g. 'images' or 'masks'
-            - tuple of list of str, e.g. ['images', 'masks']
-            if src is a list, dst should be either list or None.
+            - tuple or list of str, e.g. ['images', 'masks']
 
         p : float or None
-            probability of applying transform to an element in the batch
-
-            if not None, indices of relevant batch elements will be passed ``func``
-            as a named arg ``indices``.
+            probability of applying func to an element in the batch
 
         args, kwargs
             other parameters passed to ``func``
 
         Notes
         -----
-        apply_transform does the following (but in parallel)::
+        apply_parallel does the following (but in parallel)::
 
             for item in range(len(batch)):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
 
-        If `src` is a list with two or more elements, `dst` should be list or
-        tuple of the same lenght.
+        `apply_parallel(func, src=['images', 'masks'])` is equal to
+        `apply_parallel(func, src=['images', 'masks'], dst=['images', 'masks'])`,
+        which in turn equals to two subsequent calls::
+
+            images = func(images)
+            masks = func(masks)
+
+        Whereas `apply_parallel(func, src=('images', 'masks'))` (i.e. when `src` takes a tuple of component names,
+        not the list as in the previous example) passes both components data into `func` simultaneously::
+
+            images, masks = func((images, masks))
 
         Examples
         --------
 
         ::
 
-            apply_transform(make_masks_fn, src='images', dst='masks')
-            apply_transform(apply_mask, src=('images', 'masks'), dst='images')
-            FIXME apply_transform(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
-            apply_transform(MyBatch.some_static_method, p=.5)
-            apply_transform(B.some_method, p=.5)
+            apply_parallel(make_masks_fn, src='images', dst='masks')
+            apply_parallel(apply_mask, src=('images', 'masks'), dst='images_with_masks')
+            apply_parallel(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
+            apply_parallel(MyBatch.some_static_method, p=.5)
+            apply_parallel(B.some_method, src='features', p=.5)
         """
-        kwargs_full = {**self.transform_defaults, **kwargs}
-        target, init, post, _ = [kwargs_full.pop(keyname) for keyname in ['target', 'init', 'post', 'all']]
+        kwargs = {**self.apply_defaults, **kwargs}
 
-        parallel = inbatch_parallel(init=init, post=post, target=target)
-        transform = parallel(type(self)._apply_transform)
-        return transform(self, func, *args, **kwargs_full)
+        src, dst = [kwargs.pop(name, None) for name in ('src', 'dst')]
 
-    def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, **kwargs):
+        if isinstance(src, list) and (dst is None or isinstance(dst, list) and len(src) == len(dst)):
+            if dst is None:
+                dst = src
+            if isinstance(p, float):
+                p = P(np.random.binomial(1, p, size=len(self)))
+
+            for ones, oned in zip(src, dst):
+                kwargs['src'] = ones
+                kwargs['dst'] = oned
+                self.apply_parallel(func, *args, p=p, **kwargs)
+            return self
+
+        if isinstance(src, str):
+            init = self.get(component=src)
+        elif isinstance(src, (tuple, list)):
+            init = list((x,) for x in zip(*[self.get(component=s) for s in src]))
+        else:
+            init = src
+
+        if isinstance(p, float):
+            p = P(R('binomial', 1, p))
+
+        post, target = [kwargs.pop(name, None) for name in ('post', 'target')]
+
+        parallel = inbatch_parallel(init=init, post=post, target=target, src=src, dst=dst)
+        # unbind the method to pass self explicitly
+        transform = parallel(type(self)._apply_once)
+        return transform(self, *args, func=func, p=p, **kwargs)
+
+    def _apply_once(self, item, *args, func=None, p=None, **kwargs):
         """ Apply a function to each item in the batch.
 
         Parameters
         ----------
+        item
+            an item of component data (in accordance with init function)
+
         func : callable
             a function to apply to each item from the source
 
-        src : str, sequence, list of str
-            the source to get data from, can be:
-            - None
-            - str - a component name, e.g. 'images' or 'masks'
-            - sequence - a numpy-array, list, etc
-            - tuple of str - get data from several components
-
-        dst : str or array
-            the destination to put the result in, can be:
-            - None
-            - str - a component name, e.g. 'images' or 'masks'
-            - array-like - a numpy-array, list, etc
-
-        p : float or None
-            probability of applying transform to an element in the batch
-
-            if not None, indices of relevant batch elements will be passed ``func``
-            as a named arg ``indices``.
+        p : None or int
+            whether to apply func to an element in the batch (yes if None or 1)
 
         args, kwargs
             other parameters passed to ``func``
         """
-        dst = src if dst is None else dst
-
-        if not (isinstance(dst, str) or
-                (isinstance(dst, (list, tuple)) and np.all([isinstance(component, str) for component in dst]))):
-            raise TypeError("dst should be str or tuple or list of str")
-
-        if src is None:
-            _args = args
-        else:
-            if isinstance(src, str):
-                pos = self.get_pos(None, src, ix)
-                src_attr = (getattr(self, src)[pos],)
-            elif isinstance(src, (tuple, list)) and np.all([isinstance(component, str) for component in src]):
-                src_attr = [getattr(self, component)[self.get_pos(None, component, ix)] for component in src]
-            else:
-                pos = self.get_pos(None, dst, ix)
-                src_attr = (src[pos],)
-            _args = tuple([*src_attr, *args])
-
-        if p is None or np.random.binomial(1, p):
-            return func(*_args, **kwargs)
-
-        if len(src_attr) == 1:
-            return src_attr[0]
-        return src_attr
-
-    @action
-    def apply_transform_all(self, func, *args, src=None, dst=None, p=None, **kwargs):
-        """ Apply a function the whole batch at once
-
-        Parameters
-        ----------
-        func : callable
-            a function to apply to each item from the source
-
-        src : str or array
-            the source to get data from, can be:
-
-            - str - a component name, e.g. 'images' or 'masks'
-            - array-like - a numpy-array, list, etc
-
-        dst : str or array
-            the destination to put the result in, can be:
-
-            - None
-            - str - a component name, e.g. 'images' or 'masks'
-            - array-like - a numpy-array, list, etc
-
-        p : float or None
-            probability of applying transform to an element in the batch
-
-            if not None, indices of relevant batch elements will be passed ``func``
-            as a named arg ``indices``.
-
-        args, kwargs
-            other parameters passed to ``func``
-
-        Notes
-        -----
-        apply_transform_all does the following::
-
-            self.dst = func(self.src, *args, **kwargs)
-
-        When ``p`` is passed, random indices are chosen first and then passed to ``func``::
-
-            self.dst = func(self.src, *args, indices=random_indices, **kwargs)
-
-        Examples
-        --------
-
-        ::
-
-            apply_transform_all(make_masks_fn, src='images', dst='masks')
-            apply_transform_all(MyBatch.make_masks, src='images', dst='masks')
-            apply_transform_all(custom_crop, src='images', dst='augmented_images', p=.2)
-
-        """
-        if not isinstance(dst, str) and not isinstance(src, str):
-            raise TypeError("At least one of dst and src should be attribute names, not arrays")
-
-        if src is None:
-            _args = args
-        else:
-            if isinstance(src, str):
-                src_attr = getattr(self, src)
-            else:
-                src_attr = src
-            _args = tuple([src_attr, *args])
-
-        if p is not None:
-            indices = np.where(np.random.binomial(1, p, len(self)))[0]
-            kwargs['indices'] = indices
-        tr_res = func(*_args, **kwargs)
-
-        if dst is None:
-            pass
-        elif isinstance(dst, str):
-            setattr(self, dst, tr_res)
-        else:
-            dst[:] = tr_res
-        return self
+        if p is None or p == 1:
+            return func(item, *args, **kwargs)
+        return item
 
     def _get_file_name(self, ix, src):
         """ Get full path file name corresponding to the current index.
@@ -863,6 +703,7 @@ class Batch(metaclass=MethodsTransformingMeta):
             print(all_errors)
             traceback.print_tb(all_errors[0].__traceback__)
             raise RuntimeError("Could not assemble the batch")
+
         if dst is None:
             dst_default = kwargs.get('dst_default', 'src')
             if dst_default == 'src':
@@ -1089,3 +930,37 @@ class Batch(metaclass=MethodsTransformingMeta):
     def save(self, *args, **kwargs):
         """ Save batch data to a file (an alias for dump method)"""
         return self.dump(*args, **kwargs)
+
+    @apply_parallel_
+    def to_array(self, comp, dtype=np.float32, channels='last'):
+        """ Converts batch components to np.ndarray format
+
+        Parameters
+        ----------
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        dtype : str or np.dtype
+            Data type
+        channels : None, 'first' or 'last'
+            the dimension for channels axis
+        """
+        comp = np.array(comp)
+
+        if len(comp.shape) == 2:
+            # a special treatment for 2d arrays with images - add a new dimension for channels
+            if channels == 'first':
+                comp = comp[np.newaxis, :, :]
+            elif channels == 'last':
+                comp = comp[:, :, np.newaxis]
+        else:
+            # we assume that channels is 'last' by default
+            # so move channels from the last to the first axis if needed
+            if channels == 'first':
+                comp = np.moveaxis(comp, -1, 0)
+
+        if dtype is not None:
+            comp = comp.astype(dtype)
+
+        return comp

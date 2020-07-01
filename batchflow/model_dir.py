@@ -107,19 +107,28 @@ class ModelDirectory:
         with self.lock:
             self.models.update({name: model})
 
-    def init_model(self, mode, model_class, name=None, config=None):
+    def init_model(self, mode, name=None, model_class=None, *args, config=None):
         """ Initialize a static or dynamic model
 
         Parameters
         ----------
         mode : {'static', 'dynamic'}
-        model_class : class or named expression
-            a model class
         name : str
-            a name for the model. Default - a model class name.
+            (optional) a name for the model. Default - a model class name.
+        model_class : class or named expression
+            (optional) a model class (if not specified in the config).
         config : dict
-            model configurations parameters, where each key and value could be named expressions
+            (optional) model configurations parameters, where each key and value could be named expressions
         """
+        _ = args
+        # workaround for a previous arg order
+        if isinstance(name, (type, NamedExpression)):
+            name, model_class = model_class, name
+
+        model_class = model_class if model_class is not None else config.get('model_class')
+        if model_class is None:
+            raise ValueError('model_class should be specified in the model config')
+
         if mode == 'static':
             model = self.create_model(model_class, config)
         else:
@@ -139,11 +148,11 @@ class ModelDirectory:
         model = self.get_model_by_name(name)
         model.save(*args, **kwargs)
 
-    def load_model(self, mode, model_class, name=None, *args, build=None, **kwargs):
+    def load_model(self, mode, name=None, model_class=None, *args, build=None, **kwargs):
         """ Load a model """
         _ = args
         config = {'load': kwargs, 'build': build}
-        self.init_model(mode, model_class, name, config=config)
+        self.init_model(mode, name, model_class, config=config)
 
     def __add__(self, other):
         if not isinstance(other, ModelDirectory):
