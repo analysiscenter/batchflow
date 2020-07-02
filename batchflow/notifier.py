@@ -241,7 +241,7 @@ class Notifier:
                 desc = f'{name}={value:5.5}' if isinstance(value, float) else f'{name}={value:5}'
                 description.append(desc)
 
-        description = '>>>'.join(description)
+        description = '   '.join(description)
         self.bar.set_description(description)
 
     def update_plots(self, add_suptitle=False, savepath=None):
@@ -275,12 +275,14 @@ class Notifier:
     visualize = update_plots
 
     def update_file(self):
+        """ Update file on the fly. """
         with open(self.file, 'a+') as f:
             timestamp = strftime("%Y-%m-%d  %H:%M:%S", self.timestamps[-1])
             msg = f'Iteration {self.bar.n:5};    {self.bar.desc[:-1]}'
             print(f'{timestamp}     {msg}', file=f)
 
     def to_file(self, file):
+        """ Log all the iteration-wise info (timestamps, descriptions) into file."""
         with open(file, 'w') as f:
             for i, timestamp in enumerate(self.timestamps):
                 timestamp_ = strftime("%Y-%m-%d  %H:%M:%S", timestamp)
@@ -295,7 +297,6 @@ class Notifier:
 
                 msg = f'Iteration {i:5};    {description}'
                 print(f'{timestamp_}     {msg}', file=f)
-
 
 
     def __call__(self, iterable):
