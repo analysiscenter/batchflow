@@ -11,7 +11,7 @@ from IPython import display
 import matplotlib.pyplot as plt
 
 from .monitor import ResourceMonitor, MONITOR_ALIASES
-from .named_expr import NamedExpression, eval_expr
+from .named_expr import AlgebraicNamedExpression, NamedExpression, eval_expr
 
 
 class DummyBar:
@@ -105,11 +105,8 @@ class Notifier:
         # Prepare file log
         self.file = file
         if self.file:
-            with open(self.file, 'w') as f:
-                timestamp = f'{strftime("%Y-%m-%d  %H:%M:%S", gmtime())}'
-                msg = 'Notifier started'
-                print(f'{timestamp}     {msg}', file=f)
-
+            with open(self.file, 'w') as _:
+                pass
 
         # Prepare containers for data
         names = []
@@ -142,6 +139,14 @@ class Notifier:
             bar_func = tqdm
         else:
             bar_func = DummyBar
+
+        # Set default values for bars
+        if 'ncols' not in kwargs:
+            if bar_func == tqdm_notebook:
+                kwargs['ncols'] = min(700 + 100 * len(variables or []), 1000)
+            elif bar_func == tqdm:
+                kwargs['ncols'] = min(80 + 10 * len(variables or []), 120)
+
         self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
         self.update_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                           drop_last=drop_last, length=length)
@@ -178,20 +183,6 @@ class Notifier:
             self.bar = self.bar_func(total=total)
 
 
-    def __getattr__(self, key):
-        """ Redirect everything to the underlying bar. """
-        if not key in self.__dict__ and hasattr(self.bar, key):
-            return getattr(self.bar, key)
-        raise AttributeError(key)
-
-
-    def start_monitors(self):
-        """ Start collection of data for every resource monitor. """
-        for monitor in self.data_generators.values():
-            if isinstance(monitor, ResourceMonitor):
-                monitor.start()
-
-
     def update(self, n=1, pipeline=None, batch=None):
         """ Update Notifier with new info:
             - increment underlying progress bar tracker
@@ -200,10 +191,11 @@ class Notifier:
             - draw plots anew
             - re-start monitors
         """
-        self.bar.update(n)
+        self.timestamps.append(gmtime())
 
-        self.update_data(pipeline=pipeline, batch=batch)
-        self.update_description()
+        if self.data_generators:
+            self.update_data(pipeline=pipeline, batch=batch)
+            self.update_description()
 
         if self.plot:
             self.update_plots(True)
@@ -214,12 +206,11 @@ class Notifier:
         if self.has_monitors and self.bar.n < self.bar.total:
             self.start_monitors()
 
+        self.bar.update(n)
+
     def update_data(self, pipeline=None, batch=None):
         """ Get data from monitor or pipeline. """
-        self.timestamps.append(gmtime())
-
         for name, generator in self.data_generators.items():
-
             if isinstance(generator, ResourceMonitor):
                 value = generator.stop()
                 self.data[name].extend(value)
@@ -234,14 +225,7 @@ class Notifier:
 
     def update_description(self):
         """ Set new bar description. """
-        description = []
-        for name, generator in self.data_generators.items():
-            if not isinstance(generator, ResourceMonitor):
-                value = self.data[name][-1]
-                desc = f'{name}={value:5.5}' if isinstance(value, float) else f'{name}={value:5}'
-                description.append(desc)
-
-        description = '   '.join(description)
+        description = self.create_description(iteration=-1)
         self.bar.set_description(description)
 
     def update_plots(self, add_suptitle=False, savepath=None):
@@ -264,40 +248,28 @@ class Notifier:
             ax[i].grid(True)
 
         if add_suptitle:
-            title = self.format_meter(self.n, self.total, time()-self.start_t, ncols=80)
+            title = self.format_meter(self.n+1, self.total, time()-self.start_t, ncols=80)
             plt.suptitle(title, y=0.99, fontsize=14)
 
         if savepath:
             plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
         plt.show()
 
-    # Convenient alias for working inspect instance after pipeline run
-    visualize = update_plots
-
     def update_file(self):
         """ Update file on the fly. """
         with open(self.file, 'a+') as f:
-            timestamp = strftime("%Y-%m-%d  %H:%M:%S", self.timestamps[-1])
-            msg = f'Iteration {self.bar.n:5};    {self.bar.desc[:-1]}'
-            print(f'{timestamp}     {msg}', file=f)
+            print(self.create_message(self.bar.n, self.bar.desc[:-2]), file=f)
+
+
+    # Convenient alias for working with an instance
+    visualize = update_plots
 
     def to_file(self, file):
         """ Log all the iteration-wise info (timestamps, descriptions) into file."""
         with open(file, 'w') as f:
-            for i, timestamp in enumerate(self.timestamps):
-                timestamp_ = strftime("%Y-%m-%d  %H:%M:%S", timestamp)
-
-                description = []
-                for name, generator in self.data_generators.items():
-                    if not isinstance(generator, ResourceMonitor):
-                        value = self.data[name][i]
-                        desc = f'{name}={value:6.6}' if isinstance(value, float) else f'{name}={value:6}'
-                        description.append(desc)
-                description = '   '.join(description)
-
-                msg = f'Iteration {i:5};    {description}'
-                print(f'{timestamp_}     {msg}', file=f)
-
+            for i in range(self.bar.n):
+                description = self.create_description(iteration=i)
+                print(self.create_message(i, description), file=f)
 
     def __call__(self, iterable):
         self.update_total(0, 0, 0, 0, 0, total=len(iterable))
@@ -306,7 +278,38 @@ class Notifier:
             self.update()
         self.close()
 
-
     def close(self):
         """ Close the underlying progress bar. """
         self.bar.close()
+
+
+    # Utility functions
+    def start_monitors(self):
+        """ Start collection of data for every resource monitor. """
+        for monitor in self.data_generators.values():
+            if isinstance(monitor, ResourceMonitor):
+                monitor.start()
+
+    def create_description(self, iteration):
+        """ Create string description of a given iteration. """
+        description = []
+        for name, generator in self.data_generators.items():
+            if not isinstance(generator, ResourceMonitor):
+                if isinstance(generator, AlgebraicNamedExpression):
+                    desc = self.data[name][iteration]
+                elif isinstance(generator, (str, NamedExpression)):
+                    value = self.data[name][iteration]
+                    desc = f'{name}={value:6.6}' if isinstance(value, float) else f'{name}={value:6}'
+                description.append(desc)
+        return ';   '.join(description)
+
+    def create_message(self, iteration, description):
+        """ Combine timestamp, iteration and description into one string message. """
+        timestamp = strftime("%Y-%m-%d  %H:%M:%S", self.timestamps[iteration])
+        return f'{timestamp}     Iteration {iteration:5};    {description}'
+
+    def __getattr__(self, key):
+        """ Redirect everything to the underlying bar. """
+        if not key in self.__dict__ and hasattr(self.bar, key):
+            return getattr(self.bar, key)
+        raise AttributeError(key)
