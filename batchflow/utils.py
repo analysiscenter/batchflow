@@ -3,6 +3,8 @@ import sys
 import copy
 import math
 import functools
+import itertools
+
 import tqdm
 
 import numpy as np
@@ -150,8 +152,13 @@ def show_research(df, layouts=None, titles=None, average_repetitions=False, log_
         If True, values will be logarithmised.
     rolling_window : int of sequence of ints, optional
         Size of rolling window.
-    color: sequence of matplotlib.colors, optional
-        Colors for plots would be randomly sampled from given set.
+    color: str or sequence of matplotlib.colors, optional
+        If str, should be a name of matplotlib colormap, 
+        colors for plots will be selected from that colormap.
+        If sequence of colors, they will be used for plots, 
+        if sequence length is less, than number of lines to plot, 
+        colors will be repeated in cycle
+        If None (default), `mcolors.TABLEAU_COLORS` sequence is used
     kwargs:
         Additional named arguments directly passed to `plt.subplots`.
         With default parameters:
@@ -175,8 +182,12 @@ def show_research(df, layouts=None, titles=None, average_repetitions=False, log_
     if color is None:
         color = list(mcolors.TABLEAU_COLORS.keys())
     df_len = len(df['config'].unique())
-    replace = not len(color) > df_len
-    chosen_colors = np.random.choice(color, replace=replace, size=df_len)
+
+    if isinstance(color, str):
+        cmap = plt.get_cmap(color)
+        chosen_colors = [cmap(i/df_len) for i in range(df_len)]
+    else:
+        chosen_colors = itertools.cycle(color)
 
     kwargs = {'figsize': (9 * len(layouts), 7), 'nrows': 1, 'ncols': len(layouts), **kwargs}
 
