@@ -153,10 +153,10 @@ def show_research(df, layouts=None, titles=None, average_repetitions=False, log_
     rolling_window : int of sequence of ints, optional
         Size of rolling window.
     color: str or sequence of matplotlib.colors, optional
-        If str, should be a name of matplotlib colormap, 
+        If str, should be a name of matplotlib colormap,
         colors for plots will be selected from that colormap.
-        If sequence of colors, they will be used for plots, 
-        if sequence length is less, than number of lines to plot, 
+        If sequence of colors, they will be used for plots,
+        if sequence length is less, than number of lines to plot,
         colors will be repeated in cycle
         If None (default), `mcolors.TABLEAU_COLORS` sequence is used
     kwargs:
