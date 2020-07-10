@@ -104,6 +104,7 @@ class Pipeline:
         self._iter_params = None
         self._not_init_vars = True
 
+        self.notifier = None
         self._profile = None
         self._profiler = None
         self.profile_info = None
@@ -1556,6 +1557,7 @@ class Pipeline:
                               EmptyBatchSequence, stacklevel=3)
 
         notifier.close()
+        self.notifier = notifier
 
         if self.after:
             self.after.run()
