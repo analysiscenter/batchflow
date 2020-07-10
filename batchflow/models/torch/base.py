@@ -16,8 +16,8 @@ import torch.nn as nn
 
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
-from .losses import CrossEntropyLoss
-from .. import BaseModel
+from .losses import CrossEntropyLoss, binary as binary_losses, multiclass as multiclass_losses
+from ..base import BaseModel
 from ... import Config
 
 
@@ -34,6 +34,9 @@ LOSSES = {
     'hinge': nn.HingeEmbeddingLoss,
     'huber': nn.SmoothL1Loss,
     'logloss': CrossEntropyLoss,
+    'bdice': binary_losses.Dice,
+    'btversky': binary_losses.Tversky,
+    'dice': multiclass_losses.Dice
 }
 
 DECAYS = {
@@ -84,13 +87,12 @@ class TorchModel(BaseModel):
         If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
         placeholder (usually np.ndarrays with zeros) creation. Default value is 2.
 
-    loss : str, tuple, dict, list
+    loss : str, dict, list
         Loss function, might be defined in multiple formats.
 
         If str, then short ``name``.
-        If tuple, then ``(name, *args)``.
         If dict, then ``{'name': name, **kwargs}``.
-        If list, then sequence of losses in previous formats.
+        If list, then each item is a dict of format described above.
 
         Name must be one of:
             - short name (e.g. ``'mse'``, ``'ce'``, ``'l1'``, ``'cos'``, ``'hinge'``,
@@ -102,16 +104,15 @@ class TorchModel(BaseModel):
         Examples:
 
         - ``{'loss': 'mse'}``
-        - ``{'loss': ('KLDiv', {'reduction': 'none'})``
+        - ``{'loss': {'name': 'KLDiv', 'reduction': 'none'}}``
         - ``{'loss': {'name': MyCustomLoss, 'epsilon': 1e-6}}``
         - ``{'loss': my_custom_loss_fn}``
         - ``{'loss': ['dice', 'bce']}``
 
-    optimizer : str, tuple, dict
+    optimizer : str, dict
         Optimizer, might be defined in multiple formats.
 
         If str, then short ``name``.
-        If tuple, then ``(name, *args)``.
         If dict, then ``{'name': name, **kwargs}``.
 
         Name must be one of:
@@ -123,43 +124,46 @@ class TorchModel(BaseModel):
         Examples:
 
         - ``{'optimizer': 'Adam'}``
-        - ``{'optimizer': ('SparseAdam', {'lr': 0.01})}``
-        - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
-        - ``{'optimizer': {'name': MyCustomOptimizer, momentum=0.95}}``
+        - ``{'optimizer': {'name': 'SparseAdam', 'lr': 0.01}}``
+        - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}}``
+        - ``{'optimizer': {'name': MyCustomOptimizer, 'momentum': 0.95}}``
 
-    decay : str, tuple, dict
-        Learning rate decay algorithm, might be defined in multiple formats.
-        All decays require to have ``n_iters`` as a key in a configuration
-        dictionary that contains the number of iterations in one epoch.
+    decay : dict, list of dicts
+        The learning rate decay algorithm might be defined in multiple formats.
+        All decays require to have 'frequency' as a key in a configuration dictionary.
+        Parameter 'frequency' sets how often do decay step: at every `'frequency'`
+        iteration. Each decay might have optional parameters 'first_iter' and 'last_iter'
+        that defines the closed range of iterations where decay is at work.
+        If you want to use a learning rate warmup and decay together,
+        you should use a list of decays (see examples).
 
-        If str, then short ``name``.
-        If tuple, then ``(name, *args)``.
         If dict, then ``{'name': name, **kwargs}``.
+        If list, then each item is a dict of format described above.
 
         Name must be one of:
 
-        - short name (``'exp'``, ``'invtime'``, ``'naturalexp'``, ``'const'``, ``'poly'``)
         - a class name from `torch.optim.lr_scheduler
           <https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate>`_
           (e.g. ``'LambdaLR'``) except ``'ReduceLROnPlateau'``.
+        - short name (``'exp'`` - ExponentialLR, ``'lambda'`` - LambdaLR, ``'step'`` - StepLR,
+                      ``'multistep'`` - MultiStepLR, ``'cos'`` - CosineAnnealingLR)
         - a class with ``_LRScheduler`` interface
         - a callable which takes optimizer and optional args
 
         Examples:
 
-        - ``{'decay': 'exp'}``
-        - ``{'decay': ('StepLR', {'steps_size': 10000})}``
-        - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5}``
-
-    n_iters : int
-        Frequency of making step of learning rate decay.
+        - ``{'decay': {'name: 'exp', 'frequency': 5, 'first_iter': 6, 'last_iter': 20}}``
+        - ``{'decay': {'name': 'StepLR', 'steps_size': 10000, 'frequency': 5}}``
+        - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5, 'frequency': 15, 'first_iter': 400}``
+        - ``{'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
+                       {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'first_iter': 901}]``
 
     train_steps : dict
         Configuration of different training procedures.
         Must be a mapping from string names to dictionary with train parameters like
-        loss, optimizer, decay, n_iters. Those keys support syntax defined above.
+        loss, optimizer, decay. Those keys support syntax defined above.
 
-        If any of loss, optimizer, decay, n_iters is defined directly in config, it serves as the default
+        If any of loss, optimizer, decay is defined directly in config, it serves as the default
         value for every train step.
 
         Optimizer and decay, created at one train step, can be re-used in another. To do so, one can
@@ -295,7 +299,7 @@ class TorchModel(BaseModel):
         self.devices = []
         self.train_steps = None
 
-        self.sync_counter = 0
+        self.sync_counter = 1
         self.microbatch = None
 
         self.iter_info = {}
@@ -563,13 +567,13 @@ class TorchModel(BaseModel):
         # Wrap parameters from config root as `train_steps`
         if config.get('train_steps') is None:
             config['train_steps'] = {'': {key: config.get(key) for key in
-                                          ('loss', 'optimizer', 'decay', 'n_iters')}}
+                                          ('loss', 'optimizer', 'decay')}}
 
         # First pass through the config: pass values from higher level, create (and store) all of the optimizers
         optimizers = {}
         for key, subconfig in config['train_steps'].items():
             subconfig.update({key: subconfig.get(key) or config.get(key)
-                              for key in ('loss', 'optimizer', 'decay', 'n_iters')})
+                              for key in ('loss', 'optimizer', 'decay')})
             if subconfig.get('optimizer') is not None:
                 if optimizers.get(key) is None:
                     optimizers[key] = self._make_optimizer(subconfig)
@@ -578,12 +582,13 @@ class TorchModel(BaseModel):
         train_steps = {}
         for key, subconfig in config['train_steps'].items():
             loss = self._make_loss(subconfig)
-            optimizer, decay = optimizers.get(subconfig.get('use')) or optimizers.get(key)
+            optimizer, decay, decay_step = optimizers.get(subconfig.get('use')) or optimizers.get(key)
+
             step = {
                 'loss': loss,
                 'optimizer': optimizer,
                 'decay': decay,
-                'n_iters': subconfig.get('n_iters'),
+                'decay_step': decay_step,
             }
             train_steps.update({key: step})
 
@@ -632,36 +637,45 @@ class TorchModel(BaseModel):
         else:
             raise ValueError("Optimizer is not defined", optimizer)
 
-        decay, decay_args = self._make_decay(config)
-        if decay is not None:
-            decay = decay(optimizer, **decay_args)
-        return optimizer, decay
+        decays, list_kwargs, list_steps = self._make_decay(config)
+
+        if decays:
+            decays = [decay(optimizer, **decay_kwargs) for decay, decay_kwargs in zip(decays, list_kwargs)]
+        return optimizer, decays, list_steps
 
     def _make_decay(self, config):
-        decay, decay_args = unpack_fn_from_config('decay', config)
-        n_iters = config.get('n_iters')
+        res = unpack_fn_from_config('decay', config)
+        res = res if isinstance(res, list) else [res]
+        decays, list_kwargs, list_steps = [], [], []
+        for decay, decay_args in res:
+            if decay is None:
+                return decays, list_kwargs, list_steps
 
-        if decay is None:
-            return decay, decay_args
-        if 'n_iters' not in config:
-            raise ValueError("Missing required key ``'n_iters'`` in the cofiguration dict.")
+            step_meta_keys = ['frequency', 'first_iter', 'last_iter']
+            step_meta_defaults = [None, 0, np.inf]
+            step_meta = {key: decay_args.pop(key, default) for key, default in zip(step_meta_keys, step_meta_defaults)}
 
-        if callable(decay) or isinstance(decay, type):
-            pass
-        elif isinstance(decay, str) and hasattr(torch.optim.lr_scheduler, decay):
-            decay = getattr(torch.optim.lr_scheduler, decay)
-        elif decay in DECAYS:
-            decay = DECAYS.get(decay)
-        else:
-            raise ValueError("Unknown learning rate decay method", decay)
+            if step_meta['frequency'] is None:
+                raise ValueError("Missing required key 'decay/frequency' in the configuration dict.")
+            if callable(decay) or isinstance(decay, type):
+                pass
+            elif isinstance(decay, str) and hasattr(torch.optim.lr_scheduler, decay):
+                decay = getattr(torch.optim.lr_scheduler, decay)
+            elif decay in DECAYS:
+                decay = DECAYS.get(decay)
+            else:
+                raise ValueError("Unknown learning rate decay method", decay)
 
-        if decay in DECAYS_DEFAULTS:
-            decay_dict = DECAYS_DEFAULTS.get(decay).copy()
-            if decay == DECAYS['cos']:
-                decay_dict.update(T_max=n_iters)
-            decay_dict.update(decay_args)
-            decay_args = decay_dict.copy()
-        return decay, decay_args
+            if decay in DECAYS_DEFAULTS:
+                decay_dict = DECAYS_DEFAULTS.get(decay).copy()
+                if decay == DECAYS['cos']:
+                    decay_dict.update(T_max=step_meta['frequency'])
+                decay_args = {**decay_dict, **decay_args}
+
+            decays.append(decay)
+            list_kwargs.append(decay_args)
+            list_steps.append(step_meta)
+        return decays, list_kwargs, list_steps
 
 
     @classmethod
@@ -903,7 +917,7 @@ class TorchModel(BaseModel):
         return output
 
 
-    def train(self, *args, feed_dict=None, fetches=None, use_lock=False, train_mode='',
+    def train(self, *args, feed_dict=None, fetches=None, use_lock=True, train_mode='',
               accumulate_grads=True, sync_frequency=True, microbatch=True, profile=False, **kwargs):
         """ Train the model with the data provided
 
@@ -975,8 +989,8 @@ class TorchModel(BaseModel):
             splitted_inputs = [inputs]
             splitted_targets = [targets]
 
-
         if self.model is None:
+            self.train_lock.acquire()
             if isinstance(splitted_inputs[0], (list, tuple)):
                 self.input_shapes = [get_shape(item) for item in splitted_inputs[0]]
             else:
@@ -989,6 +1003,7 @@ class TorchModel(BaseModel):
 
             self.build_config()
             self._build(splitted_inputs[0])
+            self.train_lock.release()
 
         self.model.train()
 
@@ -1013,12 +1028,13 @@ class TorchModel(BaseModel):
         if use_lock:
             self.train_lock.release()
 
-        outputs = [outputs] if isinstance(fetches, str) else outputs
-        output = []
-        for i, _ in enumerate(outputs[0]):
-            lst = [np.asarray(item[i]) for item in outputs]
-            output.append(np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst))
-        output = output[0] if isinstance(fetches, str) else output
+        if fetches:
+            outputs = [outputs] if isinstance(fetches, str) else outputs
+            output = [np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst)
+                      for lst in outputs]
+            output = output[0] if isinstance(fetches, str) else output
+        else:
+            output = []
 
         if profile:
             profiler.__exit__(None, None, None)
@@ -1048,37 +1064,45 @@ class TorchModel(BaseModel):
             else:
                 train_fetches = [(name, train_step) for name, train_step in self.train_steps.items()
                                  if re.search(mode, name) is not None]
-
             mode_loss = 0
-            for name, step in train_fetches:
-                loss_fn, optimizer, decay = step['loss'], step['optimizer'], step['decay']
 
+            for name, step in train_fetches:
+                loss_fn, optimizer = step['loss'], step['optimizer']
+                decays, decay_steps = step['decay'], step['decay_step']
                 if 'initialized' not in step:
                     optimizer.zero_grad()
                     step['initialized'] = True
-
                 if accumulate_grads:
                     predictions = self.model(inputs)
                 loss = sum([loss_fn_(predictions, targets) for loss_fn_ in loss_fn]) / len(loss_fn)
                 mode_loss += loss
                 loss.backward()
-                step['iter'] = step.get('iter', 0) + 1
+                step['iter'] = step.get('iter', 0.0) + (1 / sync_frequency)
 
                 if self.sync_counter >= sync_frequency:
-                    self.sync_counter = 1
+                    for p in self.model.parameters():
+                        if p.grad is not None:
+                            p.grad /= sync_frequency
+
                     optimizer.step()
                     optimizer.zero_grad()
+                    self.sync_counter = 1
                 else:
                     self.sync_counter += 1
 
-                if decay:
-                    if step.get('current_iter', 0) >= step['n_iters']:
-                        decay.step()
-                        step['current_iter'] = 0
-                    step['current_iter'] = step.get('current_iter', 0) + 1
+                curr_lr = [group['lr'] for group in optimizer.param_groups]
+                self.iter_info.setdefault('lr', []).append(curr_lr)
 
-                output_container['loss' + '_'*int(len(name) > 0) + name] = loss
-            output_container['loss' + '_'*int(len(mode) > 0) + mode] = mode_loss
+                if decays:
+                    for decay, decay_step in zip(decays, decay_steps):
+                        step_condition = (step['iter'] - decay_step['first_iter']) % decay_step['frequency'] == 0
+                        range_condition = decay_step['first_iter'] <= step['iter'] <= decay_step['last_iter']
+                        if step_condition and range_condition:
+                            decay.step()
+
+                output_container['loss' + '_'*bool(len(name)) + name] = loss
+            output_container['loss' + '_'*bool(len(name)) + mode] = mode_loss
+        output_container['lr'] = curr_lr
         output_container['predictions'] = predictions
 
         config = self.full_config
@@ -1146,7 +1170,7 @@ class TorchModel(BaseModel):
 
                 loss_fn = step['loss']
                 loss = sum([loss(predictions, targets) for loss in loss_fn]) / len(loss_fn)
-                output_container['loss' + '_'*int(len(train_mode) > 0) + train_mode] = loss
+                output_container['loss' + '_'*bool(len(train_mode)) + train_mode] = loss
             output_container['predictions'] = predictions
 
         config = self.full_config

@@ -115,7 +115,7 @@ class Validator:
 
         self.metrics = {}
 
-    def train_loader(self, path=None, **kwargs):
+    def load_train_dataset(self, path=None, **kwargs):
         """ Train dataset loader.
 
         Parameters
@@ -132,7 +132,7 @@ class Validator:
         _ = kwargs
         return path
 
-    def test_loader(self, path=None, **kwargs):
+    def load_test_dataset(self, path=None, **kwargs):
         """ Test dataset loader.
 
         Parameters
@@ -261,11 +261,11 @@ class Validator:
         if 'pretrained' in self.config:
             self.from_train = self.load_model(**self._pretrained)
         elif 'train' in self.config:
-            self.train_dataset = self.train_loader(**self._train_ds)
+            self.train_dataset = self.load_train_dataset(**self._train_ds)
             self.train(self.train_dataset, **self.config['train'])
 
         if 'test' in self.config:
-            self.test_dataset = self.test_loader(**self._test_ds)
+            self.test_dataset = self.load_test_dataset(**self._test_ds)
             self.targets, self.predictions = self.inference(self.test_dataset, **self.config['test'])
             self.compute_metrics(self.targets, self.predictions, *self._metrics,
                                  **{key: value for key, value in self.config.items() if key in self._metrics})

@@ -10,17 +10,22 @@ There are two main reasons to wrap your model using classes from `Validator` sub
 - make the structure of the model lifecycle clear,
 - provide API to automized model training and validation.
 
-All you need is:
+All you need is to define class inherited from `Validator` and then you can use it in your scipts: ::
 
-- define class inherited from `Validator`,
-- configure it by `yaml` file,
-- execute the following code: ::
+    validator = LithologyModel(dpcm=20, crop_length=10)
+    train_dataset = validator.load_train_dataset(path='/train')
+    validator.train(train_dataset, n_epochs=300)
+    test_dataset = validator.load_test_dataset('/test')
+    targets, predictions = validator.inference(test_dataset)
+    validator.compute_metrics(targets, predictions, 'f1_score')
 
-    from model_api import MyValidator
+Also you can configure it by `yaml` file and execute the following code: ::
 
-    val = MyValidator('validator.yaml')
-    val.run()
-    print(val.metrics)
+        from validator import MyValidator
+
+        val = MyValidator('validator.yaml')
+        val.run()
+        print(val.metrics)
 
 Basic example
 =============
@@ -35,22 +40,22 @@ model_api.py
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.model_config = ...
-            self.ds = PascalSegmentation(bar=True)
+            self.dataset = PascalSegmentation(bar=True)
 
         def train_loader(self, **kwargs):
-            return self.ds.train
+            return self.dataset.train
 
         def test_loader(self, **kwargs):
-            return self.ds.test
+            return self.dataset.test
 
-        def train(self, ds):
-            train_ppl = ... << ds
+        def train(self, dataset):
+            train_ppl = ... << dataset
             train_ppl.run()
             self.model = train_ppl.get_model_by_name('model')
 
-        def inference(self, ds):
+        def inference(self, dataset):
             model = self.model
-            test_ppl = ... << ds
+            test_ppl = ... << dataset
             test_ppl.run()
             targets = np.array(test_ppl.v('targets'))
             predictions = np.array(test_ppl.v('predictions'))
