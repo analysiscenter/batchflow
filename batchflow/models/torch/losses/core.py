@@ -19,7 +19,7 @@ class Weighted(nn.Module):
     losses : sequence
         Instances of loss functions.
     weights : sequence of numbers
-        Multiplier for each loss during summation. Default value is 1 over number of losses for each loss.
+        Multiplier for each loss during summation. Default value is 1 over the number of losses for each loss.
     starts : sequence of ints
         Iteration to start computation for each of the losses. Default value is 0 for each loss.
     """
@@ -29,13 +29,15 @@ class Weighted(nn.Module):
         self.n = len(losses)
 
         if weights is not None:
-            assert len(weights) == self.n
+            if len(weights) != self.n:
+                raise ValueError('A weight must be provided for each of the losses!')
             self.weights = weights
         else:
             self.weights = (1 / self.n,) * self.n
 
         if starts is not None:
-            assert len(starts) == self.n
+            if len(starts) != self.n:
+                raise ValueError('Starting iteration must be provided for each of the losses!')
             self.starts = starts
         else:
             self.starts = (0,) * self.n

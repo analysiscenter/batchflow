@@ -19,7 +19,7 @@ class Dice(nn.Module):
 
         target = target.long()
         target = torch.eye(num_classes)[target.squeeze(1)]
-        target = target.permute(0, 3, 1, 2).float()
+        target = target.permute(0, -1, *tuple(range(1, ndims))).float()
         target = target.to(prediction.device).type(prediction.type())
 
         dims = (0,) + tuple(range(2, ndims))
