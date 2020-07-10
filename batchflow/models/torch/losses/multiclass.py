@@ -11,6 +11,10 @@ class Dice(nn.Module):
 
     Predictions are passed through a softmax function to obtain probabilities.
     """
+    def __init__(self, eps=1e-7):
+        super().__init__()
+        self.eps = eps
+
     def forward(self, prediction, target):
         num_classes = prediction.shape[1]
         ndims = target.ndimension()
@@ -25,5 +29,5 @@ class Dice(nn.Module):
         dims = (0,) + tuple(range(2, ndims))
         intersection = torch.sum(prediction * target, dims)
         cardinality = torch.sum(prediction + target, dims)
-        dice_coeff = (2. * intersection / (cardinality + 1e-7)).mean()
+        dice_coeff = (2. * intersection / (cardinality + self.eps)).mean()
         return 1 - dice_coeff
