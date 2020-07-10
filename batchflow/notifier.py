@@ -1,4 +1,4 @@
-""" Progress notyfier. """
+""" Progress notifier. """
 import math
 from time import time, gmtime, strftime
 
