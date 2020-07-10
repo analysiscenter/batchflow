@@ -16,7 +16,8 @@ import torch.nn as nn
 
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
-from .losses import CrossEntropyLoss
+from .losses import CrossEntropyLoss, binary as binary_losses, multiclass as multiclass_losses
+from ..base import BaseModel
 from ... import Config
 
 
@@ -33,6 +34,9 @@ LOSSES = {
     'hinge': nn.HingeEmbeddingLoss,
     'huber': nn.SmoothL1Loss,
     'logloss': CrossEntropyLoss,
+    'bdice': binary_losses.Dice,
+    'btversky': binary_losses.Tversky,
+    'dice': multiclass_losses.Dice
 }
 
 DECAYS = {
@@ -53,7 +57,7 @@ DECAYS_DEFAULTS = {
 
 
 
-class TorchModel:
+class TorchModel(BaseModel):
     r""" Base class for eager Torch models.
 
     Parameters
@@ -1024,12 +1028,13 @@ class TorchModel:
         if use_lock:
             self.train_lock.release()
 
-        outputs = [outputs] if isinstance(fetches, str) else outputs
-        output = []
-        for i, _ in enumerate(outputs[0]):
-            lst = [np.asarray(item[i]) for item in outputs]
-            output.append(np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst))
-        output = output[0] if isinstance(fetches, str) else output
+        if fetches:
+            outputs = [outputs] if isinstance(fetches, str) else outputs
+            output = [np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst)
+                      for lst in outputs]
+            output = output[0] if isinstance(fetches, str) else output
+        else:
+            output = []
 
         if profile:
             profiler.__exit__(None, None, None)
@@ -1072,12 +1077,16 @@ class TorchModel:
                 loss = sum([loss_fn_(predictions, targets) for loss_fn_ in loss_fn]) / len(loss_fn)
                 mode_loss += loss
                 loss.backward()
-                step['iter'] = step.get('iter', 0) + 1
+                step['iter'] = step.get('iter', 0.0) + (1 / sync_frequency)
 
                 if self.sync_counter >= sync_frequency:
-                    self.sync_counter = 1
+                    for p in self.model.parameters():
+                        if p.grad is not None:
+                            p.grad /= sync_frequency
+
                     optimizer.step()
                     optimizer.zero_grad()
+                    self.sync_counter = 1
                 else:
                     self.sync_counter += 1
 
