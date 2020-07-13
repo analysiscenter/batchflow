@@ -3,6 +3,7 @@ import pytest
 import numpy as np
 from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import KFold
 
 from batchflow.models.validator import Validator
 from batchflow import Config
@@ -33,19 +34,30 @@ def validator_class():
             self.model = None
             self.stages = []
 
-        def train_loader(self, size=100):
+        def load_train_dataset(self, size=100):
             self.stages += ['train_loader']
 
             np.random.seed(42)
             x = np.random.random(size).reshape(-1, 1)
             return x, 2 * x
 
-        def test_loader(self, size=50):
+        def load_test_dataset(self, size=50):
             self.stages += ['test_loader']
 
             np.random.seed(6)
             x = np.random.random(size).reshape(-1, 1)
             return x, 2 * x
+
+        def load_cv_dataset(self, size=100, folds=5):
+            datasets = []
+            x = np.random.random(size).reshape(-1, 1)
+            y = 2 * x
+            for train_indices, test_indices in KFold(n_splits=folds).split(x):
+                datasets.append([
+                    (x[train_indices], y[train_indices]),
+                    (x[test_indices], y[test_indices]),
+                ])
+            return datasets
 
         def train(self, dataset, model='linear'):
             self.stages += ['train']
@@ -148,3 +160,15 @@ def test_config_checks(validator_class, config, keys, exception):
 def test_api_checks(add_methods, methods, exception):
     val_class = type('NewValidator', (Validator, ), {method: lambda x: x for method in add_methods})
     assert val_class.check_api(methods=methods, warning=False) == exception
+
+@pytest.mark.parametrize('folds, agg', list(zip([3, 5], ['mean', 'median'])))
+def test_cv(validator_class, folds, agg):
+    val = validator_class(Config({'train': None, 'test/metrics': 'my_mse', 'cv': {'folds': folds}}))
+    val.run_cv(agg=agg)
+    assert np.isclose(val.metrics['my_mse'], 0)
+
+@pytest.mark.parametrize('folds', [3, 5])
+def test_cv_none_agg(validator_class, folds):
+    val = validator_class(Config({'train': None, 'test/metrics': 'my_mse', 'cv': {'folds': folds}}))
+    val.run_cv(agg=None)
+    assert len(val.metrics) == folds

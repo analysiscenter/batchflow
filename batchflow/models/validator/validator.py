@@ -4,6 +4,7 @@ import warnings
 import inspect
 from copy import deepcopy
 import yaml
+import numpy as np
 
 from ...pipeline import METRICS
 from ... import Config
@@ -107,6 +108,8 @@ class Validator:
                 self.config['test'] = {}
                 self._metrics = []
 
+        self._cv = self.config.get('cv', {})
+
         self.train_dataset = None
         self.from_train = None
         self.test_dataset = None
@@ -122,12 +125,6 @@ class Validator:
         ----------
         path : str or None
             path to train dataset, defined in `train/dataset` section of config.
-
-        Return
-        ------
-        path : str or None
-            If function is not defined in child class, return `path`. It will be
-            used as first argument of `train`.
          """
         _ = kwargs
         return path
@@ -139,15 +136,26 @@ class Validator:
         ----------
         path : str or None
             path to test dataset, defined in `test/dataset` section of config.
-
-        Return
-        ------
-        path : str or None
-            If function is not defined in child class, return `path`. It will be
-            used as the first argument of `train`.
         """
         _ = kwargs
         return path
+
+    def load_train_test_dataset(self, path, test_path=None, **kwargs):
+        """ Train and test datasets loader.
+
+        Parameters
+        ----------
+        path : str or None
+            path to train dataset or the whole dataset which will be splitted into train and test.
+        test_path : str or None
+            path to test dataset
+        """
+        _ = kwargs
+        return path, test_path
+
+    def load_cv_dataset(self, path, **kwargs):
+        _ = kwargs
+        return None
 
     def load_model(self, path=None):
         """ Loader for pretrained model.
@@ -179,15 +187,17 @@ class Validator:
     def compute_metrics(self, targets, predictions, *metrics, **metric_configs):
         """ Metrics computation. """
         metrics = list(set([*metrics, *metric_configs.keys()]))
+        values = {}
         for _metric in metrics:
             if hasattr(self, _metric):
-                self.metrics[_metric] = getattr(self, _metric)(targets, predictions)
+                values[_metric] = getattr(self, _metric)(targets, predictions)
             else:
                 metric_config = metric_configs.get(_metric, {})
                 metric_class = metric_config.pop('class', 'classification')
                 evaluate = metric_config.pop('evaluate', {})
                 metrics = METRICS[metric_class](targets, predictions, **metric_config)
-                self.metrics[_metric] = metrics.evaluate(_metric, **evaluate)
+                values[_metric] = metrics.evaluate(_metric, **evaluate)
+        return values
 
     @classmethod
     def check_api(cls, methods=('train', 'inference'), warning=True, exception=False):
@@ -265,7 +275,26 @@ class Validator:
             self.train(self.train_dataset, **self.config['train'])
 
         if 'test' in self.config:
+            metrics_kwargs = {key: value for key, value in self.config.items() if key in self._metrics}
             self.test_dataset = self.load_test_dataset(**self._test_ds)
             self.targets, self.predictions = self.inference(self.test_dataset, **self.config['test'])
-            self.compute_metrics(self.targets, self.predictions, *self._metrics,
-                                 **{key: value for key, value in self.config.items() if key in self._metrics})
+            self.metrics = self.compute_metrics(self.targets, self.predictions, *self._metrics, **metrics_kwargs)
+
+    def run_cv(self, agg='mean'):
+        res = []
+        metrics_kwargs = {key: value for key, value in self.config.items() if key in self._metrics}
+        for train, test in self.load_cv_dataset(**self._cv):
+            self.train(train, **self.config['train'])
+            self.targets, self.predictions = self.inference(test, **self.config['test'])
+            res.append(self.compute_metrics(self.targets, self.predictions, *self._metrics, **metrics_kwargs))
+        if agg is None:
+            self.metrics = res
+        else:
+            if isinstance(agg, str):
+                _agg = getattr(np, agg)
+            elif callable(agg):
+                _agg = agg
+            else:
+                raise ValueError('agg must be str or callable')
+            for key in res[0]:
+                self.metrics[key] = _agg([item[key] for item in res])
