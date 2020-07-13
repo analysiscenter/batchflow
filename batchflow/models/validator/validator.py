@@ -85,33 +85,25 @@ class Validator:
         if 'pretrained' in self.config and self._pretrained is None:
             self._pretrained = {}
 
-        self._train_ds = {}
-        if 'train' in self.config:
-            if self.config['train'] is not None:
-                self._train_ds = self.config['train'].pop('dataset', {})
-                if isinstance(self._train_ds, str):
-                    self._train_ds = {'path': self._train_ds}
-            else:
-                self.config['train'] = {}
+        self.config['train'] = self.config.get('train', {})
+        self.config['test'] = self.config.get('test', {})
 
-        self._test_ds = {}
-        if 'test' in self.config:
-            if self.config['test'] is not None:
-                self._test_ds = self.config['test'].pop('dataset', {})
-                if isinstance(self._test_ds, str):
-                    self._test_ds = {'path': self._test_ds}
-                self._metrics = self.config['test'].pop('metrics', {})
+        self._train_ds = self.config.get('train_dataset', {})
+        if isinstance(self._train_ds, str):
+            self._train_ds = {'path': self._train_ds}
+        self._test_ds = self.config.get('test_dataset', {})
+        if isinstance(self._test_ds, str):
+            self._test_ds = {'path': self._test_ds}
 
-                if isinstance(self._metrics, str):
-                    self._metrics = [item.strip() for item in self._metrics.split(',')]
-            else:
-                self.config['test'] = {}
-                self._metrics = []
+        self._metrics = self.config.get('metrics', [])
+        if isinstance(self._metrics, str):
+            self._metrics = [item.strip() for item in self._metrics.split(',')]
 
         self._cv = self.config.get('cv', {})
+        if self._cv is None:
+            self._cv = {}
 
         self.train_dataset = None
-        self.from_train = None
         self.test_dataset = None
         self.targets = None
         self.predictions = None
@@ -140,7 +132,7 @@ class Validator:
         _ = kwargs
         return path
 
-    def load_train_test_dataset(self, path, test_path=None, **kwargs):
+    def load_train_test_dataset(self, path=None, test_path=None, **kwargs):
         """ Train and test datasets loader.
 
         Parameters
@@ -171,7 +163,7 @@ class Validator:
             If `pretrained` is enabled, output of that function will be used
             as the second argument of `inference`.
         """
-        return path
+        _ = path
 
     def train(self, train_dataset, **kwargs):
         """ Function that must contain the whole training process. Method will be executed
@@ -268,21 +260,30 @@ class Validator:
 
     def run(self):
         """ Run validator """
+        if 'cv' not in self.config:
+            self._run()
+        else:
+            self._run_cv()
+
+    def _run(self):
+        train_dataset, test_dataset = self.load_train_test_dataset(**(self.config.get('load_train_test_dataset') or {}))
+
         if 'pretrained' in self.config:
-            self.from_train = self.load_model(**self._pretrained)
-        elif 'train' in self.config:
-            self.train_dataset = self.load_train_dataset(**self._train_ds)
-            self.train(self.train_dataset, **self.config['train'])
+            self.load_model(**self._pretrained)
+        else:
+            train_dataset = train_dataset or self.load_train_dataset(**self._train_ds)
+            self.train(train_dataset, **self.config['train'])
 
-        if 'test' in self.config:
-            metrics_kwargs = {key: value for key, value in self.config.items() if key in self._metrics}
-            self.test_dataset = self.load_test_dataset(**self._test_ds)
-            self.targets, self.predictions = self.inference(self.test_dataset, **self.config['test'])
-            self.metrics = self.compute_metrics(self.targets, self.predictions, *self._metrics, **metrics_kwargs)
+        test_dataset = test_dataset or self.load_test_dataset(**self._test_ds)
+        self.targets, self.predictions = self.inference(test_dataset, **self.config['test'])
 
-    def run_cv(self, agg='mean'):
+        metrics_kwargs = {key: value for key, value in self.config.items() if key in self._metrics}
+        self.metrics = self.compute_metrics(self.targets, self.predictions, *self._metrics, **metrics_kwargs)
+
+    def _run_cv(self):
         res = []
         metrics_kwargs = {key: value for key, value in self.config.items() if key in self._metrics}
+        agg = self._cv.pop('agg', 'mean')
         for train, test in self.load_cv_dataset(**self._cv):
             self.train(train, **self.config['train'])
             self.targets, self.predictions = self.inference(test, **self.config['test'])

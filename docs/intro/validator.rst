@@ -19,7 +19,7 @@ All you need is to define class inherited from `Validator` and then you can use 
     targets, predictions = validator.inference(test_dataset)
     validator.compute_metrics(targets, predictions, 'f1_score')
 
-Also you can configure it by `yaml` file and execute the following code: ::
+Also you can configure all stages by `yaml` file (see below) and execute the following code: ::
 
         from validator import MyValidator
 
@@ -66,9 +66,7 @@ validator.yaml
 --------------
 ::
 
-    train:
-    test:
-        metrics: accuracy
+    metrics: accuracy
 
 
 `val.metrics`
@@ -83,31 +81,36 @@ Validator class
 
 `Validator` child-class can implement the following methods:
 
-`train_loader(self, path=None, **kwargs)`
------------------------------------------
+`load_train_dataset(self, path=None, **kwargs)`
+-----------------------------------------------
 
-`path` and `kwargs` are from config `<train>`. In the example above we have empty value for `train` key, therefore `path=None` and `kwargs={}`. Let's define config:
+`path` and `kwargs` are from config `<train>`. In the example above we haven't `train_dataset` key, therefore `path=None` and `kwargs={}`. Let's define config:
 
 ::
 
-    train:
-        dataset: /path/to/dataset
+    train_dataset: /path/to/dataset
 
 
-In that case `path='/path/to/dataset'`. You also can define multiple parameters of `train_loader`: ::
+In that case `path='/path/to/dataset'`. You also can define multiple parameters of `load_train_dataset`: ::
 
-    train:
-        dataset:
+    train_dataset:
         path: /path/to/dataset
         format: 'png'
 
 Now `path='/path/to/dataset', kwargs={format: 'png'}`.
 The output of the function will be used as `train_dataset` argument of `train` method. By default, it returns `path`.
 
-`test_loader(self, path=None, **kwargs)`
-----------------------------------------
+`load_test_dataset(self, path=None, **kwargs)`
+----------------------------------------------
 
 The same as `train_loader` but for `test`.
+
+`load_train_test_dataset(self, path=None, test_path=None, **kwargs)`
+---------------------------------------------------------------
+
+Sometimes train and test datasets must be defined in the same function. In that case you can define `load_train_test_dataset` which
+should return train and test datasets.
+
 
 `load_model(self, path=None, **kwargs)`
 ---------------------------------------
