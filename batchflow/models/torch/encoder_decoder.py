@@ -146,7 +146,8 @@ class DecoderModule(nn.ModuleDict):
 
                 elif letter in ['c']:
                     if self.skip and (i < len(inputs) - 2):
-                        args = {**kwargs, **combine_args, **unpack_args(combine_args, i, num_stages)}
+                        args = {'factor': factor[i],
+                                **kwargs, **combine_args, **unpack_args(combine_args, i, num_stages)}
 
                         layer = Combine(inputs=[x, inputs[-i - 3]], **args)
                         x = layer([x, inputs[-i - 3]])
