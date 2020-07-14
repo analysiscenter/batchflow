@@ -262,6 +262,7 @@ the following sequence of methods will be executed:
 #. compute_metrics
 
 If `'cv'` is in config, then cross-validation procedure will be performed:
+
 #. load_cv_dataset
 #. for each split
     #. train
