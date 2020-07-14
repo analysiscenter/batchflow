@@ -10,7 +10,8 @@ There are two main reasons to wrap your model using classes from `Validator` sub
 - make the structure of the model lifecycle clear,
 - provide API to automized model training and validation.
 
-All you need is to define class inherited from `Validator` and then you can use it in your scipts: ::
+All you need is to define class inherited from `Validator`, define few methods
+and then you can use it in your scipts: ::
 
     validator = LithologyModel(dpcm=20, crop_length=10)
     train_dataset = validator.load_train_dataset(path='/train')
@@ -19,18 +20,48 @@ All you need is to define class inherited from `Validator` and then you can use 
     targets, predictions = validator.inference(test_dataset)
     validator.compute_metrics(targets, predictions, 'f1_score')
 
-Also you can configure all stages by `yaml` file (see below) and execute the following code: ::
+Also you can configure all stages by `yaml` file: ::
 
-        from validator import MyValidator
+    dpcm: 20
+    crop_length: 10
+    load_train_dataset: /train
+    train:
+        n_epochs: 300
+    load_test_dataset: /test
+    metrics: f1_score
 
-        val = MyValidator('validator.yaml')
-        val.run()
-        print(val.metrics)
+and execute the following code: ::
+
+    from validator import LithologyModel
+
+    val = LithologyModel('validator.yaml')
+    val.run()
+
+If you call `run` method of Validator and 'cv' key is not in config,
+the following sequence of methods will be executed:
+
+    load_train_test_dataset
+    if `'pretrained'` key not in config then
+        load_train_data (if needed, see `load_train_test_dataset` docsting)
+        train
+    else
+        load_model
+    load_test_data (if needed, see `load_train_test_dataset` docsting)
+    inference
+    compute_metrics
+
+If 'cv' is in config, then cross-validation procedure will be performed:
+    load_cv_dataset
+    for each split
+        train
+        inference
+        compute_metrics
+    metrics aggregation
 
 Basic example
 =============
 
-model_api.py
+validator.py
 ------------
 ::
 
@@ -84,32 +115,39 @@ Validator class
 `load_train_dataset(self, path=None, **kwargs)`
 -----------------------------------------------
 
-`path` and `kwargs` are from config `<train>`. In the example above we haven't `train_dataset` key, therefore `path=None` and `kwargs={}`. Let's define config:
+`path` and `kwargs` are from config `<load_train_dataset>`. In the example above we haven't `load_train_dataset` key,
+therefore `path=None` and `kwargs={}`. Let's define config:
 
 ::
 
-    train_dataset: /path/to/dataset
+    load_train_dataset: /path/to/dataset
 
+or
+
+::
+    load_train_dataset:
+        path: /path/to/dataset
 
 In that case `path='/path/to/dataset'`. You also can define multiple parameters of `load_train_dataset`: ::
 
-    train_dataset:
+    load_train_dataset:
         path: /path/to/dataset
         format: 'png'
 
-Now `path='/path/to/dataset', kwargs={format: 'png'}`.
+Now `path='/path/to/dataset', kwargs={'format': 'png'}`.
 The output of the function will be used as `train_dataset` argument of `train` method. By default, it returns `path`.
 
 `load_test_dataset(self, path=None, **kwargs)`
 ----------------------------------------------
 
-The same as `train_loader` but for `test`.
+The same as `load_train_dataset` but for `test`.
 
-`load_train_test_dataset(self, path=None, test_path=None, **kwargs)`
+`load_train_test_dataset(self, path=None, **kwargs)`
 ---------------------------------------------------------------
 
-Sometimes train and test datasets must be defined in the same function. In that case you can define `load_train_test_dataset` which
-should return train and test datasets.
+Sometimes it’s more convenient to create train and test datasets in the same function. In that case you
+can define `load_train_test_dataset` which returns train and test datasets. Method has the same argument
+logic as other data loaders.
 
 
 `load_model(self, path=None, **kwargs)`
@@ -117,38 +155,43 @@ should return train and test datasets.
 
 Loader for pretrained model. Let's make example above more complex::
 
-    train:
     pretrained:
         path: /path/to/model
         device: cuda:0
     test:
         metrics: accuracy
 
-In that case `path='/path/to/model'` and `kwargs={device: 'cuda:0'}`. The output of the function will be used as `train_output` argument of `inference` method. By default, it returns `path`. Note that when you define `pretrained` key in your config, train section will be skipped.
+In that case `path='/path/to/model'` and `kwargs={device: 'cuda:0'}`. The output of the function will be used as `train_output` argument of `inference` method.
+By default, it returns `path`. Note that when you define `pretrained` key in your config, train section will be skipped.
 
 `train(self, train_dataset, **kwargs)`
 --------------------------------------
 
-Function that must contain the whole training process. Argument `train_dataset` is an output of `train_loader` method, dict `kwargs` is from config and doesn't include popped `dataset` key. Example::
+Function that must contain the whole training process. Argument `train_dataset` is an output of `train_loader` method,
+dict `kwargs` is from config. Example::
 
     train:
-        dataset: /path/to/data
         model: UNet
-    test:
-        metrics: accuracy
 
-In that case `kwargs={model: 'UNet'}`. Method is executed when `pretrained` is not defined.
+In that case `kwargs={model: 'UNet'}`. Method is executed when `pretrained` is not defined in config.
 
 `inference(self, test_dataset, **kwargs)`
--------------------------------------------------------
+-----------------------------------------
 
 Function that must contain the whole inference process. Argument `test_dataset` is an output of `test_loader` method. `kwargs` is from config and doesn't include popped `dataset` key.
 Function returns `predictions` and `targets` in format that can be used with Batchflow metrics (see :doc:`metrics API <../api/batchflow.models.metrics>`).
 
+`load_cv_dataset(self, path, **kwargs)`
+---------------------------------------
+Load data and split into folds. Method has the same argument logic as other data loaders.
+Method must return list of tuple where each tuple is a pair of train and test dataset which will
+be substituted into `train` and `inderence` methods, correspondingly.
+
 Custom metrics
 --------------
 
-If you need to realize your custom metrics, add method like::
+You can use BatchFlow metrics to validate your model but if you need to realize
+your custom metrics, add method like::
 
     def my_accuracy(self, target, prediction):
         return (target == prediction.argmax(axis=1)).mean()
@@ -157,13 +200,12 @@ If you need to realize your custom metrics, add method like::
 To specify what metrics will be computed, add them into config::
 
     ...
-      test:
-        metrics:
-            - accuracy
-            - f1_score
-            - my_accuracy
+      metrics:
+        - accuracy       // BatchFlow metric
+        - f1_score       // BatchFlow metric
+        - my_accuracy    // custom metric
       accuracy:
-        class: classification # BatchFLow class of metrics
+        class: classification # BatchFlow class of metrics
         axis: 1               # Init parameters
       f1_score:
         class: classification
@@ -172,6 +214,10 @@ To specify what metrics will be computed, add them into config::
             agg: mean
             multiclass:
 
+You also can define `metrics` value as one string: ::
+
+    metrics: accuracy, f1_score, my_accuracy
+
 
 validator.yaml
 ==============
@@ -179,21 +225,37 @@ validator.yaml
 Generally has the following structure::
 
 
-    train: (optional)
-        dataset:
-            - <dataset_param_0>: <value_0>
-            ...
-    pretrained: (optional)
-        path: <model_path>
+    load_train_data: path
+            or
+    load_train_data:
+        <kwarg_0>: <value_0>
+        ...
+
+    load_test_data: path
+            or
+    load_test_data:
+        <kwarg_0>: <value_0>
+        ...
+
+    train:
+        <kwarg_0>: <value_0>
+        ...
+
+    pretrained: path
+        or
+    pretrained:
+        <kwarg_0>: <value_0>
+
     test:
-        dataset:
-            - <dataset_param_0>: <value_0>
-            ...
-        metrics:
-            - <metric_0>         # BatchFLow class of metrics because `metric_0` is also key of the first level of config
-            - ...
-            - <custom_metric_0>  # custom metric defined in Validator-child class
-            ...
+        <kwarg_0>: <value_0>
+        ...
+    metrics: <metric_0>, ..., <custom_metric_0>, ...
+            or
+    metrics:
+        <metric_0>         # BatchFLow class of metrics because `metric_0` is also key of the first level of config
+        ...
+        <custom_metric_0>  # custom metric defined in Validator-child class
+        ...
     metric_0
         class: <classification|segmentation|mask|instance|regression>
             <kwarg_0>: <value_0>
@@ -204,15 +266,12 @@ Generally has the following structure::
                 <metric_kwarg_1>: <value_1>
     ...
 
-Also you can define metrics in the following way: ::
-
-    metrics: <metric_0>, <metric_1>, <custom_metric_0>, ...
-
 Style guide
 ===========
 
-To make your interfaces clearer, we propose one rule: use each of 5 methods to divide your model lify-cycle into clear blocks.
-For example, there are several options to define data loading: `__init__`, `train`/`inference` but it's better when you use special methods 'train_loader'/'test_loader'.
+To make your interfaces clearer, we propose one rule: use all to divide your model life-cycle into clear blocks.
+For example, there are several options to define data loading: `__init__`, `train`/`inference` but it's better when you
+use one of loaders.
 
 To check that interface has necessary methods, you can call `check_api` method.
 For example, call class method::

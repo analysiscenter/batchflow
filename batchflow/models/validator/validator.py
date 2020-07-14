@@ -82,8 +82,11 @@ class Validator:
             raise ValueError("Both 'train' and 'pretrained' was founded.")
 
         self._pretrained = self.config.get('pretrained', {})
-        if 'pretrained' in self.config and self._pretrained is None:
-            self._pretrained = {}
+        if 'pretrained' in self.config:
+            if self._pretrained is None:
+                self._pretrained = {}
+            elif isinstance(self._pretrained, str):
+                self._pretrained = {'path': self._pretrained}
 
         self.config['train'] = self.config.get('train', {})
         self.config['test'] = self.config.get('test', {})
@@ -102,6 +105,8 @@ class Validator:
         self._cv = self.config.get('cv', {})
         if self._cv is None:
             self._cv = {}
+        elif isinstance(self._cv, str):
+            self._cv = {'path': self._cv}
 
         self.train_dataset = None
         self.test_dataset = None
@@ -116,7 +121,13 @@ class Validator:
         Parameters
         ----------
         path : str or None
-            path to train dataset, defined in `train/dataset` section of config.
+            path to train dataset, defined in `train/dataset` section of config
+
+        Return
+        ------
+        path : str or None
+            If function is not defined in child class, return `path`. It will be
+            used as first argument of `train`.
          """
         _ = kwargs
         return path
@@ -127,27 +138,50 @@ class Validator:
         Parameters
         ----------
         path : str or None
-            path to test dataset, defined in `test/dataset` section of config.
+            path to test dataset, defined in `test/dataset` section of config
+
+        Return
+        ------
+        path : str or None
+            If function is not defined in child class, return `path`. It will be
+            used as the first argument of `train`.
         """
         _ = kwargs
         return path
 
-    def load_train_test_dataset(self, path=None, test_path=None, **kwargs):
+    def load_train_test_dataset(self, path=None, **kwargs):
         """ Train and test datasets loader.
 
         Parameters
         ----------
         path : str or None
-            path to train dataset or the whole dataset which will be splitted into train and test.
-        test_path : str or None
-            path to test dataset
+            path to data
+
+        Return
+        ------
+        tuple :
+            If function is not defined in child class, return (`path`, None). It will be
+            used as the first arguments of `train` and `test` correspondingly. For each None
+            value in tuple corresponding loader will be called (train or test).
         """
         _ = kwargs
-        return path, test_path
+        return path, None
 
     def load_cv_dataset(self, path, **kwargs):
-        _ = kwargs
-        return None
+        """ Cross valdiation split.
+
+        Parameters
+        ----------
+        path : str or None
+            path to data
+
+        Return
+        ------
+        list of tuples :
+            Each tuple is pair of train and test datasets. By default, return empty list.
+        """
+        _ = path, kwargs
+        return []
 
     def load_model(self, path=None):
         """ Loader for pretrained model.
@@ -155,13 +189,14 @@ class Validator:
         Parameters
         ----------
         path : str
+            path to model
 
         Return
         ------
         path : str
             If function is not defined in child class, return `path` to model.
-            If `pretrained` is enabled, output of that function will be used
-            as the second argument of `inference`.
+            If `pretrained` is enabled in config, 'load_train_dataset' and 'train'
+            will be ignored.
         """
         _ = path
 
@@ -266,7 +301,8 @@ class Validator:
             self._run_cv()
 
     def _run(self):
-        train_dataset, test_dataset = self.load_train_test_dataset(**(self.config.get('load_train_test_dataset') or {}))
+        loader_kwargs = self.config.get('load_train_test_dataset') or {}
+        train_dataset, test_dataset = self.load_train_test_dataset(**loader_kwargs)
 
         if 'pretrained' in self.config:
             self.load_model(**self._pretrained)
