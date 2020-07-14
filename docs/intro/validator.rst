@@ -245,6 +245,11 @@ Config has the following keys::
             evaluate:
                 <metric_kwarg_0>: <value_0>
                 <metric_kwarg_1>: <value_1>
+
+    cv:
+        agg: <agg_func>  # 'mean', 'median' or None (without aggregation)
+        <kwarg_0>: <value_0>
+        ...
     ...
 
 
@@ -268,7 +273,7 @@ If `'cv'` is in config, then cross-validation procedure will be performed:
     #. train
     #. inference
     #. compute_metrics
-#. metrics aggregation
+#. metrics aggregation by function defined in config (by default, 'mean')
 
 Style guide
 ===========
@@ -293,4 +298,4 @@ You also can check keys in validator config by `check_config` method: ::
     val = MyValidator('validator.yaml')
     val.check_config(keys=['train|pretrained', 'load_model])
 
-Successful check means that class implements `load_model` method and one of 'train` and `pretrained`.
+Successful check means that class implements `load_model` method and one of `train` and `pretrained`.
