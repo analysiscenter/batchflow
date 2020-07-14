@@ -37,26 +37,26 @@ and execute the following code: ::
     val = LithologyModel('validator.yaml')
     val.run()
 
-If you call `run` method of Validator and 'cv' key is not in config,
+If you call `run` method of Validator and `'cv'` key is not in config,
 the following sequence of methods will be executed:
 
-    load_train_test_dataset
-    if `'pretrained'` key not in config then
-        load_train_data (if needed, see `load_train_test_dataset` docsting)
-        train
-    else
-        load_model
-    load_test_data (if needed, see `load_train_test_dataset` docsting)
-    inference
-    compute_metrics
+- load_train_test_dataset
+- if `'pretrained'` key not in config then
+     load_train_data (if needed, see `load_train_test_dataset` docsting)
+     train
+   else
+     load_model
+     load_test_data (if needed, see `load_train_test_dataset` docsting)
+- inference
+- compute_metrics
 
-If 'cv' is in config, then cross-validation procedure will be performed:
-    load_cv_dataset
-    for each split
-        train
-        inference
-        compute_metrics
-    metrics aggregation
+If `'cv'` is in config, then cross-validation procedure will be performed:
+- load_cv_dataset
+- for each split
+     train
+     inference
+     compute_metrics
+- metrics aggregation
 
 Basic example
 =============
