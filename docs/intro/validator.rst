@@ -5,12 +5,12 @@ Validator
 Getting started
 ===============
 Validator is an instrument to unify the process of model training and validation.
-There are two main reasons to wrap your model using classes from `Validator` submodule:
+There are two main reasons to wrap your model with `Validator`:
 
-- make the structure of the model lifecycle clear,
-- provide API to automized model training and validation.
+- make the model lifecycle more clear,
+- provide API to automized model training, validation and cross-validation.
 
-All you need is to define class inherited from `Validator`, define few methods
+All you need is to define class inherited from `Validator`, define few methods (`train`, `inference`, train/test loaders etc.)
 and then you can use it in your scipts: ::
 
     validator = LithologyModel(dpcm=20, crop_length=10)
@@ -20,7 +20,7 @@ and then you can use it in your scipts: ::
     targets, predictions = validator.inference(test_dataset)
     validator.compute_metrics(targets, predictions, 'f1_score')
 
-Also you can configure all stages by `yaml` file: ::
+Moreover, you can configure all the stages by `yaml` file: ::
 
     dpcm: 20
     crop_length: 10
@@ -30,33 +30,11 @@ Also you can configure all stages by `yaml` file: ::
     load_test_dataset: /test
     metrics: f1_score
 
-and execute the following code: ::
+Then you just need to execute the following code: ::
 
     from validator import LithologyModel
-
     val = LithologyModel('validator.yaml')
     val.run()
-
-If you call `run` method of Validator and `'cv'` key is not in config,
-the following sequence of methods will be executed:
-
-- load_train_test_dataset
-- if `'pretrained'` key not in config then
-     load_train_data (if needed, see `load_train_test_dataset` docsting)
-     train
-   else
-     load_model
-     load_test_data (if needed, see `load_train_test_dataset` docsting)
-- inference
-- compute_metrics
-
-If `'cv'` is in config, then cross-validation procedure will be performed:
-- load_cv_dataset
-- for each split
-     train
-     inference
-     compute_metrics
-- metrics aggregation
 
 Basic example
 =============
@@ -73,10 +51,10 @@ validator.py
             self.model_config = ...
             self.dataset = PascalSegmentation(bar=True)
 
-        def train_loader(self, **kwargs):
+        def load_train_dataset(self, **kwargs):
             return self.dataset.train
 
-        def test_loader(self, **kwargs):
+        def load_test_dataset(self, **kwargs):
             return self.dataset.test
 
         def train(self, dataset):
@@ -122,20 +100,20 @@ therefore `path=None` and `kwargs={}`. Let's define config:
 
     load_train_dataset: /path/to/dataset
 
-or
+or ::
 
-::
     load_train_dataset:
         path: /path/to/dataset
 
-In that case `path='/path/to/dataset'`. You also can define multiple parameters of `load_train_dataset`: ::
+In that case `path='/path/to/dataset'` and `kwargs={}`. You also can define multiple parameters of `load_train_dataset`: ::
 
     load_train_dataset:
         path: /path/to/dataset
         format: 'png'
 
 Now `path='/path/to/dataset', kwargs={'format': 'png'}`.
-The output of the function will be used as `train_dataset` argument of `train` method. By default, it returns `path`.
+The output of the function will be used as the first positional argument of `train` method. By default, it returns `path`.
+If you use 'run' method, 'load_train_dataset' and `train` are executed when `pretrained` is not defined in config.
 
 `load_test_dataset(self, path=None, **kwargs)`
 ----------------------------------------------
@@ -153,39 +131,37 @@ logic as other data loaders.
 `load_model(self, path=None, **kwargs)`
 ---------------------------------------
 
-Loader for pretrained model. Let's make example above more complex::
+Loader for pretrained model. Let's consider an example::
 
     pretrained:
         path: /path/to/model
         device: cuda:0
-    test:
-        metrics: accuracy
 
-In that case `path='/path/to/model'` and `kwargs={device: 'cuda:0'}`. The output of the function will be used as `train_output` argument of `inference` method.
-By default, it returns `path`. Note that when you define `pretrained` key in your config, train section will be skipped.
+In that case `path='/path/to/model'` and `kwargs={device: 'cuda:0'}`. Methods hasn't ouputs, model must be saved as instance attribute.
+Note that when you use `run` method and define `pretrained` key in your config, train section will be skipped.
 
 `train(self, train_dataset, **kwargs)`
 --------------------------------------
 
-Function that must contain the whole training process. Argument `train_dataset` is an output of `train_loader` method,
+Function that must contain the whole training process. Positional argument `train_dataset` is an output of `train_loader` method,
 dict `kwargs` is from config. Example::
 
     train:
         model: UNet
 
-In that case `kwargs={model: 'UNet'}`. Method is executed when `pretrained` is not defined in config.
+In that case `kwargs={model: 'UNet'}`. If you use 'run' method, 'load_train_dataset' and `train` are executed when `pretrained` is not defined in config.
 
 `inference(self, test_dataset, **kwargs)`
 -----------------------------------------
 
-Function that must contain the whole inference process. Argument `test_dataset` is an output of `test_loader` method. `kwargs` is from config and doesn't include popped `dataset` key.
+Function that must contain the whole inference process. Argument `test_dataset` is an output of `test_loader` method. `kwargs` is from config.
 Function returns `predictions` and `targets` in format that can be used with Batchflow metrics (see :doc:`metrics API <../api/batchflow.models.metrics>`).
 
 `load_cv_dataset(self, path, **kwargs)`
 ---------------------------------------
 Load data and split into folds. Method has the same argument logic as other data loaders.
 Method must return list of tuple where each tuple is a pair of train and test dataset which will
-be substituted into `train` and `inderence` methods, correspondingly.
+be substituted into `train` and `inference` methods, correspondingly.
 
 Custom metrics
 --------------
@@ -222,18 +198,23 @@ You also can define `metrics` value as one string: ::
 validator.yaml
 ==============
 
-Generally has the following structure::
+Config has the following keys::
 
+    load_train_test_dataset: path
+            or
+    load_train_test_dataset:
+        <kwarg_0>: <value_0>
+        ...
 
-    load_train_data: path
+    load_train_dataset: path
             or
     load_train_data:
         <kwarg_0>: <value_0>
         ...
 
-    load_test_data: path
+    load_test_dataset: path
             or
-    load_test_data:
+    load_test_dataset:
         <kwarg_0>: <value_0>
         ...
 
@@ -265,6 +246,28 @@ Generally has the following structure::
                 <metric_kwarg_0>: <value_0>
                 <metric_kwarg_1>: <value_1>
     ...
+
+
+If you call `run` method of Validator and `'cv'` key is not in config,
+the following sequence of methods will be executed:
+
+#. load_train_test_dataset
+#. if `'pretrained'` key is not in config then
+    #. load_train_data (if needed, see `load_train_test_dataset` docsting)
+    #. train
+#. else
+    #. load_model
+    #. load_test_data (if needed, see `load_train_test_dataset` docsting)
+#. inference
+#. compute_metrics
+
+If `'cv'` is in config, then cross-validation procedure will be performed:
+#. load_cv_dataset
+#. for each split
+    #. train
+    #. inference
+    #. compute_metrics
+#. metrics aggregation
 
 Style guide
 ===========
