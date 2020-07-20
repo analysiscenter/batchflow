@@ -85,12 +85,17 @@ class ResourceMonitor:
         plt.figure(figsize=(8, 6))
         plt.plot(np.array(self.ticks) - self.ticks[0], self.data)
         plt.title(self.__class__.__name__)
+        plt.xlabel('Time, s', fontsize=12)
+        plt.ylabel(self.UNIT, fontsize=12, rotation='horizontal', labelpad=15)
+        plt.grid(True)
         plt.show()
 
 
 
 class CPUMonitor(ResourceMonitor):
     """ Track CPU usage. """
+    UNIT = '%'
+
     @staticmethod
     def get_usage(**kwargs):
         """ Track CPU usage. """
@@ -100,6 +105,8 @@ class CPUMonitor(ResourceMonitor):
 
 class MemoryMonitor(ResourceMonitor):
     """ Track total virtual memory usage. """
+    UNIT = 'Gb'
+
     @staticmethod
     def get_usage(**kwargs):
         """ Track total virtual memory usage. """
@@ -109,6 +116,8 @@ class MemoryMonitor(ResourceMonitor):
 
 class RSSMonitor(ResourceMonitor):
     """ Track non-swapped physical memory usage. """
+    UNIT = 'Gb'
+
     @staticmethod
     def get_usage(pid=None, **kwargs):
         """ Track non-swapped physical memory usage. """
@@ -119,6 +128,8 @@ class RSSMonitor(ResourceMonitor):
 
 class VMSMonitor(ResourceMonitor):
     """ Track current process virtual memory usage. """
+    UNIT = 'Gb'
+
     @staticmethod
     def get_usage(pid=None, **kwargs):
         """ Track current process virtual memory usage. """
@@ -129,6 +140,8 @@ class VMSMonitor(ResourceMonitor):
 
 class USSMonitor(ResourceMonitor):
     """ Track current process unique virtual memory usage. """
+    UNIT = 'Gb'
+
     @staticmethod
     def get_usage(pid=None, **kwargs):
         """ Track current process unique virtual memory usage. """
@@ -139,6 +152,8 @@ class USSMonitor(ResourceMonitor):
 
 class GPUMonitor(ResourceMonitor):
     """ Track GPU usage. """
+    UNIT = 'Gb'
+
     @staticmethod
     def get_usage(gpu_list=None, **kwargs):
         """ Track GPU usage. """
