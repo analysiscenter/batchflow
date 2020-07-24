@@ -35,11 +35,11 @@ def test_assemble(all_results, kwargs, res):
     batch = FakeBatch(np.arange(2))
     batch._assemble(np.asarray(all_results), **kwargs)
 
-    def check_res(item, true_val):
+    def assert_arrays_equal(item, true_val):
         if true_val is None:
-            assert true_val is None
+            assert item is None
         else:
             assert (item == np.asarray(true_val)).all()
 
-    check_res(batch.c1, res['c1'])
-    check_res(batch.c2, res['c2'])
+    assert_arrays_equal(batch.c1, res['c1'])
+    assert_arrays_equal(batch.c2, res['c2'])
