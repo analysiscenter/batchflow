@@ -11,6 +11,10 @@ class FakeBatch(Batch):
     components = ('c1', 'c2')
 
 
+def assert_arrays_equal(item, true_val):
+    assert np.all(item == np.asarray(true_val)) if true_val is not None else (item is None)
+
+
 def test_handle_exceptions():
     """ Exception is raised if `all_results` contains an Exception object """
     batch = FakeBatch(np.arange(2))
@@ -34,12 +38,6 @@ def test_assemble(all_results, kwargs, res):
     """ ensure that values from `all_results` are put into components properly """
     batch = FakeBatch(np.arange(2))
     batch._assemble(np.asarray(all_results), **kwargs)
-
-    def assert_arrays_equal(item, true_val):
-        if true_val is None:
-            assert item is None
-        else:
-            assert (item == np.asarray(true_val)).all()
 
     assert_arrays_equal(batch.c1, res['c1'])
     assert_arrays_equal(batch.c2, res['c2'])
