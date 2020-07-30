@@ -62,6 +62,7 @@ class EfficientNetB0(EncoderDecoder):
 
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = super().default_config()
 
         config['initial_block'] += dict(scalable=True, layout='cna', kernel_size=3, strides=2, filters=32)
@@ -93,6 +94,7 @@ class EfficientNetB0(EncoderDecoder):
         return config
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super().build_config(names)
 
         if config.get('head/units') is None:

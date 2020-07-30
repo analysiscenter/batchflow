@@ -43,6 +43,7 @@ class DenseNet(TFModel):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
         config['common/conv/use_bias'] = False
         config['initial_block'] += dict(layout='cnap', filters=16, kernel_size=7, strides=2,
@@ -57,6 +58,7 @@ class DenseNet(TFModel):
         return config
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super().build_config(names)
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')

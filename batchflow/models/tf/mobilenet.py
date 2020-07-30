@@ -74,6 +74,7 @@ class MobileNet(TFModel):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
         config['initial_block'] += dict(layout='cna', filters=32, kernel_size=3, strides=2)
         config['body'].update(_V1_DEFAULT_BODY)
@@ -82,6 +83,7 @@ class MobileNet(TFModel):
         return config
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super().build_config(names)
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')
@@ -179,6 +181,7 @@ class MobileNet_v2(TFModel):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
         config['initial_block'].update(dict(layout='cna', filters=32, kernel_size=3, strides=2))
         config['body'].update(dict(width_factor=1, layout=_V2_DEFAULT_BODY))
@@ -188,6 +191,7 @@ class MobileNet_v2(TFModel):
         return config
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super().build_config(names)
         if isinstance(config['head/filters'], list):
             config['head/filters'][-1] = self.num_classes('targets')

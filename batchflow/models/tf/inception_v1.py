@@ -35,6 +35,7 @@ class Inception_v1(Inception):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = Inception.default_config()
         config['common']['layout'] = 'cn'
         config['initial_block'] += dict(layout='cnp cn cn p', filters=[64, 64, 192],

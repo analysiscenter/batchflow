@@ -34,6 +34,7 @@ class Inception(TFModel):
     """
 
     def build_config(self, names=None):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = super().build_config(names)
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')

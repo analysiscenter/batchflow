@@ -29,6 +29,7 @@ class InceptionResNet_v2(Inception):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = Inception.default_config()
         config['common']['layout'] = 'cna'
         config['initial_block'] += dict(layout='cna', filters=[32, 64, 96, 192],

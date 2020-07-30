@@ -37,6 +37,7 @@ class Xception(TFModel):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
         config['body/entry'] = dict(num_stages=None, filters=None, strides=2, combine_op='softsum')
         config['body/middle'] = dict(num_stages=None, filters=None, strides=1, combine_op='sum')
@@ -46,6 +47,7 @@ class Xception(TFModel):
         return config
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super().build_config(names)
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')
