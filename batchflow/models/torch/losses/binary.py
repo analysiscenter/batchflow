@@ -136,7 +136,8 @@ class Tversky(nn.Module):
         intersection = (prediction * target).sum()
         false_positive = (prediction * (1 - target)).sum()
         false_negative = ((1 - prediction) * target).sum()
-        tversky_coeff = intersection / (intersection + self.alpha * false_positive + self.beta * false_negative + self.eps)
+        tversky_coeff = intersection / (intersection + self.alpha * false_positive
+                                        + self.beta * false_negative + self.eps)
         return 1 - tversky_coeff
 
 

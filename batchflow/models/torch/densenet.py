@@ -14,6 +14,7 @@ class DenseNet(Encoder):
     """ DenseNet architecture. """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TorchModel.default_config`"""
         config = super().default_config()
         config['common/conv/bias'] = False
         config['initial_block'] += dict(layout='cnap', filters=16,
@@ -83,6 +84,7 @@ class SegmentationDenseNet(EncoderDecoder):
     """ FC DenseNet architecture for segmentation tasks. """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TorchModel.default_config`"""
         config = super().default_config()
         config['common/conv/bias'] = False
         config['initial_block'] += dict(layout='c', filters=48, kernel_size=3, strides=1)
