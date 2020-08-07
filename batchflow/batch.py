@@ -266,13 +266,12 @@ class Batch(metaclass=MethodsTransformingMeta):
                 new_comp = [b.get(component=comp) for b in batches]
             else:
                 last_batch = batches[break_point]
-                last_batch_last_index = last_batch.get_pos(None, comp, last_batch.indices[last_batch_len - 1])
                 new_comp = [b.get(component=comp) for b in batches[:break_point]] + \
-                           [last_batch.get(component=comp)[:last_batch_last_index + 1]]
+                           [last_batch.get(component=comp)[:last_batch_len]]
             new_data[i] = cls.merge_component(comp, new_comp)
 
             if batch_size is not None:
-                rest_comp = [last_batch.get(component=comp)[last_batch_last_index + 1:]] + \
+                rest_comp = [last_batch.get(component=comp)[last_batch_len:]] + \
                             [b.get(component=comp) for b in batches[break_point + 1:]]
                 rest_data[i] = cls.merge_component(comp, rest_comp)
 
