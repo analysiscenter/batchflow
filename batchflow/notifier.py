@@ -86,8 +86,6 @@ class Notifier:
                  window=None, layout='h', figsize=None, savepath=None, **kwargs):
 
         # Prepare data containers like monitors and pipeline variables
-        data_containers = []
-
         if monitors:
             monitors = monitors if isinstance(monitors, (tuple, list)) else [monitors]
         else:
@@ -103,7 +101,7 @@ class Notifier:
         self.n_monitors = len(monitors)
 
         self.data_containers = []
-        for container in (monitors + graphs):
+        for container in monitors + graphs:
             if not isinstance(container, dict):
                 container = {'source': container}
 

@@ -1,16 +1,13 @@
 """ Contains helper functions """
-import sys
 import copy
-import math
 import functools
-import tqdm
 
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib import colors as mcolors
 
-from .named_expr import NamedExpression, eval_expr
+from .named_expr import NamedExpression
 
 
 def is_iterable(obj):
