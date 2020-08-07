@@ -1,7 +1,7 @@
 """ Monitoring (memory usage, cpu/gpu utilization) tools. """
 import os
 import time
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Manager
 from contextlib import contextmanager
 
 import psutil
@@ -17,6 +17,8 @@ except ImportError:
 
 class ResourceMonitor:
     """ Periodically runs supplied function in a separate process and stores its outputs.
+
+    The created process runs infinitely until it is killed by SIGKILL signal.
 
     Parameters
     ----------
@@ -40,39 +42,49 @@ class ResourceMonitor:
         self.kwargs = kwargs
 
         self.pid = os.getpid()
-        self.repeat_queue, self.data_queue = None, None
+        self.pid_to_kill = None
         self.running = False
+
+        # Re-creating instances would take some (~20ms) time, so store it
+        self.manager = Manager()
+        self.parent_process = psutil.Process(self.pid)
+        self.shared_list = None
 
         self.start_time, self.end_time = None, None
         self.ticks, self.data = [], []
 
-
     @staticmethod
-    def endless_repeat(function, frequency, repeat_queue, data_queue, **kwargs):
-        """ Repeat `function` and storing results, until `stop` signal is recieved.. """
-        res = []
-        while repeat_queue.empty():
-            res.append(function(**kwargs))
+    def endless_repeat(shared_list, function, frequency, **kwargs):
+        """ Repeat `function` and storing results, until `stop` signal is recieved. """
+        while True:
+            # As this process is killed ungracefully, it can be shut down in the middle of data appending.
+            # We let Python handle it by ignoring the exception.
+            try:
+                shared_list.append(function(**kwargs))
+            except BrokenPipeError:
+                pass
             time.sleep(frequency)
-        data_queue.put(res)
-
 
     def start(self):
         """ Start a separate process with function calls. """
         self.running = True
-        self.repeat_queue = Queue()
-        self.data_queue = Queue()
+        self.shared_list = self.manager.list()
         self.start_time = time.time()
 
-        args = self.function, self.frequency, self.repeat_queue, self.data_queue
-        p = Process(target=self.endless_repeat, args=args,
-                    kwargs={'pid': self.pid, **self.kwargs})
+        args = self.shared_list, self.function, self.frequency
+        p = Process(target=self.endless_repeat, args=args, kwargs={'pid': self.pid, **self.kwargs})
         p.start()
+        self.pid_to_kill = p.pid
 
     def stop(self):
         """ Stop separate process; append collected data to the already stored. """
-        self.repeat_queue.put('stop')
-        data = self.data_queue.get()
+        for child in self.parent_process.children(recursive=False):
+            if child.pid == self.pid_to_kill:
+                child.kill()
+                break
+
+        data = self.shared_list
+        data.append(self.function(pid=self.pid, **self.kwargs))
         self.end_time = time.time()
         self.running = False
 
@@ -162,7 +174,6 @@ class GPUMonitor(ResourceMonitor):
         handle = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
         res = [nvidia_smi.nvmlDeviceGetUtilizationRates(item) for item in handle]
         return [item.gpu for item in res]
-
 
 
 
