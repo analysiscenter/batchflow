@@ -98,26 +98,38 @@ class Notifier:
         else:
             graphs = []
 
-        data_containers = monitors + graphs
-        data_containers = [MONITOR_ALIASES[container.lower()]()
-                           if isinstance(container, str) and container.lower() in MONITOR_ALIASES else container
-                           for container in data_containers]
-        self.has_monitors = sum(isinstance(container, ResourceMonitor) for container in data_containers)
+        self.has_monitors = False
         self.has_graphs = len(graphs) > 0
         self.n_monitors = len(monitors)
 
-        names = []
-        for container in data_containers:
-            if isinstance(container, ResourceMonitor):
-                names.append(container.__class__.__name__)
-            elif isinstance(container, NamedExpression):
-                names.append(container.name)
-            elif isinstance(container, str):
-                names.append(container)
+        self.data_containers = []
+        for container in (monitors + graphs):
+            if not isinstance(container, dict):
+                container = {'source': container}
+
+            if isinstance(container['source'], str) and container['source'].lower() in MONITOR_ALIASES:
+                container['source'] = MONITOR_ALIASES[container['source'].lower()]()
+
+
+            source = container.get('source')
+            if source is None:
+                raise ValueError('Passed dictionaries as `monitors` or `graphs` should contain `source` key!')
+
+            if isinstance(source, ResourceMonitor):
+                self.has_monitors = True
+
+            if 'name' not in container:
+                if isinstance(source, ResourceMonitor):
+                    container['name'] = source.__class__.__name__
+                elif isinstance(source, NamedExpression):
+                    container['name'] = source.name
+                elif isinstance(source, str):
+                    container['name'] = source
+
+            self.data_containers.append(container)
+
 
         self.frequency = frequency
-        self.data_containers = dict(zip(names, data_containers))
-        self.data = {name: [] for name in names}
         self.timestamps = []
         self.start_monitors()
 
@@ -211,18 +223,19 @@ class Notifier:
 
     def update_data(self, pipeline=None, batch=None):
         """ Get data from monitor or pipeline. """
-        for name, container in self.data_containers.items():
-            if isinstance(container, ResourceMonitor):
-                value = container.stop()
-                self.data[name] = container.data
+        for container in self.data_containers:
+            source = container['source']
+            if isinstance(source, ResourceMonitor):
+                value = source.stop()
+                container['data'] = source.data
 
-            elif isinstance(container, NamedExpression):
-                value = eval_expr(container, pipeline=pipeline, batch=batch)
-                self.data[name] = value
+            elif isinstance(source, NamedExpression):
+                value = eval_expr(source, pipeline=pipeline, batch=batch)
+                container['data'] = value
 
-            elif isinstance(container, str):
-                value = pipeline.v(container)
-                self.data[name] = value
+            elif isinstance(source, str):
+                value = pipeline.v(source)
+                container['data'] = value
 
     def update_description(self):
         """ Set new bar description. """
@@ -236,22 +249,30 @@ class Notifier:
         figsize = self.figsize or ((20, 5) if self.layout.startswith('h') else (20, 5*num_graphs))
 
         display.clear_output(wait=True)
-        _, ax = plt.subplots(*layout, figsize=figsize)
+        fig, ax = plt.subplots(*layout, figsize=figsize)
         ax = ax if isinstance(ax, np.ndarray) else [ax]
 
-        for i, (name, container) in  enumerate(self.data_containers.items()):
+        for i, container in enumerate(self.data_containers):
             if i >= index:
-                if isinstance(container, ResourceMonitor):
-                    data_x = np.array(container.ticks)[self.slice] - container.ticks[0]
-                    data_y = container.data[self.slice]
-                    x_label, y_label = 'Time, s', container.UNIT
+                source = container['source']
+                name = container['name']
+                plot_function = container.get('plot_function')
+
+                if isinstance(source, ResourceMonitor):
+                    data_x = np.array(source.ticks)[self.slice] - source.ticks[0]
+                    data_y = source.data[self.slice]
+                    x_label, y_label = 'Time, s', source.UNIT
                 else:
-                    data_y = self.data[name]
+                    data_y = container['data']
                     data_x = list(range(len(data_y)))[self.slice]
                     data_y = data_y[self.slice]
                     x_label, y_label = 'Iteration', ''
 
-                if isinstance(data_y, (tuple, list)) or (isinstance(data_y, np.ndarray) and data_y.ndim == 1):
+                if plot_function is not None:
+                    plot_function(fig=fig, ax=ax[i - index], i=i,
+                                  data_x=data_x, data_y=data_y, container=container)
+                # Default plotting functionality
+                elif isinstance(data_y, (tuple, list)) or (isinstance(data_y, np.ndarray) and data_y.ndim == 1):
                     ax[i - index].plot(data_x, data_y)
                     ax[i - index].set_title(name, fontsize=12)
                     ax[i - index].set_xlabel(x_label, fontsize=12)
@@ -301,20 +322,23 @@ class Notifier:
     # Utility functions
     def start_monitors(self):
         """ Start collection of data for every resource monitor. """
-        for container in self.data_containers.values():
-            if isinstance(container, ResourceMonitor):
-                container.start()
+        for container in self.data_containers:
+            source = container['source']
+            if isinstance(source, ResourceMonitor):
+                source.start()
 
     def create_description(self, iteration):
         """ Create string description of a given iteration. """
         description = []
-        for name, container in self.data_containers.items():
-            if not isinstance(container, ResourceMonitor):
-                if isinstance(container, AlgebraicNamedExpression):
-                    desc = self.data[name][iteration]
+        for container in self.data_containers:
+            source = container['source']
+            name = container['name']
+            if not isinstance(source, ResourceMonitor):
+                if isinstance(source, AlgebraicNamedExpression):
+                    desc = container['data'][iteration]
                     description.append(desc)
-                elif isinstance(container, (str, NamedExpression)):
-                    value = self.data[name][iteration]
+                elif isinstance(source, (str, NamedExpression)):
+                    value = container['data'][iteration]
                     if isinstance(value, (int, float)):
                         desc = f'{name}={value:<6.6}' if isinstance(value, float) else f'{name}={value:<6}'
                         description.append(desc)
