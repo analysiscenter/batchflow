@@ -9,7 +9,7 @@ import numpy as np
 from ...pipeline import METRICS
 from ... import Config
 
-def _get_class_that_defined_method(meth):
+def _get_method_owner(meth):
     if inspect.ismethod(meth):
         for cls in inspect.getmro(meth.__self__.__class__):
             if cls.__dict__.get(meth.__name__) is meth:
@@ -76,44 +76,78 @@ class Validator:
         elif config is None:
             self.config = {}
 
-        self.config = {**self.config, **kwargs}
+
+        defaults = {
+            'pretrained': {},
+            'train': {},
+            'test': {},
+            'train_dataset': {},
+            'test_dataset': {},
+            'metrics': [],
+            'cv': {}
+        }
+
+        self.config = {**defaults, **self.config, **kwargs}
 
         if 'train' in self.config and 'pretrained' in self.config:
-            raise ValueError("Both 'train' and 'pretrained' was founded.")
+            raise ValueError("Both 'train' and 'pretrained' was found.")
 
-        self._pretrained = self.config.get('pretrained', {})
-        if 'pretrained' in self.config:
-            if self._pretrained is None:
-                self._pretrained = {}
-            elif isinstance(self._pretrained, str):
-                self._pretrained = {'path': self._pretrained}
+        for key in ['pretrained', 'train_dataset', 'test_dataset', 'cv']:
+            if self.config[key] is None:
+                self.config[key] = {}
+            elif isinstance(self.config[key], str):
+                self.config[key] = {'path': self.config[key]}
 
-        self.config['train'] = self.config.get('train', {})
-        self.config['test'] = self.config.get('test', {})
+        if isinstance(self.config['metrics'], str):
+            self.config['metrics'] = [item.strip() for item in self.config['metrics'].split(',')]
 
-        self._train_ds = self.config.get('train_dataset', {})
-        if isinstance(self._train_ds, str):
-            self._train_ds = {'path': self._train_ds}
-        self._test_ds = self.config.get('test_dataset', {})
-        if isinstance(self._test_ds, str):
-            self._test_ds = {'path': self._test_ds}
-
-        self._metrics = self.config.get('metrics', [])
-        if isinstance(self._metrics, str):
-            self._metrics = [item.strip() for item in self._metrics.split(',')]
-
-        self._cv = self.config.get('cv', {})
-        if self._cv is None:
-            self._cv = {}
-        elif isinstance(self._cv, str):
-            self._cv = {'path': self._cv}
-
-        self.train_dataset = None
-        self.test_dataset = None
         self.targets = None
         self.predictions = None
 
         self.metrics = {}
+
+    def run(self):
+        """ Run validator """
+        if 'cv' not in self.config:
+            self._run()
+        else:
+            self._run_cv()
+
+    def _run(self):
+        loader_kwargs = self.config.get('load_train_test_dataset') or {}
+        train_dataset, test_dataset = self.load_train_test_dataset(**loader_kwargs)
+
+        if 'pretrained' in self.config:
+            self.load_model(**self._pretrained)
+        else:
+            train_dataset = train_dataset or self.load_train_dataset(**self.config['train_dataset'])
+            self.train(train_dataset, **self.config['train'])
+
+        test_dataset = test_dataset or self.load_test_dataset(**self.config['test_dataset'])
+        self.targets, self.predictions = self.inference(test_dataset, **self.config['test'])
+
+        metrics_kwargs = {key: value for key, value in self.config.items() if key in self.config['metrics']}
+        self.metrics = self.compute_metrics(self.targets, self.predictions, *self.config['metrics'], **metrics_kwargs)
+
+    def _run_cv(self):
+        res = []
+        metrics_kwargs = {key: value for key, value in self.config.items() if key in self.config['metrics']}
+        agg = self.config['cv'].pop('agg', 'mean')
+        for train, test in self.load_cv_dataset(**self.config['cv']):
+            self.train(train, **self.config['train'])
+            self.targets, self.predictions = self.inference(test, **self.config['test'])
+            res.append(self.compute_metrics(self.targets, self.predictions, *self.config['metrics'], **metrics_kwargs))
+        if agg is None:
+            self.metrics = res
+        else:
+            if isinstance(agg, str):
+                _agg = getattr(np, agg)
+            elif callable(agg):
+                _agg = agg
+            else:
+                raise ValueError('agg must be str or callable')
+            for key in res[0]:
+                self.metrics[key] = _agg([item[key] for item in res])
 
     def load_train_dataset(self, path=None, **kwargs):
         """ Train dataset loader.
@@ -254,7 +288,7 @@ class Validator:
         else:
             _warning = lambda msg: msg
         for meth in methods:
-            cond = all([_get_class_that_defined_method(getattr(cls, _meth)) == Validator for _meth in meth.split('|')])
+            cond = all([_get_method_owner(getattr(cls, _meth)) == Validator for _meth in meth.split('|')])
             if cond:
                 error = True
                 _ = _warning('Method "{}" is not implemented in class {}'.format(meth, cls.__class__))
@@ -290,48 +324,5 @@ class Validator:
             cond = all([_key not in self.config for _key in key.split('|')])
             if cond:
                 error = True
-                _ = _warning('Key "{}" was not founded in config: {}'.format(key, self.config))
+                _ = _warning('Key "{}" was not found in config: {}'.format(key, self.config))
         return error
-
-    def run(self):
-        """ Run validator """
-        if 'cv' not in self.config:
-            self._run()
-        else:
-            self._run_cv()
-
-    def _run(self):
-        loader_kwargs = self.config.get('load_train_test_dataset') or {}
-        train_dataset, test_dataset = self.load_train_test_dataset(**loader_kwargs)
-
-        if 'pretrained' in self.config:
-            self.load_model(**self._pretrained)
-        else:
-            train_dataset = train_dataset or self.load_train_dataset(**self._train_ds)
-            self.train(train_dataset, **self.config['train'])
-
-        test_dataset = test_dataset or self.load_test_dataset(**self._test_ds)
-        self.targets, self.predictions = self.inference(test_dataset, **self.config['test'])
-
-        metrics_kwargs = {key: value for key, value in self.config.items() if key in self._metrics}
-        self.metrics = self.compute_metrics(self.targets, self.predictions, *self._metrics, **metrics_kwargs)
-
-    def _run_cv(self):
-        res = []
-        metrics_kwargs = {key: value for key, value in self.config.items() if key in self._metrics}
-        agg = self._cv.pop('agg', 'mean')
-        for train, test in self.load_cv_dataset(**self._cv):
-            self.train(train, **self.config['train'])
-            self.targets, self.predictions = self.inference(test, **self.config['test'])
-            res.append(self.compute_metrics(self.targets, self.predictions, *self._metrics, **metrics_kwargs))
-        if agg is None:
-            self.metrics = res
-        else:
-            if isinstance(agg, str):
-                _agg = getattr(np, agg)
-            elif callable(agg):
-                _agg = agg
-            else:
-                raise ValueError('agg must be str or callable')
-            for key in res[0]:
-                self.metrics[key] = _agg([item[key] for item in res])
