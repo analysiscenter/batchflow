@@ -1,5 +1,6 @@
 """ Wrapper for models """
 
+import logging
 import warnings
 import inspect
 from copy import deepcopy
@@ -76,6 +77,12 @@ class Validator:
         elif config is None:
             self.config = {}
 
+        if 'train' in self.config and 'pretrained' in self.config:
+            raise ValueError("Both 'train' and 'pretrained' was found.")
+        else:
+            self._pretrained = 'pretrained' in self.config
+
+        self._cv = 'cv' in self.config
 
         defaults = {
             'pretrained': {},
@@ -83,23 +90,22 @@ class Validator:
             'test': {},
             'train_dataset': {},
             'test_dataset': {},
+            'load_train_test_dataset': {},
             'metrics': [],
             'cv': {}
         }
 
         self.config = {**defaults, **self.config, **kwargs}
 
-        if 'train' in self.config and 'pretrained' in self.config:
-            raise ValueError("Both 'train' and 'pretrained' was found.")
-
-        for key in ['pretrained', 'train_dataset', 'test_dataset', 'cv']:
+        for key in ['pretrained', 'load_train_test_dataset', 'train_dataset', 'test_dataset', 'cv']:
             if self.config[key] is None:
                 self.config[key] = {}
             elif isinstance(self.config[key], str):
                 self.config[key] = {'path': self.config[key]}
 
-        if isinstance(self.config['metrics'], str):
-            self.config['metrics'] = [item.strip() for item in self.config['metrics'].split(',')]
+        for key in ['metrics']:
+            if isinstance(self.config[key], str):
+                self.config[key] = [item.strip() for item in self.config[key].split(',')]
 
         self.targets = None
         self.predictions = None
@@ -108,24 +114,32 @@ class Validator:
 
     def run(self):
         """ Run validator """
-        if 'cv' not in self.config:
-            self._run()
-        else:
+        if self._cv:
             self._run_cv()
+        else:
+            self._run()
 
     def _run(self):
-        loader_kwargs = self.config.get('load_train_test_dataset') or {}
-        train_dataset, test_dataset = self.load_train_test_dataset(**loader_kwargs)
+        logging.info('Load datasets')
+        train_dataset, test_dataset = self.load_train_test_dataset(**self.config['load_train_test_dataset'])
 
-        if 'pretrained' in self.config:
-            self.load_model(**self._pretrained)
+        if self._pretrained:
+            logging.info('Load model')
+            self.load_model(**self.config['pretrained'])
         else:
+            logging.info('Load train dataset')
             train_dataset = train_dataset or self.load_train_dataset(**self.config['train_dataset'])
+
+            logging.info('Train model')
             self.train(train_dataset, **self.config['train'])
 
+        logging.info('Load test dataset')
         test_dataset = test_dataset or self.load_test_dataset(**self.config['test_dataset'])
+
+        logging.info('Inference')
         self.targets, self.predictions = self.inference(test_dataset, **self.config['test'])
 
+        logging.info('Compute metrics')
         metrics_kwargs = {key: value for key, value in self.config.items() if key in self.config['metrics']}
         self.metrics = self.compute_metrics(self.targets, self.predictions, *self.config['metrics'], **metrics_kwargs)
 
@@ -201,7 +215,7 @@ class Validator:
         _ = kwargs
         return path, None
 
-    def load_cv_dataset(self, path, **kwargs):
+    def load_cv_dataset(self, path=None, **kwargs):
         """ Cross valdiation split.
 
         Parameters
