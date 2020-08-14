@@ -148,18 +148,6 @@ def test_metrics(validator_class, config):
     assert np.isclose(val.metrics['mse'], 0)
     assert np.isclose(val.metrics['my_mse'], 0)
 
-@pytest.mark.parametrize('config, keys, exception', [
-    ({'train': None, 'test': None}, ['train', 'test'], False),
-    ({'train': None, 'test': None}, ['train'], False),
-    ({'test': None}, ['train', 'test'], False),
-    ({'pretrained': None, 'test': None}, ['train', 'test'], False),
-    ({'pretrained': None, 'test': None}, ['train|pretrained', 'test'], False),
-    ({'train': None}, 'train', False),
-    ({'test': None}, ['train', 'pretrained'], True)
-])
-def test_config_checks(validator_class, config, keys, exception):
-    assert validator_class(config).check_config(keys=keys, warning=False) == exception
-
 @pytest.mark.parametrize('add_methods, methods, exception', [
     (('train', 'inference'), ('train', 'inference'), False),
     (('train', 'inference'), ['train'], False),

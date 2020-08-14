@@ -79,8 +79,8 @@ class Validator:
 
         if 'train' in self.config and 'pretrained' in self.config:
             raise ValueError("Both 'train' and 'pretrained' was found.")
-        else:
-            self._pretrained = 'pretrained' in self.config
+
+        self._pretrained = 'pretrained' in self.config
 
         self._cv = 'cv' in self.config
 
@@ -91,8 +91,8 @@ class Validator:
             'train_dataset': {},
             'test_dataset': {},
             'load_train_test_dataset': {},
-            'metrics': [],
-            'cv': {}
+            'cv': {},
+            'metrics': []
         }
 
         self.config = {**defaults, **self.config, **kwargs}
@@ -306,37 +306,4 @@ class Validator:
             if cond:
                 error = True
                 _ = _warning('Method "{}" is not implemented in class {}'.format(meth, cls.__class__))
-        return error
-
-    def check_config(self, keys=('train', 'test'), warning=True, exception=False):
-        """ Check that config has necessary keys.
-
-        Parameters
-        ----------
-        keys : list
-            list of keys to check.
-        warning : bool
-            if True, call warning. If exception
-        exception : bool
-            if True, raise exception.
-
-        Returns
-        -------
-        error: bool
-        """
-        error = False
-        if isinstance(keys, str):
-            keys = (keys, )
-        if exception:
-            def _warning(msg):
-                raise NotImplementedError(msg)
-        elif warning:
-            _warning = warnings.warn
-        else:
-            _warning = lambda msg: msg
-        for key in keys:
-            cond = all([_key not in self.config for _key in key.split('|')])
-            if cond:
-                error = True
-                _ = _warning('Key "{}" was not found in config: {}'.format(key, self.config))
         return error
