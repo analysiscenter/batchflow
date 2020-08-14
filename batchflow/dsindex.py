@@ -495,8 +495,7 @@ class DatasetIndex(Baseset):
 
         if notifier:
             if not isinstance(notifier, Notifier):
-                notifier = {'bar': notifier} if isinstance(notifier, str) else notifier
-                notifier = Notifier(**notifier if isinstance(notifier, dict) else notifier,
+                notifier = Notifier(**(notifier if isinstance(notifier, dict) else {'bar': notifier}),
                                     total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                     drop_last=drop_last, length=len(self._dataset.index))
             else:

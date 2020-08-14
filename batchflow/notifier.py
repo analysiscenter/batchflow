@@ -11,7 +11,7 @@ from IPython import display
 import matplotlib.pyplot as plt
 
 from .monitor import ResourceMonitor, MONITOR_ALIASES
-from .named_expr import AlgebraicNamedExpression, NamedExpression, eval_expr
+from .named_expr import NamedExpression, eval_expr
 
 
 class DummyBar:
@@ -108,7 +108,6 @@ class Notifier:
             if isinstance(container['source'], str) and container['source'].lower() in MONITOR_ALIASES:
                 container['source'] = MONITOR_ALIASES[container['source'].lower()]()
 
-
             source = container.get('source')
             if source is None:
                 raise ValueError('Passed dictionaries as `monitors` or `graphs` should contain `source` key!')
@@ -125,7 +124,6 @@ class Notifier:
                     container['name'] = source
 
             self.data_containers.append(container)
-
 
         self.frequency = frequency
         self.timestamps = []
@@ -168,7 +166,6 @@ class Notifier:
         self.layout, self.figsize, self.savepath = layout, figsize, savepath
 
 
-
     def update_total(self, batch_size, n_iters, n_epochs, drop_last, length, total=None):
         """ Re-calculate total number of iterations. """
         if total is None:
@@ -195,11 +192,11 @@ class Notifier:
 
     def update(self, n=1, pipeline=None, batch=None):
         """ Update Notifier with new info:
-            - increment underlying progress bar tracker
-            - set bar description
-            - fetch up-to-date data from pipeline and batch; gather info from monitors
-            - draw plots anew
-            - re-start monitors
+        - fetch up-to-date data from batch, pipeline and monitors
+        - set bar description
+        - draw plots anew
+        - update log file
+        - increment underlying progress bar tracker
         """
         if (self.bar.n + 1) % self.frequency == 0 or (self.bar.n == self.bar.total - 1):
             self.timestamps.append(gmtime())
@@ -214,9 +211,6 @@ class Notifier:
             if self.file:
                 self.update_file()
 
-            if self.has_monitors and self.bar.n < self.bar.total:
-                self.start_monitors()
-
         self.bar.update(n)
 
     def update_data(self, pipeline=None, batch=None):
@@ -224,7 +218,7 @@ class Notifier:
         for container in self.data_containers:
             source = container['source']
             if isinstance(source, ResourceMonitor):
-                value = source.stop()
+                source.fetch()
                 container['data'] = source.data
 
             elif isinstance(source, NamedExpression):
@@ -240,13 +234,14 @@ class Notifier:
         description = self.create_description(iteration=-1)
         self.bar.set_description(description)
 
-    def update_plots(self, index=0, add_suptitle=False, savepath=None):
+    def update_plots(self, index=0, add_suptitle=False, savepath=None, clear_display=True):
         """ Draw plots anew. """
         num_graphs = len(self.data_containers) - index
         layout = (1, num_graphs) if self.layout.startswith('h') else (num_graphs, 1)
         figsize = self.figsize or ((20, 5) if self.layout.startswith('h') else (20, 5*num_graphs))
 
-        display.clear_output(wait=True)
+        if clear_display:
+            display.clear_output(wait=True)
         fig, ax = plt.subplots(*layout, figsize=figsize)
         ax = ax if isinstance(ax, np.ndarray) else [ax]
 
@@ -295,8 +290,9 @@ class Notifier:
             print(self.create_message(self.bar.n, self.bar.desc[:-2]), file=f)
 
 
-    # Convenient alias for working with an instance
-    visualize = update_plots
+    def visualize(self):
+        """ Convenient alias for working with an instance. """
+        self.update_plots(clear_display=False)
 
     def to_file(self, file):
         """ Log all the iteration-wise info (timestamps, descriptions) into file."""
@@ -315,6 +311,7 @@ class Notifier:
     def close(self):
         """ Close the underlying progress bar. """
         self.bar.close()
+        self.stop_monitors()
 
 
     # Utility functions
@@ -325,21 +322,24 @@ class Notifier:
             if isinstance(source, ResourceMonitor):
                 source.start()
 
+    def stop_monitors(self):
+        """ Stop collection of data for every resource monitor. """
+        for container in self.data_containers:
+            source = container['source']
+            if isinstance(source, ResourceMonitor):
+                source.stop()
+
     def create_description(self, iteration):
         """ Create string description of a given iteration. """
         description = []
         for container in self.data_containers:
             source = container['source']
             name = container['name']
-            if not isinstance(source, ResourceMonitor):
-                if isinstance(source, AlgebraicNamedExpression):
-                    desc = container['data'][iteration]
+            if isinstance(source, (str, NamedExpression)):
+                value = container['data'][iteration]
+                if isinstance(value, (int, float)):
+                    desc = f'{name}={value:<6.6}' if isinstance(value, float) else f'{name}={value:<6}'
                     description.append(desc)
-                elif isinstance(source, (str, NamedExpression)):
-                    value = container['data'][iteration]
-                    if isinstance(value, (int, float)):
-                        desc = f'{name}={value:<6.6}' if isinstance(value, float) else f'{name}={value:<6}'
-                        description.append(desc)
         return ';   '.join(description)
 
     def create_message(self, iteration, description):

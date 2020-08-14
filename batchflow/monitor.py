@@ -1,7 +1,7 @@
 """ Monitoring (memory usage, cpu/gpu utilization) tools. """
 import os
 import time
-from multiprocessing import Process, Manager
+from multiprocessing import Process, Manager, Queue
 from contextlib import contextmanager
 
 import psutil
@@ -42,55 +42,69 @@ class ResourceMonitor:
         self.kwargs = kwargs
 
         self.pid = os.getpid()
-        self.pid_to_kill = None
         self.running = False
 
-        # Re-creating instances would take some (~20ms) time, so store it
-        self.manager = Manager()
-        self.parent_process = psutil.Process(self.pid)
+        self.stop_queue = None
         self.shared_list = None
+        self.process = None
 
-        self.start_time, self.end_time = None, None
+        self.start_time, self.prev_time, self.end_time = None, None, None
         self.ticks, self.data = [], []
 
+
     @staticmethod
-    def endless_repeat(shared_list, function, frequency, **kwargs):
+    def endless_repeat(shared_list, stop_queue, function, frequency, **kwargs):
         """ Repeat `function` and storing results, until `stop` signal is recieved. """
-        while True:
+        while stop_queue.empty():
             # As this process is killed ungracefully, it can be shut down in the middle of data appending.
             # We let Python handle it by ignoring the exception.
             try:
                 shared_list.append(function(**kwargs))
-            except BrokenPipeError:
+            except (BrokenPipeError, ConnectionResetError):
                 pass
             time.sleep(frequency)
 
     def start(self):
-        """ Start a separate process with function calls. """
+        """ Start a separate process with function calls every `frequency` seconds. """
         self.running = True
-        self.shared_list = self.manager.list()
-        self.start_time = time.time()
+        manager = Manager()
+        self.shared_list = manager.list()
+        self.stop_queue = Queue()
 
-        args = self.shared_list, self.function, self.frequency
-        p = Process(target=self.endless_repeat, args=args, kwargs={'pid': self.pid, **self.kwargs})
-        p.start()
-        self.pid_to_kill = p.pid
+        self.start_time = time.time()
+        self.prev_time = self.start_time
+
+        args = self.shared_list, self.stop_queue, self.function, self.frequency
+        self.process = Process(target=self.endless_repeat, args=args, kwargs={'pid': self.pid, **self.kwargs})
+        self.process.start()
+
+    def fetch(self):
+        """ Append collected data to the instance attributes. """
+        n = len(self.data)
+        # We copy data so additional points don't appear during this function execution
+        self.data = self.shared_list[:]
+        self.end_time = time.time()
+
+        # Compute one more entry
+        point = self.function(pid=self.pid, **self.kwargs)
+        tick = time.time()
+
+        # Update timestamps, append additional entries everywhere
+        # If data was appended to `shared_list` during the execution of this function, the order might be wrong;
+        # But, as it would mean that the time between calls to `self.function` is very small, it is negligeable.
+        self.ticks.extend(np.linspace(self.prev_time, self.end_time, num=len(self.data) - n).tolist())
+        self.data.append(point)
+        self.shared_list.append(point)
+        self.ticks.append(tick)
+
+        self.prev_time = time.time()
 
     def stop(self):
-        """ Stop separate process; append collected data to the already stored. """
-        for child in self.parent_process.children(recursive=False):
-            if child.pid == self.pid_to_kill:
-                child.kill()
-                break
-
-        data = self.shared_list
-        data.append(self.function(pid=self.pid, **self.kwargs))
-        self.end_time = time.time()
+        """ Stop separate process. """
+        self.stop_queue.put(True)
+        self.process.join()
         self.running = False
 
-        self.ticks.extend(np.linspace(self.start_time, self.end_time, num=len(data)).tolist())
-        self.data.extend(data)
-        return data
 
     def visualize(self):
         """ Simple plots of collected data-points. """
@@ -164,16 +178,32 @@ class USSMonitor(ResourceMonitor):
 
 class GPUMonitor(ResourceMonitor):
     """ Track GPU usage. """
-    UNIT = 'Gb'
+    UNIT = '%'
 
     @staticmethod
     def get_usage(gpu_list=None, **kwargs):
         """ Track GPU usage. """
         _ = kwargs
+        gpu_list = gpu_list or [0]
         nvidia_smi.nvmlInit()
         handle = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
         res = [nvidia_smi.nvmlDeviceGetUtilizationRates(item) for item in handle]
         return [item.gpu for item in res]
+
+
+class GPUMemoryMonitor(ResourceMonitor):
+    """ Track GPU memory usage. """
+    UNIT = '%'
+
+    @staticmethod
+    def get_usage(gpu_list=None, **kwargs):
+        """ Track GPU memory usage. """
+        _ = kwargs
+        gpu_list = gpu_list or [0]
+        nvidia_smi.nvmlInit()
+        handle = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
+        res = [nvidia_smi.nvmlDeviceGetUtilizationRates(item) for item in handle]
+        return [item.memory for item in res]
 
 
 
@@ -184,6 +214,7 @@ MONITOR_ALIASES = {
     VMSMonitor: ['vms'],
     USSMonitor: ['uss'],
     GPUMonitor: ['gpu'],
+    GPUMemoryMonitor: ['gpu_memory'],
 }
 
 MONITOR_ALIASES = {alias: monitor for monitor, aliases in MONITOR_ALIASES.items()
@@ -203,6 +234,7 @@ def monitor_resource(resource='memory', frequency=0.5, **kwargs):
         yield monitors[0] if len(monitors) == 1 else monitors
     finally:
         for monitor in monitors:
+            monitor.fetch()
             monitor.stop()
 
 
