@@ -201,8 +201,14 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                         params.append(pos)
                     elif name is not None:
                         params.append(name)
-                    v = value.get(batch=self, parallel=True)
+                    v = value.get(batch=self, parallel=True, seed=id(self) + id(pos))
                     return v
+                elif isinstance(value, dict) and '_p_' in value:
+                    if pos is not None:
+                        params.append(pos)
+                    elif name is not None:
+                        params.append(name)
+                    return value['value']
                 return value
 
             _args = []

@@ -540,6 +540,23 @@ class Batch(metaclass=MethodsTransformingMeta):
             if isinstance(p, float):
                 p = P(np.random.binomial(1, p, size=len(self)))
 
+            args_ = []
+            for item in args:
+                if isinstance(item, P):
+                    dct = {'value': item.get(batch=self, parallel=True), '_p_': True}
+                    args_.append(dct)
+                else:
+                    args_.append(item)
+
+            kwargs_ = {}
+            for key, value in kwargs.items():
+                if isinstance(value, P):
+                    dct = {'value': value.get(batch=self, parallel=True), '_p_': True}
+                    kwargs_[key] = dct
+                else:
+                    kwargs_[key] = value
+            args, kwargs = args_, kwargs_
+
             for ones, oned in zip(src, dst):
                 kwargs['src'] = ones
                 kwargs['dst'] = oned
