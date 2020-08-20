@@ -92,7 +92,7 @@ class RefineNet(TFModel):
         with tf.variable_scope(name):
             x, inputs = inputs, None
             x = cls.crop(x, targets, kwargs['data_format'])
-            x = conv_block(x, layout, filters=num_classes, kernel_size=kernel_size, **kwargs)
+            x = conv_block(x, layout=layout, filters=num_classes, kernel_size=kernel_size, **kwargs)
         return x
 
     @classmethod
