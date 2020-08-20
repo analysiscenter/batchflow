@@ -139,6 +139,7 @@ class EncoderDecoder(TFModel):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
 
         config['body/encoder'] = dict(base=None, num_stages=None,

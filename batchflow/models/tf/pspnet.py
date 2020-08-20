@@ -29,6 +29,7 @@ class PSPNet(EncoderDecoder):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = super().default_config()
         config['body/embedding'] = dict(base=pyramid_pooling)
         config['body/decoder'] = None

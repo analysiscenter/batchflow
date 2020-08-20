@@ -12,6 +12,7 @@ class FCN(TFModel):
     """ Base Fully convolutional network (FCN) """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
         config['common/dropout_rate'] = .5
         config['initial_block/base_network'] = VGG16
@@ -24,6 +25,7 @@ class FCN(TFModel):
         return config
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super().build_config(names)
 
         config['body/num_classes'] = self.num_classes('targets')

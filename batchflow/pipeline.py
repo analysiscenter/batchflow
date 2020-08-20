@@ -25,6 +25,7 @@ from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
                              SegmentationMetricsByInstances, RegressionMetrics, Loss)
+
 from ._const import *       # pylint:disable=wildcard-import
 from .utils import save_data_to
 from .notifier import Notifier

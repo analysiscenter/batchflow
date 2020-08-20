@@ -33,6 +33,7 @@ class DeepLab(EncoderDecoder):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = super().default_config()
         config['body/encoder'] += dict(base=None, num_stages=None)
 

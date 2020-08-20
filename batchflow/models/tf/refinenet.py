@@ -36,6 +36,7 @@ class RefineNet(TFModel):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
 
         filters = 64   # number of filters in the first block
@@ -48,6 +49,7 @@ class RefineNet(TFModel):
         return config
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super().build_config(names)
         if config.get('head/num_classes') is None:
             config['head/num_classes'] = self.num_classes('targets')
@@ -86,6 +88,7 @@ class RefineNet(TFModel):
 
     @classmethod
     def head(cls, inputs, targets, num_classes, layout='c', kernel_size=1, name='head', **kwargs):
+        """ The last network layers which produce predictions. See :meth: `~.TFModel.head` """
         with tf.variable_scope(name):
             x, inputs = inputs, None
             x = cls.crop(x, targets, kwargs['data_format'])
