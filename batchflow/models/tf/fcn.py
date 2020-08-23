@@ -12,6 +12,7 @@ class FCN(TFModel):
     """ Base Fully convolutional network (FCN) """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
         config['common/dropout_rate'] = .5
         config['initial_block/base_network'] = VGG16
@@ -24,6 +25,7 @@ class FCN(TFModel):
         return config
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super().build_config(names)
 
         config['body/num_classes'] = self.num_classes('targets')
@@ -209,7 +211,7 @@ class FCN16(FCN):
 
             x = cls.upsample(x, factor=2, filters=num_classes, name='fcn32_upsample', **upsample_args, **kwargs)
 
-            skip = conv_block(skip, 'c', filters=num_classes, kernel_size=1, name='pool4', **kwargs)
+            skip = conv_block(skip, layout='c', filters=num_classes, kernel_size=1, name='pool4', **kwargs)
             x = cls.crop(x, skip, kwargs.get('data_format'))
             output = tf.add(x, skip, name='output')
         return output
@@ -287,7 +289,7 @@ class FCN8(FCN):
             x = FCN16.body((x, skip1), filters=filters, num_classes=num_classes, name='fcn16', **kwargs)
             x = cls.upsample(x, factor=2, filters=num_classes, name='fcn16_upsample', **upsample_args, **kwargs)
 
-            skip2 = conv_block(skip2, 'c', num_classes, 1, name='pool3', **kwargs)
+            skip2 = conv_block(skip2, layout='c', filters=num_classes, kernel_size=1, name='pool3', **kwargs)
 
             x = cls.crop(x, skip2, kwargs.get('data_format'))
             output = tf.add(x, skip2, name='output')

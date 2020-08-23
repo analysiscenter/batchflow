@@ -10,6 +10,8 @@ from batchflow.models.tf import LinkNet, UNet, VNet, \
                                 VGG16, VGG19, VGG7, \
                                 ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
                                 ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152, \
+                                SEResNet18, SEResNet34, SEResNet50, SEResNet101, SEResNet152, \
+                                SEResNeXt18, SEResNeXt34, SEResNeXt50, SEResNeXt101, SEResNeXt152, \
                                 Inception_v1, InceptionResNet_v2, Inception_v3, Inception_v4, \
                                 SqueezeNet, MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small, \
                                 DenseNet121, DenseNet169, DenseNet201, DenseNet264, \
@@ -26,14 +28,16 @@ MODELS_CLF = [
     VGG7, VGG16, VGG19,
     ResNet18, ResNet34, # ResNet50, ResNet101, ResNet152,
     ResNeXt18, ResNeXt34, # ResNeXt50, ResNeXt101, ResNeXt152,
+    SEResNet18, SEResNet34, # SEResNet50, SEResNet101, SEResNet152,
+    SEResNeXt18, SEResNeXt34, # SEResNeXt50, SEResNeXt101, SEResNeXt152,
     Inception_v1,
-    # InceptionResNet_v2, Inception_v3, Inception_v4, # fail
+    # InceptionResNet_v2, Inception_v3, Inception_v4, # need bigger spatial size of inputs (256)
     SqueezeNet,
     MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small,
-    DenseNet121,  # DenseNet169, DenseNet201, DenseNet264,
-    ResNetAttention56, # ResNetAttention92,
-    PyramidNet18, PyramidNet34, # PyramidNet50, PyramidNet101,
-    XceptionS, Xception41, # Xception64
+    DenseNet121, # DenseNet169, DenseNet201, DenseNet264,
+    # ResNetAttention56, # ResNetAttention92, # not working
+    # PyramidNet18, PyramidNet34, # PyramidNet50, PyramidNet101, # not working
+    XceptionS, Xception41, # Xception64,
     EfficientNetB0, EfficientNetB1, # EfficientNetB2, EfficientNetB3, \
     # EfficientNetB4, EfficientNetB5, EfficientNetB6, EfficientNetB7
 ]
