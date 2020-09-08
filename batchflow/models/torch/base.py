@@ -287,7 +287,6 @@ class TorchModel(BaseModel):
     """
     def __init__(self, config=None):
         self.full_config = Config(config)
-        self.config = Config(config)
         self.train_lock = threading.Lock()
 
         self.input_names = None
@@ -309,12 +308,7 @@ class TorchModel(BaseModel):
                          'model',
                          'train_steps', 'sync_counter', 'microbatch']
 
-        load = self.config.get('load')
-        build = self.config.get('build', default=load is None)
-        if load:
-            self.load(**load)
-        if build:
-            self.build()
+        super().__init__(config)
 
     def reset(self):
         """ Allows to recreate model from scratch. """
