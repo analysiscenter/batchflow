@@ -5,36 +5,39 @@ from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import KFold
 
-from batchflow.models.validator import Validator
+from batchflow.models.validator import ModelController
 from batchflow import Config
 
 @pytest.fixture
 def dummy_validator_class():
-    class DummyValidator(Validator):
-        def train(self, a):
+    class DummyValidator(ModelController):
+        def train(self, a=None, **kwargs):
             if a is None:
                 a = 2
             self.a = a
 
-        def inference(self, b):
+        def inference(self, b=None, **kwargs):
             if b is None:
                 b = 1
-            return self.a, b
+            return b
 
-        def my_metric(self, a, b):
+        def get_targets(self, **kwargs):
+            return self.a
+
+        def my_metric(self, a, b, **kwargs):
             return a - b
     return DummyValidator
 
 
 @pytest.fixture
 def validator_class(cv=False):
-    class NewValidator(Validator):
+    class NewValidator(ModelController):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.model = None
             self.stages = []
 
-        def load_train_dataset(self, size=100):
+        def load_train_dataset(self, size=100, **kwargs):
             self.stages += ['load_train_dataset']
 
             np.random.seed(42)
@@ -42,7 +45,7 @@ def validator_class(cv=False):
             self.train_dataset = x, 2 * x
             return self.train_dataset
 
-        def load_test_dataset(self, size=50):
+        def load_test_dataset(self, size=50, **kwargs):
             self.stages += ['load_test_dataset']
 
             np.random.seed(6)
@@ -50,7 +53,7 @@ def validator_class(cv=False):
             self.test_dataset = x, 2 * x
             return self.test_dataset
 
-        def load_cv_dataset(self, size=100, folds=5):
+        def load_cv_dataset(self, size=100, folds=5, **kwargs):
             self.stages += ['load_cv_dataset']
             datasets = []
             x = np.random.random(size).reshape(-1, 1)
@@ -83,12 +86,14 @@ def validator_class(cv=False):
         def inference(self, dataset):
             self.stages += ['inference']
 
-            targets = dataset[1]
             if self.model:
                 predictions = self.model.predict(dataset[0])
             else:
                 predictions = None
-            return targets, predictions
+            return predictions
+
+        def get_targets(self, dataset):
+            return dataset[1]
 
         def my_mse(self, target, prediction):
             self.stages += ['my_mse']
@@ -104,29 +109,22 @@ def validator_class(cv=False):
     return NewValidator
 
 @pytest.mark.parametrize('config, metric', [
-    (Config({'train_dataset/path': 5, 'test_dataset/path': 2, 'metrics': 'my_metric'}), 3),
-    (Config({'test_dataset/path': 2, 'metrics': 'my_metric'}), 0),
-    (Config({'train_dataset/path': 3, 'metrics': 'my_metric'}), 2),
+    (Config({'train/a': 5, 'inference/b': 2, 'metrics': 'my_metric'}), 3),
+    (Config({'inference/b': 2, 'metrics': 'my_metric'}), 0),
+    (Config({'train/a': 3, 'metrics': 'my_metric'}), 2),
     (Config({'metrics': 'my_metric'}), 1),
 ])
 def test_args(dummy_validator_class, config, metric):
     val = dummy_validator_class(config)
-    val.run()
+    val.validate()
     assert val.metrics['my_metric'] == metric
 
 @pytest.mark.parametrize('config, stages', [
-    ({}, ['train', 'inference', 'load_train_dataset', 'load_test_dataset']),
-    ({'train': {}, 'test': {}}, ['train', 'inference', 'load_train_dataset', 'load_test_dataset']),
-    ({'pretrained': {}, 'test': {}}, ['load_model', 'inference', 'load_test_dataset']),
-    ({'train': {}}, ['train', 'inference', 'load_train_dataset', 'load_test_dataset']),
-    ({'test': {}}, ['train', 'inference', 'load_train_dataset', 'load_test_dataset']),
-    ({'load_train_dataset': {}}, ['train', 'inference', 'load_train_dataset', 'load_test_dataset']),
-    ({'train': {}, 'metrics': 'my_mse'}, ['train', 'inference', 'load_train_dataset', 'load_test_dataset', 'my_mse']),
-    ({'cv': None}, ['train', 'inference', 'load_cv_dataset'])
+    ({}, ['train', 'inference', 'load_train_dataset', 'load_test_dataset', 'load_model'])
 ])
 def test_stages(validator_class, config, stages):
     val = validator_class(config)
-    val.run()
+    val.validate()
     assert set(val.stages) == set(stages)
 
 @pytest.mark.parametrize('config', [
@@ -134,7 +132,7 @@ def test_stages(validator_class, config, stages):
 ])
 def test_kwargs(validator_class, config):
     val = validator_class(config)
-    val.run()
+    val.validate()
     assert len(val.train_dataset[1]) == config['train_dataset/size']
     assert len(val.test_dataset[1]) == config['test_dataset/size']
     assert isinstance(val.model, Lasso)
@@ -144,7 +142,7 @@ def test_kwargs(validator_class, config):
 ])
 def test_metrics(validator_class, config):
     val = validator_class(config)
-    val.run()
+    val.validate()
     assert np.isclose(val.metrics['mse'], 0)
     assert np.isclose(val.metrics['my_mse'], 0)
 
@@ -158,17 +156,17 @@ def test_metrics(validator_class, config):
     ({'test': None}, ['train', 'load_model'], True)
 ])
 def test_api_checks(add_methods, methods, exception):
-    val_class = type('NewValidator', (Validator, ), {method: lambda x: x for method in add_methods})
+    val_class = type('NewValidator', (ModelController, ), {method: lambda x: x for method in add_methods})
     assert val_class.check_api(methods=methods, warning=False) == exception
 
 @pytest.mark.parametrize('folds, agg', list(zip([3, 5], ['mean', 'median'])))
 def test_cv(validator_class, folds, agg):
     val = validator_class(Config({'metrics': 'my_mse', 'cv': {'folds': folds, 'agg': agg}}))
-    val.run()
+    val.validate()
     assert np.isclose(val.metrics['my_mse'], 0)
 
 @pytest.mark.parametrize('folds', [3, 5])
 def test_cv_none_agg(validator_class, folds):
     val = validator_class(Config({'metrics': 'my_mse', 'cv': {'folds': folds, 'agg': None}}))
-    val.run()
+    val.validate()
     assert len(val.metrics) == folds

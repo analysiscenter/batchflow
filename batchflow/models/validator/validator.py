@@ -23,7 +23,7 @@ def _get_method_owner(meth):
             return cls
     return getattr(meth, '__objclass__', None)  # handle special descriptor objects
 
-class Validator:
+class ModelController:
     """ Validator: interface for loaders, train, inference and metrics evaluation.
 
     **Attributes**
@@ -77,17 +77,13 @@ class Validator:
         elif config is None:
             self.config = {}
 
-        if 'train' in self.config and 'pretrained' in self.config:
-            raise ValueError("Both 'train' and 'pretrained' was found.")
-
-        self._pretrained = 'pretrained' in self.config
-
         self._cv = 'cv' in self.config
 
         defaults = {
             'pretrained': {},
             'train': {},
-            'test': {},
+            'inference': {},
+            'targets': {},
             'train_dataset': {},
             'test_dataset': {},
             'load_train_test_dataset': {},
@@ -112,7 +108,7 @@ class Validator:
 
         self.metrics = {}
 
-    def run(self):
+    def validate(self):
         """ Run validator """
         if self._cv:
             self._run_cv()
@@ -123,21 +119,23 @@ class Validator:
         logging.info('Load datasets')
         train_dataset, test_dataset = self.load_train_test_dataset(**self.config['load_train_test_dataset'])
 
-        if self._pretrained:
-            logging.info('Load model')
-            self.load_model(**self.config['pretrained'])
-        else:
-            logging.info('Load train dataset')
-            train_dataset = train_dataset or self.load_train_dataset(**self.config['train_dataset'])
+        logging.info('Load model')
+        self.load_model(**self.config['pretrained'])
 
-            logging.info('Train model')
-            self.train(train_dataset, **self.config['train'])
+        logging.info('Load train dataset')
+        train_dataset = train_dataset or self.load_train_dataset(**self.config['train_dataset'])
+
+        logging.info('Train model')
+        self.train(dataset=train_dataset, **self.config['train'])
 
         logging.info('Load test dataset')
         test_dataset = test_dataset or self.load_test_dataset(**self.config['test_dataset'])
 
         logging.info('Inference')
-        self.targets, self.predictions = self.inference(test_dataset, **self.config['test'])
+        self.predictions = self.inference(dataset=test_dataset, **self.config['inference'])
+
+        logging.info('Targets')
+        self.targets = self.get_targets(dataset=test_dataset, **self.config['targets'])
 
         logging.info('Compute metrics')
         metrics_kwargs = {key: value for key, value in self.config.items() if key in self.config['metrics']}
@@ -149,7 +147,8 @@ class Validator:
         agg = self.config['cv'].pop('agg', 'mean')
         for train, test in self.load_cv_dataset(**self.config['cv']):
             self.train(train, **self.config['train'])
-            self.targets, self.predictions = self.inference(test, **self.config['test'])
+            self.predictions = self.inference(dataset=test, **self.config['inference'])
+            self.targets = self.get_targets(dataset=test, **self.config['targets']) 
             res.append(self.compute_metrics(self.targets, self.predictions, *self.config['metrics'], **metrics_kwargs))
         if agg is None:
             self.metrics = res
@@ -163,7 +162,7 @@ class Validator:
             for key in res[0]:
                 self.metrics[key] = _agg([item[key] for item in res])
 
-    def load_train_dataset(self, path=None, **kwargs):
+    def load_train_dataset(self, **kwargs):
         """ Train dataset loader.
 
         Parameters
@@ -178,9 +177,8 @@ class Validator:
             used as first argument of `train`.
          """
         _ = kwargs
-        return path
 
-    def load_test_dataset(self, path=None, **kwargs):
+    def load_test_dataset(self, **kwargs):
         """ Test dataset loader.
 
         Parameters
@@ -195,9 +193,8 @@ class Validator:
             used as the first argument of `train`.
         """
         _ = kwargs
-        return path
 
-    def load_train_test_dataset(self, path=None, **kwargs):
+    def load_train_test_dataset(self,  **kwargs):
         """ Train and test datasets loader.
 
         Parameters
@@ -213,9 +210,9 @@ class Validator:
             value in tuple corresponding loader will be called (train or test).
         """
         _ = kwargs
-        return path, None
+        return None, None
 
-    def load_cv_dataset(self, path=None, **kwargs):
+    def load_cv_dataset(self, **kwargs):
         """ Cross valdiation split.
 
         Parameters
@@ -228,10 +225,9 @@ class Validator:
         list of tuples :
             Each tuple is pair of train and test datasets. By default, return empty list.
         """
-        _ = path, kwargs
-        return []
+        _ = kwargs
 
-    def load_model(self, path=None):
+    def load_model(self, **kwargs):
         """ Loader for pretrained model.
 
         Parameters
@@ -246,18 +242,21 @@ class Validator:
             If `pretrained` is enabled in config, 'load_train_dataset' and 'train'
             will be ignored.
         """
-        _ = path
+        _ = kwargs
 
-    def train(self, train_dataset, **kwargs):
+    def train(self, **kwargs):
         """ Function that must contain the whole training process. Method will be executed
         if `pretrained` is not enabled. """
-        pass
+        _ = kwargs
 
-    def inference(self, test_dataset, **kwargs):
+    def inference(self, **kwargs):
         """ Function that must contain the whole inference process. The function must return
         predictions and targets for metrics.
         """
-        pass
+        _ = kwargs
+
+    def get_targets(self, **kwargs):
+        _ = kwargs
 
     def compute_metrics(self, targets, predictions, *metrics, **metric_configs):
         """ Metrics computation. """
@@ -302,7 +301,7 @@ class Validator:
         else:
             _warning = lambda msg: msg
         for meth in methods:
-            cond = all([_get_method_owner(getattr(cls, _meth)) == Validator for _meth in meth.split('|')])
+            cond = all([_get_method_owner(getattr(cls, _meth)) == ModelController for _meth in meth.split('|')])
             if cond:
                 error = True
                 _ = _warning('Method "{}" is not implemented in class {}'.format(meth, cls.__class__))
