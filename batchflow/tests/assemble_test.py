@@ -25,7 +25,6 @@ def test_handle_exceptions():
     assert 'Could not assemble the batch' in str(err.value)
 
 
-# pylint: disable=bad-whitespace
 @pytest.mark.parametrize('all_results, kwargs, res', [
     ([0, 1],           dict(dst='c1'),         dict(c1=[0, 1], c2=None)),
     ([[0, 2], [1, 3]], dict(dst=['c1', 'c2']), dict(c1=[0, 1], c2=[2, 3])),

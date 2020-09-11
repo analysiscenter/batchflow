@@ -75,6 +75,7 @@ class Dataset(Baseset):
         self._attrs = None
         kwargs['_copy'] = kwargs.get('_copy', copy)
         self.n_splits = None
+        self.train, self.test = None, None
 
         cv_kwargs = {item: kwargs.pop(item) for item in ['method', 'n_splits', 'shuffle'] if item in kwargs}
         if cv_kwargs.get('n_splits') is not None:

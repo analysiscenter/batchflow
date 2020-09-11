@@ -31,6 +31,7 @@ class DatasetIndex(Baseset):
         super().__init__(*args, **kwargs)
         self._pos = self.build_pos()
         self._random_state = None
+        self.train, self.test, self.validation = None, None, None
 
     @classmethod
     def from_index(cls, *args, **kwargs):
