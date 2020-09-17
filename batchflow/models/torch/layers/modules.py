@@ -5,7 +5,8 @@ import torch.nn as nn
 from .resize import Upsample, Combine
 from .conv_block import ConvBlock
 from .conv import Conv
-from ..utils import get_shape, get_num_dims
+from .core import BatchNorm
+from ..utils import get_shape, get_num_dims, get_num_channels
 
 
 class PyramidPooling(nn.Module):
@@ -128,7 +129,7 @@ class KSAC(nn.Module):
     Parameters
     ----------
     layout : str
-        Layout for convolution layers.
+        Layout for final postprocessing layer.
     filters : int
         Number of filters in the output tensor.
     kernel_size : int
@@ -147,41 +148,75 @@ class KSAC(nn.Module):
         3: nn.functional.conv3d,
     }
 
-    def __init__(self, inputs=None, layout='cna', filters=None, kernel_size=3,
+    def __init__(self, inputs=None, layout='cnad', filters=None, kernel_size=3,
                  rates=(6, 12, 18), pyramid=None, **kwargs):
         super().__init__()
-        filters = filters if filters else f'max(1, same // {len(rates)})'
-        self.bottleneck = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=1, **kwargs)
-
         self.n = get_num_dims(inputs)
-        self.global_pooling = ConvBlock(inputs=inputs, layout='V>cna', filters=filters, kernel_size=1,
-                                        dim=self.n)
-
-        self.layer = Conv(inputs=inputs, filters=filters, kernel_size=kernel_size).to(inputs.device)
-        _ = self.layer(inputs)
         self.conv = self.LAYERS[self.n]
         self.rates = rates
 
+        out_filters = filters or get_num_channels(inputs)
+        feature_filters = max(1, out_filters // len(rates))
+        tensors = []
+
+        # Bottleneck: 1x1 convolution
+        self.bottleneck = ConvBlock(inputs=inputs, layout='cna', filters=feature_filters, kernel_size=1, **kwargs)
+        tensors.append(self.bottleneck(inputs))
+
+        # Convolutions with different dilations and shared weights
+        self.layer = Conv(inputs=inputs, filters=feature_filters, kernel_size=kernel_size).to(inputs.device)
+        tensor = self.layer(inputs)
+        tensors.append(tensor)
+
+        self.batch_norm = BatchNorm(inputs=tensor).to(inputs.device)
+
+        for level in self.rates:
+            tensor = self.conv(inputs, self.layer.layer.weight, padding=level, dilation=level)
+            tensor = self.batch_norm(tensor)
+            tensors.append(tensor)
+
+        # Optional pyramid branch
         if pyramid is not None:
             pyramid = pyramid if isinstance(pyramid, (tuple, list)) else [pyramid]
-            layer = PyramidPooling(inputs=inputs, filters=filters, pyramid=pyramid, **kwargs)
-            self.pyramid = layer
+            self.pyramid = PyramidPooling(inputs=inputs, filters=feature_filters, pyramid=pyramid, **kwargs)
+            tensors.append(self.pyramid(inputs))
         else:
             self.pyramid = None
 
+        # Global pooling
+        self.global_pooling = ConvBlock(inputs=inputs, layout='V>cna', filters=feature_filters, kernel_size=1,
+                                        dim=self.n)
+        global_info = nn.functional.interpolate(self.global_pooling(inputs), size=inputs.size()[2:],
+                                                mode='bilinear', align_corners=True)
+        tensors.append(global_info)
+
+        # Concatenation of features
         self.combine = Combine(op='concat')
+        combined = self.combine(tensors)
+
+        # Final postprocessing
+        self.post = ConvBlock(inputs=combined, layout=layout, filters=out_filters, kernel_size=kernel_size, **kwargs)
 
     def forward(self, x):
-        levels = [self.bottleneck(x), self.layer(x)]
+        # Bottleneck and base convolution layer
+        tensors = [self.bottleneck(x), self.layer(x)]
 
+        # Convolutions with different dilations and shared weights
         for level in self.rates:
             tensor = self.conv(x, self.layer.layer.weight, padding=level, dilation=level)
-            levels.append(tensor)
+            tensor = self.batch_norm(tensor)
+            tensor = nn.functional.relu(tensor)
+            tensors.append(tensor)
 
+        # Optional pyramid branch
+        if self.pyramid:
+            tensors.append(self.pyramid(x))
+
+        # Global pooling
         global_info = nn.functional.interpolate(self.global_pooling(x), size=tensor.size()[2:],
                                                 mode='bilinear', align_corners=True)
-        levels.append(global_info)
+        tensors.append(global_info)
 
-        if self.pyramid:
-            levels.append(self.pyramid(x))
-        return self.combine(levels)
+        # Concatenate features and apply final postprocessing
+        combined = self.combine(tensors)
+        return self.post(combined)
