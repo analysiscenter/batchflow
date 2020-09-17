@@ -281,11 +281,11 @@ class Decoder(TorchModel):
             inputs = layer(inputs)
             layers.append(layer)
 
-        if target_shape:
-            if get_shape(inputs) != target_shape:
-                layer = Crop(resize_to=target_shape)
-                inputs = layer(inputs)
-                layers.append(layer)
+        # if target_shape:
+        #     if get_shape(inputs) != target_shape:
+        #         layer = Crop(resize_to=target_shape)
+        #         inputs = layer(inputs)
+        #         layers.append(layer)
 
         if classes:
             if get_shape(inputs)[1] != classes:
