@@ -4,6 +4,8 @@ from functools import partial
 
 import numpy as np
 
+from .config import Config
+
 
 class _DummyBatch:
     """ A fake batch for static models """
@@ -18,7 +20,7 @@ def eval_expr(expr, **kwargs):
         _expr = expr.get(**kwargs)
         if isinstance(expr, W):
             expr = _expr
-        elif isinstance(_expr, NamedExpression):
+        elif isinstance(_expr, (NamedExpression, list, tuple, dict, Config)):
             expr = eval_expr(_expr, **kwargs)
         else:
             expr = _expr
