@@ -24,12 +24,11 @@ class REU(ResearchNamedExpression): # ResearchExecutableUnit
             _experiment = experiment
         else:
             _experiment = [experiment]
-        if self.name is not None:
-            res = [item[self.name] for item in _experiment]
-            if len(_experiment) == 1:
-                return res[0]
-            return res
-        return experiment
+        name = self.name if self.name is not None else list(_experiment[0].keys())[0]
+        res = [item[name] for item in _experiment]
+        if len(_experiment) == 1:
+            return res[0]
+        return res
 
 class RP(REU): # ResearchPipeline
     """ NamedExpression for Pipeline in Research """
@@ -59,7 +58,7 @@ class RI(ResearchNamedExpression): # ResearchIteration
 
 class RC(REU): # ResearchConfig
     """ NamedExpression for Config of the ExecutableUnit """
-    def __init__(self, name):
+    def __init__(self, name=None):
         super().__init__(name=name)
 
     def get(self, **kwargs):
