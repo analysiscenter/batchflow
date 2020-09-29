@@ -1,9 +1,11 @@
 """ Contains common layers """
+from functools import partial
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.layers as K # pylint: disable=import-error
 
 from .layer import Layer, add_as_function
+from ..utils import get_num_channels, get_num_dims
 
 
 
@@ -35,10 +37,27 @@ class Flatten:
         return x
 
 
+@add_as_function
+class Activation(Layer):
+    """ Wrapper for activation functions.
+    Used for `a` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
+    def __init__(self, activation, **kwargs):
+        self.activation = activation
+        self.kwargs = kwargs
+
+    def __call__(self, inputs):
+        if self.activation is not None:
+            return self.activation(inputs)
+        return inputs
+
+
 
 @add_as_function
 class Dense(Layer):
-    """ Wrapper for fully-connected layer. """
+    """ Wrapper for fully-connected layer.
+    Used for `f` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     def __init__(self, units, **kwargs):
         self.units = units
         self.kwargs = kwargs
@@ -53,6 +72,7 @@ class Dense(Layer):
 @add_as_function
 class Combine(Layer):
     """ Combine inputs into one tensor via various transformations.
+    Used for `.`, `+`, `*`, `&` letters in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -63,35 +83,136 @@ class Combine(Layer):
         If one of 'sum', 'add', inputs are summed.
         If one of 'softsum', 'convsum', every tensor is passed through 1x1 convolution in order to have
         the same number of channels as the first tensor, and then summed.
+        If one of 'attention', 'gau', then the first tensor is used to create multiplicative attention for second,
+        and the output is added to second tensor.
 
     data_format : str {'channels_last', 'channels_first'}
         Data format.
+    leading_index : int
+        Index of tensor to broadcast to. Allows to change the order of input tensors.
+    force_resize : None or bool
+        Whether to crop every tensor to the leading one.
     kwargs : dict
         Arguments for :class:`.ConvBlock`.
     """
-    def __init__(self, op='softsum', data_format='channels_last', name='combine', **kwargs):
+    @staticmethod
+    def concat(inputs, data_format='channels_last', axis=None, **kwargs):
+        """ Concatenate tensors along specified axis or data format. """
+        _ = kwargs
+        axis = axis or (1 if data_format == "channels_first" or data_format.startswith("NC") else -1)
+        return tf.concat(inputs, axis=axis, name='combine-concat')
+
+    @staticmethod
+    def sum(inputs, **kwargs):
+        """ Addition with broadcasting. """
+        _ = kwargs
+        result = 0
+        for item in inputs:
+            result = result + item
+        return result
+
+    @staticmethod
+    def mul(inputs, **kwargs):
+        """ Multiplication with broadcasting. """
+        _ = kwargs
+        result = 1
+        for item in inputs:
+            result = result * item
+        return result
+
+    @staticmethod
+    def mean(inputs, **kwargs):
+        """ Mean with broadcasting. """
+        _ = kwargs
+        return Combine.sum(inputs, name='combine-softsum') / len(inputs)
+
+    @staticmethod
+    def softsum(inputs, data_format='channels_last', **kwargs):
+        """ Softsum. """
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        axis = 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
+        filters = inputs[0].get_shape().as_list()[axis]
+        args = {'layout': 'c', 'filters': filters, 'kernel_size': 1, **kwargs}
+        for i in range(1, len(inputs)):
+            inputs[i] = ConvBlock(name='combine-conv', **args)(inputs[i])
+        return Combine.sum(inputs, name='combine-softsum')
+
+
+    @staticmethod
+    def attention(inputs, **kwargs):
+        """ Attention combine module.
+        Hanchao Li, Pengfei Xiong, Jie An, Lingxue Wang. Pyramid Attention Network
+        for Semantic Segmentation <https://arxiv.org/abs/1805.10180>'_"
+        """
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        x, skip = inputs[0], inputs[1]
+        num_channels = get_num_channels(skip)
+        num_dims = get_num_dims(skip) + 1
+        conv1 = ConvBlock(layout='cna', kernel_size=3, filters=num_channels, name='conv-x', **kwargs)(x)
+        conv2 = ConvBlock(layout='V > cna', kernel_size=1, filters=num_channels, dim=num_dims,
+                          name='conv-skip', **kwargs)(skip)
+        weighted = Combine.mul([conv1, conv2])
+        return Combine.sum([weighted, skip])
+
+    @staticmethod
+    def gau(inputs, filters=None, **kwargs):
+        """ Global Attention Upsample module. """
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        from .resize import Crop
+        x, skip = inputs[0], inputs[1]
+        num_dims = get_num_dims(skip) + 1
+        leaky_relu = partial(tf.nn.leaky_relu, alpha=0.1)
+        conv1 = ConvBlock(layout='ca', filters=filters, activation=leaky_relu, name='conv-low', **kwargs)(x)
+        conv2 = ConvBlock(layout='Vfna >', units=filters, activation=leaky_relu, dim=num_dims,
+                          name='conv-high', **kwargs)(skip)
+        gated = Combine.mul([conv1, conv2])
+
+        gated = ConvBlock(layout='caN', filters=filters, activation=leaky_relu, name='conv-gated')(gated)
+        clamped = ConvBlock(layout='ca', filters=filters, activation=leaky_relu, name='conv-clamped', **kwargs)(skip)
+        gated = Crop(resize_to=clamped)(gated)
+        return Combine.sum([gated, clamped])
+
+    OPS = {
+        concat: ['concat', 'cat', '.'],
+        sum: ['sum', 'plus', '+'],
+        mul: ['multi', 'mul', '*'],
+        mean: ['avg', 'mean', 'average'],
+        softsum: ['softsum', '&'],
+        attention: ['attention'],
+        gau: ['gau'],
+    }
+    OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
+
+    def __init__(self, op='softsum', data_format='channels_last', leading_index=0, force_resize=None,
+                 name='combine', **kwargs):
         self.op = op
-        self.data_format, self.name = data_format, name
+        self.data_format, self.name, self.idx, self.force_resize = data_format, name, leading_index, force_resize
         self.kwargs = kwargs
 
     def __call__(self, inputs):
         with tf.variable_scope(self.name):
-            axis = 1 if self.data_format == "channels_first" or self.data_format.startswith("NC") else -1
+            if self.idx != 0:
+                inputs[0], inputs[self.idx] = inputs[self.idx], inputs[0]
 
-            if self.op == 'concat':
-                return tf.concat(inputs, axis=axis, name='combine-concat')
-            if self.op in ['avg', 'average', 'mean']:
-                return tf.reduce_mean(tf.stack(inputs, axis=0), axis=0, name='combine-mean')
-            if self.op in ['sum', 'add']:
-                return tf.add_n(inputs, name='combine-sum')
-            if self.op in ['softsum', 'convsum']:
-                from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
-                filters = inputs[0].get_shape().as_list()[axis]
-                args = {'layout': 'c', 'filters': filters, 'kernel_size': 1, **self.kwargs}
-                for i in range(1, len(inputs)):
-                    inputs[i] = ConvBlock(name='combine-conv', **args)(inputs[i])
-                return tf.add_n(inputs, name='combine-softsum')
-            raise ValueError('Unknown operation {}.'.format(self.op))
+            if self.op in self.OPS:
+                op = self.OPS[self.op]
+            elif callable(self.op):
+                op = self.op
+            else:
+                raise ValueError('Combine operation must be a callable or \
+                                  one from {}, instead got {}.'.format(list(self.OPS.keys()), op))
+
+            if self.force_resize is None:
+                if op.__name__ in ['gau', 'softsum']:
+                    force_resize = False
+                else:
+                    force_resize = True
+            if force_resize:
+                from .resize import Crop
+                inputs = [Crop(resize_to=inputs[-1], data_format=self.data_format)(item) for item in inputs]
+
+            return op(inputs, data_format=self.data_format, **self.kwargs)
+
 
 
 
@@ -160,18 +281,23 @@ class BaseDropout(Layer):
 
 
 class Dropout(BaseDropout):
-    """ Wrapper for dropout layer. """
+    """ Wrapper for dropout layer.
+    Used for `d` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     LAYER = K.Dropout
 
 
 class AlphaDropout(BaseDropout):
-    """ Wrapper for self-normalizing dropout layer. """
+    """ Wrapper for self-normalizing dropout layer.
+    Used for `D` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     LAYER = K.AlphaDropout
 
 
 
 class BatchNormalization(Layer):
     """ Wrapper for batch normalization layer.
+    Used for `n` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Note that Keras layers does not add update operations to `UPDATE_OPS` collection,
     so we must do it manually.
@@ -248,7 +374,9 @@ class Xip:
 
 @add_as_function
 class Mip(Layer):
-    """ Maximum intensity projection by shrinking the channels dimension with max pooling every ``depth`` channels """
+    """ Maximum intensity projection by shrinking the channels dimension with max pooling every ``depth`` channels.
+    Used for `m` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     def __init__(self, depth, data_format='channels_last', name='max'):
         self.depth, self.data_format = depth, data_format
         self.name = name

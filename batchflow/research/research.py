@@ -160,7 +160,7 @@ class Research:
         name = name or function.__name__
 
         if name in self.executables:
-            raise ValueError('Executable unit with name {} was alredy existed'.format(name))
+            raise ValueError('Executable unit with name {} already exists'.format(name))
 
         if on_root and returns is not None:
             raise ValueError("If function on root, then it mustn't have returns")
@@ -172,8 +172,8 @@ class Research:
 
         return self
 
-    def get_metrics(self, pipeline, metrics_var, metrics_name,
-                    returns=None, execute=1, dump='last', logging=False):
+    def get_metrics(self, pipeline, metrics_var, metrics_name, *args,
+                    returns=None, execute=1, dump='last', logging=False, agg='mean', **kwargs):
         """ Evaluate metrics.
 
         Parameters
@@ -186,7 +186,7 @@ class Research:
             metrics to evaluate
         returns : str, list of str or None
             names to save metrics into results
-            if None, `function` will be executed without any saving results and dumping
+            if None, `returns` will be equal to `metrics_name`
         execute : int, str or list of int and str
             If `'last'`, metrics will be gathered just at last iteration (if `iteration + 1 == n_iters`
             or `StopIteration` was raised)
@@ -202,10 +202,11 @@ class Research:
         logging : bool
             include execution information to log file or not
         """
-        name = pipeline + '_metrics'
-        self.add_callable(get_metrics, name=name, execute=execute, dump=dump, returns=returns,
+        name = pipeline + '_' + metrics_var
+        returns = returns or metrics_name
+        self.add_callable(get_metrics, *args, name=name, execute=execute, dump=dump, returns=returns,
                           on_root=False, logging=logging, pipeline=RP(pipeline),
-                          metrics_var=metrics_var, metrics_name=metrics_name)
+                          metrics_var=metrics_var, metrics_name=metrics_name, agg=agg, **kwargs)
         return self
 
     def init_domain(self, domain=None, n_configs=None, n_reps=1, repeat_each=100):
@@ -440,10 +441,7 @@ class Research:
                 ]
         if isinstance(devices[0], list):
             def _transform_item(x):
-                if len(x) > 1:
-                    values = ['gpu:'+str(item) if isinstance(item, int) else item for item in x]
-                else:
-                    values = 'gpu:'+str(x[0]) if isinstance(x[0], int) else x[0]
+                values = [str(item) if isinstance(item, int) else item for item in x]
                 return dict(device=values) if x is not None else dict()
 
             devices = [[_transform_item(branch_config) for branch_config in worker_config] for worker_config in devices]

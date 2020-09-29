@@ -64,7 +64,7 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
                     upsample_shape = dynamic_shape
 
                 # Conv block to set number of feature maps
-                x = ConvBlock(layout, filters=filters, kernel_size=kernel_size,
+                x = ConvBlock(layout=layout, filters=filters, kernel_size=kernel_size,
                               name='conv-%d' % level, **kwargs)(x)
 
                 # Output either vector with fixed size or tensor with fixed spatial dimensions
@@ -84,7 +84,7 @@ def _static_pyramid_pooling(inputs, spatial_shape, level, pool_op, **kwargs):
     pool_size = tuple(np.ceil(spatial_shape / level).astype(np.int32).tolist())
     pool_strides = tuple(np.floor((spatial_shape - 1) / level + 1).astype(np.int32).tolist())
 
-    output = ConvBlock('p', pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides, **kwargs)(inputs)
+    output = ConvBlock(layout='p', pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides, **kwargs)(inputs)
     return output
 
 def _dynamic_pyramid_pooling(inputs, level, pool_op, num_channels, data_format):
@@ -177,11 +177,11 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
         image_level_features = (image_level_features,)
 
     with tf.variable_scope(name):
-        x = ConvBlock(layout, filters=filters, kernel_size=1, name='conv-1x1', **kwargs)(inputs)
+        x = ConvBlock(layout=layout, filters=filters, kernel_size=1, name='conv-1x1', **kwargs)(inputs)
         layers = [x]
 
         for level in rates:
-            x = ConvBlock(layout, filters=filters, kernel_size=kernel_size, dilation_rate=level,
+            x = ConvBlock(layout=layout, filters=filters, kernel_size=kernel_size, dilation_rate=level,
                           name='conv-%d' % level, **kwargs)(inputs)
             layers.append(x)
 
@@ -190,5 +190,5 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
         layers.append(x)
 
         x = tf.concat(layers, axis=axis, name='concat')
-        x = ConvBlock(layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)(x)
+        x = ConvBlock(layout=layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)(x)
     return x

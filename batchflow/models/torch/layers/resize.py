@@ -244,11 +244,12 @@ class Interpolate(nn.Module):
         if mode in self.MODES:
             mode = self.MODES[mode]
         self.mode = mode
+        self.align_corners = True if self.mode in ['linear', 'bilinear', 'bicubic', 'trilinear'] else None
         self.kwargs = kwargs
 
     def forward(self, x):
         return F.interpolate(x, mode=self.mode, size=self.shape, scale_factor=self.scale_factor,
-                             align_corners=True, **self.kwargs)
+                             align_corners=self.align_corners, **self.kwargs)
 
     def extra_repr(self):
         if self.scale_factor is not None:
