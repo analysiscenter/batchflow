@@ -79,6 +79,7 @@ class UNet(EncoderDecoder):
         return config
 
     def build_config(self, names=None):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = super().build_config(names)
 
         num_stages = config.get('body/encoder/num_stages')

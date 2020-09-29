@@ -202,7 +202,7 @@ class Executable:
     def run(self):
         """ Run pipeline """
         if self.pipeline is not None:
-            self.pipeline.reset("iter")
+            self.pipeline.reset("iter", "vars")
             self.pipeline.run()
         else:
             raise TypeError("Executable should be pipeline, not a function")

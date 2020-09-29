@@ -13,7 +13,7 @@ from tensorflow.python.client import device_lib
 from ... import Config
 from ..utils import unpack_fn_from_config
 from ..base import BaseModel
-from .layers import mip, conv_block, upsample
+from .layers import Mip, Upsample, ConvBlock, Crop
 from .losses import softmax_cross_entropy, dice
 from .nn import piecewise_constant, cyclic_learning_rate
 
@@ -253,7 +253,7 @@ class TFModel(BaseModel):
 
     * Take a look at :class:`.BaseModel`: ``build`` and ``load`` methods inherited from it.
 
-    * Take a look at :class:`~.tf.layers.ConvBlock`. It is a widely used as a building block,
+    * Take a look at :class:`~.tf.layers.ConvBlock` since it is a widely used as a building block,
       capable of chaining various operations (convolutions, batch normalizations, etc).
 
     * Define model defaults (e.g. number of filters, dropout rates, etc) by overriding
@@ -373,7 +373,7 @@ class TFModel(BaseModel):
         # finally, individual train steps with desired loss, optimizer, decay and scope are created
         with self.graph.as_default():
             with tf.variable_scope(self.__class__.__name__):
-                with tf.variable_scope('globals'):
+                with tf.variable_scope('globals'), tf.device(self.leading_device):
                     is_training = tf.placeholder(tf.bool, name='is_training')
                     self.store_to_attr('is_training', is_training)
 
@@ -405,7 +405,7 @@ class TFModel(BaseModel):
 
     def reset(self):
         """ Reset the trained model to allow a new training from scratch """
-        with self.session.graph.as_default():
+        with self.session.graph.as_default(), tf.device(self.leading_device):
             self.session.run(tf.global_variables_initializer())
 
     def _get_devices(self):
@@ -597,7 +597,7 @@ class TFModel(BaseModel):
             raise ValueError('mip transform requires shape specified in the inputs config')
         if depth is None:
             raise ValueError("mip should be specified as mip @ depth, e.g. 'mip @ 3'")
-        tensor = mip(tensor, depth=depth, data_format=self.data_format(input_name))
+        tensor = Mip(depth=depth, data_format=self.data_format(input_name))(tensor)
         return tensor
 
     def to_classes(self, tensor, input_name, name=None):
@@ -689,10 +689,10 @@ class TFModel(BaseModel):
                                     'multi_update_grads': update_op,
                                     'multi_apply_grads': apply_op})
 
-            # We need to explicitly initialize variable for every optimizer in order to not
-            # interfere with capability to reuse optimizers for different train_steps
-            if init:
-                self.session.run(tf.variables_initializer(optimizer.variables()))
+                # We need to explicitly initialize variable for every optimizer in order to not
+                # interfere with capability to reuse optimizers for different train_steps
+                if init:
+                    self.session.run(tf.variables_initializer(optimizer.variables()))
 
             # Store all the created operations
             train_steps.update({key: ops})
@@ -969,9 +969,11 @@ class TFModel(BaseModel):
         _feed_dict = {}
         for placeholder, value in feed_dict.items():
             if self.has_classes(placeholder):
-                classes = self.classes(placeholder)
-                get_indices = np.vectorize(lambda c, arr=classes: np.where(c == arr)[0])
-                value = get_indices(value)
+                classes = self.get_tensor_config(placeholder).get('classes')
+                if not isinstance(classes, int):
+                    classes = self.classes(placeholder)
+                    get_indices = np.vectorize(lambda c, arr=classes: np.where(c == arr)[0])
+                    value = get_indices(value)
             placeholder = self._map_name(placeholder, device)
             value = self._map_name(value, device)
             _feed_dict.update({placeholder: value})
@@ -1396,60 +1398,6 @@ class TFModel(BaseModel):
             return type(name)({key: self._to_graph_items(name[key]) for key in name.keys()})
         raise ValueError('Unrecognized type of value.')
 
-    @classmethod
-    def crop(cls, inputs, resize_to, data_format='channels_last'):
-        """ Crop input tensor to a shape of a given image.
-        If resize_to does not have a fully defined shape (resize_to.get_shape() has at least one None),
-        the returned tf.Tensor will be of unknown shape except the number of channels.
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            Input tensor.
-        resize_to : tf.Tensor
-            Tensor which shape the inputs should be resized to.
-        data_format : str {'channels_last', 'channels_first'}
-            Data format.
-        """
-        static_shape = cls.spatial_shape(resize_to, data_format, False)
-        dynamic_shape = cls.spatial_shape(resize_to, data_format, True)
-
-        if None in cls.shape(inputs) + static_shape:
-            return cls._dynamic_crop(inputs, static_shape, dynamic_shape, data_format)
-        return cls._static_crop(inputs, static_shape, data_format)
-
-    @classmethod
-    def _static_crop(cls, inputs, shape, data_format='channels_last'):
-        input_shape = np.array(cls.spatial_shape(inputs, data_format))
-
-        if np.abs(input_shape - shape).sum() > 0:
-            begin = [0] * inputs.shape.ndims
-            if data_format == "channels_last":
-                size = [-1] + shape + [-1]
-            else:
-                size = [-1, -1] + shape
-            x = tf.slice(inputs, begin=begin, size=size)
-        else:
-            x = inputs
-        return x
-
-    @classmethod
-    def _dynamic_crop(cls, inputs, static_shape, dynamic_shape, data_format='channels_last'):
-        input_shape = cls.spatial_shape(inputs, data_format, True)
-        n_channels = cls.num_channels(inputs, data_format)
-        if data_format == 'channels_last':
-            slice_size = [(-1,), dynamic_shape, (n_channels,)]
-            output_shape = [None] * (len(static_shape) + 1) + [n_channels]
-        else:
-            slice_size = [(-1, n_channels), dynamic_shape]
-            output_shape = [None, n_channels] + [None] * len(static_shape)
-
-        begin = [0] * len(inputs.get_shape().as_list())
-        size = tf.concat(slice_size, axis=0)
-        cond = tf.reduce_sum(tf.abs(input_shape - dynamic_shape)) > 0
-        x = tf.cond(cond, lambda: tf.slice(inputs, begin=begin, size=size), lambda: inputs)
-        x.set_shape(output_shape)
-        return x
 
     @classmethod
     def initial_block(cls, inputs, name='initial_block', **kwargs):
@@ -1472,7 +1420,7 @@ class TFModel(BaseModel):
         """
         kwargs = cls.fill_params('initial_block', **kwargs)
         if kwargs.get('layout'):
-            return conv_block(inputs, name=name, **kwargs)
+            return ConvBlock(name=name, **kwargs)(inputs)
         return inputs
 
     @classmethod
@@ -1502,7 +1450,7 @@ class TFModel(BaseModel):
         """
         kwargs = cls.fill_params('body', **kwargs)
         if kwargs.get('layout'):
-            return conv_block(inputs, name=name, **kwargs)
+            return ConvBlock(name=name, **kwargs)(inputs)
         return inputs
 
     @classmethod
@@ -1584,8 +1532,9 @@ class TFModel(BaseModel):
         """
         kwargs = cls.fill_params('head', **kwargs)
         if kwargs.get('layout'):
-            return conv_block(inputs, name=name, **kwargs)
+            return ConvBlock(name=name, **kwargs)(inputs)
         return inputs
+
 
     def output(self, inputs, predictions=None, ops=None, **kwargs):
         """ Add output operations to the model graph, like predicted probabilities or labels, etc.
@@ -2079,11 +2028,28 @@ class TFModel(BaseModel):
         """
         return tensor.get_shape().as_list()[0]
 
-
     @classmethod
     def channels_axis(cls, data_format='channels_last'):
         """ Return the integer channels axis based on string data format. """
         return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
+
+
+    @classmethod
+    def crop(cls, inputs, resize_to, data_format='channels_last'):
+        """ Crop input tensor to a shape of a given image.
+        If resize_to does not have a fully defined shape (resize_to.get_shape() has at least one None),
+        the returned tf.Tensor will be of unknown shape except the number of channels.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            Input tensor.
+        resize_to : tf.Tensor
+            Tensor which shape the inputs should be resized to.
+        data_format : str {'channels_last', 'channels_first'}
+            Data format.
+        """
+        return Crop(resize_to=resize_to, data_format=data_format)(inputs)
 
     @classmethod
     def se_block(cls, inputs, ratio, name='se', **kwargs):
@@ -2093,34 +2059,10 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        inputs : tf.Tensor
-            Input tensor.
         ratio : int
             Squeeze ratio for the number of filters.
-
-        Returns
-        -------
-        tf.Tensor
         """
-        with tf.variable_scope(name):
-            data_format = kwargs.get('data_format')
-            in_filters = cls.num_channels(inputs, data_format)
-            if isinstance(kwargs.get('activation'), list) and len(kwargs.get('activation')) == 2:
-                activation = kwargs.pop('activation')
-            elif kwargs.get('activation') is not None:
-                activation = [kwargs.get('activation'), tf.nn.sigmoid]
-            else:
-                activation = [tf.nn.relu, tf.nn.sigmoid]
-
-            x = conv_block(inputs,
-                           **{**kwargs, 'layout': 'Vfafa', 'units': [in_filters//ratio, in_filters],
-                              'name': 'se', 'activation': activation})
-
-            shape = [-1] + [1] * (cls.spatial_dim(inputs) + 1)
-            axis = cls.channels_axis(data_format)
-            shape[axis] = in_filters
-            scale = tf.reshape(x, shape)
-            x = inputs * scale
+        x = ConvBlock(**{**kwargs, 'layout': 'S', 'attention_mode': 'se', 'ratio': ratio, 'name': name})(inputs)
         return x
 
     @classmethod
@@ -2132,24 +2074,12 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        inputs : tf.Tensor
-            Input tensor.
         ratio : int, optional
             Squeeze ratio for the number of filters in spatial squeeze
             and channel excitation block. Default is 2.
-
-        Returns
-        -------
-        tf.Tensor
         """
-        with tf.variable_scope(name):
-            cse = cls.se_block(inputs, ratio, name='cse', **kwargs)
-
-            x = conv_block(inputs, **{**kwargs, 'layout': 'ca', 'filters': 1, 'kernel_size': 1,
-                                      'activation': tf.nn.sigmoid, 'name': 'sse'})
-
-            scse = cse + tf.multiply(x, inputs)
-        return scse
+        x = ConvBlock(**{**kwargs, 'layout': 'S', 'attention_mode': 'scse', 'ratio': ratio, 'name': name})(inputs)
+        return x
 
     @classmethod
     def upsample(cls, inputs, factor=None, resize_to=None, layout='b', name='upsample', **kwargs):
@@ -2176,13 +2106,7 @@ class TFModel(BaseModel):
         -------
         tf.Tensor
         """
-        if np.all(factor == 1):
-            return inputs
-
-        if kwargs.get('filters') is None:
-            kwargs['filters'] = cls.num_channels(inputs, kwargs['data_format'])
-
-        x = upsample(inputs, factor=factor, layout=layout, name=name, **kwargs)
+        x = Upsample(factor=factor, layout=layout, name=name, **kwargs)(inputs)
         if resize_to is not None:
             x = cls.crop(x, resize_to, kwargs['data_format'])
         return x

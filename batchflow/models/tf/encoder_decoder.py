@@ -3,7 +3,7 @@
 import tensorflow as tf
 
 from . import TFModel
-from .layers import conv_block, combine
+from .layers import ConvBlock, Combine, Upsample
 from ..utils import unpack_args
 
 
@@ -63,10 +63,8 @@ class EncoderDecoder(TFModel):
                 If list, upsampling factors for each stage.
 
             skip : bool, dict
-                If bool, then whether to combine upsampled tensor with stored pre-downsample encoding by
-                using `combine_op`, that can be specified for each of blocks separately.
-                If dict, then parameters for combining upsampled tensor with stored pre-downsample encoding,
-                see :class:`~.tf.layers.Combine`.
+                Whether to combine upsampled tensor with stored pre-downsample encoding by
+                using `combine`, that can be specified for each of blocks separately.
 
             order : str, sequence of str
                 Determines order of applying layers.
@@ -83,11 +81,29 @@ class EncoderDecoder(TFModel):
 
                 base : callable
                     Tensor processing function. Default is :func:`~.layers.conv_block`.
-                combine_op : str, dict
-                    If str, then operation for combining tensors, see :class:`~.tf.layers.Combine`.
-                    If dict, then parameters for combining tensors, see :class:`~.tf.layers.Combine`.
                 other args : dict
                     Parameters for the base block.
+
+            combine : dict
+                Parameters for combining decoder tensor and skip from encoder:
+
+                    op : str
+                        Which operation to use for combining tensors.
+                        If 'concat', inputs are concated along channels axis.
+                        If one of 'avg', 'mean', takes average of inputs.
+                        If one of 'sum', 'add', inputs are summed.
+                        If one of 'softsum', 'convsum', every tensor is passed through 1x1 convolution in order to have
+                        the same number of channels as the first tensor, and then summed.
+                        If one of 'attention', then the first tensor is used to create multiplicative
+                        attention for second, and the output is added to second tensor.
+                    data_format : str {'channels_last', 'channels_first'}
+                        Data format.
+                    leading_index : int
+                        Index of tensor to broadcast to. Allows to change the order of input tensors.
+                    force_resize : None or bool
+                        Whether to crop every tensor to the leading one.
+                    kwargs : dict
+                        Arguments for :class:`.ConvBlock`.
 
     head : dict, optional
         parameters for the head layers, usually :func:`.conv_block` parameters
@@ -139,6 +155,7 @@ class EncoderDecoder(TFModel):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
 
         config['body/encoder'] = dict(base=None, num_stages=None,
@@ -152,6 +169,7 @@ class EncoderDecoder(TFModel):
                                       order=['upsampling', 'block', 'combine'])
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
+        config['body/decoder/combine'] = dict(op='concat', force_resize=None)
         return config
 
     @classmethod
@@ -198,7 +216,7 @@ class EncoderDecoder(TFModel):
             channels = cls.num_channels(targets)
             if cls.num_channels(x) != channels:
                 args = {**kwargs, **dict(layout='c', kernel_size=1, filters=channels, strides=1)}
-                x = conv_block(x, name='conv1x1', **args)
+                x = ConvBlock(name='conv1x1', **args)(x)
 
         return x
 
@@ -210,7 +228,7 @@ class EncoderDecoder(TFModel):
         """
         layout = kwargs.pop('layout', 'cna')
         filters = kwargs.pop('filters', cls.num_channels(inputs))
-        return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
+        return ConvBlock(layout=layout, filters=filters, name=name, **kwargs)(inputs)
 
 
     @classmethod
@@ -267,7 +285,6 @@ class EncoderDecoder(TFModel):
             steps, downsample, block_args = cls.pop(['num_stages', 'downsample', 'blocks'], kwargs)
             order = ''.join([item[0] for item in order])
 
-            base_block = block_args.get('base')
             with tf.variable_scope(name):
                 x = inputs
                 encoder_outputs = []
@@ -281,12 +298,12 @@ class EncoderDecoder(TFModel):
 
                         for letter in order:
                             if letter == 'b':
-                                x = base_block(x, name='block', **args)
+                                x = ConvBlock(name='block', **args)(x)
                             elif letter == 's':
                                 encoder_outputs.append(x)
                             elif letter in ['d', 'p']:
                                 if downsample.get('layout') is not None:
-                                    x = conv_block(x, name='downsample', **downsample_args)
+                                    x = ConvBlock(name='downsample', **downsample_args)(x)
                             else:
                                 raise ValueError('Unknown letter in order {}, use one of "b", "d", "p", "s"'
                                                  .format(letter))
@@ -317,8 +334,7 @@ class EncoderDecoder(TFModel):
         -------
         tf.Tensor
         """
-        base_block = kwargs.get('base', cls.block)
-        return base_block(inputs, name=name, **kwargs)
+        return ConvBlock(name=name, **kwargs)(inputs)
 
     @classmethod
     def decoder(cls, inputs, name='decoder', return_all=False, **kwargs):
@@ -385,9 +401,9 @@ class EncoderDecoder(TFModel):
         """
         steps = kwargs.pop('num_stages') or len(inputs)-2
         factor = kwargs.pop('factor') or [2]*steps
-        skip, order, upsample, block_args = cls.pop(['skip', 'order', 'upsample', 'blocks'], kwargs)
+        skip, order = cls.pop(['skip', 'order'], kwargs)
+        upsample_args, block_args, combine_args = cls.pop(['upsample', 'blocks', 'combine'], kwargs)
         order = ''.join([item[0] for item in order])
-        base_block = block_args.get('base')
 
         outputs = []
 
@@ -406,28 +422,19 @@ class EncoderDecoder(TFModel):
                     if factor[i] == 1:
                         continue
 
-                    # Make all the args
-                    args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
-                    upsample_args = {'factor': factor[i],
-                                     **kwargs, **upsample, **unpack_args(upsample, i, steps)}
-
-                    combine_op = args.get('combine_op')
-                    combine_args = {'op': combine_op if isinstance(combine_op, str) else '',
-                                    'data_format': args.get('data_format'),
-                                    **(combine_op if isinstance(combine_op, dict) else {}),
-                                    **(skip if isinstance(skip, dict) else {})}
-
                     for letter in order:
                         if letter == 'b':
-                            x = base_block(x, name='block', **args)
+                            args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
+                            x = ConvBlock(name='block', **args)(x)
                         elif letter in ['u']:
-                            if upsample.get('layout') is not None:
-                                x = cls.upsample(x, name='upsample', **upsample_args)
+                            args = {'factor': factor[i],
+                                    **kwargs, **upsample_args, **unpack_args(upsample_args, i, steps)}
+                            x = Upsample(name='upsample', **args)(x)
                         elif letter == 'c':
                             # Combine result with the stored encoding of the ~same shape
-                            if (skip or isinstance(skip, dict)) and (i < len(inputs) - 2):
-                                x = cls.crop(x, inputs[-i - 3], data_format=kwargs.get('data_format'))
-                                x = combine([x, inputs[-i - 3]], **combine_args)
+                            if skip and (i < len(inputs) - 2):
+                                args = {**kwargs, **combine_args, **unpack_args(combine_args, i, steps)}
+                                x = Combine(**args)([x, inputs[-i - 3]])
                         else:
                             raise ValueError('Unknown letter in order {}, use one of ("b", "u", "c")'.format(letter))
                     if return_all:

@@ -14,7 +14,6 @@ import numpy as np
 from sklearn.preprocessing import LabelEncoder
 
 from . import ImagesOpenset
-from .. import DatasetIndex
 
 
 logger = logging.getLogger('SmallImagenet')
@@ -115,9 +114,14 @@ class Imagenette(ImagesOpenset):
         if self.bar:
             self.bar.update(1)
 
-        self._train_index = DatasetIndex(np.arange(len(train_data[0])))
-        self._test_index = DatasetIndex(np.arange(len(test_data[0])))
-        return train_data, test_data
+        images = np.concatenate([train_data[0], test_data[0]])
+        labels = np.concatenate([train_data[1], test_data[1]])
+        preloaded = images, labels
+
+        train_len, test_len = len(train_data[0]), len(test_data[0])
+        index, train_index, test_index = self._infer_train_test_index(train_len, test_len)
+
+        return preloaded, index, train_index, test_index
 
 
 class Imagenette320(Imagenette):

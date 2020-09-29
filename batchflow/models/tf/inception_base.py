@@ -34,6 +34,7 @@ class Inception(TFModel):
     """
 
     def build_config(self, names=None):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = super().build_config(names)
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')
@@ -122,10 +123,12 @@ class Inception(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            branch_3 = conv_block(inputs, layout, filters[3], 3, name='conv_3', strides=2, padding='valid', **kwargs)
-            branch_1_3 = conv_block(inputs, layout*2, [filters[0]]+[filters[1]], [1, 3], name='conv_1_3', **kwargs)
-            branch_1_3_3 = conv_block(branch_1_3, layout, filters[2], 3, name='conv_1_3_3', strides=2,
-                                      padding='valid', **kwargs)
+            branch_3 = conv_block(inputs, layout=layout, filters=filters[3], kernel_size=3, strides=2, padding='valid',
+                                  name='conv_3', **kwargs)
+            branch_1_3 = conv_block(inputs, layout=layout*2, filters=[filters[0]]+[filters[1]], kernel_size=[1, 3],
+                                    name='conv_1_3', **kwargs)
+            branch_1_3_3 = conv_block(branch_1_3, layout=layout, filters=filters[2], kernel_size=3, strides=2,
+                                      padding='valid', name='conv_1_3_3', **kwargs)
 
             branch_pool = conv_block(inputs, layout='p', pool_size=3, pool_strides=2, name='max_pooling',
                                      padding='valid', **kwargs)
