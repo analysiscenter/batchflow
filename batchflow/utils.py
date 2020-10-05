@@ -333,7 +333,6 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
                     title += '\n {} Prediction: {} with {:.2f}%'.format(models_names[j],
                                                                         pred_class_name, class_proba * 100)
             ax[i].title.set_text(title)
-            ax[i].title.set_size(28)
         ax[i].grid(b=None)
 
     for i in range(n_items, nrows * ncols):
