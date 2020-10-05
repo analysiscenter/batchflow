@@ -271,8 +271,6 @@ def print_results(df, layout, average_repetitions=False, sort_by=None, ascending
         res_df.sort_values(by=sort_by, ascending=ascending, inplace=True)
     return res_df
 
-
-
 def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_names=None, **kwargs):
     """ Plot images and optionally true labels as well as predicted class proba.
         - In case labels and proba are not passed, just shows images.
@@ -340,6 +338,13 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
 
     for i in range(n_items, nrows * ncols):
         fig.delaxes(ax[i])
+    
+def plot_loss(loss, xlabel='Iterations', ylabel='Loss', figsize=(15, 5), **kwargs):
+    """ Plot loss function. """
+    plt.figure(figsize=figsize)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.plot(loss, **kwargs)
 
 def save_data_to(what, where, **kwargs):
     """ Store data to specified locations
