@@ -31,7 +31,6 @@ class DatasetIndex(Baseset):
         super().__init__(*args, **kwargs)
         self._pos = self.build_pos()
         self._random_state = None
-        self.train, self.test, self.validation = None, None, None
 
     @classmethod
     def from_index(cls, *args, **kwargs):
@@ -238,13 +237,13 @@ class DatasetIndex(Baseset):
 
         if valid_share > 0:
             validation_pos = order[:valid_share]
-            self.validation = self.create_subset(self.subset_by_pos(validation_pos))
+            setattr(self, 'validation', self.create_subset(self.subset_by_pos(validation_pos)))
         if test_share > 0:
             test_pos = order[valid_share : valid_share + test_share]
-            self.test = self.create_subset(self.subset_by_pos(test_pos))
+            setattr(self, 'test', self.create_subset(self.subset_by_pos(test_pos)))
         if train_share > 0:
             train_pos = order[valid_share + test_share:]
-            self.train = self.create_subset(self.subset_by_pos(train_pos))
+            setattr(self, 'validation', self.create_subset(self.subset_by_pos(train_pos)))
 
     def shuffle(self, shuffle, iter_params=None):
         """ Permute indices
