@@ -235,15 +235,16 @@ class DatasetIndex(Baseset):
         else:
             order = np.arange(len(self))
 
+        # pylint: disable=attribute-defined-outside-init
         if valid_share > 0:
             validation_pos = order[:valid_share]
-            setattr(self, 'validation', self.create_subset(self.subset_by_pos(validation_pos)))
+            self.validation = self.create_subset(self.subset_by_pos(validation_pos))
         if test_share > 0:
             test_pos = order[valid_share : valid_share + test_share]
-            setattr(self, 'test', self.create_subset(self.subset_by_pos(test_pos)))
+            self.test = self.create_subset(self.subset_by_pos(test_pos))
         if train_share > 0:
             train_pos = order[valid_share + test_share:]
-            setattr(self, 'validation', self.create_subset(self.subset_by_pos(train_pos)))
+            self.train = self.create_subset(self.subset_by_pos(train_pos))
 
     def shuffle(self, shuffle, iter_params=None):
         """ Permute indices
