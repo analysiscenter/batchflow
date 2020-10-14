@@ -1,6 +1,7 @@
 """ Contains helper functions """
 import os
 import re
+import json
 import copy
 import functools
 import itertools
@@ -10,7 +11,6 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib import colors as mcolors
 
-import json
 import ipykernel
 import requests
 from notebook.notebookapp import list_running_servers
@@ -396,6 +396,7 @@ def get_notebook_path():
             if params['kernel']['id'] == kernel_id:
                 relative_path = params['notebook']['path']
                 return os.path.join(server['notebook_dir'], relative_path)
+    return None
 
 def get_notebook_name():
     """ Return the title of the current jupyter notebook without base directory and extension,
