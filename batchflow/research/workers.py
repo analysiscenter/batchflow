@@ -111,7 +111,7 @@ class Worker:
                                 if self.timeout is not None and (time.time() - last_update_time.value) / 60 > self.timeout:
                                     p = psutil.Process(pid)
                                     p.terminate()
-                                    message = 'Job {} [{}] failed in {}'.format(job[0], pid, self.worker_name)
+                                    message = 'Job {} [{}] failed in {} because of timeout'.format(job[0], pid, self.worker_name)
                                     self.logger.info(message)
                                     final_signal.exception = TimeoutError(message)
                                     results.put(copy(final_signal))
