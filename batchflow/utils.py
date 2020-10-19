@@ -382,10 +382,27 @@ def save_data_to(what, where, **kwargs):
             where[i] = item
 
 
+def in_notebook():
+    """ Return True if in Jupyter notebook and False otherwise. """
+    try:
+        shell = get_ipython().__class__.__name__
+        if shell == 'ZMQInteractiveShell':
+            return True
+        if shell == 'TerminalInteractiveShell':
+            return False
+        return False
+    except NameError:
+        return False
+
 def get_notebook_path():
-    """ Return the full absolute path of the current jupyter notebook,
+    """ Return the full absolute path of the current Jupyter notebook,
     for example, `/path/path/path/My_notebook_title.ipynb`.
+
+    If run outside Jupyter notebook, returns None.
     """
+    if not in_notebook():
+        return None
+
     kernel_id = re.search('kernel-(.*).json',
                           ipykernel.connect.get_connection_file()).group(1)
     servers = list_running_servers()
@@ -399,17 +416,24 @@ def get_notebook_path():
     return None
 
 def get_notebook_name():
-    """ Return the title of the current jupyter notebook without base directory and extension,
+    """ Return the title of the current Jupyter notebook without base directory and extension,
     for example, `My_notebook_title`.
+
+    If run outside Jupyter notebook, returns None.
     """
-    return get_notebook_path().split('/')[-1].split('.')[0]
+    if not in_notebook():
+        return None
+
+    return os.path.splitext(get_notebook_path())[0].split('/')[-1]
 
 
 def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, ignore_codes=None,
                     keep_script=False, return_report=False):
-    """ Run pylint on entire jupyter notebook.
+    """ Run pylint on entire Jupyter notebook.
     Under the hood, the notebook is converted to regular `.py` script,
     special IPython commands like magics removed, and then pylint is executed.
+
+    If run outside Jupyter notebook, returns 1.
 
     Parameters
     ----------
@@ -422,13 +446,17 @@ def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, 
     ignore_comments : bool
         Whether to ignore markdown cells and comments in code.
     ignore_codes : sequence
-        Pylint errors to ignore. By default, invalid names and import errors are disabled.
+        Pylint errors to ignore.
+        By default, `invalid-name`, `import-error` and `wrong-import-position` are disabled.
     keep_script : bool
         Whether to keep temporal `.py` file after command execution.
     return_report : bool
         If True, then this function returns the string representation of produced report.
         If False, then 0 is returned.
     """
+    if not in_notebook():
+        return 1
+
     path = path or get_notebook_path()
     options = options if options.startswith(' ') else ' ' + options
     ignore_codes = ignore_codes or ['invalid-name', 'import-error', 'wrong-import-position']
@@ -518,7 +546,7 @@ def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, 
     printer('\n'.join(report_))
 
     # Cleanup
-    if keep_script is False:
+    if not keep_script:
         os.remove(temp_name)
 
     if return_report:

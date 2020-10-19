@@ -18,7 +18,7 @@ from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, parallel, any_action_failed, mjit, deprecated, apply_parallel
 from .exceptions import SkipBatchException, EmptyBatchSequence
 from .sampler import Sampler, ConstantSampler, NumpySampler, HistoSampler, ScipySampler
-from .utils import save_data_to, get_notebook_path, get_notebook_name, pylint_notebook
+from .utils import save_data_to, get_notebook_path, get_notebook_name, pylint_notebook, in_notebook
 
 
 __version__ = '0.3.0'
