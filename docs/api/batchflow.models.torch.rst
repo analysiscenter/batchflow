@@ -2,6 +2,10 @@
 batchflow.models.torch
 ======================
 
+.. note::
+
+    This requires torch
+
 .. toctree::
 
     batchflow.models.torch.models
