@@ -152,6 +152,8 @@ class DecoderModule(nn.ModuleDict):
                         layer = Combine(inputs=[x, inputs[-i - 3]], **args)
                         x = layer([x, inputs[-i - 3]])
                         layer_desc = 'combine-{}'.format(i)
+                    else:
+                        layer = nn.Identity()
                 else:
                     raise ValueError('Unknown letter in order {}, use one of ("b", "u", "c")'.format(letter))
 
@@ -469,7 +471,7 @@ class AutoEncoder(EncoderDecoder):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/decoder'] += dict(skip=False)
+        config['body/decoder'] += dict(skip=False, order=['upsampling', 'block'])
         return config
 
 

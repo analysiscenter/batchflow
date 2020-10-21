@@ -1095,9 +1095,9 @@ class TorchModel(BaseModel):
 
                 if decays:
                     for decay, decay_step in zip(decays, decay_steps):
-                        step_condition = (step['iter'] - decay_step['first_iter']) % decay_step['frequency'] == 0
+                        step_condition = int(1 + step['iter'] - decay_step['first_iter']) % decay_step['frequency'] == 0
                         range_condition = decay_step['first_iter'] <= step['iter'] <= decay_step['last_iter']
-                        if step_condition and range_condition:
+                        if step_condition and range_condition and self.sync_counter == 1:
                             decay.step()
 
                 output_container['loss' + '_'*bool(len(name)) + name] = loss
