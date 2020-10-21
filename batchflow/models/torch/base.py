@@ -333,6 +333,8 @@ class TorchModel(BaseModel):
         if self.input_shapes:
             self._build()
 
+
+    # Create config of model creation: combine the external and default ones
     @classmethod
     def default_config(cls):
         """ Define model defaults.
@@ -439,6 +441,7 @@ class TorchModel(BaseModel):
         return config
 
 
+    # Prepare to build the model: determine device(s) and shape(s)
     def _get_devices(self):
         devices = self.full_config.get('device')
         if devices is None:
@@ -504,6 +507,7 @@ class TorchModel(BaseModel):
                     self.classes = shapes[0][0]
 
 
+    # Chain multiple building blocks to create model
     def _build(self, inputs=None):
         config = self.full_config
         order = config.get('order')
@@ -563,6 +567,7 @@ class TorchModel(BaseModel):
         return block
 
 
+    # Create training procedure(s): loss, optimizer, decay
     def _make_train_steps(self, config):
         # Wrap parameters from config root as `train_steps`
         if config.get('train_steps') is None:
@@ -678,6 +683,7 @@ class TorchModel(BaseModel):
         return decays, list_kwargs, list_steps
 
 
+    # Define model structure
     @classmethod
     def get_defaults(cls, name, kwargs):
         """ Fill block params from default config and kwargs """
@@ -740,136 +746,8 @@ class TorchModel(BaseModel):
             return ConvBlock(inputs=inputs, **kwargs)
         return None
 
-    def information(self, config=True, devices=True, train_steps=True, model=False, misc=True):
-        """ Show information about model configuration, used devices, train steps, architecture and more. """
-        template = '\n##### {}:'
 
-        if config:
-            print(template.format('Config'))
-            pprint(self.full_config.config)
-
-        if devices:
-            print(template.format('Devices'))
-            print('Leading device is {}'.format(self.device, ))
-            if self.devices:
-                _ = [print('Device {} is {}'.format(i, d)) for i, d in enumerate(self.devices)]
-
-        if train_steps:
-            print(template.format('Train steps'))
-            pprint(self.train_steps)
-
-        if model:
-            print(template.format('Model'))
-            print(self.model)
-
-        if misc:
-            print(template.format('Additional info'))
-            if self.input_shapes:
-                _ = [print('Input {} has shape {}'.format(i, s)) for i, s in enumerate(self.input_shapes)]
-            if self.target_shape:
-                print('Target has shape {}'.format(self.target_shape))
-
-            if self.model:
-                num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-                print('\nTotal number of parameters in model: {}'.format(num_params))
-
-            iters = {key: value.get('iter', 0) for key, value in self.train_steps.items()}
-            print('\nTotal number of passed training iterations: {}'.format(sum(list(iters.values()))))
-            if len(iters) > 1:
-                print('Number of training iterations for individual train steps:')
-                pprint(iters)
-
-            print(template.format('Last iteration params'))
-            pprint(self.iter_info)
-
-    @property
-    def info(self):
-        """ Show information about model configuration, used devices, train steps and more. """
-        self.information()
-
-    def show_profile_info(self, per_iter=False, sortby=None, limit=10, parse=False):
-        """ Show stored profiling information with varying levels of details. """
-        if (self.profile_info is None) or parse:
-            self._parse_profilers()
-
-        if self.device.type == 'cpu':
-            columns = ['ncalls', 'CPU_tottime', 'CPU_cumtime', 'CPU_tottime_avg']
-            if sortby is None:
-                sortby = ('CPU_tottime', 'sum') if per_iter is False else 'CPU_tottime'
-        else:
-            columns = ['ncalls', 'CUDA_cumtime', 'CUDA_cumtime_avg']
-            if sortby is None:
-                sortby = ('CUDA_cumtime', 'sum') if per_iter is False else 'CUDA_cumtime'
-
-        if per_iter is False:
-            aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.reset_index().groupby(['name']).agg(aggs)
-                      .sort_values(sortby, ascending=False)[:limit])
-        else:
-            result = (self.profile_info.reset_index().set_index(['iter', 'name'])[columns]
-                      .sort_values(['iter', sortby], ascending=[True, False])
-                      .groupby(level=0).apply(lambda df: df[:limit]).droplevel(0))
-        return result
-
-    def _parse_profilers(self):
-        us_in_s = 1000.0 * 1000.0
-
-        indices, values = [], []
-        for i, profiler in enumerate(self.profilers):
-            for evt in profiler.function_events.key_averages():
-                indices.append((i, evt.key))
-                row_dict = {
-                    'ncalls': evt.count,
-                    'CPU_tottime': evt.self_cpu_time_total / us_in_s,
-                    'CPU_cumtime': evt.cpu_time_total / us_in_s,
-                    'CUDA_cumtime': evt.cuda_time_total / us_in_s,
-                }
-                values.append(row_dict)
-        multiindex = pd.MultiIndex.from_tuples(indices, names=['iter', 'name'])
-
-        self.profile_info = pd.DataFrame(values, index=multiindex,
-                                         columns=['ncalls', 'CPU_tottime', 'CPU_cumtime', 'CUDA_cumtime'])
-        self.profile_info['CPU_tottime_avg'] = self.profile_info['CPU_tottime'] / self.profile_info['ncalls']
-        self.profile_info['CUDA_cumtime_avg'] = self.profile_info['CUDA_cumtime'] / self.profile_info['ncalls']
-
-
-    def set_debug_mode(self, mode=True):
-        """ Changes representation of model to a more or less detailed.
-        By default, model representation reduces the description of the most complex modules.
-        """
-        if self.model is None:
-            raise ValueError('Model is not initialized yet. ')
-        self.model.apply(lambda module: setattr(module, 'debug', mode))
-
-
-    def save_graph(self, log_dir=None, **kwargs):
-        """ Save model graph for later visualization via tensorboard.
-
-        Parameters
-        ----------
-        logdir : str
-            Save directory location. Default is `runs/CURRENT_DATETIME_HOSTNAME`, which changes after each run.
-            Use hierarchical folder structure to compare between runs easily,
-            e.g. ‘runs/exp1’, ‘runs/exp2’, etc. for each new experiment to compare across them from within tensorboard.
-
-        Examples
-        --------
-        To easily check model graph inside Jupyter Notebook, run::
-
-        model.save_graph()
-        %load_ext tensorboard
-        %tensorboard --logdir runs/
-
-        Or, using command line::
-        tensorboard --logdir=runs
-        """
-        # Import here to avoid unnecessary tensorflow imports inside tensorboard
-        from torch.utils.tensorboard import SummaryWriter
-        writer = SummaryWriter(log_dir=log_dir, **kwargs)
-        writer.add_graph(self.model, self._placeholder_data())
-        writer.close()
-
-
+    # Transfer data to/from device(s)
     def _fill_value(self, value):
         if value.dtype not in [np.float32, 'float32']:
             value = value.astype(np.float32)
@@ -917,6 +795,7 @@ class TorchModel(BaseModel):
         return output
 
 
+    # Apply model to train/predict on given data
     def train(self, *args, feed_dict=None, fetches=None, use_lock=True, train_mode='',
               accumulate_grads=True, sync_frequency=True, microbatch=True, profile=False, **kwargs):
         """ Train the model with the data provided
@@ -1142,19 +1021,7 @@ class TorchModel(BaseModel):
 
             model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
-        feed_dict = {**(feed_dict or {}), **kwargs}
-        if len(feed_dict) == 1:
-            _, value = feed_dict.popitem()
-            args = (*args, value)
-        if feed_dict:
-            if targets is not None and 'targets' in feed_dict.keys():
-                warnings.warn("`targets` already present in `feed_dict`, so those passed as keyword arg won't be used")
-            *inputs, targets = self._fill_input(*args, **feed_dict)
-        else:
-            inputs = self._fill_input(*args)
-            if targets is not None:
-                targets = self._fill_input(targets)[0]
-        inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
+        inputs, targets = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
 
         self.model.eval()
 
@@ -1180,6 +1047,22 @@ class TorchModel(BaseModel):
         output = self._fill_output(fetches, output_container)
         return output
 
+    def _make_prediction_inputs(self, *args, targets=None, feed_dict=None, **kwargs):
+        """ Prase arguments to create valid inputs for model. """
+        feed_dict = {**(feed_dict or {}), **kwargs}
+        if len(feed_dict) == 1:
+            _, value = feed_dict.popitem()
+            args = (*args, value)
+        if feed_dict:
+            if targets is not None and 'targets' in feed_dict.keys():
+                warnings.warn("`targets` already present in `feed_dict`, so those passed as keyword arg won't be used")
+            *inputs, targets = self._fill_input(*args, **feed_dict)
+        else:
+            inputs = self._fill_input(*args)
+            if targets is not None:
+                targets = self._fill_input(targets)[0]
+        inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
+        return inputs, targets
 
     def output(self, inputs, predictions=None, ops=None):
         """ Add output operations to the model, like predicted probabilities or labels, etc.
@@ -1274,6 +1157,7 @@ class TorchModel(BaseModel):
         return attr_prefix + name, output
 
 
+    # Preserve model for later usage
     def save(self, path, *args, **kwargs):
         """ Save torch model.
 
@@ -1343,3 +1227,338 @@ class TorchModel(BaseModel):
 
         if eval:
             self.model.eval()
+
+
+    # Debug and profile the performance
+    def set_debug_mode(self, mode=True):
+        """ Changes representation of model to a more or less detailed.
+        By default, model representation reduces the description of the most complex modules.
+        """
+        if self.model is None:
+            raise ValueError('Model is not initialized yet. ')
+        self.model.apply(lambda module: setattr(module, 'debug', mode))
+
+    def show_profile_info(self, per_iter=False, sortby=None, limit=10, parse=False):
+        """ Show stored profiling information with varying levels of details. """
+        if (self.profile_info is None) or parse:
+            self._parse_profilers()
+
+        if self.device.type == 'cpu':
+            columns = ['ncalls', 'CPU_tottime', 'CPU_cumtime', 'CPU_tottime_avg']
+            if sortby is None:
+                sortby = ('CPU_tottime', 'sum') if per_iter is False else 'CPU_tottime'
+        else:
+            columns = ['ncalls', 'CUDA_cumtime', 'CUDA_cumtime_avg']
+            if sortby is None:
+                sortby = ('CUDA_cumtime', 'sum') if per_iter is False else 'CUDA_cumtime'
+
+        if per_iter is False:
+            aggs = {key: ['sum', 'mean', 'max'] for key in columns}
+            result = (self.profile_info.reset_index().groupby(['name']).agg(aggs)
+                      .sort_values(sortby, ascending=False)[:limit])
+        else:
+            result = (self.profile_info.reset_index().set_index(['iter', 'name'])[columns]
+                      .sort_values(['iter', sortby], ascending=[True, False])
+                      .groupby(level=0).apply(lambda df: df[:limit]).droplevel(0))
+        return result
+
+    def _parse_profilers(self):
+        us_in_s = 1000.0 * 1000.0
+
+        indices, values = [], []
+        for i, profiler in enumerate(self.profilers):
+            for evt in profiler.function_events.key_averages():
+                indices.append((i, evt.key))
+                row_dict = {
+                    'ncalls': evt.count,
+                    'CPU_tottime': evt.self_cpu_time_total / us_in_s,
+                    'CPU_cumtime': evt.cpu_time_total / us_in_s,
+                    'CUDA_cumtime': evt.cuda_time_total / us_in_s,
+                }
+                values.append(row_dict)
+        multiindex = pd.MultiIndex.from_tuples(indices, names=['iter', 'name'])
+
+        self.profile_info = pd.DataFrame(values, index=multiindex,
+                                         columns=['ncalls', 'CPU_tottime', 'CPU_cumtime', 'CUDA_cumtime'])
+        self.profile_info['CPU_tottime_avg'] = self.profile_info['CPU_tottime'] / self.profile_info['ncalls']
+        self.profile_info['CUDA_cumtime_avg'] = self.profile_info['CUDA_cumtime'] / self.profile_info['ncalls']
+
+    # Textual visualization of model
+    def information(self, config=True, devices=True, train_steps=True, model=False, misc=False):
+        """ Show information about model configuration, used devices, train steps, architecture and more. """
+        template = '\n##### {}:'
+
+        if config:
+            print(template.format('Config'))
+            pprint(self.full_config.config)
+
+        if devices:
+            print(template.format('Devices'))
+            print('Leading device is {}'.format(self.device, ))
+            if self.devices:
+                _ = [print('Device {} is {}'.format(i, d)) for i, d in enumerate(self.devices)]
+
+        if train_steps:
+            print(template.format('Train steps'))
+            pprint(self.train_steps)
+
+        if model:
+            print(template.format('Model'))
+            print(self.model)
+
+        if misc:
+            print(template.format('Additional info'))
+            if self.input_shapes:
+                _ = [print('Input {} has shape {}'.format(i, s)) for i, s in enumerate(self.input_shapes)]
+            if self.target_shape:
+                print('Target has shape {}'.format(self.target_shape))
+
+            if self.model:
+                num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+                print('\nTotal number of parameters in model: {}'.format(num_params))
+
+            iters = {key: value.get('iter', 0) for key, value in self.train_steps.items()}
+            print('\nTotal number of passed training iterations: {}'.format(sum(list(iters.values()))))
+            if len(iters) > 1:
+                print('Number of training iterations for individual train steps:')
+                pprint(iters)
+
+            print(template.format('Last iteration params'))
+
+            iter_info = {**self.iter_info}
+            iter_info.pop('lr')
+            pprint(iter_info)
+
+    @property
+    def info(self):
+        """ Show information about model configuration, used devices, train steps and more. """
+        self.information()
+
+
+    # Visualize intermediate layers: activations and features
+    def get_intermediate_activations(self, *args, layers=None, feed_dict=None, **kwargs):
+        """ Compute the intermediate activations of a given layers in the same structure (tuple/list/dict).
+
+        Under the hood, a forward hook is registered to capture the output of a targeted layers,
+        and it is removed after extraction of all the activations.
+
+        Parameters
+        ----------
+        layers : nn.Module, sequence or dict
+            If nn.Module, then must be a part of the `model` attribute to get activations from.
+            If sequence, then multiple such modules.
+            If dictionary, then values must be such modules.
+        args : sequence
+            Arguments to be passed directly into the model.
+        feed_dict : dict
+            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
+            with keys being names and values being actual data.
+        kwargs : dict
+            Additional named arguments directly passed to `feed_dict`.
+
+        Returns
+        -------
+        Intermediate activations in the same structure, as `layers`.
+        """
+        #pylint: disable=unnecessary-comprehension
+        # Parse `activations`: make it a dictionary
+        if layers is None:
+            raise TypeError('get_intermediate_activations() missing 1 required argument: `layers`')
+
+        if not isinstance(layers, (tuple, list, dict)):
+            container = {0: layers}
+        elif isinstance(layers, (tuple, list)):
+            container = {i: item for i, item in enumerate(layers)}
+        else:
+            container = dict(layers) # shallow copy is fine
+
+        container = {key: LayerExtractor(module)
+                     for key, module in container.items()}
+
+        # Parse inputs to model, run model
+        inputs, _ = self._make_prediction_inputs(*args, targets=None, feed_dict=feed_dict, **kwargs)
+        self.model.eval()
+        with torch.no_grad():
+            self.model(inputs)
+
+        # Remove hooks; parse hooked data into desired format
+        for value in container.values():
+            value.close()
+
+        container = {key : extractor.activation
+                     for key, extractor in container.items()}
+
+        if isinstance(layers, (tuple, list)):
+            container = [container[i] for i, _ in enumerate(layers)]
+        elif not isinstance(layers, dict):
+            container = container[0]
+        return container
+
+    def get_layer_representation(self, layer, index=0, input_shape=None, ranges=(-1, 1), iters=100, return_loss=False):
+        """ Compute a representation of an intermediate layer.
+
+        Under the hood, this function generates random image and then optimizes it
+        with respect to the mean value of activations at the target layer.
+
+        Parameters
+        ----------
+        layer : nn.Module
+            Part of the `model` attribute to visualize.
+        index : int or slice
+            Valid slice for the activations at the targeted layer. Default is 0.
+        input_shape : sequence
+            Shape of the image to generate. Default is the shape of the last model input.
+        ranges : sequence
+            Lower and upper bound of values in generated image.
+        iters : int
+            Number of optimization iterations.
+        return_loss : bool
+            Whether to return the loss values of optimization procedure.
+        """
+        # Create starting image: random uniform noise
+        input_shape = input_shape or self.input_shapes[0][1:]
+        image = np.random.uniform(*ranges, input_shape)[None]
+        image_var = torch.from_numpy(image.astype(np.float32)).to(self.device)
+        image_var.requires_grad = True
+
+        # Set up optimization procedure
+        extractor = LayerExtractor(layer)
+        optimizer = torch.optim.Adam([image_var], lr=0.1, weight_decay=1e-6)
+        self.model.eval()
+
+        # Iteratively make image visualize desired layer/filter
+        losses = []
+        for _ in range(iters):
+            optimizer.zero_grad()
+            self.model(image_var.clone())
+
+            loss = - extractor.activation[0, index].mean()
+            loss.backward()
+            optimizer.step()
+
+            image_var.data.clamp_(*ranges)
+            losses.append(loss.detach())
+
+        # Clean-up: one final clamp and closing handles
+        image_var.data.clamp_(*ranges)
+        image_var = image_var.detach().cpu().numpy()
+        extractor.close()
+
+        if return_loss:
+            return image_var, losses
+        return image_var
+
+    def get_gradcam(self, *args, targets=None, layer=None, cam_class=None, feed_dict=None, **kwargs):
+        """ Create visual explanation of a network decisions, based on the intermediate layer gradients.
+        Ramprasaath R. Selvaraju, et al "`Grad-CAM: Visual Explanations
+        from Deep Networks via Gradient-based Localization <https://arxiv.org/abs/1610.02391>`_"
+
+        Under the hood, forward and backward hooks are used to extract the activation and the gradient,
+        and the mean value of gradients (along each channel) is used as weights for activation summation.
+
+        Parameters
+        ----------
+        layers : nn.Module, sequence or dict
+            Part of the `model` attribute to base visualizations on.
+        cam_class : int
+            If the model solves classification task, then class to visualize.
+            Default is the model prediction.
+        args : sequence
+            Arguments to be passed directly into the model.
+        feed_dict : dict
+            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
+            with keys being names and values being actual data.
+        kwargs : dict
+            Additional named arguments directly passed to `feed_dict`.
+        """
+        extractor = LayerExtractor(layer)
+        inputs, _ = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
+
+        self.model.eval()
+        prediction = self.model(inputs)
+
+        if self.classes:
+            gradient = torch.zeros((1, self.classes), dtype=prediction.dtype, device=self.device)
+            cam_class = cam_class or np.argmax(prediction.detach().cpu().numpy()[0])
+            gradient[0][cam_class] = 1
+        else:
+            gradient = prediction.clone()
+
+        self.model.zero_grad()
+        prediction.backward(gradient=gradient, retain_graph=True)
+        self.model.zero_grad()
+
+        activation = extractor.activation.detach().cpu().numpy()[0]
+        gradient = extractor.gradient.detach().cpu().numpy()[0]
+
+        weights = np.mean(gradient, axis=(1, 2))
+        camera = np.zeros(activation.shape[1:], dtype=activation.dtype)
+
+        for i, w in enumerate(weights):
+            camera += w * activation[i]
+
+        camera = np.maximum(camera, 0)
+        camera = (camera - np.min(camera)) / (np.max(camera) - np.min(camera) + 0.0001)
+        camera = np.uint8(camera * 255)
+        return camera
+
+
+    # Visualize model graph
+    def save_graph(self, log_dir=None, **kwargs):
+        """ Save model graph for later visualization via tensorboard.
+
+        Parameters
+        ----------
+        logdir : str
+            Save directory location. Default is `runs/CURRENT_DATETIME_HOSTNAME`, which changes after each run.
+            Use hierarchical folder structure to compare between runs easily,
+            e.g. ‘runs/exp1’, ‘runs/exp2’, etc. for each new experiment to compare across them from within tensorboard.
+
+        Examples
+        --------
+        To easily check model graph inside Jupyter Notebook, run::
+
+        model.save_graph()
+        %load_ext tensorboard
+        %tensorboard --logdir runs/
+
+        Or, using command line::
+        tensorboard --logdir=runs
+        """
+        # Import here to avoid unnecessary tensorflow imports inside tensorboard
+        from torch.utils.tensorboard import SummaryWriter
+        writer = SummaryWriter(log_dir=log_dir, **kwargs)
+        writer.add_graph(self.model, self._placeholder_data())
+        writer.close()
+
+
+
+class LayerExtractor:
+    """ Create hook to get layer activations and gradients. """
+    def __init__(self, module):
+        self.activation = None
+        self.gradient = None
+
+        self.forward_handle = module.register_forward_hook(self.forward_hook)
+        self.backward_handle = module.register_backward_hook(self.backward_hook)
+
+    def forward_hook(self, module, input, output):
+        """ Save activations: if multi-output, the first one is saved. """
+        _ = module, input
+        if isinstance(output, (tuple, list)):
+            output = output[-1]
+        self.activation = output
+
+    def backward_hook(self, module, grad_input, grad_output):
+        """ Save gradients: if multi-output, the first one is saved. """
+        _ = module, grad_input
+        if isinstance(grad_output, (tuple, list)):
+            grad_output = grad_output[0]
+        self.gradient = grad_output
+
+    def close(self):
+        self.forward_handle.remove()
+        self.backward_handle.remove()
+
+    def __del__(self):
+        self.close()
