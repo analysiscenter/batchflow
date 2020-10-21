@@ -1,25 +1,28 @@
-blosc
-dask
-dill
-feather-format
-fsspec
-matplotlib
+dill + 
+numpy + 
+tqdm + 
+matplotlib + 
+numba +
+pandas +
+psutil +
+scipy +
+IPython +
+
+#research
 multiprocess
-nbconvert
-numba
-numpy
-nvidia-smi
-pandas
-psutil
-pytest
-requests
-scikit-image
-scikit-learn
-scipy
-seaborn
-tensorflow-gpu==1.15.0
-toolz
+
+#opensets
+sklearn
+
+#torch
 torch
-tqdm
-IPython
-Pillow
+
+#tf
+tf
+
+#metcsi
+pass
+
+
+
+
