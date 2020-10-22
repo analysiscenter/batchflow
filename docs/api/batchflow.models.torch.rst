@@ -2,9 +2,7 @@
 batchflow.models.torch
 ======================
 
-.. note::
-
-    This requires torch
+.. automodule:: batchflow.models.torch
 
 .. toctree::
 
