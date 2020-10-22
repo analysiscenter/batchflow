@@ -1,4 +1,8 @@
-""" Research module. """
+""" Research module. 
+
+.. note::
+    This module requries multiprocessing package. 
+"""
 from .domain import KV, Domain, Option, ConfigAlias
 from .distributor import Distributor
 from .logger import BaseLogger, FileLogger, PrintLogger, TelegramLogger
