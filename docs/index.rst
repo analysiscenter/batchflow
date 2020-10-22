@@ -147,7 +147,6 @@ Some BatchFlow modules also depends on other optional packages:
 * multiprocessing for ``batchflow.research``
 * torch for ``batchflow.models.torch``
 * tensorflow ``for batchflow.models.tf``
-* sklearn for ``batchflow.opensets``
 
 
 Citing BatchFlow

@@ -2,6 +2,7 @@
 batchflow.research
 ==================
 
+.. automodule:: batchflow.research
 
 Research
 --------
