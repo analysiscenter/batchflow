@@ -1466,6 +1466,7 @@ class TorchModel(BaseModel):
         gradient_mode : Tensor or str
             If Tensor, then used directly to backpropagate from.
             If `onehot`, then OHE is created with `cam_class` parameter.
+            If `targets`, then targets argument is used.
             Otherwise, model prediction is used.
         cam_class : int
             If gradient mode is `onehot`, then class to visualize. Default is the model prediction.
@@ -1478,13 +1479,15 @@ class TorchModel(BaseModel):
             Additional named arguments directly passed to `feed_dict`.
         """
         extractor = LayerExtractor(layer)
-        inputs, _ = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
+        inputs, targets = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
 
         self.model.eval()
         prediction = self.model(inputs)
 
         if isinstance(gradient_mode, np.ndarray):
             gradient = self._fill_value(gradient_mode)
+        elif 'targ' in gradient_mode:
+            gradient = targets
         elif 'oh' in gradient_mode:
             gradient = torch.zeros_like(prediction)[0:1]
             cam_class = cam_class or np.argmax(prediction.detach().cpu().numpy()[0])
