@@ -16,27 +16,34 @@ import torch.nn as nn
 
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
-from .losses import CrossEntropyLoss, binary as binary_losses, multiclass as multiclass_losses
+from .losses import CrossEntropyLoss, BinaryLovaszLoss, LovaszLoss, SSIM, MSSIM
+from .losses import binary as binary_losses, multiclass as multiclass_losses
 from ..base import BaseModel
 from ... import Config
 
 
 
 LOSSES = {
-    'mse': nn.MSELoss,
-    'bce': nn.BCEWithLogitsLoss,
-    'ce': CrossEntropyLoss,
-    'crossentropy': CrossEntropyLoss,
-    'absolutedifference': nn.L1Loss,
     'l1': nn.L1Loss,
-    'cosine': nn.CosineSimilarity,
-    'cos': nn.CosineSimilarity,
-    'hinge': nn.HingeEmbeddingLoss,
     'huber': nn.SmoothL1Loss,
-    'logloss': CrossEntropyLoss,
+    'absolutedifference': nn.L1Loss,
+    'mse': nn.MSELoss,
+    'cos': nn.CosineSimilarity,
+    'cosine': nn.CosineSimilarity,
+    'hinge': nn.HingeEmbeddingLoss,
+    'ssim': SSIM,
+    'mssim': MSSIM,
+
+    'bce': nn.BCEWithLogitsLoss,
     'bdice': binary_losses.Dice,
     'btversky': binary_losses.Tversky,
-    'dice': multiclass_losses.Dice
+    'blovasz': BinaryLovaszLoss,
+
+    'ce': CrossEntropyLoss,
+    'crossentropy': CrossEntropyLoss,
+    'logloss': CrossEntropyLoss,
+    'dice': multiclass_losses.Dice,
+    'lovasz': LovaszLoss
 }
 
 DECAYS = {
