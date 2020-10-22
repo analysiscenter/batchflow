@@ -127,7 +127,7 @@ Relative import is also possible::
     from .batchflow import Dataset
 
 
-Requirments
+Requirements
 -----------
 
 BatchFlow has the following strict requirments:
