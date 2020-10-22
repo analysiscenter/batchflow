@@ -1048,7 +1048,7 @@ class TorchModel(BaseModel):
         return output
 
     def _make_prediction_inputs(self, *args, targets=None, feed_dict=None, **kwargs):
-        """ Prase arguments to create valid inputs for model. """
+        """ Parse arguments to create valid inputs for the model. """
         feed_dict = {**(feed_dict or {}), **kwargs}
         if len(feed_dict) == 1:
             _, value = feed_dict.popitem()
@@ -1283,6 +1283,7 @@ class TorchModel(BaseModel):
         self.profile_info['CPU_tottime_avg'] = self.profile_info['CPU_tottime'] / self.profile_info['ncalls']
         self.profile_info['CUDA_cumtime_avg'] = self.profile_info['CUDA_cumtime'] / self.profile_info['ncalls']
 
+
     # Textual visualization of model
     def information(self, config=True, devices=True, train_steps=True, model=False, misc=False):
         """ Show information about model configuration, used devices, train steps, architecture and more. """
@@ -1361,10 +1362,10 @@ class TorchModel(BaseModel):
         Intermediate activations in the same structure, as `layers`.
         """
         #pylint: disable=unnecessary-comprehension
-        # Parse `activations`: make it a dictionary
         if layers is None:
             raise TypeError('get_intermediate_activations() missing 1 required argument: `layers`')
 
+        # Parse `activations`: make it a dictionary
         if not isinstance(layers, (tuple, list, dict)):
             container = {0: layers}
         elif isinstance(layers, (tuple, list)):
@@ -1385,7 +1386,7 @@ class TorchModel(BaseModel):
         for value in container.values():
             value.close()
 
-        container = {key : extractor.activation
+        container = {key : extractor.activation.detach().cpu().numpy()
                      for key, extractor in container.items()}
 
         if isinstance(layers, (tuple, list)):
@@ -1403,7 +1404,7 @@ class TorchModel(BaseModel):
         Parameters
         ----------
         layer : nn.Module
-            Part of the `model` attribute to visualize.
+            Part of the model to visualize.
         index : int or slice
             Valid slice for the activations at the targeted layer. Default is 0.
         input_shape : sequence
@@ -1430,6 +1431,7 @@ class TorchModel(BaseModel):
         losses = []
         for _ in range(iters):
             optimizer.zero_grad()
+            # Clone is needed due to bug in PyTorch v1.3. May be removed later
             self.model(image_var.clone())
 
             loss = - extractor.activation[0, index].mean()
@@ -1448,21 +1450,25 @@ class TorchModel(BaseModel):
             return image_var, losses
         return image_var
 
-    def get_gradcam(self, *args, targets=None, layer=None, cam_class=None, feed_dict=None, **kwargs):
+    def get_gradcam(self, *args, targets=None, feed_dict=None,
+                    layer=None, gradient_mode='onehot', cam_class=None, **kwargs):
         """ Create visual explanation of a network decisions, based on the intermediate layer gradients.
         Ramprasaath R. Selvaraju, et al "`Grad-CAM: Visual Explanations
         from Deep Networks via Gradient-based Localization <https://arxiv.org/abs/1610.02391>`_"
 
         Under the hood, forward and backward hooks are used to extract the activation and the gradient,
-        and the mean value of gradients (along each channel) is used as weights for activation summation.
+        and the mean value of gradients along channels are used as weights for activation summation.
 
         Parameters
         ----------
         layers : nn.Module, sequence or dict
-            Part of the `model` attribute to base visualizations on.
+            Part of the model to base visualizations on.
+        gradient_mode : Tensor or str
+            If Tensor, then used directly to backpropagate from.
+            If `onehot`, then OHE is created with `cam_class` parameter.
+            Otherwise, model prediction is used.
         cam_class : int
-            If the model solves classification task, then class to visualize.
-            Default is the model prediction.
+            If gradient mode is `onehot`, then class to visualize. Default is the model prediction.
         args : sequence
             Arguments to be passed directly into the model.
         feed_dict : dict
@@ -1477,8 +1483,10 @@ class TorchModel(BaseModel):
         self.model.eval()
         prediction = self.model(inputs)
 
-        if self.classes:
-            gradient = torch.zeros((1, self.classes), dtype=prediction.dtype, device=self.device)
+        if isinstance(gradient_mode, np.ndarray):
+            gradient = self._fill_value(gradient_mode)
+        elif 'oh' in gradient_mode:
+            gradient = torch.zeros_like(prediction)[0:1]
             cam_class = cam_class or np.argmax(prediction.detach().cpu().numpy()[0])
             gradient[0][cam_class] = 1
         else:
