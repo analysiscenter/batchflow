@@ -1,28 +1,9 @@
-dill + 
-numpy + 
-tqdm + 
-matplotlib + 
-numba +
-pandas +
-psutil +
-scipy +
-IPython +
-
-#research
-multiprocess
-
-#opensets
-sklearn
-
-#torch
-torch
-
-#tf
-tf
-
-#metcsi
-pass
-
-
-
-
+dill
+numpy
+tqdm
+matplotlib
+numba
+pandas
+psutil
+scipy
+IPython
