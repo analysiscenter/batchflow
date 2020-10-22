@@ -14,6 +14,11 @@ import queue as q
 import numpy as np
 import pandas as pd
 
+try:
+    from torch.utils.data import DataLoader, IterableDataset
+except ImportError:
+    IterableDataset = object
+
 from .base import Baseset
 from .config import Config
 from .batch import Batch
@@ -1637,3 +1642,39 @@ class Pipeline:
     def run_later(self, *args, **kwargs):
         """ Define params to execute pipeline later """
         return self.run(*args, **kwargs, lazy=True)
+
+
+    def to_dataloader(self, *components, batch_size=64, **kwargs):
+        """ Convert pipeline to `PyTorch` dataloader.
+
+        Parameters
+        ----------
+        components : sequence of str
+            Components to get from generated batches.
+        batch_size : int
+            Desired number of items in the batch.
+        kwargs : dict
+            Additional parameters of `DataLoader` initialization.
+        """
+        pipeline_dataset = PipelineDataset(self, *components, batch_size=batch_size)
+        return DataLoader(pipeline_dataset, batch_size=None, pin_memory=True, **kwargs)
+
+
+
+class PipelineDataset(IterableDataset):
+    """ Wrap pipeline into `PyTorch` interface. """
+    def __init__(self, pipeline, *components, batch_size=64):
+        if IterableDataset == object:
+            raise ImportError('Install `Pytorch` module first')
+        self.pipeline = pipeline
+        self.components = components
+        self.batch_size = batch_size
+
+    def get_data(self):
+        """ Yield batch items endlessly. """
+        while True:
+            batch = self.pipeline.next_batch(self.batch_size)
+            yield [getattr(batch, comp).astype(np.float32) for comp in self.components]
+
+    def __iter__(self):
+        return self.get_data()
