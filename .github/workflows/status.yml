@@ -23,10 +23,7 @@ jobs:
       run: pip3 install -U pylint
 
     - name: Check pylint 
-      #run: pylint -rn --rcfile pylintrc batchflow  UNCOMMENT WHEN TORCH FIX PYLINT  
-      run: |
-        pylint -rn --rcfile pylintrc batchflow --ignore=torch
-        pylint -rn --rcfile pylintrc batchflow/models/torch --disable=abstract-method,missing-function-docstring
+      run: pylint -rn --rcfile pylintrc batchflow
 
     - name: Run tests
       if: always()
