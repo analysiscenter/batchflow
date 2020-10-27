@@ -14,14 +14,10 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-try:
-    from pytorch_lightning import LightningModule
-except ImportError:
-    LightningModule = object
-
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
 from .losses import CrossEntropyLoss, binary as binary_losses, multiclass as multiclass_losses
+from .lightning import LightningModel
 from ..base import BaseModel
 from ... import Config
 
@@ -1236,7 +1232,13 @@ class TorchModel(BaseModel):
 
     # Model conversion
     def to_lightning(self):
-        """ Wrap the underlying model and created optimizers, loss, etc in `LightningModule`. """
+        """ Wrap the underlying model and created optimizers, loss, etc in `LightningModule`.
+        Allows to leverage all the features of `Pytorch Lightning` with just a few lines of code:
+
+        >>> trainer = Trainer(gpus=7, max_steps=100, amp_backend='native', auto_lr_find=True)
+        >>> lightning_model = batchflow_model.to_lightning()
+        >>> trainer.fit(lightning_model, dataloader)
+        """
         return LightningModel(self)
 
     # Debug and profile the performance
@@ -1583,35 +1585,3 @@ class LayerExtractor:
 
     def __del__(self):
         self.close()
-
-
-
-class LightningModel(LightningModule):
-    """ Convert `TorchModel` from `BatchFlow` to `PyLightning`.
-    Falcon WA, et al "`PyTorch Lightning <https://github.com/PyTorchLightning/pytorch-lightning>`_"
-    """
-    def __init__(self, batchflow_model):
-        if LightningModule == object:
-            raise ImportError('Install `PyTorch Lightning` module first')
-        super().__init__()
-        self.batchflow_model = batchflow_model
-
-        self.loss_list = []
-
-    def forward(self, x):
-        return self.batchflow_model.model(x)
-
-    def configure_optimizers(self):
-        return self.batchflow_model.train_steps['']['optimizer']
-
-    def training_step(self, batch, batch_idx):
-        """ Define custom training iteration on given data. """
-        images, targets = batch
-        predictions = self(images)
-
-        loss_func = self.batchflow_model.train_steps['']['loss'][0]
-        loss = loss_func(predictions, targets)
-
-        self.loss_list.append(loss.detach().cpu().numpy())
-        logs = {'loss': loss}
-        return {'loss': loss, 'log': logs}

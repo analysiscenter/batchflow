@@ -14,11 +14,6 @@ import queue as q
 import numpy as np
 import pandas as pd
 
-try:
-    from torch.utils.data import DataLoader, IterableDataset
-except ImportError:
-    IterableDataset = object
-
 from .base import Baseset
 from .config import Config
 from .batch import Batch
@@ -30,6 +25,7 @@ from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
                              SegmentationMetricsByInstances, RegressionMetrics, Loss)
+from .models.torch import PipelineDataLoader
 
 from ._const import *       # pylint:disable=wildcard-import
 from .utils import save_data_to
@@ -1646,6 +1642,7 @@ class Pipeline:
 
     def to_dataloader(self, *components, batch_size=64, **kwargs):
         """ Convert pipeline to `PyTorch` dataloader.
+        Allows to easily transfer the whole pipeline logic to generate data for other frameworks.
 
         Parameters
         ----------
@@ -1655,26 +1652,16 @@ class Pipeline:
             Desired number of items in the batch.
         kwargs : dict
             Additional parameters of `DataLoader` initialization.
+
+        Examples
+        --------
+        Generate images and labels from pipeline and use in regular loop:
+
+        >>> dataloader = ppl.to_dataloader('images', 'labels', batch_size=64)
+        >>> for batch in dataloader:
+        >>>     images, labels = batch
+
+        The same object `dataloader` can be used with `Pytorch Lightning`:
+        >>> trainer.fit(lightning_model, dataloader)
         """
-        pipeline_dataset = PipelineDataset(self, *components, batch_size=batch_size)
-        return DataLoader(pipeline_dataset, batch_size=None, pin_memory=True, **kwargs)
-
-
-
-class PipelineDataset(IterableDataset):
-    """ Wrap pipeline into `PyTorch` interface. """
-    def __init__(self, pipeline, *components, batch_size=64):
-        if IterableDataset == object:
-            raise ImportError('Install `Pytorch` module first')
-        self.pipeline = pipeline
-        self.components = components
-        self.batch_size = batch_size
-
-    def get_data(self):
-        """ Yield batch items endlessly. """
-        while True:
-            batch = self.pipeline.next_batch(self.batch_size)
-            yield [getattr(batch, comp).astype(np.float32) for comp in self.components]
-
-    def __iter__(self):
-        return self.get_data()
+        return PipelineDataLoader(self, components=components, batch_size=batch_size, pin_memory=True, **kwargs)
