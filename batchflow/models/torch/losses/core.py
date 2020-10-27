@@ -15,7 +15,7 @@ class CrossEntropyLoss(nn.Module):
         If `proportional`, then weight is the same as the support of a class.
         If Tensor, then uses the same semantics as :class:`torch.nn.CrossEntropyLoss` implementation.
     squeeze : bool
-        Whether to remove the second axis of targets.
+        Whether to remove the channel axis of targets.
     other parameters
         The same as :class:`torch.nn.CrossEntropyLoss` arguments.
     """
