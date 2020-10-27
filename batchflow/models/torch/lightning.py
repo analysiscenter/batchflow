@@ -9,6 +9,8 @@
 """
 import numpy as np
 
+# In case of missing modules, we assign `object` to inherit from it and throw `ImportError` at initialization
+# Import of `Pipeline` is postponed to avoid cyclic imports
 try:
     from pytorch_lightning import LightningModule
 except ImportError:
