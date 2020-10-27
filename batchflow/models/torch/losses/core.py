@@ -14,10 +14,12 @@ class CrossEntropyLoss(nn.Module):
         If one of `dynamic`, `inverse` or `adaptive`, then weight is inversely proportional to the support of a class.
         If `proportional`, then weight is the same as the support of a class.
         If Tensor, then uses the same semantics as :class:`torch.nn.CrossEntropyLoss` implementation.
+    squeeze : bool
+        Whether to remove the second axis of targets.
     other parameters
         The same as :class:`torch.nn.CrossEntropyLoss` arguments.
     """
-    def __init__(self, weight=None, size_average=None, ignore_index=-100, reduce=None, reduction='mean'):
+    def __init__(self, squeeze=False, weight=None, size_average=None, ignore_index=-100, reduce=None, reduction='mean'):
         super().__init__()
         self.kwargs = {
             'weight': weight,
@@ -27,12 +29,16 @@ class CrossEntropyLoss(nn.Module):
             'reduction': reduction
         }
 
+        self.squeeze = squeeze
         self.weight = weight
-        self.dynamic = isinstance(weight, str) or callable(str)
+        self.dynamic = isinstance(weight, str) or callable(weight)
 
     def forward(self, prediction, target):
         kwargs = dict(self.kwargs)
         target = target.to(dtype=torch.long)
+
+        if self.squeeze:
+            target = target.squeeze(1)
 
         if self.dynamic:
             num_classes = prediction.shape[1]
