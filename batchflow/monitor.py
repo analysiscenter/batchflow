@@ -1,6 +1,7 @@
 """ Monitoring (memory usage, cpu/gpu utilization) tools. """
 import os
 import time
+from math import ceil
 from multiprocessing import Process, Manager, Queue
 from contextlib import contextmanager
 
@@ -117,6 +118,45 @@ class ResourceMonitor:
         plt.show()
 
 
+class MultiMonitor(list):
+    """ Holder for multiple monitors with simple visualization method. """
+    def visualize(self, layout=None, figsize=None, suptitle=''):
+        """ Visualize multiple monitors in a single figure.
+
+        Parameters
+        ----------
+        layout : tuple of ints
+            Grid layout of plots.
+        figsize : tuple of numbers
+            Size of figure: width and height.
+        suptitle : str
+            Title for the figure.
+        """
+        if layout is None:
+            layout = ceil(len(self) / 3), 3 if len(self) > 2 else len(self)
+        figsize = figsize or (7 * layout[1], 8 * layout[0])
+
+        fig, ax = plt.subplots(*layout, figsize=figsize)
+        ax = np.atleast_2d(ax)
+
+        for i, monitor in enumerate(self):
+            name = monitor.__class__.__name__
+            title = f'{name}\nMean: {np.mean(monitor.data):2.2}; std: {np.std(monitor.data):2.2}'
+
+            ax[i // layout[1], i % layout[1]].plot(np.array(monitor.ticks) - monitor.ticks[0], monitor.data)
+            ax[i // layout[1], i % layout[1]].set_title(title, fontsize=16)
+            ax[i // layout[1], i % layout[1]].set_xlabel('Time, s', fontsize=14)
+            ax[i // layout[1], i % layout[1]].set_ylabel(monitor.UNIT, fontsize=12, rotation='horizontal', labelpad=15)
+            ax[i // layout[1], i % layout[1]].grid(True)
+
+        for i in range(len(self), layout[0] * layout[1]):
+            ax[i // layout[1], i % layout[1]].set_axis_off()
+
+        if suptitle:
+            fig.suptitle(suptitle, fontsize=24)
+        plt.show()
+
+
 
 class CPUMonitor(ResourceMonitor):
     """ Track CPU usage. """
@@ -191,6 +231,21 @@ class GPUMonitor(ResourceMonitor):
         return [item.gpu for item in res]
 
 
+class GPUMemoryUtilizationMonitor(ResourceMonitor):
+    """ Track GPU memory utilization. """
+    UNIT = '%'
+
+    @staticmethod
+    def get_usage(gpu_list=None, **kwargs):
+        """ Track GPU memory utilization. """
+        _ = kwargs
+        gpu_list = gpu_list or [0]
+        nvidia_smi.nvmlInit()
+        handle = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
+        res = [nvidia_smi.nvmlDeviceGetUtilizationRates(item) for item in handle]
+        return [item.memory for item in res]
+
+
 class GPUMemoryMonitor(ResourceMonitor):
     """ Track GPU memory usage. """
     UNIT = '%'
@@ -202,9 +257,10 @@ class GPUMemoryMonitor(ResourceMonitor):
         gpu_list = gpu_list or [0]
         nvidia_smi.nvmlInit()
         handle = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
-        res = [nvidia_smi.nvmlDeviceGetUtilizationRates(item) for item in handle]
-        return [item.memory for item in res]
-
+        res = [nvidia_smi.nvmlDeviceGetMemoryInfo(item) for item in handle]
+        res = [100 * item.used / item.total for item in res]
+        nvidia_smi.nvmlShutdown()
+        return res
 
 
 MONITOR_ALIASES = {
@@ -215,10 +271,12 @@ MONITOR_ALIASES = {
     USSMonitor: ['uss'],
     GPUMonitor: ['gpu'],
     GPUMemoryMonitor: ['gpu_memory'],
+    GPUMemoryUtilizationMonitor: ['gpu_memory_utilization']
 }
 
 MONITOR_ALIASES = {alias: monitor for monitor, aliases in MONITOR_ALIASES.items()
                    for alias in aliases}
+
 
 
 @contextmanager
@@ -231,7 +289,7 @@ def monitor_resource(resource='memory', frequency=0.5, **kwargs):
     try:
         for monitor in monitors:
             monitor.start()
-        yield monitors[0] if len(monitors) == 1 else monitors
+        yield monitors[0] if len(monitors) == 1 else MultiMonitor(monitors)
     finally:
         for monitor in monitors:
             monitor.fetch()
