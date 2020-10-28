@@ -6,7 +6,6 @@ import threading
 import inspect
 from collections import OrderedDict
 from functools import partial
-from pprint import pprint
 
 import dill
 import numpy as np
@@ -14,6 +13,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
+from .visualization import VisualizationMixin
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
 from .losses import CrossEntropyLoss, binary as binary_losses, multiclass as multiclass_losses
@@ -57,7 +57,7 @@ DECAYS_DEFAULTS = {
 
 
 
-class TorchModel(BaseModel):
+class TorchModel(BaseModel, VisualizationMixin):
     r""" Base class for eager Torch models.
 
     Parameters
@@ -222,7 +222,7 @@ class TorchModel(BaseModel):
 
     initial_block : dict
         User-defined module or parameters for the input block, usually
-        :class:`~.eager_torch.layers.ConvBlock` parameters.
+        :class:`~.torch.layers.ConvBlock` parameters.
 
         If ``initial_block/inputs`` is specified with a name or list of names,
         then it should contain names from ``inputs`` with info about shapes of tensors to be passed to `initial_block`.
@@ -236,11 +236,11 @@ class TorchModel(BaseModel):
 
     body : dict or nn.Module
         User-defined module or parameters for the base network layers,
-        usually :class:`~.eager_torch.layers.ConvBlock` parameters.
+        usually :class:`~.torch.layers.ConvBlock` parameters.
 
     head : dict or nn.Module
         User-defined module or parameters for the head layers,
-        usually :class:`~.eager_torch.layers.ConvBlock` parameters.
+        usually :class:`~.torch.layers.ConvBlock` parameters.
 
     predictions : str or callable
         An operation applied to the head output to make the predictions tensor which is used in the loss function.
@@ -250,12 +250,12 @@ class TorchModel(BaseModel):
         Auxiliary operations to apply to network predictions. See :meth:`.TorchModel.output` for details.
 
     common : dict
-        Default parameters for all blocks (see :class:`~.eager_torch.layers.ConvBlock`).
+        Default parameters for all blocks (see :class:`~.torch.layers.ConvBlock`).
 
 
     **In order to create your own model, it is recommended to:**
 
-    * Take a look at :class:`~.eager_torch.layers.ConvBlock` since it is widely used as a building
+    * Take a look at :class:`~.torch.layers.ConvBlock` since it is widely used as a building
       block almost everywhere.
 
     * Define model defaults (e.g. number of filters, dropout rates, etc) by overriding
@@ -281,7 +281,7 @@ class TorchModel(BaseModel):
     * ``initial_block`` sub-dictionary with ``inputs`` key with names of tensors to use as network inputs.
 
     * ``initial_block``, ``body``, ``head`` keys are used to define behaviour of respective part of the network.
-      Default behaviour is to support all of the :class:`~.eager_torch.layers.ConvBlock` options.
+      Default behaviour is to support all of the :class:`~.torch.layers.ConvBlock` options.
       For complex models, take a look at default config of the chosen model to learn
       which parameters should be configured.
     """
@@ -1048,7 +1048,21 @@ class TorchModel(BaseModel):
         return output
 
     def _make_prediction_inputs(self, *args, targets=None, feed_dict=None, **kwargs):
-        """ Parse arguments to create valid inputs for the model. """
+        """ Parse arguments to create valid inputs for the model.
+        Implements the logic of parsing the positional and keyword arguments to the model,
+        possibly wrapped into `feed_dict` dictionary, or even combination of the two.
+
+        Used under the hood of :meth:`~.TorchModel.predict` method.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            model.predict(B('images'), targets=B('labels'))
+            model.predict(images=B('images'), targets=B('labels'))
+            model.predict(B('images'), targets=B('labels'), masks=B('masks'))
+        """
+        # Concatenate `kwargs` and `feed_dict`; if not empty, use keywords in `_fill_input`
         feed_dict = {**(feed_dict or {}), **kwargs}
         if len(feed_dict) == 1:
             _, value = feed_dict.popitem()
@@ -1057,6 +1071,8 @@ class TorchModel(BaseModel):
             if targets is not None and 'targets' in feed_dict.keys():
                 warnings.warn("`targets` already present in `feed_dict`, so those passed as keyword arg won't be used")
             *inputs, targets = self._fill_input(*args, **feed_dict)
+
+        # Positional arguments only
         else:
             inputs = self._fill_input(*args)
             if targets is not None:
@@ -1282,294 +1298,3 @@ class TorchModel(BaseModel):
                                          columns=['ncalls', 'CPU_tottime', 'CPU_cumtime', 'CUDA_cumtime'])
         self.profile_info['CPU_tottime_avg'] = self.profile_info['CPU_tottime'] / self.profile_info['ncalls']
         self.profile_info['CUDA_cumtime_avg'] = self.profile_info['CUDA_cumtime'] / self.profile_info['ncalls']
-
-
-    # Textual visualization of model
-    def information(self, config=True, devices=True, train_steps=True, model=False, misc=False):
-        """ Show information about model configuration, used devices, train steps, architecture and more. """
-        template = '\n##### {}:'
-
-        if config:
-            print(template.format('Config'))
-            pprint(self.full_config.config)
-
-        if devices:
-            print(template.format('Devices'))
-            print('Leading device is {}'.format(self.device, ))
-            if self.devices:
-                _ = [print('Device {} is {}'.format(i, d)) for i, d in enumerate(self.devices)]
-
-        if train_steps:
-            print(template.format('Train steps'))
-            pprint(self.train_steps)
-
-        if model:
-            print(template.format('Model'))
-            print(self.model)
-
-        if misc:
-            print(template.format('Additional info'))
-            if self.input_shapes:
-                _ = [print('Input {} has shape {}'.format(i, s)) for i, s in enumerate(self.input_shapes)]
-            if self.target_shape:
-                print('Target has shape {}'.format(self.target_shape))
-
-            if self.model:
-                num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-                print('\nTotal number of parameters in model: {}'.format(num_params))
-
-            iters = {key: value.get('iter', 0) for key, value in self.train_steps.items()}
-            print('\nTotal number of passed training iterations: {}'.format(sum(list(iters.values()))))
-            if len(iters) > 1:
-                print('Number of training iterations for individual train steps:')
-                pprint(iters)
-
-            print(template.format('Last iteration params'))
-
-            iter_info = {**self.iter_info}
-            iter_info.pop('lr')
-            pprint(iter_info)
-
-    @property
-    def info(self):
-        """ Show information about model configuration, used devices, train steps and more. """
-        self.information()
-
-
-    # Visualize intermediate layers: activations and features
-    def get_intermediate_activations(self, *args, layers=None, feed_dict=None, **kwargs):
-        """ Compute the intermediate activations of a given layers in the same structure (tuple/list/dict).
-
-        Under the hood, a forward hook is registered to capture the output of a targeted layers,
-        and it is removed after extraction of all the activations.
-
-        Parameters
-        ----------
-        layers : nn.Module, sequence or dict
-            If nn.Module, then must be a part of the `model` attribute to get activations from.
-            If sequence, then multiple such modules.
-            If dictionary, then values must be such modules.
-        args : sequence
-            Arguments to be passed directly into the model.
-        feed_dict : dict
-            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
-            with keys being names and values being actual data.
-        kwargs : dict
-            Additional named arguments directly passed to `feed_dict`.
-
-        Returns
-        -------
-        Intermediate activations in the same structure, as `layers`.
-        """
-        #pylint: disable=unnecessary-comprehension
-        if layers is None:
-            raise TypeError('get_intermediate_activations() missing 1 required argument: `layers`')
-
-        # Parse `activations`: make it a dictionary
-        if not isinstance(layers, (tuple, list, dict)):
-            container = {0: layers}
-        elif isinstance(layers, (tuple, list)):
-            container = {i: item for i, item in enumerate(layers)}
-        else:
-            container = dict(layers) # shallow copy is fine
-
-        container = {key: LayerExtractor(module)
-                     for key, module in container.items()}
-
-        # Parse inputs to model, run model
-        inputs, _ = self._make_prediction_inputs(*args, targets=None, feed_dict=feed_dict, **kwargs)
-        self.model.eval()
-        with torch.no_grad():
-            self.model(inputs)
-
-        # Remove hooks; parse hooked data into desired format
-        for value in container.values():
-            value.close()
-
-        container = {key : extractor.activation.detach().cpu().numpy()
-                     for key, extractor in container.items()}
-
-        if isinstance(layers, (tuple, list)):
-            container = [container[i] for i, _ in enumerate(layers)]
-        elif not isinstance(layers, dict):
-            container = container[0]
-        return container
-
-    def get_layer_representation(self, layer, index=0, input_shape=None, ranges=(-1, 1), iters=100, return_loss=False):
-        """ Compute a representation of an intermediate layer.
-
-        Under the hood, this function generates random image and then optimizes it
-        with respect to the mean value of activations at the target layer.
-
-        Parameters
-        ----------
-        layer : nn.Module
-            Part of the model to visualize.
-        index : int or slice
-            Valid slice for the activations at the targeted layer. Default is 0.
-        input_shape : sequence
-            Shape of the image to generate. Default is the shape of the last model input.
-        ranges : sequence
-            Lower and upper bound of values in generated image.
-        iters : int
-            Number of optimization iterations.
-        return_loss : bool
-            Whether to return the loss values of optimization procedure.
-        """
-        # Create starting image: random uniform noise
-        input_shape = input_shape or self.input_shapes[0][1:]
-        image = np.random.uniform(*ranges, input_shape)[None]
-        image_var = torch.from_numpy(image.astype(np.float32)).to(self.device)
-        image_var.requires_grad = True
-
-        # Set up optimization procedure
-        extractor = LayerExtractor(layer)
-        optimizer = torch.optim.Adam([image_var], lr=0.1, weight_decay=1e-6)
-        self.model.eval()
-
-        # Iteratively make image visualize desired layer/filter
-        losses = []
-        for _ in range(iters):
-            optimizer.zero_grad()
-            # Clone is needed due to bug in PyTorch v1.3. May be removed later
-            self.model(image_var.clone())
-
-            loss = - extractor.activation[0, index].mean()
-            loss.backward()
-            optimizer.step()
-
-            image_var.data.clamp_(*ranges)
-            losses.append(loss.detach())
-
-        # Clean-up: one final clamp and closing handles
-        image_var.data.clamp_(*ranges)
-        image_var = image_var.detach().cpu().numpy()
-        extractor.close()
-
-        if return_loss:
-            return image_var, losses
-        return image_var
-
-    def get_gradcam(self, *args, targets=None, feed_dict=None,
-                    layer=None, gradient_mode='onehot', cam_class=None, **kwargs):
-        """ Create visual explanation of a network decisions, based on the intermediate layer gradients.
-        Ramprasaath R. Selvaraju, et al "`Grad-CAM: Visual Explanations
-        from Deep Networks via Gradient-based Localization <https://arxiv.org/abs/1610.02391>`_"
-
-        Under the hood, forward and backward hooks are used to extract the activation and the gradient,
-        and the mean value of gradients along channels are used as weights for activation summation.
-
-        Parameters
-        ----------
-        layers : nn.Module, sequence or dict
-            Part of the model to base visualizations on.
-        gradient_mode : Tensor or str
-            If Tensor, then used directly to backpropagate from.
-            If `onehot`, then OHE is created with `cam_class` parameter.
-            If `targets`, then targets argument is used.
-            Otherwise, model prediction is used.
-        cam_class : int
-            If gradient mode is `onehot`, then class to visualize. Default is the model prediction.
-        args : sequence
-            Arguments to be passed directly into the model.
-        feed_dict : dict
-            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
-            with keys being names and values being actual data.
-        kwargs : dict
-            Additional named arguments directly passed to `feed_dict`.
-        """
-        extractor = LayerExtractor(layer)
-        inputs, targets = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
-
-        self.model.eval()
-        prediction = self.model(inputs)
-
-        if isinstance(gradient_mode, np.ndarray):
-            gradient = self._fill_value(gradient_mode)
-        elif 'targ' in gradient_mode:
-            gradient = targets
-        elif 'oh' in gradient_mode:
-            gradient = torch.zeros_like(prediction)[0:1]
-            cam_class = cam_class or np.argmax(prediction.detach().cpu().numpy()[0])
-            gradient[0][cam_class] = 1
-        else:
-            gradient = prediction.clone()
-
-        self.model.zero_grad()
-        prediction.backward(gradient=gradient, retain_graph=True)
-        self.model.zero_grad()
-
-        activation = extractor.activation.detach().cpu().numpy()[0]
-        gradient = extractor.gradient.detach().cpu().numpy()[0]
-
-        weights = np.mean(gradient, axis=(1, 2))
-        camera = np.zeros(activation.shape[1:], dtype=activation.dtype)
-
-        for i, w in enumerate(weights):
-            camera += w * activation[i]
-
-        camera = np.maximum(camera, 0)
-        camera = (camera - np.min(camera)) / (np.max(camera) - np.min(camera) + 0.0001)
-        camera = np.uint8(camera * 255)
-        return camera
-
-
-    # Visualize model graph
-    def save_graph(self, log_dir=None, **kwargs):
-        """ Save model graph for later visualization via tensorboard.
-
-        Parameters
-        ----------
-        logdir : str
-            Save directory location. Default is `runs/CURRENT_DATETIME_HOSTNAME`, which changes after each run.
-            Use hierarchical folder structure to compare between runs easily,
-            e.g. ‘runs/exp1’, ‘runs/exp2’, etc. for each new experiment to compare across them from within tensorboard.
-
-        Examples
-        --------
-        To easily check model graph inside Jupyter Notebook, run::
-
-        model.save_graph()
-        %load_ext tensorboard
-        %tensorboard --logdir runs/
-
-        Or, using command line::
-        tensorboard --logdir=runs
-        """
-        # Import here to avoid unnecessary tensorflow imports inside tensorboard
-        from torch.utils.tensorboard import SummaryWriter
-        writer = SummaryWriter(log_dir=log_dir, **kwargs)
-        writer.add_graph(self.model, self._placeholder_data())
-        writer.close()
-
-
-
-class LayerExtractor:
-    """ Create hook to get layer activations and gradients. """
-    def __init__(self, module):
-        self.activation = None
-        self.gradient = None
-
-        self.forward_handle = module.register_forward_hook(self.forward_hook)
-        self.backward_handle = module.register_backward_hook(self.backward_hook)
-
-    def forward_hook(self, module, input, output):
-        """ Save activations: if multi-output, the first one is saved. """
-        _ = module, input
-        if isinstance(output, (tuple, list)):
-            output = output[-1]
-        self.activation = output
-
-    def backward_hook(self, module, grad_input, grad_output):
-        """ Save gradients: if multi-output, the first one is saved. """
-        _ = module, grad_input
-        if isinstance(grad_output, (tuple, list)):
-            grad_output = grad_output[0]
-        self.gradient = grad_output
-
-    def close(self):
-        self.forward_handle.remove()
-        self.backward_handle.remove()
-
-    def __del__(self):
-        self.close()
