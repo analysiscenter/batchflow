@@ -9,13 +9,13 @@ class CrossEntropyLoss(nn.Module):
 
     Parameters
     ----------
+    squeeze : bool
+        Whether to remove the channel axis of targets.
     weight : str, callable or torch.Tensor
         If callable, then used on the support of a given class.
         If one of `dynamic`, `inverse` or `adaptive`, then weight is inversely proportional to the support of a class.
         If `proportional`, then weight is the same as the support of a class.
         If Tensor, then uses the same semantics as :class:`torch.nn.CrossEntropyLoss` implementation.
-    squeeze : bool
-        Whether to remove the channel axis of targets.
     other parameters
         The same as :class:`torch.nn.CrossEntropyLoss` arguments.
     """
