@@ -13,6 +13,9 @@ class SSIM(nn.Module):
     """ Structural similarity between two images.
     Note that images must be grayscale.
 
+    Heavily inspired by the author's implementation:
+    https://ece.uwaterloo.ca/~z70wang/research/ssim/ssim_index.m
+
     Parameters
     ----------
     kernel_size : int
@@ -46,7 +49,7 @@ class SSIM(nn.Module):
         return kernel
 
     def compute_ssim(self, prediction, target, return_sigma=False):
-        """ Heavily inspired by the `scipy` implementation. """
+        """ Compute structural similarity map. """
         channel = prediction.size()[1]
 
         mu1 = F.conv2d(prediction, self.kernel, padding=self.kernel_size // 2, groups=channel)
@@ -72,8 +75,11 @@ class SSIM(nn.Module):
 class MSSIM(SSIM):
     """ Compute SSIM on multiple scales and return the weighted average.
     Note that images must be grayscale.
+
+    Heavily inspired by the author's implementation:
+    http://www.cns.nyu.edu/~lcv/ssim/msssim.zip
     """
-    WEIGHTS = [0.0448, 0.2856, 0.3001, 0.2363, 0.1333]
+    WEIGHTS = [0.0448, 0.2856, 0.3001, 0.2363, 0.1333] # from the author's code
 
     def __init__(self, kernel_size=11, sigma=1.5):
         super().__init__()
