@@ -1,19 +1,16 @@
-""" !!. """
+""" Contains mixin for :class:`~.torch.TorchModel` to provide textual and graphical visualizations. """
 from pprint import pformat
 import matplotlib.pyplot as plt
 
 import numpy as np
 import torch
 
+# Also imports `tensorboard`, if necessary
+
 
 
 class VisualizationMixin:
-    """ Collection of visualization (both textual and graphical) tools for a :class:`~.torch.TorchModel`.
-
-    Required attributes
-    -------------------
-
-    """
+    """ Collection of visualization (both textual and graphical) tools for a :class:`~.torch.TorchModel`. """
     # Textual visualization of the model
     def information(self, config=True, devices=True, train_steps=True, model=False, misc=False):
         """ Show information about model configuration, used devices, train steps and more. """
