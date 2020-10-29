@@ -106,7 +106,7 @@ class LovaszLoss(nn.Module):
             return probas, labels
 
         mask = labels != self.ignore
-        return probas[mask.nonzero().squeeze()], labels[mask]
+        return probas[mask], labels[mask]
 
     def compute_loss(self, probas, labels):
         """ Takes in flattened tensors and outputs binary Lovasz loss. """
