@@ -3,7 +3,6 @@ import os
 import time
 from math import ceil
 from multiprocessing import Process, Manager, Queue
-from contextlib import contextmanager
 
 import psutil
 import numpy as np
@@ -12,7 +11,8 @@ import matplotlib.pyplot as plt
 try:
     import nvidia_smi
 except ImportError:
-    pass
+    # Use this value to raise ImportError later
+    nvidia_smi = None
 
 
 
@@ -106,54 +106,26 @@ class ResourceMonitor:
         self.process.join()
         self.running = False
 
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.fetch()
+        self.stop()
+
 
     def visualize(self):
         """ Simple plots of collected data-points. """
         plt.figure(figsize=(8, 6))
         plt.plot(np.array(self.ticks) - self.ticks[0], self.data)
-        plt.title(self.__class__.__name__)
+
+        name = self.__class__.__name__
+        title = f'{name}\nMEAN: {np.mean(self.data):4.4}    STD: {np.std(self.data):4.4}'
+        plt.title(title)
         plt.xlabel('Time, s', fontsize=12)
         plt.ylabel(self.UNIT, fontsize=12, rotation='horizontal', labelpad=15)
         plt.grid(True)
-        plt.show()
-
-
-class MultiMonitor(list):
-    """ Holder for multiple monitors with simple visualization method. """
-    def visualize(self, layout=None, figsize=None, suptitle=''):
-        """ Visualize multiple monitors in a single figure.
-
-        Parameters
-        ----------
-        layout : tuple of ints
-            Grid layout of plots.
-        figsize : tuple of numbers
-            Size of figure: width and height.
-        suptitle : str
-            Title for the figure.
-        """
-        if layout is None:
-            layout = ceil(len(self) / 3), 3 if len(self) > 2 else len(self)
-        figsize = figsize or (7 * layout[1], 8 * layout[0])
-
-        fig, ax = plt.subplots(*layout, figsize=figsize)
-        ax = np.atleast_2d(ax)
-
-        for i, monitor in enumerate(self):
-            name = monitor.__class__.__name__
-            title = f'{name}\nMean: {np.mean(monitor.data):2.2}; std: {np.std(monitor.data):2.2}'
-
-            ax[i // layout[1], i % layout[1]].plot(np.array(monitor.ticks) - monitor.ticks[0], monitor.data)
-            ax[i // layout[1], i % layout[1]].set_title(title, fontsize=16)
-            ax[i // layout[1], i % layout[1]].set_xlabel('Time, s', fontsize=14)
-            ax[i // layout[1], i % layout[1]].set_ylabel(monitor.UNIT, fontsize=12, rotation='horizontal', labelpad=15)
-            ax[i // layout[1], i % layout[1]].grid(True)
-
-        for i in range(len(self), layout[0] * layout[1]):
-            ax[i // layout[1], i % layout[1]].set_axis_off()
-
-        if suptitle:
-            fig.suptitle(suptitle, fontsize=24)
         plt.show()
 
 
@@ -220,6 +192,11 @@ class GPUMonitor(ResourceMonitor):
     """ Track GPU usage. """
     UNIT = '%'
 
+    def __init__(self, *args, **kwargs):
+        if nvidia_smi is None:
+            raise ImportError('Install Python interface for nvidia_smi')
+        super().__init__(*args, **kwargs)
+
     @staticmethod
     def get_usage(gpu_list=None, **kwargs):
         """ Track GPU usage. """
@@ -234,6 +211,11 @@ class GPUMonitor(ResourceMonitor):
 class GPUMemoryUtilizationMonitor(ResourceMonitor):
     """ Track GPU memory utilization. """
     UNIT = '%'
+
+    def __init__(self, *args, **kwargs):
+        if nvidia_smi is None:
+            raise ImportError('Install Python interface for nvidia_smi')
+        super().__init__(*args, **kwargs)
 
     @staticmethod
     def get_usage(gpu_list=None, **kwargs):
@@ -250,6 +232,11 @@ class GPUMemoryMonitor(ResourceMonitor):
     """ Track GPU memory usage. """
     UNIT = '%'
 
+    def __init__(self, *args, **kwargs):
+        if nvidia_smi is None:
+            raise ImportError('Install Python interface for nvidia_smi')
+        super().__init__(*args, **kwargs)
+
     @staticmethod
     def get_usage(gpu_list=None, **kwargs):
         """ Track GPU memory usage. """
@@ -261,6 +248,7 @@ class GPUMemoryMonitor(ResourceMonitor):
         res = [100 * item.used / item.total for item in res]
         nvidia_smi.nvmlShutdown()
         return res
+
 
 
 MONITOR_ALIASES = {
@@ -278,29 +266,60 @@ MONITOR_ALIASES = {alias: monitor for monitor, aliases in MONITOR_ALIASES.items(
                    for alias in aliases}
 
 
+class Monitor(list):
+    """ Holder for multiple monitors with simple visualization method. """
+    def __init__(self, monitors=('cpu', 'memory', 'gpu'), frequency=0.1, **kwargs):
+        monitors = [monitors] if not isinstance(monitors, (tuple, list)) else monitors
+        monitors = [MONITOR_ALIASES[monitor.lower()](frequency=frequency, **kwargs)
+                    if isinstance(monitor, str) else monitor
+                    for monitor in monitors]
 
-@contextmanager
-def monitor_resource(resource='memory', frequency=0.5, **kwargs):
-    """ A convenient context manager to profile a part of code. Can use one or more monitors. """
-    resource = [resource] if not isinstance(resource, (tuple, list)) else resource
-    monitors = [MONITOR_ALIASES[res.lower()](frequency=frequency, **kwargs) if isinstance(res, str) else res
-                for res in resource]
+        super().__init__(monitors)
 
-    try:
-        for monitor in monitors:
+
+    def __enter__(self):
+        for monitor in self:
             monitor.start()
-        yield monitors[0] if len(monitors) == 1 else MultiMonitor(monitors)
-    finally:
-        for monitor in monitors:
+        return self[0] if len(self) == 0 else self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        for monitor in self:
             monitor.fetch()
             monitor.stop()
 
 
-def monitor_memory(frequency=0.5):
-    return monitor_resource('memory', frequency=frequency)
+    def visualize(self, layout=None, figsize=None, suptitle=''):
+        """ Visualize multiple monitors in a single figure.
 
-def monitor_cpu(frequency=0.5):
-    return monitor_resource('cpu', frequency=frequency)
+        Parameters
+        ----------
+        layout : tuple of ints
+            Grid layout of plots.
+        figsize : tuple of numbers
+            Size of figure: width and height.
+        suptitle : str
+            Title for the figure.
+        """
+        if layout is None:
+            layout = ceil(len(self) / 3), 3 if len(self) > 2 else len(self)
+        figsize = figsize or (7 * layout[1], 8 * layout[0])
 
-def monitor_gpu(frequency=0.5, gpu_list=None):
-    return monitor_resource('gpu', frequency=frequency, gpu_list=gpu_list)
+        fig, ax = plt.subplots(*layout, figsize=figsize)
+        ax = np.atleast_2d(ax)
+
+        for i, monitor in enumerate(self):
+            name = monitor.__class__.__name__
+            title = f'{name}\nMEAN: {np.mean(monitor.data):4.4}    STD: {np.std(monitor.data):4.4}'
+
+            ax[i // layout[1], i % layout[1]].plot(np.array(monitor.ticks) - monitor.ticks[0], monitor.data)
+            ax[i // layout[1], i % layout[1]].set_title(title, fontsize=16)
+            ax[i // layout[1], i % layout[1]].set_xlabel('Time, s', fontsize=14)
+            ax[i // layout[1], i % layout[1]].set_ylabel(monitor.UNIT, fontsize=12, rotation='horizontal', labelpad=15)
+            ax[i // layout[1], i % layout[1]].grid(True)
+
+        for i in range(len(self), layout[0] * layout[1]):
+            ax[i // layout[1], i % layout[1]].set_axis_off()
+
+        if suptitle:
+            fig.suptitle(suptitle, fontsize=24)
+        plt.show()
