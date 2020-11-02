@@ -267,8 +267,10 @@ class TorchModel(BaseModel, VisualizationMixin):
     PRESERVE = [
         'full_config', 'config', 'model',
         'input_names', 'input_shapes', 'target_shape', 'classes',
-        'loss', 'optimizer', 'decay',
-        'sync_counter', 'microbatch'
+        'loss', 'optimizer', 'decay', 'decay_step',
+        'sync_counter', 'microbatch',
+        'iteration', 'iter_info', 'lr_list', 'syncs', 'decay_iters',
+        '_loss_list', 'loss_list'
     ]
 
     def __init__(self, config=None):
@@ -304,6 +306,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.lr_list = []
         self.syncs = []
         self.decay_iters = []
+        self._loss_list = []
+        self.loss_list = []
 
         # Profile kernels used
         self.profilers = []
@@ -872,6 +876,9 @@ class TorchModel(BaseModel, VisualizationMixin):
             output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps)
             outputs.append(output)
 
+        # Store the average value of loss over the entire batch
+        self.loss_list.append(np.mean(self._loss_list[-steps:]))
+
         if use_lock:
             self.model_lock.release()
 
@@ -900,9 +907,6 @@ class TorchModel(BaseModel, VisualizationMixin):
         return output
 
     def _train(self, *args, fetches=None, sync_frequency=True):
-        """
-        sync_counter is zero-based, so we need to update weights when it is equal to sync_frequency - 1
-        """
         # Parse inputs
         *inputs, targets = args
         inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
@@ -911,6 +915,9 @@ class TorchModel(BaseModel, VisualizationMixin):
         predictions = self.model(inputs)
         loss = sum(loss_fn(predictions, targets) for loss_fn in self.loss) / len(self.loss)
         loss.backward()
+
+        # Store loss value for every microbatch
+        self._loss_list.append(loss.detach().cpu().numpy())
 
         # Whether to update weights or keep accumulating
         if self.sync_counter == sync_frequency - 1:
