@@ -316,37 +316,57 @@ class BaseConvBlock(nn.ModuleDict):
         branches = []
 
         for i, letter in enumerate(self.layout):
+            # Get the current layer configuration
             letter_group = self.LETTERS_GROUPS[letter]
             layer_name = self.LETTERS_LAYERS[letter]
             layer_class = self.LAYERS_MODULES[layer_name]
             layout_dict[letter_group][0] += 1
 
+            # Skip-connection letters: parallel execution branch
             if letter in self.BRANCH_LETTERS:
+                # Make layer arguments
                 args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
+
+                # Create layer and store the output
                 layer = layer_class(**args).to(self.device)
                 skip = layer(inputs)
                 branches.append(skip)
 
-                layer_desc = 'Layer {}, skip-letter "{}"; {} -> {}'.format(i, letter,
-                                                                           get_shape(inputs),
-                                                                           get_shape(skip))
-            elif letter in self.COMBINE_LETTERS:
-                args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
-                args = {**args, 'inputs': [inputs, branches.pop()], 'op': letter}
-                layer = layer_class(**args).to(self.device)
+                # Create layer description
+                shape_before = (None, *get_shape(inputs)[1:])
+                shape_after = (None, *get_shape(skip)[1:])
+                layer_desc = 'Layer {},    skip "{}": {} -> {}'.format(i, letter, shape_before, shape_after)
 
-                shape_before = get_shape(inputs)
+            # Combine multiple inputs with addition, concatenation, etc
+            elif letter in self.COMBINE_LETTERS:
+                # Make layer arguments: pop additional inputs from storage
+                args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
+                combine_inputs = [inputs, branches.pop()]
+                args = {**args, 'inputs': combine_inputs, 'op': letter}
+
+                # Create layer
+                layer = layer_class(**args).to(self.device)
+                shape_before = [get_shape(item) for item in combine_inputs]
                 inputs = layer(args['inputs'])
                 shape_after = get_shape(inputs)
 
-                shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
-                layer_desc = 'Layer {}: combine; {} -> {}'.format(i, shape_before, shape_after)
+                # Create layer description: one line for each of the inputs
+                shape_before = [str((None, *shape[1:])) for shape in shape_before]
+                shape_after = (None, *shape_after[1:])
+                layer_desc = 'Layer {}, combine "{}": {}'.format(i, letter, shape_before[0])
+                starter = ('\n' + ' '*len(layer_desc))
+                for shape in shape_before[1:]:
+                    layer_desc += '\n' + ' '*(len(layer_desc) - len(shape)) + shape
+                layer_desc += ' -> {}'.format(shape_after)
+
+            # Regular layer
             else:
+                # Check if we need to skip current layer
                 layer_args = self.kwargs.get(layer_name, {})
                 skip_layer = layer_args is False \
                              or isinstance(layer_args, dict) and layer_args.get('disable', False)
 
-                # Create params for the layer call
+                # Make layer argument
                 if skip_layer:
                     pass
                 elif letter in self.DEFAULT_LETTERS:
@@ -354,25 +374,40 @@ class BaseConvBlock(nn.ModuleDict):
                 elif letter not in self.LETTERS_LAYERS.keys():
                     raise ValueError('Unknown letter symbol - %s' % letter)
 
-                # Additional params for some layers
+                # Additional params for some of the layers
                 if letter_group.lower() == 'p':
                     args['op'] = letter
                 elif letter_group == 'b':
                     args['mode'] = args.get('mode', letter.lower())
 
                 if not skip_layer:
+                    # Create layer
                     layer = layer_class(**args).to(self.device)
                     shape_before = get_shape(inputs)
                     inputs = layer(inputs)
                     shape_after = get_shape(inputs)
 
+                    # Create layer description
                     shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
-                    layer_desc = 'Layer {}, letter "{}"; {} -> {}'.format(i, letter, shape_before, shape_after)
+                    layer_desc = 'Layer {},  letter "{}": {} -> {}'.format(i, letter, shape_before, shape_after)
 
             self.update([(layer_desc, layer)])
 
     def extra_repr(self):
         return 'layout={}\n'.format(self.layout)
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            key = list(self.keys())[key]
+        return super().__getitem__(key)
+
+    def __repr__(self):
+        if getattr(self, 'short_repr', False):
+            msg = f'layout={self.layout}\n'
+            msg += '\n'.join([f'{key}' for key in self.keys()])
+            return f'{msg}\n'
+        return super().__repr__()
+
 
 
 def update_layers(letter, module, name=None):
@@ -488,3 +523,11 @@ class ConvBlock(nn.Sequential):
             inputs = layer(inputs)
             layers.append(layer)
         return nn.Sequential(*layers)
+
+    def __repr__(self):
+        if getattr(self, 'short_repr', False):
+            if len(self) == 1:
+                msg = self.__class__.__name__ + '\n'
+                msg += torch.nn.modules.module._addindent(repr(self[0]), 2)
+                return msg
+        return super().__repr__()
