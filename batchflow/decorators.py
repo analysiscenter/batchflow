@@ -141,9 +141,9 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             if isinstance(init, str):
                 try:
                     init_fn = getattr(self, init)
-                except AttributeError:
+                except AttributeError as e:
                     raise ValueError("init should refer to a method or property of the class", type(self).__name__,
-                                     "returning the list of arguments")
+                                     "returning the list of arguments") from e
             elif callable(init):
                 init_fn = init
             else:
@@ -153,8 +153,8 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 if isinstance(post, str):
                     try:
                         post_fn = getattr(self, post)
-                    except AttributeError:
-                        raise ValueError("post should refer to a method of the class", type(self).__name__)
+                    except AttributeError as e:
+                        raise ValueError("post should refer to a method of the class", type(self).__name__) from e
                 elif callable(post):
                     post_fn = post
                 else:

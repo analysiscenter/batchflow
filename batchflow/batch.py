@@ -644,8 +644,8 @@ class Batch(metaclass=MethodsTransformingMeta):
         elif isinstance(src, FilesIndex):
             try:
                 file_name = src.get_fullpath(ix)
-            except KeyError:
-                raise KeyError("File {} is not indexed in the received index".format(ix))
+            except KeyError as e:
+                raise KeyError("File {} is not indexed in the received index".format(ix)) from e
 
         elif src is None:
             file_name = self.index.get_fullpath(ix)
@@ -733,7 +733,7 @@ class Batch(metaclass=MethodsTransformingMeta):
             try:
                 item = tuple(data[i] for i in components)
             except Exception as e:
-                raise KeyError('Cannot find components in corresponfig file', e)
+                raise KeyError('Cannot find components in corresponfig file', file_name) from e
         return item
 
     @inbatch_parallel('indices', target='f')

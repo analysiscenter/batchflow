@@ -235,6 +235,7 @@ class DatasetIndex(Baseset):
         else:
             order = np.arange(len(self))
 
+        # pylint: disable=attribute-defined-outside-init
         if valid_share > 0:
             validation_pos = order[:valid_share]
             self.validation = self.create_subset(self.subset_by_pos(validation_pos))

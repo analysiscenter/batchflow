@@ -62,6 +62,7 @@ class LinkNet(EncoderDecoder):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = super().default_config()
 
         config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
