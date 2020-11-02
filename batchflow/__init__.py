@@ -19,6 +19,7 @@ from .decorators import action, inbatch_parallel, parallel, any_action_failed, m
 from .exceptions import SkipBatchException, EmptyBatchSequence
 from .sampler import Sampler, ConstantSampler, NumpySampler, HistoSampler, ScipySampler
 from .utils import save_data_to
+from .utils_notebook import in_notebook, get_notebook_path, get_notebook_name, pylint_notebook
 
 
 __version__ = '0.3.0'
