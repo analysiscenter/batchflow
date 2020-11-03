@@ -270,7 +270,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         'loss', 'optimizer', 'decay', 'decay_step',
         'sync_counter', 'microbatch',
         'iteration', 'iter_info', 'lr_list', 'syncs', 'decay_iters',
-        '_loss_list', 'loss_list'
+        '_loss_list', 'loss_list',
     ]
 
     def __init__(self, config=None):
@@ -927,7 +927,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                     p.grad /= sync_frequency
 
             # Store learning rate: once per sync
-            # Note: we do it before decay, so it is actual used LR on this iteration
+            # Note: we do it before decay, so it is actual LR used on this iteration
             self.lr_list.append([group['lr'] for group in self.optimizer.param_groups])
 
             # Update weights and remove grads
