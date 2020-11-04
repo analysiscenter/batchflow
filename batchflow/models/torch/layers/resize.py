@@ -82,7 +82,7 @@ class Combine(nn.Module):
 
     op : str or callable
         If callable, then operation to be applied to the list of inputs.
-        If 'concat', 'cat', '.', then inputs are concated along channels axis.
+        If 'concat', 'cat', '|', then inputs are concated along channels axis.
         If 'sum', '+', then inputs are summed.
         If 'mul', '*', then inputs are multiplied.
         If 'avg', then inputs are averaged.
@@ -141,7 +141,7 @@ class Combine(nn.Module):
         return Combine.sum([weighted, skip])
 
     OPS = {
-        concat: ['concat', 'cat', '.'],
+        concat: ['concat', 'cat', '|'],
         sum: ['sum', 'plus', '+'],
         mul: ['multi', 'mul', '*'],
         mean: ['average', 'avg', 'mean'],
