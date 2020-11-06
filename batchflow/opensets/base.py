@@ -23,9 +23,21 @@ class Openset(Dataset):
         return None
 
     def download(self, path):
-        """ Download a dataset from the source web-site """
+        """ Download a dataset from the source web-site.
+
+        Returns
+        -------
+        tuple of np.arrays or None
+            Preloaded data components, i.e. images and labels. Return None in case using FilesIndex.
+        DatasetIndex or FilesIndex
+            An index for the dataset.
+        DatasetIndex or FilesIndex or None
+            An index for the train part of the dataset. Return None if there is no train/test split.
+        DatasetIndex or FilesIndex or None
+            An index for the test part of the dataset. Return None if there is no train/test split.
+        """
         _ = path
-        return None
+        return None, None, None, None
 
     def _infer_train_test_index(self, train_len, test_len):
         total_len = train_len + test_len

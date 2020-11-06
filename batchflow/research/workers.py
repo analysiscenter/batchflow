@@ -15,7 +15,7 @@ class Worker:
     Worker get queue of jobs, pop one job and execute it in subprocess. That subprocess
     call init, main and post class methods.
     """
-    def __init__(self, devices, worker_name=None, worker_config=None, timeout=5, trials=2, logger=None):
+    def __init__(self, devices, worker_name=None, worker_config=None, timeout=None, trials=2, logger=None):
         """
         Parameters
         ----------
@@ -107,14 +107,15 @@ class Worker:
                                 signal = feedback_queue.get(timeout=1)
                             except EmptyException:
                                 signal = None
-                            if signal is None and (time.time() - last_update_time.value) / 60 > self.timeout:
-                                p = psutil.Process(pid)
-                                p.terminate()
-                                message = 'Job {} [{}] failed in {}'.format(job[0], pid, self.worker_name)
-                                self.logger.info(message)
-                                final_signal.exception = TimeoutError(message)
-                                results.put(copy(final_signal))
-                                break
+                            if signal is None:
+                                if self.timeout is not None and (time.time() - last_update_time.value) / 60 > self.timeout:
+                                    p = psutil.Process(pid)
+                                    p.terminate()
+                                    message = 'Job {} [{}] failed in {} because of timeout'.format(job[0], pid, self.worker_name)
+                                    self.logger.info(message)
+                                    final_signal.exception = TimeoutError(message)
+                                    results.put(copy(final_signal))
+                                    break
                             if signal is not None and signal.done:
                                 finished = True
                                 final_signal = signal

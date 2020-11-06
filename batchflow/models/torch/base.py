@@ -6,7 +6,6 @@ import threading
 import inspect
 from collections import OrderedDict
 from functools import partial
-from pprint import pprint
 
 import dill
 import numpy as np
@@ -14,29 +13,37 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
+from .visualization import VisualizationMixin
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
-from .losses import CrossEntropyLoss, binary as binary_losses, multiclass as multiclass_losses
+from .losses import CrossEntropyLoss, BinaryLovaszLoss, LovaszLoss, SSIM, MSSIM
+from .losses import binary as binary_losses, multiclass as multiclass_losses
 from ..base import BaseModel
 from ... import Config
 
 
 
 LOSSES = {
-    'mse': nn.MSELoss,
-    'bce': nn.BCEWithLogitsLoss,
-    'ce': CrossEntropyLoss,
-    'crossentropy': CrossEntropyLoss,
-    'absolutedifference': nn.L1Loss,
     'l1': nn.L1Loss,
-    'cosine': nn.CosineSimilarity,
-    'cos': nn.CosineSimilarity,
-    'hinge': nn.HingeEmbeddingLoss,
     'huber': nn.SmoothL1Loss,
-    'logloss': CrossEntropyLoss,
+    'absolutedifference': nn.L1Loss,
+    'mse': nn.MSELoss,
+    'cos': nn.CosineSimilarity,
+    'cosine': nn.CosineSimilarity,
+    'hinge': nn.HingeEmbeddingLoss,
+    'ssim': SSIM,
+    'mssim': MSSIM,
+
+    'bce': nn.BCEWithLogitsLoss,
     'bdice': binary_losses.Dice,
     'btversky': binary_losses.Tversky,
-    'dice': multiclass_losses.Dice
+    'blovasz': BinaryLovaszLoss,
+
+    'ce': CrossEntropyLoss,
+    'crossentropy': CrossEntropyLoss,
+    'logloss': CrossEntropyLoss,
+    'dice': multiclass_losses.Dice,
+    'lovasz': LovaszLoss
 }
 
 DECAYS = {
@@ -57,7 +64,7 @@ DECAYS_DEFAULTS = {
 
 
 
-class TorchModel(BaseModel):
+class TorchModel(BaseModel, VisualizationMixin):
     r""" Base class for eager Torch models.
 
     Parameters
@@ -158,34 +165,6 @@ class TorchModel(BaseModel):
         - ``{'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
                        {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'first_iter': 901}]``
 
-    train_steps : dict
-        Configuration of different training procedures.
-        Must be a mapping from string names to dictionary with train parameters like
-        loss, optimizer, decay. Those keys support syntax defined above.
-
-        If any of loss, optimizer, decay is defined directly in config, it serves as the default
-        value for every train step.
-
-        Optimizer and decay, created at one train step, can be re-used in another. To do so, one can
-        pass 'use' key with value corresponding to the name of train step from which you want to borrow optimizer.
-        Note that in this case you are still free to change loss-function or scope.
-
-        In order to use particular train step during train, one must pass `train_mode` argument to
-        :meth:`.TorchModel.train` method.
-
-        Examples:
-
-        Create multiple training procedures:
-            - one to optimize weights to minimize cross-entropy with Adam
-            - one to optimize weights to minimize Dice-coefficient loss with RMSProp
-            - one to optimize weights to minimize cross-entropy loss with re-used optimizer from previous
-
-        .. code-block:: python
-
-            {'train_steps': {'adam_ce': {'loss': 'ce', 'optimizer': 'Adam'},
-                             'rmsprop_dice': {'loss': 'dice', 'optimizer': 'RMSProp'}},
-                             'rmsprop_ce': {'loss': 'ce', 'use': 'rmsprop_dice'}}
-
     device : str, torch.device or sequence
         If str, a device name (e.g. 'cpu' or 'gpu:0'). Regular expressions are also allowed (e.g. 'gpu:*').
         If torch.device, then device to be used.
@@ -222,7 +201,7 @@ class TorchModel(BaseModel):
 
     initial_block : dict
         User-defined module or parameters for the input block, usually
-        :class:`~.eager_torch.layers.ConvBlock` parameters.
+        :class:`~.torch.layers.ConvBlock` parameters.
 
         If ``initial_block/inputs`` is specified with a name or list of names,
         then it should contain names from ``inputs`` with info about shapes of tensors to be passed to `initial_block`.
@@ -236,11 +215,11 @@ class TorchModel(BaseModel):
 
     body : dict or nn.Module
         User-defined module or parameters for the base network layers,
-        usually :class:`~.eager_torch.layers.ConvBlock` parameters.
+        usually :class:`~.torch.layers.ConvBlock` parameters.
 
     head : dict or nn.Module
         User-defined module or parameters for the head layers,
-        usually :class:`~.eager_torch.layers.ConvBlock` parameters.
+        usually :class:`~.torch.layers.ConvBlock` parameters.
 
     predictions : str or callable
         An operation applied to the head output to make the predictions tensor which is used in the loss function.
@@ -250,12 +229,12 @@ class TorchModel(BaseModel):
         Auxiliary operations to apply to network predictions. See :meth:`.TorchModel.output` for details.
 
     common : dict
-        Default parameters for all blocks (see :class:`~.eager_torch.layers.ConvBlock`).
+        Default parameters for all blocks (see :class:`~.torch.layers.ConvBlock`).
 
 
     **In order to create your own model, it is recommended to:**
 
-    * Take a look at :class:`~.eager_torch.layers.ConvBlock` since it is widely used as a building
+    * Take a look at :class:`~.torch.layers.ConvBlock` since it is widely used as a building
       block almost everywhere.
 
     * Define model defaults (e.g. number of filters, dropout rates, etc) by overriding
@@ -281,40 +260,59 @@ class TorchModel(BaseModel):
     * ``initial_block`` sub-dictionary with ``inputs`` key with names of tensors to use as network inputs.
 
     * ``initial_block``, ``body``, ``head`` keys are used to define behaviour of respective part of the network.
-      Default behaviour is to support all of the :class:`~.eager_torch.layers.ConvBlock` options.
+      Default behaviour is to support all of the :class:`~.torch.layers.ConvBlock` options.
       For complex models, take a look at default config of the chosen model to learn
       which parameters should be configured.
     """
+    PRESERVE = [
+        'full_config', 'config', 'model',
+        'input_names', 'input_shapes', 'target_shape', 'classes',
+        'loss', 'optimizer', 'decay', 'decay_step',
+        'sync_counter', 'microbatch',
+        'iteration', 'iter_info', 'lr_list', 'syncs', 'decay_iters',
+        '_loss_list', 'loss_list',
+    ]
+
     def __init__(self, config=None):
         self.full_config = Config(config)
-        self.config = Config(config)
-        self.train_lock = threading.Lock()
+        self.model_lock = threading.Lock()
 
+        # Shapes of inputs and outputs
         self.input_names = None
         self.input_shapes = None
         self.target_shape = None
         self.classes = None
+
+        # Pytorch model
         self.model = None
+
+        # Leading device and list of all devices used
         self.device = None
         self.devices = []
-        self.train_steps = None
 
-        self.sync_counter = 1
+        # Train procedure
+        self.loss = None
+        self.optimizer = None
+        self.decay = None
+        self.decay_step = None
+
+        # Memory amortization: accumulate gradients to update weights later
+        self.sync_counter = 0
         self.microbatch = None
 
+        # Store info about passed train iterations
+        self.iteration = 0
         self.iter_info = {}
+        self.lr_list = []
+        self.syncs = []
+        self.decay_iters = []
+        self._loss_list = []
+        self.loss_list = []
+
+        # Profile kernels used
         self.profilers = []
         self.profile_info = None
-        self.preserve = ['full_config', 'input_shapes', 'target_shape', 'classes',
-                         'model',
-                         'train_steps', 'sync_counter', 'microbatch']
-
-        load = self.config.get('load')
-        build = self.config.get('build', default=load is None)
-        if load:
-            self.load(**load)
-        if build:
-            self.build()
+        super().__init__(config)
 
     def reset(self):
         """ Allows to recreate model from scratch. """
@@ -370,7 +368,6 @@ class TorchModel(BaseModel):
         config['microbatch'] = None
         config['sync_frequency'] = 1
 
-        config['train_steps'] = None
         config['loss'] = None
         config['optimizer'] = 'Adam'
         config['decay'] = None
@@ -538,7 +535,9 @@ class TorchModel(BaseModel):
         else:
             self.model.to(self.device)
 
-        self.train_steps = self._make_train_steps(config)
+        self.loss = self._make_loss(config)
+        self.optimizer, self.decay, self.decay_step = self._make_optimizer(config)
+
 
     def _placeholder_data(self):
         data = [np.zeros(shape, dtype=np.float32) for shape in self.input_shapes]
@@ -568,37 +567,6 @@ class TorchModel(BaseModel):
 
 
     # Create training procedure(s): loss, optimizer, decay
-    def _make_train_steps(self, config):
-        # Wrap parameters from config root as `train_steps`
-        if config.get('train_steps') is None:
-            config['train_steps'] = {'': {key: config.get(key) for key in
-                                          ('loss', 'optimizer', 'decay')}}
-
-        # First pass through the config: pass values from higher level, create (and store) all of the optimizers
-        optimizers = {}
-        for key, subconfig in config['train_steps'].items():
-            subconfig.update({key: subconfig.get(key) or config.get(key)
-                              for key in ('loss', 'optimizer', 'decay')})
-            if subconfig.get('optimizer') is not None:
-                if optimizers.get(key) is None:
-                    optimizers[key] = self._make_optimizer(subconfig)
-
-        # Second pass through the config: create loss, get scope variables, minimize via chosen optimizer
-        train_steps = {}
-        for key, subconfig in config['train_steps'].items():
-            loss = self._make_loss(subconfig)
-            optimizer, decay, decay_step = optimizers.get(subconfig.get('use')) or optimizers.get(key)
-
-            step = {
-                'loss': loss,
-                'optimizer': optimizer,
-                'decay': decay,
-                'decay_step': decay_step,
-            }
-            train_steps.update({key: step})
-
-        return train_steps
-
     def _make_loss(self, config):
         res = unpack_fn_from_config('loss', config)
         res = res if isinstance(res, list) else [res]
@@ -606,30 +574,39 @@ class TorchModel(BaseModel):
         losses = []
         for loss, args in res:
             loss_fn = None
+            # Parse `loss` to actual module
             if isinstance(loss, str):
+                # String like 'ce', 'bdice' or 'CrossEntropy'
                 if hasattr(nn, loss):
                     loss = getattr(nn, loss)
                 elif hasattr(nn, loss + "Loss"):
                     loss = getattr(nn, loss + "Loss")
                 else:
                     loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
-            elif isinstance(loss, type):
-                pass
+
             elif isinstance(loss, nn.Module):
+                # Already a valid module
                 loss_fn = loss
             elif callable(loss):
+                # Callable: just pass other arguments in
                 loss_fn = partial(loss, **args)
+            elif isinstance(loss, type):
+                # Class to make module
+                pass
             else:
                 raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
+
             loss_fn = loss_fn or loss(**args)
             if isinstance(loss_fn, nn.Module):
                 loss_fn.to(device=self.device)
             losses.append(loss_fn)
+
         return losses
 
     def _make_optimizer(self, config):
         optimizer, optimizer_args = unpack_fn_from_config('optimizer', config)
 
+        # Choose the optimizer
         if callable(optimizer) or isinstance(optimizer, type):
             pass
         elif isinstance(optimizer, str) and hasattr(torch.optim, optimizer):
@@ -637,10 +614,8 @@ class TorchModel(BaseModel):
         else:
             raise ValueError("Unknown optimizer", optimizer)
 
-        if optimizer:
-            optimizer = optimizer(self.model.parameters(), **optimizer_args)
-        else:
-            raise ValueError("Optimizer is not defined", optimizer)
+        # Create optimizer
+        optimizer = optimizer(self.model.parameters(), **optimizer_args)
 
         decays, list_kwargs, list_steps = self._make_decay(config)
 
@@ -652,6 +627,7 @@ class TorchModel(BaseModel):
         res = unpack_fn_from_config('decay', config)
         res = res if isinstance(res, list) else [res]
         decays, list_kwargs, list_steps = [], [], []
+
         for decay, decay_args in res:
             if decay is None:
                 return decays, list_kwargs, list_steps
@@ -659,9 +635,9 @@ class TorchModel(BaseModel):
             step_meta_keys = ['frequency', 'first_iter', 'last_iter']
             step_meta_defaults = [None, 0, np.inf]
             step_meta = {key: decay_args.pop(key, default) for key, default in zip(step_meta_keys, step_meta_defaults)}
-
             if step_meta['frequency'] is None:
-                raise ValueError("Missing required key 'decay/frequency' in the configuration dict.")
+                raise ValueError('Missing `frequency` key in the decay configuration')
+
             if callable(decay) or isinstance(decay, type):
                 pass
             elif isinstance(decay, str) and hasattr(torch.optim.lr_scheduler, decay):
@@ -669,7 +645,7 @@ class TorchModel(BaseModel):
             elif decay in DECAYS:
                 decay = DECAYS.get(decay)
             else:
-                raise ValueError("Unknown learning rate decay method", decay)
+                raise ValueError('Unknown learning rate decay method', decay)
 
             if decay in DECAYS_DEFAULTS:
                 decay_dict = DECAYS_DEFAULTS.get(decay).copy()
@@ -796,8 +772,8 @@ class TorchModel(BaseModel):
 
 
     # Apply model to train/predict on given data
-    def train(self, *args, feed_dict=None, fetches=None, use_lock=True, train_mode='',
-              accumulate_grads=True, sync_frequency=True, microbatch=True, profile=False, **kwargs):
+    def train(self, *args, feed_dict=None, fetches=None, use_lock=True, profile=False,
+              sync_frequency=True, microbatch=True, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -810,14 +786,7 @@ class TorchModel(BaseModel):
         fetches : tuple, list
             Sequence of tensor names to calculate and return.
         use_lock : bool
-            If True, the whole train step is locked, thus allowing for multithreading.
-        train_mode : str or sequence of str
-            Name(s) of train step(s) to optimize. Regular expressions are allowed.
-            If multiple train steps are selected (either via passing a sequence or by using regular expression),
-            then all of them are optimized sequentially.
-        accumulate_grads : bool
-            If True, then gradients from different train modes are accumulated and applied once at the end.
-            If False, then gradients are applied for each of the train modes separately.
+            If True, then model, loss and gradient update operations are locked, thus allowing for multithreading.
         sync_frequency : int, bool or None
             If int, then how often to apply accumulated gradients to the weights.
             If True, then value from config is used (default value is to apply gradients after each batch of data).
@@ -843,14 +812,15 @@ class TorchModel(BaseModel):
 
             model.train(B('images'), B('labels'), fetches='loss')
         """
+        # Prepare inputs and targets: convert to Torch Tensors and transfer to device
         config = self.full_config
         *inputs, targets = self._fill_input(*args, **{**(feed_dict or {}), **kwargs})
 
+        # Parse arguments
         if sync_frequency is True:
             sync_frequency = config['sync_frequency']
         elif sync_frequency is False or sync_frequency is None:
             sync_frequency = 1
-        train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
 
         if microbatch:
             if microbatch is True:
@@ -858,6 +828,7 @@ class TorchModel(BaseModel):
             else:
                 microbatch = microbatch or config.get('microbatch')
 
+        # Split data into microbatches, if needed
         if microbatch:
             microbatch = 1 if microbatch is True else microbatch
             steps = len(targets) // microbatch
@@ -868,8 +839,9 @@ class TorchModel(BaseModel):
             splitted_inputs = [inputs]
             splitted_targets = [targets]
 
+        # Create Pytorch model if it is yet to be initialized, based on the actual inputs
         if self.model is None:
-            self.train_lock.acquire()
+            self.model_lock.acquire()
             if isinstance(splitted_inputs[0], (list, tuple)):
                 self.input_shapes = [get_shape(item) for item in splitted_inputs[0]]
             else:
@@ -881,32 +853,36 @@ class TorchModel(BaseModel):
                     self.classes = self.target_shape[1]
 
             self.build_config()
-            self._build(splitted_inputs[0])
-            self.train_lock.release()
+            self._build([item[:2] for item in splitted_inputs[0]])
+            self.model_lock.release()
 
         self.model.train()
 
+        # Set up the profiling, if needed
         profile = profile or config.profile
         if profile:
             profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
             profiler.__enter__()
 
         if use_lock:
-            self.train_lock.acquire()
+            self.model_lock.acquire()
 
+        # Train on each of the microbatches
         outputs = []
         for i in range(steps):
             _inputs = splitted_inputs[i]
             _targets = splitted_targets[i]
 
-            output = self._train(*_inputs, _targets, fetches=fetches, train_mode=train_mode,
-                                 accumulate_grads=accumulate_grads, sync_frequency=sync_frequency*steps)
-
+            output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps)
             outputs.append(output)
 
-        if use_lock:
-            self.train_lock.release()
+        # Store the average value of loss over the entire batch
+        self.loss_list.append(np.mean(self._loss_list[-steps:]))
 
+        if use_lock:
+            self.model_lock.release()
+
+        # Parse outputs to a desired structure
         if fetches:
             outputs = [outputs] if isinstance(fetches, str) else outputs
             output = [np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst)
@@ -915,84 +891,82 @@ class TorchModel(BaseModel):
         else:
             output = []
 
+        # Exit the profiling mode
         if profile:
             profiler.__exit__(None, None, None)
             self.profilers.append(profiler)
 
-        self.iter_info.update({'microbatch': microbatch,
-                               'sync_frequency': sync_frequency,
-                               'steps': steps,
-                               'train_mode': train_mode,
-                               'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
-                               'actual_model_outputs_shape': get_shape(_targets),
-                               })
+        # Store info about current iteration
+        self.iter_info.update({
+            'microbatch': microbatch,
+            'sync_frequency': sync_frequency,
+            'steps': steps,
+            'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
+            'actual_model_outputs_shape': get_shape(_targets),
+        })
         return output
 
-    def _train(self, *args, fetches=None, train_mode='', accumulate_grads=True, sync_frequency=True):
+    def _train(self, *args, fetches=None, sync_frequency=True):
+        # Parse inputs
         *inputs, targets = args
         inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
 
-        output_container = {}
+        # Apply model, compute loss and gradients
+        predictions = self.model(inputs)
+        loss = sum(loss_fn(predictions, targets) for loss_fn in self.loss) / len(self.loss)
+        loss.backward()
 
-        if not accumulate_grads:
-            predictions = self.model(inputs)
+        # Store loss value for every microbatch
+        self._loss_list.append(loss.detach().cpu().numpy())
 
-        for mode in train_mode:
-            if mode in self.train_steps.keys():
-                train_fetches = [(mode, self.train_steps[mode])]
-            else:
-                train_fetches = [(name, train_step) for name, train_step in self.train_steps.items()
-                                 if re.search(mode, name) is not None]
-            mode_loss = 0
+        # Whether to update weights or keep accumulating
+        if self.sync_counter == sync_frequency - 1:
+            # Correct accumulated gradients
+            for p in self.model.parameters():
+                if p.grad is not None:
+                    p.grad /= sync_frequency
 
-            for name, step in train_fetches:
-                loss_fn, optimizer = step['loss'], step['optimizer']
-                decays, decay_steps = step['decay'], step['decay_step']
-                if 'initialized' not in step:
-                    optimizer.zero_grad()
-                    step['initialized'] = True
-                if accumulate_grads:
-                    predictions = self.model(inputs)
-                loss = sum([loss_fn_(predictions, targets) for loss_fn_ in loss_fn]) / len(loss_fn)
-                mode_loss += loss
-                loss.backward()
-                step['iter'] = step.get('iter', 0.0) + (1 / sync_frequency)
+            # Store learning rate: once per sync
+            # Note: we do it before decay, so it is actual LR used on this iteration
+            self.lr_list.append([group['lr'] for group in self.optimizer.param_groups])
 
-                if self.sync_counter >= sync_frequency:
-                    for p in self.model.parameters():
-                        if p.grad is not None:
-                            p.grad /= sync_frequency
+            # Update weights and remove grads
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+            self.iteration += 1
 
-                    optimizer.step()
-                    optimizer.zero_grad()
-                    self.sync_counter = 1
-                else:
-                    self.sync_counter += 1
+            # Apply decay to learning rate, if needed
+            if self.decay:
+                for decay, decay_step in zip(self.decay, self.decay_step):
+                    step_cond = (self.iteration - decay_step['first_iter']) % decay_step['frequency'] == 0
+                    range_cond = decay_step['first_iter'] <= self.iteration <= decay_step['last_iter']
+                    if step_cond and range_cond:
+                        decay.step()
+                        self.decay_iters.append(self.iteration)
 
-                curr_lr = [group['lr'] for group in optimizer.param_groups]
-                self.iter_info.setdefault('lr', []).append(curr_lr)
+            # Update counters
+            self.sync_counter = 0
+            self.syncs.append(True)
+        else:
+            self.sync_counter += 1
+            self.syncs.append(False)
 
-                if decays:
-                    for decay, decay_step in zip(decays, decay_steps):
-                        step_condition = int(1 + step['iter'] - decay_step['first_iter']) % decay_step['frequency'] == 0
-                        range_condition = decay_step['first_iter'] <= step['iter'] <= decay_step['last_iter']
-                        if step_condition and range_condition and self.sync_counter == 1:
-                            decay.step()
-
-                output_container['loss' + '_'*bool(len(name)) + name] = loss
-            output_container['loss' + '_'*bool(len(name)) + mode] = mode_loss
-        output_container['lr'] = curr_lr
-        output_container['predictions'] = predictions
+        # Store outputs
+        output_container = {
+            'predictions': predictions,
+            'loss': loss,
+        }
 
         config = self.full_config
-        additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
+        additional_outputs = self.output(inputs=predictions,
+                                         predictions=config['predictions'],
                                          ops=config['output'])
         output_container = {**output_container, **additional_outputs}
         output = self._fill_output(fetches, output_container)
         return output
 
 
-    def predict(self, *args, targets=None, feed_dict=None, train_mode='', fetches=None, **kwargs):
+    def predict(self, *args, targets=None, feed_dict=None, fetches=None, use_lock=True, **kwargs):
         """ Get predictions on the data provided.
 
         Parameters
@@ -1006,8 +980,8 @@ class TorchModel(BaseModel):
             Targets to calculate loss.
         fetches : tuple, list
             Sequence of tensors to fetch from the model.
-        train_mode : str
-            Exact name of train step to use to calculate loss.
+        use_lock : bool
+            If True, then model and loss computation operations are locked, thus allowing for multithreading.
         kwargs : dict
             Additional named arguments directly passed to `feed_dict`.
 
@@ -1025,20 +999,20 @@ class TorchModel(BaseModel):
 
         self.model.eval()
 
+        if use_lock:
+            self.model_lock.acquire()
+
         with torch.no_grad():
             output_container = {}
             predictions = self.model(inputs)
+            output_container['predictions'] = predictions
 
             if targets is not None:
-                if train_mode in self.train_steps.keys():
-                    step = self.train_steps[train_mode]
-                else:
-                    raise ValueError('`train_mode` must reference exact `train_step`.')
+                loss = sum([loss(predictions, targets) for loss in self.loss]) / len(self.loss)
+                output_container['loss'] = loss
 
-                loss_fn = step['loss']
-                loss = sum([loss(predictions, targets) for loss in loss_fn]) / len(loss_fn)
-                output_container['loss' + '_'*bool(len(train_mode)) + train_mode] = loss
-            output_container['predictions'] = predictions
+        if use_lock:
+            self.model_lock.release()
 
         config = self.full_config
         additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
@@ -1048,7 +1022,21 @@ class TorchModel(BaseModel):
         return output
 
     def _make_prediction_inputs(self, *args, targets=None, feed_dict=None, **kwargs):
-        """ Parse arguments to create valid inputs for the model. """
+        """ Parse arguments to create valid inputs for the model.
+        Implements the logic of parsing the positional and keyword arguments to the model,
+        possibly wrapped into `feed_dict` dictionary, or even combination of the two.
+
+        Used under the hood of :meth:`~.TorchModel.predict` method.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            model.predict(B('images'), targets=B('labels'))
+            model.predict(images=B('images'), targets=B('labels'))
+            model.predict(B('images'), targets=B('labels'), masks=B('masks'))
+        """
+        # Concatenate `kwargs` and `feed_dict`; if not empty, use keywords in `_fill_input`
         feed_dict = {**(feed_dict or {}), **kwargs}
         if len(feed_dict) == 1:
             _, value = feed_dict.popitem()
@@ -1057,6 +1045,8 @@ class TorchModel(BaseModel):
             if targets is not None and 'targets' in feed_dict.keys():
                 warnings.warn("`targets` already present in `feed_dict`, so those passed as keyword arg won't be used")
             *inputs, targets = self._fill_input(*args, **feed_dict)
+
+        # Positional arguments only
         else:
             inputs = self._fill_input(*args)
             if targets is not None:
@@ -1184,7 +1174,7 @@ class TorchModel(BaseModel):
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
-        torch.save({item: getattr(self, item) for item in self.preserve}, path, pickle_module=dill, **kwargs)
+        torch.save({item: getattr(self, item) for item in self.PRESERVE}, path, pickle_module=dill, **kwargs)
 
     def load(self, path, *args, eval=False, **kwargs):
         """ Load a torch model from files.
@@ -1219,7 +1209,7 @@ class TorchModel(BaseModel):
         else:
             checkpoint = torch.load(path, pickle_module=dill, **kwargs)
 
-        for item in self.preserve:
+        for item in self.PRESERVE:
             setattr(self, item, checkpoint.get(item))
 
         if self.device:
@@ -1282,291 +1272,3 @@ class TorchModel(BaseModel):
                                          columns=['ncalls', 'CPU_tottime', 'CPU_cumtime', 'CUDA_cumtime'])
         self.profile_info['CPU_tottime_avg'] = self.profile_info['CPU_tottime'] / self.profile_info['ncalls']
         self.profile_info['CUDA_cumtime_avg'] = self.profile_info['CUDA_cumtime'] / self.profile_info['ncalls']
-
-
-    # Textual visualization of model
-    def information(self, config=True, devices=True, train_steps=True, model=False, misc=False):
-        """ Show information about model configuration, used devices, train steps, architecture and more. """
-        template = '\n##### {}:'
-
-        if config:
-            print(template.format('Config'))
-            pprint(self.full_config.config)
-
-        if devices:
-            print(template.format('Devices'))
-            print('Leading device is {}'.format(self.device, ))
-            if self.devices:
-                _ = [print('Device {} is {}'.format(i, d)) for i, d in enumerate(self.devices)]
-
-        if train_steps:
-            print(template.format('Train steps'))
-            pprint(self.train_steps)
-
-        if model:
-            print(template.format('Model'))
-            print(self.model)
-
-        if misc:
-            print(template.format('Additional info'))
-            if self.input_shapes:
-                _ = [print('Input {} has shape {}'.format(i, s)) for i, s in enumerate(self.input_shapes)]
-            if self.target_shape:
-                print('Target has shape {}'.format(self.target_shape))
-
-            if self.model:
-                num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-                print('\nTotal number of parameters in model: {}'.format(num_params))
-
-            iters = {key: value.get('iter', 0) for key, value in self.train_steps.items()}
-            print('\nTotal number of passed training iterations: {}'.format(sum(list(iters.values()))))
-            if len(iters) > 1:
-                print('Number of training iterations for individual train steps:')
-                pprint(iters)
-
-            print(template.format('Last iteration params'))
-
-            iter_info = {**self.iter_info}
-            iter_info.pop('lr')
-            pprint(iter_info)
-
-    @property
-    def info(self):
-        """ Show information about model configuration, used devices, train steps and more. """
-        self.information()
-
-
-    # Visualize intermediate layers: activations and features
-    def get_intermediate_activations(self, *args, layers=None, feed_dict=None, **kwargs):
-        """ Compute the intermediate activations of a given layers in the same structure (tuple/list/dict).
-
-        Under the hood, a forward hook is registered to capture the output of a targeted layers,
-        and it is removed after extraction of all the activations.
-
-        Parameters
-        ----------
-        layers : nn.Module, sequence or dict
-            If nn.Module, then must be a part of the `model` attribute to get activations from.
-            If sequence, then multiple such modules.
-            If dictionary, then values must be such modules.
-        args : sequence
-            Arguments to be passed directly into the model.
-        feed_dict : dict
-            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
-            with keys being names and values being actual data.
-        kwargs : dict
-            Additional named arguments directly passed to `feed_dict`.
-
-        Returns
-        -------
-        Intermediate activations in the same structure, as `layers`.
-        """
-        #pylint: disable=unnecessary-comprehension
-        if layers is None:
-            raise TypeError('get_intermediate_activations() missing 1 required argument: `layers`')
-
-        # Parse `activations`: make it a dictionary
-        if not isinstance(layers, (tuple, list, dict)):
-            container = {0: layers}
-        elif isinstance(layers, (tuple, list)):
-            container = {i: item for i, item in enumerate(layers)}
-        else:
-            container = dict(layers) # shallow copy is fine
-
-        container = {key: LayerExtractor(module)
-                     for key, module in container.items()}
-
-        # Parse inputs to model, run model
-        inputs, _ = self._make_prediction_inputs(*args, targets=None, feed_dict=feed_dict, **kwargs)
-        self.model.eval()
-        with torch.no_grad():
-            self.model(inputs)
-
-        # Remove hooks; parse hooked data into desired format
-        for value in container.values():
-            value.close()
-
-        container = {key : extractor.activation.detach().cpu().numpy()
-                     for key, extractor in container.items()}
-
-        if isinstance(layers, (tuple, list)):
-            container = [container[i] for i, _ in enumerate(layers)]
-        elif not isinstance(layers, dict):
-            container = container[0]
-        return container
-
-    def get_layer_representation(self, layer, index=0, input_shape=None, ranges=(-1, 1), iters=100, return_loss=False):
-        """ Compute a representation of an intermediate layer.
-
-        Under the hood, this function generates random image and then optimizes it
-        with respect to the mean value of activations at the target layer.
-
-        Parameters
-        ----------
-        layer : nn.Module
-            Part of the model to visualize.
-        index : int or slice
-            Valid slice for the activations at the targeted layer. Default is 0.
-        input_shape : sequence
-            Shape of the image to generate. Default is the shape of the last model input.
-        ranges : sequence
-            Lower and upper bound of values in generated image.
-        iters : int
-            Number of optimization iterations.
-        return_loss : bool
-            Whether to return the loss values of optimization procedure.
-        """
-        # Create starting image: random uniform noise
-        input_shape = input_shape or self.input_shapes[0][1:]
-        image = np.random.uniform(*ranges, input_shape)[None]
-        image_var = torch.from_numpy(image.astype(np.float32)).to(self.device)
-        image_var.requires_grad = True
-
-        # Set up optimization procedure
-        extractor = LayerExtractor(layer)
-        optimizer = torch.optim.Adam([image_var], lr=0.1, weight_decay=1e-6)
-        self.model.eval()
-
-        # Iteratively make image visualize desired layer/filter
-        losses = []
-        for _ in range(iters):
-            optimizer.zero_grad()
-            # Clone is needed due to bug in PyTorch v1.3. May be removed later
-            self.model(image_var.clone())
-
-            loss = - extractor.activation[0, index].mean()
-            loss.backward()
-            optimizer.step()
-
-            image_var.data.clamp_(*ranges)
-            losses.append(loss.detach())
-
-        # Clean-up: one final clamp and closing handles
-        image_var.data.clamp_(*ranges)
-        image_var = image_var.detach().cpu().numpy()
-        extractor.close()
-
-        if return_loss:
-            return image_var, losses
-        return image_var
-
-    def get_gradcam(self, *args, targets=None, feed_dict=None,
-                    layer=None, gradient_mode='onehot', cam_class=None, **kwargs):
-        """ Create visual explanation of a network decisions, based on the intermediate layer gradients.
-        Ramprasaath R. Selvaraju, et al "`Grad-CAM: Visual Explanations
-        from Deep Networks via Gradient-based Localization <https://arxiv.org/abs/1610.02391>`_"
-
-        Under the hood, forward and backward hooks are used to extract the activation and the gradient,
-        and the mean value of gradients along channels are used as weights for activation summation.
-
-        Parameters
-        ----------
-        layers : nn.Module, sequence or dict
-            Part of the model to base visualizations on.
-        gradient_mode : Tensor or str
-            If Tensor, then used directly to backpropagate from.
-            If `onehot`, then OHE is created with `cam_class` parameter.
-            Otherwise, model prediction is used.
-        cam_class : int
-            If gradient mode is `onehot`, then class to visualize. Default is the model prediction.
-        args : sequence
-            Arguments to be passed directly into the model.
-        feed_dict : dict
-            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
-            with keys being names and values being actual data.
-        kwargs : dict
-            Additional named arguments directly passed to `feed_dict`.
-        """
-        extractor = LayerExtractor(layer)
-        inputs, _ = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
-
-        self.model.eval()
-        prediction = self.model(inputs)
-
-        if isinstance(gradient_mode, np.ndarray):
-            gradient = self._fill_value(gradient_mode)
-        elif 'oh' in gradient_mode:
-            gradient = torch.zeros_like(prediction)[0:1]
-            cam_class = cam_class or np.argmax(prediction.detach().cpu().numpy()[0])
-            gradient[0][cam_class] = 1
-        else:
-            gradient = prediction.clone()
-
-        self.model.zero_grad()
-        prediction.backward(gradient=gradient, retain_graph=True)
-        self.model.zero_grad()
-
-        activation = extractor.activation.detach().cpu().numpy()[0]
-        gradient = extractor.gradient.detach().cpu().numpy()[0]
-
-        weights = np.mean(gradient, axis=(1, 2))
-        camera = np.zeros(activation.shape[1:], dtype=activation.dtype)
-
-        for i, w in enumerate(weights):
-            camera += w * activation[i]
-
-        camera = np.maximum(camera, 0)
-        camera = (camera - np.min(camera)) / (np.max(camera) - np.min(camera) + 0.0001)
-        camera = np.uint8(camera * 255)
-        return camera
-
-
-    # Visualize model graph
-    def save_graph(self, log_dir=None, **kwargs):
-        """ Save model graph for later visualization via tensorboard.
-
-        Parameters
-        ----------
-        logdir : str
-            Save directory location. Default is `runs/CURRENT_DATETIME_HOSTNAME`, which changes after each run.
-            Use hierarchical folder structure to compare between runs easily,
-            e.g. ‘runs/exp1’, ‘runs/exp2’, etc. for each new experiment to compare across them from within tensorboard.
-
-        Examples
-        --------
-        To easily check model graph inside Jupyter Notebook, run::
-
-        model.save_graph()
-        %load_ext tensorboard
-        %tensorboard --logdir runs/
-
-        Or, using command line::
-        tensorboard --logdir=runs
-        """
-        # Import here to avoid unnecessary tensorflow imports inside tensorboard
-        from torch.utils.tensorboard import SummaryWriter
-        writer = SummaryWriter(log_dir=log_dir, **kwargs)
-        writer.add_graph(self.model, self._placeholder_data())
-        writer.close()
-
-
-
-class LayerExtractor:
-    """ Create hook to get layer activations and gradients. """
-    def __init__(self, module):
-        self.activation = None
-        self.gradient = None
-
-        self.forward_handle = module.register_forward_hook(self.forward_hook)
-        self.backward_handle = module.register_backward_hook(self.backward_hook)
-
-    def forward_hook(self, module, input, output):
-        """ Save activations: if multi-output, the first one is saved. """
-        _ = module, input
-        if isinstance(output, (tuple, list)):
-            output = output[-1]
-        self.activation = output
-
-    def backward_hook(self, module, grad_input, grad_output):
-        """ Save gradients: if multi-output, the first one is saved. """
-        _ = module, grad_input
-        if isinstance(grad_output, (tuple, list)):
-            grad_output = grad_output[0]
-        self.gradient = grad_output
-
-    def close(self):
-        self.forward_handle.remove()
-        self.backward_handle.remove()
-
-    def __del__(self):
-        self.close()

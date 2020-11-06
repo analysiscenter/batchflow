@@ -58,7 +58,7 @@ class RAdam(Optimizer):
                     param['buffer'] = [[None, None, None] for _ in range(10)]
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay,
                         buffer=[[None, None, None] for _ in range(10)])
-        super(RAdam, self).__init__(params, defaults)
+        super().__init__(params, defaults)
 
     def step(self, closure=None):
         """Performs a single optimization step.

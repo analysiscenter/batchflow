@@ -4,7 +4,7 @@ import warnings
 from numbers import Number
 
 import numpy as np
-from skimage.transform import resize
+from skimage.transform import resize # pylint: disable=unused-import
 import scipy.ndimage
 
 import PIL
