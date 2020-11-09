@@ -71,14 +71,15 @@ class EfficientNetB0(Encoder):
                                               strides=[1, 2, 2, 2, 1, 2, 1],
                                               filters=[16, 24, 40, 80, 112, 192, 320],
                                               expand_ratio=[1, 6, 6, 6, 6, 6, 6],
-                                              se_block=dict(ratio=4))
+                                              attention='se'
+                                              )
 
 
         config['head'] += dict(scalable=True, layout='cna V df', kernel_size=1, strides=1, filters=1280,
                                dropout_rate=0.2)
 
         config['common'] += dict(activation=swish, width_factor=1.0, depth_factor=1.0)
-
+    
         config['loss'] = 'ce'
 
         return config

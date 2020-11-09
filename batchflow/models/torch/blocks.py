@@ -177,16 +177,18 @@ class MBConvBlock(ConvBlock):
         Convolution kernel size. Default is 3.
     strides : int
         Convolution stride. Default is 1.
-    se_block: bool, dict
-        If boolean indicates whether to include Squeeze-and-Excitation block,
-        if non-empty dict provides paarmeters for :class:`~SEBlock`.
+    attention : None, bool or str
+        If None or False, then nothing is added. Default is False.
+        If True, then add a squeeze-and-excitation block.
+        If str, then any of allowed self-attentions. 
+        For more info about possible operations, check :class:`~.layers.SelfAttention`.
     n_reps : int
         Number of times to repeat the whole block. Default is 1.
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
-    def __init__(self, inputs=None, n_reps=1, expand_ratio=6, strides=1, filters='same', kernel_size=3, se_block=False,
-                 **kwargs):
+    def __init__(self, inputs=None, n_reps=1, expand_ratio=6, strides=1, filters='same', kernel_size=3, layout='wna',
+                 attention=False, **kwargs):
 
         if isinstance(filters, str):
             filters = safe_eval(filters, get_num_channels(inputs))
@@ -208,7 +210,7 @@ class MBConvBlock(ConvBlock):
                 block_params['layout'] += 'R'
 
             if expand_ratio != 1:
-                block_params['layout'] += 'cna'
+                block_params['layout'] += layout
                 block_params['filters'].append(inner_filters)
                 block_params['kernel_size'].append(1)
                 block_params['strides'].append(1)
@@ -218,10 +220,9 @@ class MBConvBlock(ConvBlock):
             block_params['kernel_size'].append(kernel_size)
             block_params['strides'].append(strides)
 
-            if se_block:
+            if attention:
                 block_params['layout'] += 'S'
-                if isinstance(se_block, dict):
-                    block_params['self_attention'] = se_block
+                block_params['attention'] = attention
 
             block_params['layout'] += 'cn'
             block_params['filters'].append(filters)
