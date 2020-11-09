@@ -5,6 +5,8 @@ Mingxing Tan, Quoc V. Le "`EfficientNet: Rethinking Model Scaling for Convolutio
 
 """
 
+from math import ceil
+
 import torch
 
 #pylint: disable=too-many-ancestors
@@ -74,7 +76,6 @@ class EfficientNetB0(Encoder):
                                               attention='se'
                                               )
 
-
         config['head'] += dict(scalable=True, layout='cna V df', kernel_size=1, strides=1, filters=1280,
                                dropout_rate=0.2)
 
@@ -99,9 +100,9 @@ class EfficientNetB0(Encoder):
                         val = config.get(path + param)
                         if val:
                             if isinstance(val, int):
-                                val = max(1, int(val * factor))
+                                val = max(1, ceil(val * factor))
                             elif isinstance(val, list):
-                                val = [max(1, int(v * factor)) for v in val]
+                                val = [max(1, ceil(v * factor)) for v in val]
                             else:
                                 raise ValueError("{} should be int or list, {} given".format(param, type(val)))
                             config[path + param] = val
