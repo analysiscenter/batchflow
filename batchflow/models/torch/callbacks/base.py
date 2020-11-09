@@ -6,6 +6,7 @@ from ....monitor import USSMonitor, GPUMonitor, GPUMemoryMonitor
 
 
 def file_print(path, msg):
+    """ Print to a file. """
     with open(path, 'a+') as f:
         print(msg, file=f)
 
@@ -18,6 +19,7 @@ class BaseCallback(ABC):
         self.stream = self.make_stream(stream)
 
     def make_stream(self, stream):
+        """ Parse the `stream` argument into callable. """
         if stream is None:
             return lambda *args: args
 
@@ -28,6 +30,7 @@ class BaseCallback(ABC):
             with open(stream, 'w') as _:
                 pass
             return lambda msg: file_print(stream, msg)
+        raise TypeError('`Stream` argument must be either None, callable or string.')
 
     def set_model(self, model):
         self.model = model
