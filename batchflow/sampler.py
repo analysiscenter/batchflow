@@ -185,21 +185,38 @@ class BaseOperationSampler(Sampler):
         self.left = left
         self.right = right
 
-def make_classname(operation='__add__'):
-    name = operation.split('__')[1]
-    return name.capitalize() + 'Sampler'
+class AddSampler(BaseOperationSampler):
+    def sample(self, size):
+        return self.left.sample(size) + self.right.sample(size)
 
-def ArithmeticSamplersFactory():
-    classes = dict()
-    ops = ['__add__', '__mul__', '__truediv__', '__sub__', '__pow__', '__floordiv__', '__mod__']
-    for oper in ops:
-        name = make_classname(oper)
-        def sample(self, size, fake=oper):
-            return getattr(self.left.sample(size), fake)(self.right.sample(size))
-        classes[oper] = type(name, (BaseOperationSampler, ), {'sample': sample})
-    return classes
+class MulSampler(BaseOperationSampler):
+    def sample(self, size):
+        return self.left.sample(size) * self.right.sample(size)
 
-classes = ArithmeticSamplersFactory()
+class TruedivSampler(BaseOperationSampler):
+    def sample(self, size):
+        return self.left.sample(size) / self.right.sample(size)
+
+class SubSampler(BaseOperationSampler):
+    def sample(self, size):
+        return self.left.sample(size) - self.right.sample(size)
+
+class PowSampler(BaseOperationSampler):
+    def sample(self, size):
+        return self.left.sample(size) ** self.right.sample(size)
+
+class FloordivSampler(BaseOperationSampler):
+    def sample(self):
+        return self.left.sample(size) // self.right.sample(size)
+
+class ModSampler(BaseOperationSampler):
+    def sample(self):
+        return self.left.sample(size) % self.right.sample(size)
+
+classes = dict(zip(['__add__', '__mul__', '__truediv__', '__sub__',
+                    '__pow__', '__floordiv__', '__mod__'],
+                   [AddSampler, MulSampler, TruedivSampler, SubSampler,
+                    PowSampler, FloordivSampler, ModSampler]))
 
 class NumpySampler(Sampler):
     """ Sampler based on a distribution from np.random.
