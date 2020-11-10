@@ -160,6 +160,8 @@ class OrSampler(Sampler):
         self._normed = _ws / np.sum(_ws)
 
     def sample(self, size):
+        """ Sampling procedure of a mixture of two samplers.
+        """
         _up_size = np.random.binomial(size, self._normed[0])
         _low_size = size - _up_size
 
@@ -177,7 +179,11 @@ class AndSampler(Sampler):
         self.right = right
 
     def sample(self, size):
-        pass
+        """ Sampling procedure of a product of two samplers.
+        """
+        _left = self.left.sample(size)
+        _right = self.right.sample(size)
+        return np.concatenate([_left, _right], axis=1)
 
 class BaseOperationSampler(Sampler):
     def __init__(self, left, right, *args, **kwargs):
@@ -187,31 +193,52 @@ class BaseOperationSampler(Sampler):
 
 class AddSampler(BaseOperationSampler):
     def sample(self, size):
-        return self.left.sample(size) + self.right.sample(size)
+        if isinstance(self.right, Sampler):
+            return self.left.sample(size) + self.right.sample(size)
+        else:
+            return self.left.sample(size) + np.array(self.right)
 
 class MulSampler(BaseOperationSampler):
     def sample(self, size):
-        return self.left.sample(size) * self.right.sample(size)
+        if isinstance(self.right, Sampler):
+            return self.left.sample(size) * self.right.sample(size)
+        else:
+            return self.left.sample(size) * np.array(self.right)
 
 class TruedivSampler(BaseOperationSampler):
     def sample(self, size):
-        return self.left.sample(size) / self.right.sample(size)
+        if isinstance(self.right, Sampler):
+            return self.left.sample(size) / self.right.sample(size)
+        else:
+            return self.left.sample(size) / np.array(self.right)
 
 class SubSampler(BaseOperationSampler):
     def sample(self, size):
-        return self.left.sample(size) - self.right.sample(size)
+        if isinstance(self.right, Sampler):
+            return self.left.sample(size) - self.right.sample(size)
+        else:
+            return self.left.sample(size) - np.array(self.right)
 
 class PowSampler(BaseOperationSampler):
     def sample(self, size):
-        return self.left.sample(size) ** self.right.sample(size)
+        if isinstance(self.right, Sampler):
+            return self.left.sample(size) ** self.right.sample(size)
+        else:
+            return self.left.sample(size) ** np.array(self.right)
 
 class FloordivSampler(BaseOperationSampler):
-    def sample(self):
-        return self.left.sample(size) // self.right.sample(size)
+    def sample(self, size):
+        if isinstance(self.right, Sampler):
+            return self.left.sample(size) // self.right.sample(size)
+        else:
+            return self.left.sample(size) // np.array(self.right)
 
 class ModSampler(BaseOperationSampler):
-    def sample(self):
-        return self.left.sample(size) % self.right.sample(size)
+    def sample(self, size):
+        if isinstance(self.right, Sampler):
+            return self.left.sample(size) % self.right.sample(size)
+        else:
+            return self.left.sample(size) % np.array(self.right)
 
 classes = dict(zip(['__add__', '__mul__', '__truediv__', '__sub__',
                     '__pow__', '__floordiv__', '__mod__'],
