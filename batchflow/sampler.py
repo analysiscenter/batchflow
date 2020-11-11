@@ -147,7 +147,34 @@ class Sampler():
         Sampler
             result of the multiplication.
         """
+        if isinstance(other, (float, int)):
+            self.weight *= other
+            return self
+
         return AndSampler(self, other)
+
+    def __rand__(self, other):
+        """ Implementation of '&' operation on a weight for instance of Sampler-class.
+        see docstring of Sampler.__and__.
+        """
+        return self & other
+
+    def apply(self, transform):
+        """ Apply a transformation to the sampler.
+        Build new sampler, which sampling function is given by `transform(self.sample(size))``.
+
+        Parameters
+        ----------
+        transform : callable
+            function, that takes ndarray of shape (size, dim_sampler) and produces
+            ndarray of shape (size, new_dim_sampler).
+
+        Returns
+        -------
+        Sampler
+            instance of class Sampler with redefined method `sample`.
+        """
+        return ApplySampler(self, transform)
 
 class OrSampler(Sampler):
     def __init__(self, left, right, *args, **kwargs):
@@ -175,7 +202,7 @@ class OrSampler(Sampler):
 
 class AndSampler(Sampler):
     def __init__(self, left, right, *args, **kwargs):
-        super.__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.left = left
         self.right = right
 
@@ -185,6 +212,18 @@ class AndSampler(Sampler):
         _left = self.left.sample(size)
         _right = self.right.sample(size)
         return np.concatenate([_left, _right], axis=1)
+
+class ApplySampler(Sampler):
+    def __init__(self, sampler, transform, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sampler = sampler
+        self.transform = transform
+
+    def sample(self, size):
+        """ Sampling procedure of a sampler subjugated to a transform.
+        """
+        return self.transform(self.sampler.sample(size))
+
 
 class BaseOperationSampler(Sampler):
     operation = None
