@@ -49,7 +49,8 @@ def _get_method_by_alias(alias, module, tf_distributions=None):
 def arithmetize(cls):
     """ Add arithmetic operations to Sampler-class.
     """
-    for oper in ['__add__', '__mul__', '__truediv__', '__sub__', '__pow__', '__floordiv__', '__mod__']:
+    for oper in ['__add__', '__mul__', '__truediv__', '__sub__', '__pow__', '__floordiv__', '__mod__',
+                 '__radd__', '__rmul__', '__rtruediv__', '__rsub__', '__rpow__', '__rfloordiv__', '__rmod__']:
         def transform(self, other, fake=oper):
             """ Arithmetic operation on couple of Samplers.
 
@@ -220,10 +221,31 @@ class FloordivSampler(BaseOperationSampler):
 class ModSampler(BaseOperationSampler):
     operation = '__mod__'
 
-classes = dict(zip(['__add__', '__mul__', '__truediv__', '__sub__',
-                    '__pow__', '__floordiv__', '__mod__'],
-                   [AddSampler, MulSampler, TruedivSampler, SubSampler,
-                    PowSampler, FloordivSampler, ModSampler]))
+class RAddSampler(BaseOperationSampler):
+    operation = '__radd__'
+
+class RMulSampler(BaseOperationSampler):
+    operation = '__rmul__'
+
+class RTruedivSampler(BaseOperationSampler):
+    operation = '__rtruediv__'
+
+class RSubSampler(BaseOperationSampler):
+    operation = '__rsub__'
+
+class RPowSampler(BaseOperationSampler):
+    operation = '__rpow__'
+
+class RFloordivSampler(BaseOperationSampler):
+    operation = '__rfloordiv__'
+
+class RModSampler(BaseOperationSampler):
+    operation = '__rmod__'
+
+classes = dict(zip(['__add__', '__mul__', '__truediv__', '__sub__', '__pow__', '__floordiv__', '__mod__',
+                    '__radd__', '__rmul__', '__rtruediv__', '__rsub__', '__rpow__', '__rfloordiv__', '__rmod__'],
+                   [AddSampler, MulSampler, TruedivSampler, SubSampler, PowSampler, FloordivSampler, ModSampler,
+                    RAddSampler, RMulSampler, RTruedivSampler, RSubSampler, RPowSampler, RFloordivSampler, RModSampler]))
 
 class NumpySampler(Sampler):
     """ Sampler based on a distribution from np.random.
