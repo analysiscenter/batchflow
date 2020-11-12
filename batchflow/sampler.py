@@ -176,6 +176,31 @@ class Sampler():
         """
         return ApplySampler(self, transform)
 
+    def truncate(self, high=None, low=None, expr=None, prob=0.5):
+        """ Truncate a sampler. Resulting sampler poduces points satisfying ``low <= pts <= high``.
+        If ``expr`` is suplied, the condition is ``low <= expr(pts) <= high``.
+
+        Parameters
+        ----------
+        high : ndarray, list, float
+            upper truncation-bound.
+        low : ndarray, list, float
+            lower truncation-bound.
+        expr : callable, optional.
+            Some vectorized function. Accepts points of sampler, returns either bool or float.
+            In case of float, either high or low should also be supplied.
+        prob : float, optional
+            estimate of P(truncation-condtion is satisfied). When supplied,
+            can improve the performance of sampling-method of truncated sampler.
+
+        Returns
+        -------
+        Sampler
+            new Sampler-instance, truncated version of self.
+        """
+        return TruncateSampler(self, high, low, expr, prob)
+
+
 class OrSampler(Sampler):
     def __init__(self, left, right, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -223,6 +248,62 @@ class ApplySampler(Sampler):
         """ Sampling procedure of a sampler subjugated to a transform.
         """
         return self.transform(self.sampler.sample(size))
+
+class TruncateSampler(Sampler):
+    def __init__(self, sampler, high=None, low=None, expr=None, prob=0.5, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sampler = sampler
+        self.high = high
+        self.low = low
+        self.expr = expr
+        self.prob = prob
+
+    def sample(self, size):
+        """ Sampling method of a sampler subjugated to truncation.
+        """
+        if size == 0:
+            return self.sampler.sample(size=0)
+
+        high, low, expr, prob = self.high, self.low, self.expr, self.prob 
+        # set batch-size
+        expectation = size / prob
+        sigma = np.sqrt(size * (1 - prob) / (prob**2))
+        batch_size = int(expectation + 2 * sigma)
+
+        # sample, filter out, concat
+        ctr = 0
+        cumulated = 0
+        samples = []
+        while cumulated < size:
+            # sample points and compute condition-vector
+            sample = self.sampler.sample(size=batch_size)
+            cond = np.ones(shape=batch_size).astype(np.bool)
+            if low is not None:
+                if expr is not None:
+                    cond &= np.greater_equal(expr(sample).reshape(batch_size, -1), low).all(axis=1)
+                else:
+                    cond &= np.greater_equal(sample, low).all(axis=1)
+
+            if high is not None:
+                if expr is not None:
+                    cond &= np.less_equal(expr(sample).reshape(batch_size, -1), high).all(axis=1)
+                else:
+                    cond &= np.less_equal(sample, high).all(axis=1)
+
+            if high is None and low is None:
+                cond &= expr(sample).all(axis=1)
+
+            # check that truncation-prob is not to small
+            _share = np.sum(cond) / batch_size
+            if _share < SMALL_SHARE and ctr > 0:
+                raise ValueError('Probability of region of interest is too small. Try other truncation bounds')
+
+            # get points from region of interest
+            samples.append(sample[cond])
+            cumulated += np.sum(cond)
+            ctr += 1
+
+        return np.concatenate(samples)[:size]
 
 
 class BaseOperationSampler(Sampler):
