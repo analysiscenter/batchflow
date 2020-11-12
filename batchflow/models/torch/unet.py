@@ -75,6 +75,7 @@ class UNet(EncoderDecoder):
 
         config['body/decoder/order'] = ['upsampling', 'combine', 'block']
         config['body/decoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[512, 256, 128, 64])
+        config['body/decoder/upsample/filters'] = [512, 256, 128, 64]
 
         config['loss'] = 'ce'
         return config
@@ -92,6 +93,7 @@ class UNet(EncoderDecoder):
             config['body/embedding/filters'] = encoder_filters[-1] * 2
             config['body/decoder/num_stages'] = num_stages
             config['body/decoder/blocks/filters'] = encoder_filters[::-1]
+            config['body/decoder/upsample/filters'] = encoder_filters[::-1]
 
         return config
 
