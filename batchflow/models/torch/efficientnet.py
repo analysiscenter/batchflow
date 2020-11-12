@@ -80,7 +80,6 @@ class EfficientNetB0(Encoder):
                                dropout_rate=0.2)
 
         config['common'] += dict(activation=swish, width_factor=1.0, depth_factor=1.0)
-    
         config['loss'] = 'ce'
 
         return config

@@ -180,7 +180,7 @@ class MBConvBlock(ConvBlock):
     attention : None, bool or str
         If None or False, then nothing is added. Default is False.
         If True, then add a squeeze-and-excitation block.
-        If str, then any of allowed self-attentions. 
+        If str, then any of allowed self-attentions.
         For more info about possible operations, check :class:`~.layers.SelfAttention`.
     n_reps : int
         Number of times to repeat the whole block. Default is 1.
