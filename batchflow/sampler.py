@@ -177,7 +177,7 @@ class Sampler():
         return ApplySampler(self, transform)
 
     def truncate(self, high=None, low=None, expr=None, prob=0.5):
-        """ Truncate a sampler. Resulting sampler poduces points satisfying ``low <= pts <= high``.
+        """ Truncate a sampler. Resulting sampler produces points satisfying ``low <= pts <= high``.
         If ``expr`` is suplied, the condition is ``low <= expr(pts) <= high``.
 
         Parameters
@@ -367,6 +367,42 @@ classes = dict(zip(['__add__', '__mul__', '__truediv__', '__sub__', '__pow__', '
                    [AddSampler, MulSampler, TruedivSampler, SubSampler, PowSampler, FloordivSampler, ModSampler,
                     RAddSampler, RMulSampler, RTruedivSampler, RSubSampler, RPowSampler, RFloordivSampler, RModSampler]))
 
+
+class ConstantSampler(Sampler):
+    """ Sampler of a constant.
+
+    Parameters
+    ----------
+    constant : int, str, float, list
+        constant, associated with the Sampler. Can be multidimensional,
+        e.g. list or np.ndarray.
+
+    Attributes
+    ----------
+    constant : np.array
+        vectorized constant, associated with the Sampler.
+    """
+    def __init__(self, constant, **kwargs):
+        self.constant = np.array(constant).reshape(1, -1)
+        super().__init__(constant, **kwargs)
+
+    def sample(self, size):
+        """ Sampling method of ``ConstantSampler``.
+        Repeats sampler's constant ``size`` times.
+
+        Parameters
+        ----------
+        size : int
+            the size of sample to be generated.
+
+        Returns
+        -------
+        np.ndarray
+            array of shape (size, 1) containing Sampler's constant.
+        """
+        return np.repeat(self.constant, repeats=size, axis=0)
+
+
 class NumpySampler(Sampler):
     """ Sampler based on a distribution from np.random.
 
@@ -415,3 +451,139 @@ class NumpySampler(Sampler):
         if len(sample.shape) == 1:
             sample = sample.reshape(-1, 1)
         return sample
+
+
+class ScipySampler(Sampler):
+    """ Sampler based on a distribution from `scipy.stats`.
+    Parameters
+    ----------
+    name : str
+        name of a distribution, class from `scipy.stats`, or its alias.
+    seed : int
+        random seed for setting up sampler's state.
+    **kwargs
+        additional parameters for specification of the distribution.
+        For instance, `scale` for name='gamma'.
+    Attributes
+    ----------
+    name : str
+        name of a distribution (class from `scipy.stats`).
+    state : int
+        sampler's random state.
+    """
+    def __init__(self, name, seed=None, **kwargs):
+        super().__init__(name, seed, **kwargs)
+        name = _get_method_by_alias(name, 'ss')
+        self.name = name
+        self.state = np.random.RandomState(seed=seed)
+        self.distr = getattr(ss, self.name)(**kwargs)
+
+    def sample(self, size):
+        """ Sampling method of ``ScipySampler``.
+        Generates random samples from distribution ``self.name``.
+        Parameters
+        ----------
+        size : int
+            the size of sample to be generated.
+        Returns
+        -------
+        np.ndarray
+            array of shape (size, Sampler's dimension).
+        """
+        sampler = self.distr.rvs
+        sample = sampler(size=size, random_state=self.state)
+        if len(sample.shape) == 1:
+            sample = sample.reshape(-1, 1)
+        return sample
+
+
+class HistoSampler(Sampler):
+    """ Sampler based on a histogram, output of `np.histogramdd`.
+    Parameters
+    ----------
+    histo : tuple
+        histogram, on which the sampler is based.
+        Make sure that it is unnormalized (`normed=False` in `np.histogramdd`).
+    edges : list
+        list of len=histo_dimension, contains edges of bins along axes.
+    seed : int
+        random seed for setting up sampler's state.
+    Attributes
+    ----------
+    bins : np.ndarray
+        bins of base-histogram (see `np.histogramdd`).
+    edges : list
+        edges of base-histogram.
+    Notes
+    -----
+        The sampler should be based on unnormalized histogram.
+        if `histo`-arg is supplied, it is used for histo-initilization.
+        Otherwise, edges should be supplied. In this case all bins are empty.
+    """
+    def __init__(self, histo=None, edges=None, seed=None, **kwargs):
+        super().__init__(histo, edges, seed, **kwargs)
+        if histo is not None:
+            self.bins = histo[0]
+            self.edges = histo[1]
+        elif edges is not None:
+            self.edges = edges
+            bins_shape = [len(axis_edge) - 1 for axis_edge in edges]
+            self.bins = np.zeros(shape=bins_shape, dtype=np.float32)
+        else:
+            raise ValueError('Either `histo` or `edges` should be specified.')
+
+        self.l_all = cart_prod(*(range_dim[:-1] for range_dim in self.edges))
+        self.h_all = cart_prod(*(range_dim[1:] for range_dim in self.edges))
+
+        self.probs = (self.bins / np.sum(self.bins)).reshape(-1)
+        self.nonzero_probs_idx = np.asarray(self.probs != 0.0).nonzero()[0]
+        self.nonzero_probs = self.probs[self.nonzero_probs_idx]
+
+        self.state = np.random.RandomState(seed=seed)
+        self.state_sampler = self.state.uniform
+
+    def sample(self, size):
+        """ Sampling method of ``HistoSampler``.
+        Generates random samples from distribution, represented by
+        histogram (self.bins, self.edges).
+        Parameters
+        ----------
+        size : int
+            the size of sample to be generated.
+        Returns
+        -------
+        np.ndarray
+            array of shape (size, histo dimension).
+        """
+        # Choose bins to use according to non-zero probabilities
+        bin_nums = np.random.choice(self.nonzero_probs_idx, p=self.nonzero_probs, size=size)
+
+        # uniformly generate samples from selected boxes
+        low, high = self.l_all[bin_nums], self.h_all[bin_nums]
+        return self.state_sampler(low=low, high=high)
+
+    def update(self, points):
+        """ Update bins of sampler's histogram by throwing in additional points.
+        Parameters
+        ----------
+        points : np.ndarray
+            Array of points of shape (n_points, histo_dimension).
+        """
+        histo_update = np.histogramdd(sample=points, bins=self.edges)
+        self.bins += histo_update[0]
+
+
+def cart_prod(*arrs):
+    """ Get array of cartesian tuples from arbitrary number of arrays.
+    Faster version of itertools.product. The order of tuples is lexicographic.
+    Parameters
+    ----------
+    arrs : tuple, list or ndarray.
+        Any sequence of ndarrays.
+    Returns
+    -------
+    ndarray
+        2d-array with rows (arr[0][i], arr[2][j],...,arr[n][k]).
+    """
+    grids = np.meshgrid(*arrs, indexing='ij')
+    return np.stack(grids, axis=-1).reshape(-1, len(arrs))
