@@ -2,12 +2,11 @@ name: release
 
 on:
   push:
-    branches:
-    - dummy
+    tags:
+      - v*
 
 jobs:
-
-  docs:
+  release:
 
     runs-on: ubuntu-latest
 
@@ -16,14 +15,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-      with:
-          fetch-depth: 1
 
     - name: Build docs
       run: |
         export LC_ALL="C"
-        pip3 install sphinx
-        pip3 install sphinx-rtd-theme
+        pip3 install --upgrade sphinx sphinx-rtd-theme
         git checkout --orphan gh-pages
         rm -rf *
         git fetch
@@ -31,7 +27,7 @@ jobs:
         cd docs
         make html
 
-    - name: Push docs
+    - name: Commit docs
       run: |
         mv docs/_build/html/* .
         rm -rf docs batchflow
@@ -40,48 +36,38 @@ jobs:
         git config user.name "Roman Kh"
         git add -A .
         git commit -am "Build docs"
-        git remote add gh_pages https://${{ secrets.GITHUB_PUSH }}@github.com/${{ github.repository }}
-        git push -f gh_pages gh-pages
 
-  coverage:
+    - name: Push docs
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: gh-pages
+        force: True
 
-    runs-on: ubuntu-latest
+    - name: Clear docs
+      run: rm -rf *
 
-    container:
-      image: analysiscenter1/ds-py3:cpu
-
-    steps:
     - uses: actions/checkout@v1
 
     - name: Generate coverage report
       run: |
         pip3 install -U pytest-cov
         pytest -m "not slow" --cov=./ --cov-report=xml
+
     - name: Upload coverage to Codecov
       run: |
         pip3 install -U codecov
         codecov -t ${{ secrets.CODECOV_TOKEN }}
 
-  pypi:
+    - uses: actions/checkout@v1
 
-    runs-on: ubuntu-latest
+    - name: Install dependencies
+      run: pip3 install --upgrade setuptools wheel twine
 
-    container:
-      image: analysiscenter1/ds-py3:cpu
-
-    steps:
-    - uses: actions/checkout@master
-    - name: Set up Python 3.7
-      uses: actions/setup-python@v1
-      with:
-        python-version: 3.7
-
-    - name: Build package
-      run: python3 setup.py sdist bdist_wheel
-
-    - name: Publish package
-      uses: pypa/gh-action-pypi-publish@master
-      with:
-        user: __token__
-        password: ${{ secrets.pypi_password }}
-        repository_url: https://test.pypi.org/legacy/
+    - name: Build and publish
+      env:
+        TWINE_USERNAME: ${{ '__token__' }}
+        TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      run: |
+        python3 setup.py sdist bdist_wheel
+        twine upload --repository testpypi dist/*
