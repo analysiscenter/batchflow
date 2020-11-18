@@ -1080,12 +1080,8 @@ class Pipeline:
         args, kwargs
             model-specific parameters (like paths, formats, etc)
         """
-        if mode == 'static':
-            self.models.load_model(mode, name, model_class, *args, **kwargs)
-            return self
-        return self._add_action(LOAD_MODEL_ID, *args,
-                                _args=dict(mode=mode, model_class=model_class, model_name=name),
-                                **kwargs)
+        self.before.load_model(mode, name, model_class, *args, **kwargs)
+        return self
 
     def _exec_load_model(self, batch, action):
         mode = self._eval_expr(action['mode'], batch=batch)
