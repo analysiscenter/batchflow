@@ -1061,7 +1061,7 @@ class Pipeline:
         self._save_output(batch, model, predictions, action['save_to'])
 
     def load_model(self, mode, name=None, model_class=None, *args, **kwargs):
-        """ Load a model
+        """ Load a model at each iteration
 
         Parameters
         ----------
@@ -1141,7 +1141,7 @@ class Pipeline:
                                           args=args, kwargs=kwargs))
 
     def save_model(self, name, *args, **kwargs):
-        """ Save a model
+        """ Save a model at each iteration
 
         Parameters
         ----------
