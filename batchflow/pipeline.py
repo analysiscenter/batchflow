@@ -1087,7 +1087,7 @@ class Pipeline:
                                 _args=dict(mode=mode, model_class=model_class, model_name=name),
                                 **kwargs)
 
-    def load_once(self, mode, name=None, model_class=None, *args, **kwargs):
+    def load_model_once(self, mode, name=None, model_class=None, *args, **kwargs):
         """ Load a model once at the first iteration
 
         Parameters
