@@ -1088,7 +1088,7 @@ class Pipeline:
                                 **kwargs)
 
     def load_model_once(self, mode, name=None, model_class=None, *args, **kwargs):
-        """ Load a model once at the first iteration
+        """ Load a model once before the first iteration
 
         Parameters
         ----------
@@ -1157,7 +1157,7 @@ class Pipeline:
         return self._add_action(SAVE_MODEL_ID, *args, _args=dict(model_name=name), **kwargs)
 
     def save_model_once(self, name, *args, **kwargs):
-        """ Save a model at the last iteration
+        """ Save a model after the last iteration
 
         Parameters
         ----------
