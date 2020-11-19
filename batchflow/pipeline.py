@@ -1074,9 +1074,6 @@ class Pipeline:
         model_class : class or named expression
             (optional) a model class to instantiate a loaded model instance.
 
-        batch : Batch
-            (optional) a batch which might be used to evaluate named expressions in other parameters
-
         args, kwargs
             model-specific parameters (like paths, formats, etc)
         """
@@ -1100,9 +1097,6 @@ class Pipeline:
 
         model_class : class or named expression
             (optional) a model class to instantiate a loaded model instance.
-
-        batch : Batch
-            (optional) a batch which might be used to evaluate named expressions in other parameters
 
         args, kwargs
             model-specific parameters (like paths, formats, etc)
@@ -1148,9 +1142,6 @@ class Pipeline:
         name : str
             a model name
 
-        batch : Batch
-            (optional) a batch which might be used to evaluate named expressions in other parameters
-
         args, kwargs
             model-specific parameters (like paths, formats, etc)
         """
@@ -1163,9 +1154,6 @@ class Pipeline:
         ----------
         name : str
             a model name
-
-        batch : Batch
-            (optional) a batch which might be used to evaluate named expressions in other parameters
 
         args, kwargs
             model-specific parameters (like paths, formats, etc)
