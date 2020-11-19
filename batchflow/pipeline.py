@@ -1080,6 +1080,33 @@ class Pipeline:
         args, kwargs
             model-specific parameters (like paths, formats, etc)
         """
+        if mode == 'static':
+            self.models.load_model(mode, name, model_class, *args, **kwargs)
+            return self
+        return self._add_action(LOAD_MODEL_ID, *args,
+                                _args=dict(mode=mode, model_class=model_class, model_name=name),
+                                **kwargs)
+
+    def load_once(self, mode, name=None, model_class=None, *args, **kwargs):
+        """ Load a model once at the first iteration
+
+        Parameters
+        ----------
+        mode : str
+            'static' or 'dynamic'
+
+        name : str
+            (optional) a model name
+
+        model_class : class or named expression
+            (optional) a model class to instantiate a loaded model instance.
+
+        batch : Batch
+            (optional) a batch which might be used to evaluate named expressions in other parameters
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
         self.before.load_model(mode, name, model_class, *args, **kwargs)
         return self
 
@@ -1128,6 +1155,23 @@ class Pipeline:
             model-specific parameters (like paths, formats, etc)
         """
         return self._add_action(SAVE_MODEL_ID, *args, _args=dict(model_name=name), **kwargs)
+
+    def save_model_once(self, name, *args, **kwargs):
+        """ Save a model at the last iteration
+
+        Parameters
+        ----------
+        name : str
+            a model name
+
+        batch : Batch
+            (optional) a batch which might be used to evaluate named expressions in other parameters
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
+        self.after.save_model(name, *args, **kwargs)
+        return self
 
     def _exec_save_model(self, batch, action):
         name = self._eval_expr(action['model_name'], batch=batch)
