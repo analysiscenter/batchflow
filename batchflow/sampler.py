@@ -208,22 +208,24 @@ class OrSampler(Sampler):
         self.right = right
 
         # calculate probs of samplers in mixture
-        _ws = np.array([self.left.weight, self.right.weight])
-        self.weight = np.sum(_ws)
-        self._normed = _ws / np.sum(_ws)
+        ws = np.array([self.left.weight, self.right.weight])
+        self.weight = np.sum(ws)
+        self.normed = ws / np.sum(ws)
 
     def sample(self, size):
-        """ Sampling procedure of a mixture of two samplers.
+        """ Sampling procedure of a mixture of two samplers. Samples points with probabilities
+        defined by weights (`self.weight`-attr) from two samplers invoked(`self.left` and 
+        `self.right`-attr) and mixes them in one sample of needed size.
         """
-        _up_size = np.random.binomial(size, self._normed[0])
-        _low_size = size - _up_size
+        up_size = np.random.binomial(size, self.normed[0])
+        low_size = size - up_size
 
-        _up = self.left.sample(size=_up_size)
-        _low = self.right.sample(size=_low_size)
-        _sample = np.concatenate([_up, _low])
-        sample = _sample[np.random.permutation(size)]
+        up_sample = self.left.sample(size=up_size)
+        low_sample  = self.right.sample(size=low_size)
+        sample_points = np.concatenate([up_sample, low_sample])
+        sample_points = sample_points[np.random.permutation(size)]
 
-        return sample
+        return sample_points
 
 class AndSampler(Sampler):
     def __init__(self, left, right, *args, **kwargs):
@@ -232,11 +234,12 @@ class AndSampler(Sampler):
         self.right = right
 
     def sample(self, size):
-        """ Sampling procedure of a product of two samplers.
+        """ Sampling procedure of a product of two samplers. Check out the docstring of
+        `Sampler.__and__` for more info.
         """
-        _left = self.left.sample(size)
-        _right = self.right.sample(size)
-        return np.concatenate([_left, _right], axis=1)
+        left_sample = self.left.sample(size)
+        right_sample = self.right.sample(size)
+        return np.concatenate([left_sample, right_sample], axis=1)
 
 class ApplySampler(Sampler):
     def __init__(self, sampler, transform, *args, **kwargs):
@@ -245,7 +248,8 @@ class ApplySampler(Sampler):
         self.transform = transform
 
     def sample(self, size):
-        """ Sampling procedure of a sampler subjugated to a transform.
+        """ Sampling procedure of a sampler subjugated to a transform. Check out the docstring of
+        `Sampler.apply` for more info.
         """
         return self.transform(self.sampler.sample(size))
 
@@ -259,7 +263,8 @@ class TruncateSampler(Sampler):
         self.prob = prob
 
     def sample(self, size):
-        """ Sampling method of a sampler subjugated to truncation.
+        """ Sampling method of a sampler subjugated to truncation. Check out the docstring of
+        `Sampler.truncation` for more info.
         """
         if size == 0:
             return self.sampler.sample(size=0)
