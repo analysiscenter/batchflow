@@ -1,4 +1,4 @@
-# pylint: disable=redefined-outer-name, missing-docstring, bad-continuation
+# pylint: disable=redefined-outer-name, missing-docstring
 import sys
 from contextlib import ExitStack as does_not_raise
 

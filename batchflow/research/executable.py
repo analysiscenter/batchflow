@@ -193,8 +193,8 @@ class Executable:
         if self.pipeline is not None:
             try:
                 batch = self.pipeline.next_batch()
-            except StopIteration:
-                raise PipelineStopIteration('{} was stopped'.format(self.name))
+            except StopIteration as e:
+                raise PipelineStopIteration('{} was stopped'.format(self.name)) from e
         else:
             raise TypeError("Executable should be pipeline, not a function")
         return batch
@@ -219,8 +219,8 @@ class Executable:
         if self.root_pipeline is not None:
             try:
                 batch = self.root_pipeline.next_batch()
-            except StopIteration:
-                raise PipelineStopIteration('{} was stopped'.format(self.name))
+            except StopIteration as e:
+                raise PipelineStopIteration('{} was stopped'.format(self.name)) from e
         else:
             raise TypeError("Executable should have root pipeline")
         return batch

@@ -37,7 +37,7 @@ class Research:
         self.devices = None
         self.domain = None
         self.n_iters = None
-        self.timeout = 5
+        self.timeout = None
         self.n_configs = None
         self.n_reps = None
         self.n_configs = None
@@ -314,7 +314,7 @@ class Research:
         return Results(self.name, *args, **kwargs)
 
     def run(self, n_iters=None, workers=1, branches=1, name=None,
-            bar=False, devices=None, worker_class=None, timeout=5, trials=2):
+            bar=False, devices=None, worker_class=None, timeout=None, trials=2):
         """ Run research.
 
         Parameters

@@ -173,7 +173,7 @@ class Combine(Layer):
         return Combine.sum([gated, clamped])
 
     OPS = {
-        concat: ['concat', 'cat', '.'],
+        concat: ['concat', 'cat', '|'],
         sum: ['sum', 'plus', '+'],
         mul: ['multi', 'mul', '*'],
         mean: ['avg', 'mean', 'average'],
