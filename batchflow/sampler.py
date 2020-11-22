@@ -1,13 +1,14 @@
 # pylint: disable=too-few-public-methods, method-hidden
 """ Contains Sampler-classes. """
 
+import warnings
 from copy import copy
 import numpy as np
 import scipy.stats as ss
 
-# if empirical probability of truncation region is less than
-# this number, truncation throws a ValueError
-SMALL_SHARE = 1e-2
+# used when truncating a Sampler. If we cannot obtain a needed amount of points
+# from the region of interest, we throw a Warning or ValueError
+MAX_ITERS = 1e7
 
 # aliases for Numpy, Scipy-Stats, TensorFlow-samplers
 ALIASES = {
@@ -176,9 +177,12 @@ class Sampler():
         """
         return ApplySampler(self, transform)
 
-    def truncate(self, high=None, low=None, expr=None, prob=0.5):
+    def truncate(self, high=None, low=None, expr=None, prob=0.5, max_iters=MAX_ITERS, sample_anyways=False):
         """ Truncate a sampler. Resulting sampler produces points satisfying ``low <= pts <= high``.
         If ``expr`` is suplied, the condition is ``low <= expr(pts) <= high``.
+
+        Uses while-loop to obtain a sample from the region of interest of needed size. The behaviour
+        of the while loop is controlled by parameters ``max_iters`` and ``sample_anyways``-parameters.
 
         Parameters
         ----------
@@ -192,84 +196,99 @@ class Sampler():
         prob : float, optional
             estimate of P(truncation-condtion is satisfied). When supplied,
             can improve the performance of sampling-method of truncated sampler.
+        max_iters : float, optional
+            if the number of iterations needed for obtaining the sample exceeds this number,
+            either a warning or error is raised. By default is set to MAX_ITERS (global constant).
+        sample_anyways : bool, optional
+            If set to True, when exceeding `self.max_iters` number of iterations the procedure throws a warning
+            but continues. If set to False, the error is raised.
 
         Returns
         -------
         Sampler
             new Sampler-instance, truncated version of self.
         """
-        return TruncateSampler(self, high, low, expr, prob)
+        return TruncateSampler(self, high, low, expr, prob, max_iters, sample_anyways)
 
 
 class OrSampler(Sampler):
+    """ Class for implementing `|` (mixture) operation on `Sampler`-instances.
+    """
     def __init__(self, left, right, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.left = left
-        self.right = right
+        self.bases = [left, right]
 
         # calculate probs of samplers in mixture
-        ws = np.array([self.left.weight, self.right.weight])
-        self.weight = np.sum(ws)
-        self.normed = ws / np.sum(ws)
+        weights = np.array([self.bases[0].weight, self.bases[1].weight])
+        self.weight = np.sum(weights)
+        self.normed = weights / np.sum(weights)
 
     def sample(self, size):
         """ Sampling procedure of a mixture of two samplers. Samples points with probabilities
-        defined by weights (`self.weight`-attr) from two samplers invoked(`self.left` and 
-        `self.right`-attr) and mixes them in one sample of needed size.
+        defined by weights (`self.weight`-attr) from two samplers invoked (`self.bases`-attr) and
+        mixes them in one sample of needed size.
         """
         up_size = np.random.binomial(size, self.normed[0])
         low_size = size - up_size
 
-        up_sample = self.left.sample(size=up_size)
-        low_sample  = self.right.sample(size=low_size)
+        up_sample = self.bases[0].sample(size=up_size)
+        low_sample  = self.bases[1].sample(size=low_size)
         sample_points = np.concatenate([up_sample, low_sample])
         sample_points = sample_points[np.random.permutation(size)]
 
         return sample_points
 
 class AndSampler(Sampler):
+    """ Class for implementing `&` (coordinates stacking) operation on `Sampler`-instances.
+    """
     def __init__(self, left, right, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.left = left
-        self.right = right
+        self.bases = [left, right]
 
     def sample(self, size):
         """ Sampling procedure of a product of two samplers. Check out the docstring of
         `Sampler.__and__` for more info.
         """
-        left_sample = self.left.sample(size)
-        right_sample = self.right.sample(size)
+        left_sample = self.bases[0].sample(size)
+        right_sample = self.bases[1].sample(size)
         return np.concatenate([left_sample, right_sample], axis=1)
 
 class ApplySampler(Sampler):
+    """ Class for implementing `apply` (adding transform) operation on `Sampler`-instances.
+    """
     def __init__(self, sampler, transform, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.sampler = sampler
+        self.bases = [sampler]
         self.transform = transform
 
     def sample(self, size):
         """ Sampling procedure of a sampler subjugated to a transform. Check out the docstring of
         `Sampler.apply` for more info.
         """
-        return self.transform(self.sampler.sample(size))
+        return self.transform(self.bases[0].sample(size))
 
 class TruncateSampler(Sampler):
-    def __init__(self, sampler, high=None, low=None, expr=None, prob=0.5, *args, **kwargs):
+    """ Class for implementing `truncate` (truncation by a condition) operation on `Sampler`-instances.
+    """
+    def __init__(self, sampler, high=None, low=None, expr=None, prob=0.5, max_iters=MAX_ITERS,
+                 sample_anyways=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.sampler = sampler
+        self.bases = [sampler]
         self.high = high
         self.low = low
         self.expr = expr
         self.prob = prob
+        self.sample_anyways = sample_anyways
+        self.max_iters = max_iters
 
     def sample(self, size):
         """ Sampling method of a sampler subjugated to truncation. Check out the docstring of
         `Sampler.truncation` for more info.
         """
         if size == 0:
-            return self.sampler.sample(size=0)
+            return self.bases[0].sample(size=0)
 
-        high, low, expr, prob = self.high, self.low, self.expr, self.prob 
+        high, low, expr, prob = self.high, self.low, self.expr, self.prob
         # set batch-size
         expectation = size / prob
         sigma = np.sqrt(size * (1 - prob) / (prob**2))
@@ -281,7 +300,7 @@ class TruncateSampler(Sampler):
         samples = []
         while cumulated < size:
             # sample points and compute condition-vector
-            sample = self.sampler.sample(size=batch_size)
+            sample = self.bases[0].sample(size=batch_size)
             cond = np.ones(shape=batch_size).astype(np.bool)
             if low is not None:
                 if expr is not None:
@@ -298,10 +317,15 @@ class TruncateSampler(Sampler):
             if high is None and low is None:
                 cond &= expr(sample).all(axis=1)
 
-            # check that truncation-prob is not to small
-            _share = np.sum(cond) / batch_size
-            if _share < SMALL_SHARE and ctr > 0:
-                raise ValueError('Probability of region of interest is too small. Try other truncation bounds')
+            # check if we reached MAX_ITERS-number of iterations
+            if ctr > self.max_iters:
+                if self.sample_anyways:
+                    warnings.warn("Already took {} number of iteration to make a sample. Yet, `sample_anyways`"
+                                  "is set to true, so going on. Kill the process manually if needed."
+                                  .format(self.max_iters))
+                else:
+                    raise ValueError("The number of iterations needed to obtain the sample exceeds {}."
+                                     "Stopping the process.".format(self.max_iters))
 
             # get points from region of interest
             samples.append(sample[cond])
@@ -312,17 +336,17 @@ class TruncateSampler(Sampler):
 
 
 class BaseOperationSampler(Sampler):
+    """ Base class for implementing all arithmetic operations on `Sampler`-instances.
+    """
     operation = None
     def __init__(self, left, right, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.left = left
-        self.right = right
+        self.bases = [left, right]
 
     def sample(self, size):
-        if isinstance(self.right, Sampler):
-            return getattr(self.left.sample(size), self.operation)(self.right.sample(size))
-        else:
-            return getattr(self.left.sample(size), self.operation)(np.array(self.right))
+        if isinstance(self.bases[1], Sampler):
+            return getattr(self.bases[0].sample(size), self.operation)(self.bases[1].sample(size))
+        return getattr(self.bases[0].sample(size), self.operation)(np.array(self.bases[1]))
 
 
 class AddSampler(BaseOperationSampler):
@@ -370,7 +394,8 @@ class RModSampler(BaseOperationSampler):
 classes = dict(zip(['__add__', '__mul__', '__truediv__', '__sub__', '__pow__', '__floordiv__', '__mod__',
                     '__radd__', '__rmul__', '__rtruediv__', '__rsub__', '__rpow__', '__rfloordiv__', '__rmod__'],
                    [AddSampler, MulSampler, TruedivSampler, SubSampler, PowSampler, FloordivSampler, ModSampler,
-                    RAddSampler, RMulSampler, RTruedivSampler, RSubSampler, RPowSampler, RFloordivSampler, RModSampler]))
+                    RAddSampler, RMulSampler, RTruedivSampler, RSubSampler, RPowSampler, RFloordivSampler,
+                    RModSampler]))
 
 
 class ConstantSampler(Sampler):
