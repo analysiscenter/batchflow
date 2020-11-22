@@ -132,19 +132,16 @@ Requirements
 
 BatchFlow has the following strict requirments:
 
-* dill 
-* numpy 
-* tqdm 
-* matplotlib
-* numba
+* numpy
+* dill
 * pandas
-* psutil
-* scipy 
-* IPython 
+* tqdm
+* matplotlib
+* scipy
 
 Some BatchFlow modules also depends on other optional packages:
 
-* multiprocessing for ``batchflow.research``
+* multiprocess for ``batchflow.research``
 * torch for ``batchflow.models.torch``
 * tensorflow ``for batchflow.models.tf``
 

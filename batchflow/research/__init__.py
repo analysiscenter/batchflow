@@ -1,7 +1,7 @@
-""" Research module. 
+""" Research module.
 
 .. note::
-    This module requries multiprocessing package. 
+    This module requries multiprocess package <http://multiprocess.rtfd.io/>`_.
 """
 from .domain import KV, Domain, Option, ConfigAlias
 from .distributor import Distributor

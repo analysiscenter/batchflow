@@ -1,7 +1,7 @@
 """ Various Torch models and blocks.
 
 .. note::
-    This module requries torch package. 
+    This module requries PyTorch package.
 """
 from .base import TorchModel
 from .encoder_decoder import Encoder, Decoder, EncoderDecoder, AutoEncoder, VariationalAutoEncoder
