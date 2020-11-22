@@ -1,12 +1,12 @@
 """ Contains utility function for metrics evaluation """
 import numpy as np
 import numpy.ma as ma
-
-from numba import njit
 from scipy.ndimage import measurements
 
+from ...decorators import mjit
 
-@njit(nogil=True)
+
+@mjit(nogil=True)
 def binarize(inputs, threshold=.5):
     """ Create a binary mask from probabilities with a given threshold.
 
@@ -26,7 +26,7 @@ def binarize(inputs, threshold=.5):
     return inputs >= threshold
 
 
-@njit(nogil=True)
+@mjit(nogil=True)
 def sigmoid(arr):
     return 1. / (1. + np.exp(-arr))
 
