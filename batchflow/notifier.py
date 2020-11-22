@@ -7,8 +7,11 @@ from tqdm.notebook import tqdm as tqdm_notebook
 from tqdm.auto import tqdm as tqdm_auto
 
 import numpy as np
-from IPython import display
 import matplotlib.pyplot as plt
+try:
+    from IPython import display
+except ImportError:
+    pass
 
 from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .named_expr import NamedExpression, eval_expr
