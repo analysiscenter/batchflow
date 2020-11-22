@@ -7,15 +7,12 @@ import warnings
 import functools
 
 import dill
+import pandas as pd
 try:
     import blosc
 except ImportError:
     pass
 import numpy as np
-try:
-    import pandas as pd
-except ImportError:
-    import _fake as pd
 try:
     import feather
 except ImportError:
@@ -23,7 +20,7 @@ except ImportError:
 try:
     import dask.dataframe as dd
 except ImportError:
-    import _fake as dd
+    from ._fake import DataFrame as dd
 
 from .dsindex import DatasetIndex, FilesIndex
 # renaming apply_parallel decorator is needed as Batch.apply_parallel method is also in the same namespace

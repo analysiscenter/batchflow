@@ -1,10 +1,8 @@
 """ Contains classes to handle batch data components """
 import copy as cp
+
 import numpy as np
-try:
-    import pandas as pd
-except ImportError:
-    import _fake as pd
+import pandas as pd
 
 from .utils import is_iterable
 
