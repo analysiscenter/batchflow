@@ -67,6 +67,7 @@ class UNet(EncoderDecoder):
     """
     @classmethod
     def default_config(cls):
+        """ Define model's defaults. """
         config = super().default_config()
 
         config['body/encoder/num_stages'] = 4
@@ -82,6 +83,7 @@ class UNet(EncoderDecoder):
         return config
 
     def build_config(self):
+        """ Define model's architecture configuration. """
         config = super().build_config()
 
         if config.get('auto_build'):
