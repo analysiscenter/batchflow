@@ -5,7 +5,7 @@ from copy import copy
 import numpy as np
 try:
     import scipy.stats as ss
-except:
+except ImportError:
     pass
 
 # if empirical probability of truncation region is less than

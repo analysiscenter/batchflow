@@ -137,7 +137,6 @@ BatchFlow has the following strict requirments:
 * pandas
 * tqdm
 * matplotlib
-* scipy
 
 Some BatchFlow modules also depends on other optional packages:
 

@@ -6,7 +6,7 @@ from numbers import Number
 import numpy as np
 try:
     from skimage.transform import resize # pylint: disable=unused-import
-except:
+except ImportError:
     pass
 try:
     import scipy.ndimage
@@ -210,9 +210,9 @@ class BaseImagesBatch(Batch):
         return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
 
 
-# @add_methods(transformations={**get_scipy_transforms(),
-#                               'pad': np.pad,
-#                               'resize': resize}, prefix='_sp_', suffix='_')
+@add_methods(transformations={**get_scipy_transforms(),
+                              'pad': np.pad,
+                              'resize': resize}, prefix='_sp_', suffix='_')
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 
