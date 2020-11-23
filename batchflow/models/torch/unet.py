@@ -1,6 +1,8 @@
 """  Ronneberger O. et al "`U-Net: Convolutional Networks for Biomedical Image Segmentation
 <https://arxiv.org/abs/1505.04597>`_"
 """
+import warnings
+
 from .encoder_decoder import EncoderDecoder
 from .blocks import ResBlock, DenseBlock
 
@@ -93,9 +95,11 @@ class UNet(EncoderDecoder):
             config['body/decoder/num_stages'] = num_stages
             config['body/decoder/blocks/filters'] = encoder_filters[::-1]
             config['body/decoder/upsample/filters'] = encoder_filters[::-1]
-            
+
         if not config.get('body/decoder/upsample/filters'):
-            config['body/decoder/upsample/filters'] = config['body/decoder/blocks/filters']
+            warnings.warn("'decoder/upsample/filters' are not set and " +
+                          "can be inconsistent with 'decoder/blocks/filters'! Please revise your model's config. " +
+                          "In future, upsample filters can be made to match decoder block's filters by default.")
 
         return config
 
