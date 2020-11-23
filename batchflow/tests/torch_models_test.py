@@ -56,11 +56,11 @@ class Test_models:
         Finally, we assert that our modification was actually applied to a model by attempting
         to build and train it with a small batch.
     """
-    @pytest.mark.parametrize('decay', [None]) #, 'exp']) # 'exp' fails
+    @pytest.mark.parametrize('decay', [None, {'name':'exp', 'frequency': 25}]) # 'exp' fails
     def test_data_format(self, model, model_setup_images_clf, pipeline, decay, image_shape):
         """ We can explicitly pass 'data_format' to inputs or common."""
         dataset, model_config = model_setup_images_clf('channels_first', image_shape=image_shape)
-        model_config.update(decay=decay, n_iters=25)
+        model_config.update(decay=decay)
         config = {'model_class': model, 'model_config': model_config}
         test_pipeline = (pipeline << dataset) << config
         batch = test_pipeline.next_batch(2, n_epochs=None)
