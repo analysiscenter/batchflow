@@ -3,7 +3,10 @@
 
 from copy import copy
 import numpy as np
-import scipy.stats as ss
+try:
+    import scipy.stats as ss
+except:
+    pass
 
 # if empirical probability of truncation region is less than
 # this number, truncation throws a ValueError

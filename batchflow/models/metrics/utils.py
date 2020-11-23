@@ -1,7 +1,10 @@
 """ Contains utility function for metrics evaluation """
 import numpy as np
 import numpy.ma as ma
-from scipy.ndimage import measurements
+try:
+    from scipy.ndimage import measurements
+except:
+    pass
 try:
     from numba import njit
 except ImportError:

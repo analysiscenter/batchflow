@@ -3,4 +3,3 @@ dill
 pandas
 tqdm
 matplotlib
-scipy

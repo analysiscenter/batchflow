@@ -4,8 +4,14 @@ import warnings
 from numbers import Number
 
 import numpy as np
-from skimage.transform import resize # pylint: disable=unused-import
-import scipy.ndimage
+try:
+    from skimage.transform import resize # pylint: disable=unused-import
+except:
+    pass
+try:
+    import scipy.ndimage
+except ImportError:
+    pass
 
 import PIL
 import PIL.ImageOps
@@ -204,9 +210,9 @@ class BaseImagesBatch(Batch):
         return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
 
 
-@add_methods(transformations={**get_scipy_transforms(),
-                              'pad': np.pad,
-                              'resize': resize}, prefix='_sp_', suffix='_')
+# @add_methods(transformations={**get_scipy_transforms(),
+#                               'pad': np.pad,
+#                               'resize': resize}, prefix='_sp_', suffix='_')
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 
