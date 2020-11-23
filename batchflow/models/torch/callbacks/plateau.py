@@ -2,11 +2,36 @@
 import numpy as np
 
 from .base import BaseCallback
+from ....exceptions import StopPipeline
 
 
 
 class PlateauCallback(BaseCallback):
-    """ !!. """
+    """ Detect whether the model loss has plateaued, and perform action if it is.
+    Method :meth:`.plateau` is used to check whether the loss has stabilized.
+    Method :meth:`.action` is used once the plateau has achieved.
+    By default, it simply logs to the `stream` the fact of getting to the plateau.
+
+    Parameters
+    ----------
+    mode : str
+        Mode of computing whether the loss has plateaued or not.
+        If `complex`, then we compare means of loss over the last `patience` / 2 iterations and the previous last.
+        If `pytorch` or `keras`, we compare the best (minimum) value over the last `patience`
+        iterations with the best value overall.
+        If `mean`, we compare the mean value over the last `patience` iterations with the best value overall.
+    patience : int
+        Length of analyzed interval. The bigger, the more stabilized loss should be to considered to be on plateau.
+    min_delta : float
+        If the difference between compared values (see `mode`) is smaller than this delta, then we consider
+        loss to be on plateau. The lower, the more stabilized loss should be considered to be on plateau.
+    cooldown : int
+        Number of iterations to skip after performing `action`.
+    stream : None, callable or str
+        If None, then no logging is performed.
+        If callable, then used to display message, for example, `print`.
+        If str, then must be path to file to write log to.
+    """
     def __init__(self, mode='complex', patience=10, min_delta=0.001, cooldown=None, stream=None):
         self.mode = mode
         self.patience = patience
@@ -44,7 +69,9 @@ class PlateauCallback(BaseCallback):
         return True
 
     def on_iter_end(self, **kwargs):
-        """ Perform the callback action, if on plateau. """
+        """ Check if the model loss on plateau, and perform action, if needed.
+        Called at the end of :meth:`TorchModel.train`.
+        """
         _ = kwargs
 
         if self.plateau():
@@ -53,12 +80,37 @@ class PlateauCallback(BaseCallback):
             self.stream(f'{self.__class__.__name__} at iteration {self.model.iteration}')
 
     def action(self):
-        """ Must be implemented in subclasses. """
+        """ Action to be performed on plateau. Must be implemented in subclasses. """
 
 
 
 class ReduceLROnPlateau(PlateauCallback):
-    """ Reduce learning rate by a multiplicative factor, if loss has plateaued. """
+    """ Reduce learning rate by a multiplicative factor, if loss has plateaued.
+
+    Parameters
+    ----------
+    mode : str
+        Mode of computing whether the loss has plateaued or not.
+        If `complex`, then we compare means of loss over the last `patience` / 2 iterations and the previous last.
+        If `pytorch` or `keras`, we compare the best (minimum) value over the last `patience`
+        iterations with the best value overall.
+        If `mean`, we compare the mean value over the last `patience` iterations with the best value overall.
+    patience : int
+        Length of analyzed interval. The bigger, the more stabilized loss should be to considered to be on plateau.
+    min_delta : float
+        If the difference between compared values (see `mode`) is smaller than this delta, then we consider
+        loss to be on plateau. The lower, the more stabilized loss should be considered to be on plateau.
+    cooldown : int
+        Number of iterations to skip after performing `action`.
+    factor : float
+        Value to multiply learning rate on.
+    min_lr : float
+        Minimum value of the set learning rate.
+    stream : None, callable or str
+        If None, then no logging is performed.
+        If callable, then used to display message, for example, `print`.
+        If str, then must be path to file to write log to.
+    """
     def __init__(self, mode='complex', patience=10, min_delta=0.001, cooldown=None,
                  factor=0.1, min_lr=0.0, stream=None):
         self.factor = factor
@@ -75,7 +127,28 @@ class ReduceLROnPlateau(PlateauCallback):
 
 
 class EarlyStopping(PlateauCallback):
-    """ Stop the model training, if loss has plateaued. """
+    """ Stop the model training, if loss has plateaued.
+
+    Parameters
+    ----------
+    mode : str
+        Mode of computing whether the loss has plateaued or not.
+        If `complex`, then we compare means of loss over the last `patience` / 2 iterations and the previous last.
+        If `pytorch` or `keras`, we compare the best (minimum) value over the last `patience`
+        iterations with the best value overall.
+        If `mean`, we compare the mean value over the last `patience` iterations with the best value overall.
+    patience : int
+        Length of analyzed interval. The bigger, the more stabilized loss should be to considered to be on plateau.
+    min_delta : float
+        If the difference between compared values (see `mode`) is smaller than this delta, then we consider
+        loss to be on plateau. The lower, the more stabilized loss should be considered to be on plateau.
+    cooldown : int
+        Number of iterations to skip after performing `action`.
+    stream : None, callable or str
+        If None, then no logging is performed.
+        If callable, then used to display message, for example, `print`.
+        If str, then must be path to file to write log to.
+    """
     def __init__(self, mode='complex', patience=10, min_delta=0.001, cooldown=None, stream=None):
         cooldown = cooldown or patience
 
@@ -83,4 +156,4 @@ class EarlyStopping(PlateauCallback):
 
     def action(self):
         """ Raise a signal to stop the pipeline. """
-        raise StopIteration
+        raise StopPipeline
