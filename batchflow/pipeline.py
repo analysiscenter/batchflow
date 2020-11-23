@@ -1061,7 +1061,7 @@ class Pipeline:
         self._save_output(batch, model, predictions, action['save_to'])
 
     def load_model(self, mode, name=None, model_class=None, *args, **kwargs):
-        """ Load a model
+        """ Load a model at each iteration
 
         Parameters
         ----------
@@ -1074,9 +1074,6 @@ class Pipeline:
         model_class : class or named expression
             (optional) a model class to instantiate a loaded model instance.
 
-        batch : Batch
-            (optional) a batch which might be used to evaluate named expressions in other parameters
-
         args, kwargs
             model-specific parameters (like paths, formats, etc)
         """
@@ -1086,6 +1083,26 @@ class Pipeline:
         return self._add_action(LOAD_MODEL_ID, *args,
                                 _args=dict(mode=mode, model_class=model_class, model_name=name),
                                 **kwargs)
+
+    def load_model_once(self, mode, name=None, model_class=None, *args, **kwargs):
+        """ Load a model once before the first iteration
+
+        Parameters
+        ----------
+        mode : str
+            'static' or 'dynamic'
+
+        name : str
+            (optional) a model name
+
+        model_class : class or named expression
+            (optional) a model class to instantiate a loaded model instance.
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
+        self.before.load_model(mode, name, model_class, *args, **kwargs)
+        return self
 
     def _exec_load_model(self, batch, action):
         mode = self._eval_expr(action['mode'], batch=batch)
@@ -1118,20 +1135,31 @@ class Pipeline:
                                           args=args, kwargs=kwargs))
 
     def save_model(self, name, *args, **kwargs):
-        """ Save a model
+        """ Save a model at each iteration
 
         Parameters
         ----------
         name : str
             a model name
 
-        batch : Batch
-            (optional) a batch which might be used to evaluate named expressions in other parameters
-
         args, kwargs
             model-specific parameters (like paths, formats, etc)
         """
         return self._add_action(SAVE_MODEL_ID, *args, _args=dict(model_name=name), **kwargs)
+
+    def save_model_once(self, name, *args, **kwargs):
+        """ Save a model after the last iteration
+
+        Parameters
+        ----------
+        name : str
+            a model name
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
+        self.after.save_model(name, *args, **kwargs)
+        return self
 
     def _exec_save_model(self, batch, action):
         name = self._eval_expr(action['model_name'], batch=batch)

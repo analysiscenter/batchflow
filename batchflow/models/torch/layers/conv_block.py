@@ -180,7 +180,7 @@ class BaseConvBlock(nn.ModuleDict):
         'B': 'branch',
         'R': 'branch', # stands for `R`esidual
         '+': 'branch_end',
-        '.': 'branch_end',
+        '|': 'branch_end',
         '*': 'branch_end',
         '&': 'branch_end',
         '>': 'increase_dim',
@@ -247,7 +247,7 @@ class BaseConvBlock(nn.ModuleDict):
 
 
     BRANCH_LETTERS = ['R', 'B']
-    COMBINE_LETTERS = ['+', '*', '.', '&']
+    COMBINE_LETTERS = ['+', '*', '|', '&']
 
     def __init__(self, inputs=None, layout='',
                  filters=0, kernel_size=3, strides=1, dilation_rate=1, depth_multiplier=1,

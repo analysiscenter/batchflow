@@ -298,7 +298,7 @@ class BaseConvBlock:
         'R': 'residual_start',
         'A': 'residual_bilinear_additive',
         '+': 'residual_end',
-        '.': 'residual_end',
+        '|': 'residual_end',
         '*': 'residual_end',
         '&': 'residual_end',
     }
@@ -351,7 +351,7 @@ class BaseConvBlock:
         })
 
     SKIP_LETTERS = ['R', 'A', 'B']
-    COMBINE_LETTERS = ['+', '*', '.', '&']
+    COMBINE_LETTERS = ['+', '*', '|', '&']
 
     def __init__(self, layout='',
                  filters=0, kernel_size=3, strides=1, dilation_rate=1, depth_multiplier=1,

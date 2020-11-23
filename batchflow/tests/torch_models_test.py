@@ -56,6 +56,7 @@ class Test_models:
         Finally, we assert that our modification was actually applied to a model by attempting
         to build and train it with a small batch.
     """
+
     @pytest.mark.parametrize('decay', [None, {'name':'exp', 'frequency': 25}])
     def test_data_format(self, model, model_setup_images_clf, pipeline, decay, image_shape):
         """ We can explicitly pass 'data_format' to inputs or common."""

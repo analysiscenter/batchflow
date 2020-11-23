@@ -291,7 +291,7 @@ class DenseBlock(ConvBlock):
             strides = [1, strides]
             filters = [growth_rate * bottleneck, filters]
 
-        layout = 'R' + layout + '.'
+        layout = 'R' + layout + '|'
         super().__init__(layout=layout, kernel_size=kernel_size, strides=strides, dropout_rate=dropout_rate,
                          filters=filters, n_repeats=num_layers, inputs=inputs, **kwargs)
 
