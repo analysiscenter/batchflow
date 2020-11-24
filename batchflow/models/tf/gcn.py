@@ -38,6 +38,7 @@ class GlobalConvolutionNetwork(TFModel):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
 
         config['initial_block'] += dict(layout='cna', filters=64, kernel_size=7, strides=2)
@@ -54,6 +55,7 @@ class GlobalConvolutionNetwork(TFModel):
         return config
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super().build_config(names)
         if config.get('head/num_classes') is None:
             config['head/num_classes'] = self.num_classes('targets')

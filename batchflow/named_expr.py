@@ -4,6 +4,8 @@ from functools import partial
 
 import numpy as np
 
+from .config import Config
+
 
 class _DummyBatch:
     """ A fake batch for static models """
@@ -18,7 +20,7 @@ def eval_expr(expr, **kwargs):
         _expr = expr.get(**kwargs)
         if isinstance(expr, W):
             expr = _expr
-        elif isinstance(_expr, NamedExpression):
+        elif isinstance(_expr, (NamedExpression, list, tuple, dict, Config)):
             expr = eval_expr(_expr, **kwargs)
         else:
             expr = _expr
@@ -185,8 +187,15 @@ class NamedExpression(metaclass=MetaNamedExpression):
         return name, kwargs
 
     def get(self, **kwargs):
-        """ Return a value of a named expression """
-        name, kwargs = self._get(**kwargs)
+        """ Return a value of a named expression
+
+        Notes
+        -----
+        This method should be overriden in child classes.
+        In the first line it chouls usually call `_get` method::
+
+            name, kwargs = self._get(**kwargs)
+        """
         raise ValueError("Undefined value")
 
     def set(self, value, mode=None, eval=True, **kwargs):

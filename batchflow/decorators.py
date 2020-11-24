@@ -76,29 +76,40 @@ def action(*args, **kwargs):
         def another_critical_section(self, some_arg, another_arg):
             ...
     """
-    if len(args) == 1 and callable(args[0]):
+    if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
         # action without arguments
         return _make_action_wrapper(action_method=args[0])
     # action with arguments
     return _make_action_wrapper_with_args(*args, **kwargs)
 
-def apply_transform(*args, **kwargs):
+
+def apply_parallel(*args, **kwargs):
     """ Mark class method for transform in its metaclass.
 
-        Decorator writes `kwargs` to the method attribute `transform_kwargs`,
+        Decorator writes `kwargs` to the method attribute `apply_kwargs`,
         so they can be extracted and used in metaclass.
 
         Parameters
         ----------
-        all : bool
-            whether call `apply_transform_all` instead of `apply_transform`
-
         args, kwargs
-            other parameters passed to `apply_transform` method of the class
+            other parameters passed to `apply_parallel` method of the class
             where this decorator is being used
+
+        Notes
+        -----
+        Redefine the attribute `apply_defaults <.Batch.apply_defaults>` in
+        the batch class. This is proposed solely for the purposes of brevity — in
+        order to avoid repeated heavily loaded class methods decoration, e.g.
+        `@apply_parallel(src='images', target='for')` which in most cases is
+        actually equivalent to simple `@apply_parallel` assuming
+        that the defaults are redefined for the class whose methods are being
+        transformed.
+        Note, that if no defaults redefined those from the nearest
+        parent class will be used in :class:`batch.MethodsTransformingMeta`.
+
         """
     def mark(method):
-        method.transform_kwargs = kwargs
+        method.apply_kwargs = kwargs
         return method
 
     if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
@@ -107,6 +118,7 @@ def apply_transform(*args, **kwargs):
         raise ValueError("This decorator accepts only named arguments")
 
     return mark
+
 
 def any_action_failed(results):
     """ Return `True` if some parallelized invocations threw exceptions """
@@ -129,9 +141,9 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             if isinstance(init, str):
                 try:
                     init_fn = getattr(self, init)
-                except AttributeError:
+                except AttributeError as e:
                     raise ValueError("init should refer to a method or property of the class", type(self).__name__,
-                                     "returning the list of arguments")
+                                     "returning the list of arguments") from e
             elif callable(init):
                 init_fn = init
             else:
@@ -141,8 +153,8 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 if isinstance(post, str):
                     try:
                         post_fn = getattr(self, post)
-                    except AttributeError:
-                        raise ValueError("post should refer to a method of the class", type(self).__name__)
+                    except AttributeError as e:
+                        raise ValueError("post should refer to a method of the class", type(self).__name__) from e
                 elif callable(post):
                     post_fn = post
                 else:
@@ -204,7 +216,8 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
 
         def _make_args(self, iteration, init_args, args, kwargs, params=None):
             """ Make args, kwargs tuple """
-            if isinstance(init_args, tuple) and len(init_args) == 2:
+            if isinstance(init_args, tuple) and len(init_args) == 2 and \
+               isinstance(init_args[0], tuple) and isinstance(init_args[1], dict):
                 margs, mkwargs = init_args
             elif isinstance(init_args, dict):
                 margs = list()
@@ -212,6 +225,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             else:
                 margs = init_args
                 mkwargs = dict()
+
             margs = margs if isinstance(margs, (list, tuple)) else [margs]
 
             if params:
@@ -232,7 +246,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 mkwargs.update(_kwargs)
 
             if use_self:
-                margs = [self] + margs
+                margs = [self] + list(margs)
 
             return margs, mkwargs
 
@@ -334,13 +348,16 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
         @functools.wraps(method)
-        def wrapped_method(self, *args, **kwargs):
+        def wrapped_method(*args, **kwargs):
             """ Wrap a method with a required parallel engine """
-            if not use_self:
-                # the first arg is not self, but an ordinary arg
-                args = (self,) + args
-                # still pass self to preserve the signature
+            if use_self:
+                # the first arg is self, not an ordinary arg
+                self = args[0]
+                args = args[1:]
+            else:
+                # still need self to preserve the signatures of other functions
                 self = None
+
             if 'target' in kwargs:
                 _target = kwargs.pop('target')
             else:

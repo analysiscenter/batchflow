@@ -235,6 +235,7 @@ class DatasetIndex(Baseset):
         else:
             order = np.arange(len(self))
 
+        # pylint: disable=attribute-defined-outside-init
         if valid_share > 0:
             validation_pos = order[:valid_share]
             self.validation = self.create_subset(self.subset_by_pos(validation_pos))
@@ -368,8 +369,8 @@ class DatasetIndex(Baseset):
 
         # The previous iteration was the last one to perform, so stop iterating
         if iter_params['_stop_iter']:
-            if 'bar' in iter_params:
-                iter_params['bar'].close()
+            if 'notifier' in iter_params:
+                iter_params['notifier'].close()
             raise StopIteration("Dataset is over. No more batches left.")
 
         if iter_params['_order'] is None:
@@ -398,8 +399,8 @@ class DatasetIndex(Baseset):
 
         if n_iters is not None and iter_params['_n_iters'] >= n_iters or \
            n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
-            if 'bar' in iter_params:
-                iter_params['bar'].close()
+            if 'notifier' in iter_params:
+                iter_params['notifier'].close()
             if n_iters is not None or drop_last and (rest_items is None or len(rest_items) < batch_size):
                 raise StopIteration("Dataset is over. No more batches left.")
             iter_params['_stop_iter'] = True
@@ -410,7 +411,7 @@ class DatasetIndex(Baseset):
         iter_params['_start_index'] += rest_of_batch
         return self.create_batch(batch_items, pos=True)
 
-    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, bar=False,
+    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, notifier=False,
                   iter_params=None):
         """ Generate batches
 
@@ -458,9 +459,10 @@ class DatasetIndex(Baseset):
             However, there is nothing to worry about if you don't iterate over batch items explicitly
             (i.e. `for item in batch`) or implicitly (through `batch[ix]`).
 
-        bar : bool, 'n' or callable
-            Whether to show a progress bar.
-            If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
+        notifier : str, dict, or instance of `.Notifier`
+            Configuration of displayed progress bar, if any.
+            If str or dict, then parameters of `.Notifier` initialization.
+            For more details about notifying capabilities, refer to `.Notifier` documentation.
 
 
         Yields
@@ -492,9 +494,15 @@ class DatasetIndex(Baseset):
             total = math.ceil(len(self) * n_epochs / batch_size)
         iter_params.update({'_total': total})
 
-        if bar:
-            iter_params['bar'] = Notifier(bar, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                                          drop_last=drop_last, length=len(self._dataset.index))
+        if notifier:
+            if not isinstance(notifier, Notifier):
+                notifier = Notifier(**(notifier if isinstance(notifier, dict) else {'bar': notifier}),
+                                    total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                    drop_last=drop_last, length=len(self._dataset.index))
+            else:
+                notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                      drop_last=drop_last, length=len(self._dataset.index))
+            iter_params['notifier'] = notifier
 
 
         while True:
@@ -504,8 +512,8 @@ class DatasetIndex(Baseset):
                 batch = self.next_batch(batch_size, shuffle, n_iters, n_epochs, drop_last, iter_params)
             except StopIteration:
                 return
-            if 'bar' in iter_params:
-                bar.update()
+            if 'notifier' in iter_params:
+                notifier.update()
             yield batch
 
 
@@ -650,15 +658,14 @@ class FilesIndex(DatasetIndex):
         if len(paths) == 0:
             raise ValueError("`path` cannot be empty. Got '{}'.".format(path))
 
-        _all_index = None
+        _all_index = []
         _all_paths = dict()
         for one_path in paths:
             _index, _paths = self.build_from_one_path(one_path, dirs, no_ext)
-            if _all_index is None:
-                _all_index = _index
-            else:
-                _all_index = np.concatenate((_all_index, _index))
+            _all_index.append(_index)
             _all_paths.update(_paths)
+
+        _all_index = np.ravel(_all_index)
 
         if sort:
             _all_index.sort()

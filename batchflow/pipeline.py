@@ -25,8 +25,9 @@ from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
                              SegmentationMetricsByInstances, RegressionMetrics, Loss)
+
 from ._const import *       # pylint:disable=wildcard-import
-from .utils import  save_data_to
+from .utils import save_data_to
 from .notifier import Notifier
 
 
@@ -104,6 +105,7 @@ class Pipeline:
         self._iter_params = None
         self._not_init_vars = True
 
+        self.notifier = None
         self._profile = None
         self._profiler = None
         self.profile_info = None
@@ -860,18 +862,18 @@ class Pipeline:
         """ A shorter alias for get_model_by_name() """
         return self.get_model_by_name(name, batch=batch)
 
-    def init_model(self, mode, model_class=None, name=None, config=None):
+    def init_model(self, mode, name=None, model_class=None, config=None):
         """ Initialize a static or dynamic model
 
         Parameters
         ----------
         mode : {'static', 'dynamic'}
-        model_class : class
-            a model class
         name : str
-            a name for the model. Default - a model class name.
-        config : dict
-            model configurations parameters, where each key and value could be named expressions.
+            (optional) a name for the model. Default - a model class name.
+        model_class : class or named expression
+            (optional) a model class (if not specified in the config).
+        config : dict or Config
+            (optional) model configurations parameters, where each key and value could be named expressions.
 
         Examples
         --------
@@ -879,7 +881,7 @@ class Pipeline:
 
         >>> pipeline
               .init_variable('images_shape', [256, 256])
-              .init_model('static', MyModel, config={'input_shape': V('images_shape')})
+              .init_model('static', 'my_model', MyModel, config={'input_shape': V('images_shape')})
 
         >>> pipeline
               .init_variable('shape_name', 'images_shape')
@@ -888,7 +890,7 @@ class Pipeline:
         >>> pipeline
               .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        self.before.init_model(mode, model_class, name, config)
+        self.before.init_model(mode, name, model_class, config=config)
         return self
 
     def import_model(self, model, pipeline=None, name=None):
@@ -1058,41 +1060,58 @@ class Pipeline:
         predictions = model.predict(*args, **kwargs)
         self._save_output(batch, model, predictions, action['save_to'])
 
-    def load_model(self, mode, model_class=None, name=None, *args, **kwargs):
-        """ Load a model
+    def load_model(self, mode, name=None, model_class=None, *args, **kwargs):
+        """ Load a model at each iteration
 
         Parameters
         ----------
         mode : str
             'static' or 'dynamic'
 
-        model_class
-            a type of a model
-
         name : str
             (optional) a model name
 
-        batch : Batch
-            (optional) a batch which might be used to evaluate named expressions in other parameters
+        model_class : class or named expression
+            (optional) a model class to instantiate a loaded model instance.
 
         args, kwargs
             model-specific parameters (like paths, formats, etc)
         """
         if mode == 'static':
-            self.models.load_model(mode, model_class, name, *args, **kwargs)
+            self.models.load_model(mode, name, model_class, *args, **kwargs)
             return self
         return self._add_action(LOAD_MODEL_ID, *args,
                                 _args=dict(mode=mode, model_class=model_class, model_name=name),
                                 **kwargs)
+
+    def load_model_once(self, mode, name=None, model_class=None, *args, **kwargs):
+        """ Load a model once before the first iteration
+
+        Parameters
+        ----------
+        mode : str
+            'static' or 'dynamic'
+
+        name : str
+            (optional) a model name
+
+        model_class : class or named expression
+            (optional) a model class to instantiate a loaded model instance.
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
+        self.before.load_model(mode, name, model_class, *args, **kwargs)
+        return self
 
     def _exec_load_model(self, batch, action):
         mode = self._eval_expr(action['mode'], batch=batch)
         name = self._eval_expr(action['model_name'], batch=batch)
         model_class = self._eval_expr(action['model_class'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, None)
-        self.models.load_model(mode, model_class, name, *args, **kwargs)
+        self.models.load_model(mode, name, model_class, *args, **kwargs)
 
-    def load_model_now(self, mode, model_class, name=None, *args, batch=None, **kwargs):
+    def load_model_now(self, mode, name=None, model_class=None, *args, batch=None, **kwargs):
         """ Load a model immediately
 
         Parameters
@@ -1100,11 +1119,11 @@ class Pipeline:
         mode : str
             'static' or 'dynamic'
 
-        model_class
-            a type of a model
-
         name : str
             (optional) a model name
+
+        model_class : class or named expression
+            (optional) a model class to instantiate a loaded model instance.
 
         batch : Batch
             (optional) a batch which might be used to evaluate named expressions in other parameters
@@ -1112,24 +1131,35 @@ class Pipeline:
         args, kwargs
             model-specific parameters (like paths, formats, etc)
         """
-        self._exec_load_model(batch, dict(mode=mode, model_class=model_class, model_name=name,
+        self._exec_load_model(batch, dict(mode=mode, model_name=name, model_class=model_class,
                                           args=args, kwargs=kwargs))
 
     def save_model(self, name, *args, **kwargs):
-        """ Save a model
+        """ Save a model at each iteration
 
         Parameters
         ----------
         name : str
             a model name
 
-        batch : Batch
-            (optional) a batch which might be used to evaluate named expressions in other parameters
-
         args, kwargs
             model-specific parameters (like paths, formats, etc)
         """
         return self._add_action(SAVE_MODEL_ID, *args, _args=dict(model_name=name), **kwargs)
+
+    def save_model_once(self, name, *args, **kwargs):
+        """ Save a model after the last iteration
+
+        Parameters
+        ----------
+        name : str
+            a model name
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
+        self.after.save_model(name, *args, **kwargs)
+        return self
 
     def _exec_save_model(self, batch, action):
         name = self._eval_expr(action['model_name'], batch=batch)
@@ -1199,7 +1229,7 @@ class Pipeline:
                                save_to=V('inferred_masks'))
                 .gather_metrics('masks', targets=B('masks'), predictions=V('inferred_masks'),
                                 fmt='proba', axis=-1, save_to=V('metrics', mode='u'))
-                .run(BATCH_SIZE, bar=True)
+                .run(BATCH_SIZE, notifier=True)
             )
 
             metrics = pipeline.get_variable('metrics')
@@ -1240,13 +1270,12 @@ class Pipeline:
         return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn,
                                                         components=components, batch_class=batch_class))
 
-    def _put_batches_into_queue(self, gen_batch, bar):
+    def _put_batches_into_queue(self, gen_batch, notifier):
         while not self._stop_flag:
             self._prefetch_count.put(1, block=True)
             try:
                 batch = next(gen_batch)
-                if bar:
-                    bar.update(pipeline=self, batch=batch)
+                notifier.update(pipeline=self, batch=batch)
             except StopIteration:
                 break
             else:
@@ -1426,9 +1455,10 @@ class Pipeline:
 
             See :meth:`DatasetIndex.gen_batch` for details.
 
-        bar : bool, 'n' or callable
-            Whether to show a progress bar.
-            If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
+        notifier : str, dict, or instance of `.Notifier`
+            Configuration of displayed progress bar, if any.
+            If str or dict, then parameters of `.Notifier` initialization.
+            For more details about notifying capabilities, refer to `.Notifier` documentation.
 
         prefetch : int
             a number of batches to process in advance (default=0)
@@ -1479,8 +1509,7 @@ class Pipeline:
         target = kwargs.pop('target', 'threads')
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
-        bar = kwargs.pop('bar', None)
-        total = kwargs.pop('total', None)
+        notifier = kwargs.pop('notifier', kwargs.pop('bar', None))
 
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
             batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
@@ -1497,12 +1526,13 @@ class Pipeline:
         n_epochs = kwargs.get('n_epochs')
         drop_last = kwargs.get('drop_last')
 
-        if bar:
-            if not isinstance(bar, Notifier):
-                bar = Notifier(bar)
-            bar.update_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                             drop_last=drop_last, length=len(self._dataset.index))
-
+        if not isinstance(notifier, Notifier):
+            notifier = Notifier(**(notifier if isinstance(notifier, dict) else {'bar': notifier}),
+                                total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                drop_last=drop_last, length=len(self._dataset.index))
+        else:
+            notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                  drop_last=drop_last, length=len(self._dataset.index))
 
         if self.before:
             self.before.run()
@@ -1523,7 +1553,7 @@ class Pipeline:
             self._prefetch_queue = q.Queue(maxsize=prefetch)
             self._batch_queue = q.Queue(maxsize=1)
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
-            self._service_executor.submit(self._put_batches_into_queue, batch_generator, bar)
+            self._service_executor.submit(self._put_batches_into_queue, batch_generator, notifier)
             self._service_executor.submit(self._run_batches_from_queue)
 
             while not self._stop_flag:
@@ -1542,8 +1572,7 @@ class Pipeline:
             for batch in batch_generator:
                 try:
                     batch_res = self.execute_for(batch)
-                    if bar:
-                        bar.update(pipeline=self, batch=batch)
+                    notifier.update(pipeline=self, batch=batch)
                 except SkipBatchException:
                     pass
                 else:
@@ -1555,8 +1584,8 @@ class Pipeline:
                 warnings.warn("Batch generator is empty. Use pipeline.reset('iter') to restart iteration.",
                               EmptyBatchSequence, stacklevel=3)
 
-        if bar:
-            bar.close()
+        notifier.close()
+        self.notifier = notifier
 
         if self.after:
             self.after.run()

@@ -82,7 +82,7 @@ class Combine(nn.Module):
 
     op : str or callable
         If callable, then operation to be applied to the list of inputs.
-        If 'concat', 'cat', '.', then inputs are concated along channels axis.
+        If 'concat', 'cat', '|', then inputs are concated along channels axis.
         If 'sum', '+', then inputs are summed.
         If 'mul', '*', then inputs are multiplied.
         If 'avg', then inputs are averaged.
@@ -141,7 +141,7 @@ class Combine(nn.Module):
         return Combine.sum([weighted, skip])
 
     OPS = {
-        concat: ['concat', 'cat', '.'],
+        concat: ['concat', 'cat', '|'],
         sum: ['sum', 'plus', '+'],
         mul: ['multi', 'mul', '*'],
         mean: ['average', 'avg', 'mean'],
@@ -244,11 +244,12 @@ class Interpolate(nn.Module):
         if mode in self.MODES:
             mode = self.MODES[mode]
         self.mode = mode
+        self.align_corners = True if self.mode in ['linear', 'bilinear', 'bicubic', 'trilinear'] else None
         self.kwargs = kwargs
 
     def forward(self, x):
         return F.interpolate(x, mode=self.mode, size=self.shape, scale_factor=self.scale_factor,
-                             align_corners=True, **self.kwargs)
+                             align_corners=self.align_corners, **self.kwargs)
 
     def extra_repr(self):
         if self.scale_factor is not None:
