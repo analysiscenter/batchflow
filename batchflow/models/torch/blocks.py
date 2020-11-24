@@ -210,12 +210,12 @@ class MBConvBlock(ConvBlock):
                 block_params['layout'] += 'R'
 
             if expand_ratio != 1:
-                block_params['layout'] += layout
+                block_params['layout'] += 'cna'
                 block_params['filters'].append(inner_filters)
                 block_params['kernel_size'].append(1)
                 block_params['strides'].append(1)
 
-            block_params['layout'] += 'wna'
+            block_params['layout'] += layout
             block_params['filters'].append(inner_filters)
             block_params['kernel_size'].append(kernel_size)
             block_params['strides'].append(strides)
