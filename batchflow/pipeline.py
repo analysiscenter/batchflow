@@ -1510,6 +1510,7 @@ class Pipeline:
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
         notifier = kwargs.pop('notifier', kwargs.pop('bar', None))
+        total = kwargs.pop('total', None)
 
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
             batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
@@ -1528,9 +1529,9 @@ class Pipeline:
 
         if not isinstance(notifier, Notifier):
             notifier = Notifier(**(notifier if isinstance(notifier, dict) else {'bar': notifier}),
-                                total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                 drop_last=drop_last, length=len(self._dataset.index))
-        else:
+        elif notifier.total is None:
             notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                   drop_last=drop_last, length=len(self._dataset.index))
 
@@ -1572,7 +1573,7 @@ class Pipeline:
             for batch in batch_generator:
                 try:
                     batch_res = self.execute_for(batch)
-                    notifier.update(pipeline=self, batch=batch)
+                    notifier.update(pipeline=self, batch=batch_res)
                 except SkipBatchException:
                     pass
                 else:
