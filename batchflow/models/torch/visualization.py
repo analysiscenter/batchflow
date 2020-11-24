@@ -12,15 +12,15 @@ import torch
 class VisualizationMixin:
     """ Collection of visualization (both textual and graphical) tools for a :class:`~.torch.TorchModel`. """
     # Textual visualization of the model
-    def information(self, config=True, devices=True, train_steps=True, model=False, misc=False):
+    def information(self, config=True, devices=True, model=False, misc=True):
         """ Show information about model configuration, used devices, train steps and more. """
-        print(self._information(config=config, devices=devices, train_steps=train_steps, model=model, misc=misc))
+        print(self._information(config=config, devices=devices, model=model, misc=misc))
 
     def info(self):
         """ Return the info message with default parameters. """
-        return self.information()
+        return self._information()
 
-    def _information(self, config=True, devices=True, train_steps=True, model=False, misc=False):
+    def _information(self, config=True, devices=True, model=False, misc=True):
         """ Create information string. """
         message = ''
         template = '\n##### {}:\n'
@@ -34,10 +34,6 @@ class VisualizationMixin:
             message += f'Leading device is {self.device}\n'
             if self.devices:
                 message += '\n'.join([f'Device {i} is {d}' for i, d in enumerate(self.devices)])
-
-        if train_steps:
-            message += template.format('Train steps')
-            message += pformat(self.train_steps) + '\n'
 
         if model:
             message += template.format('Model')
@@ -57,16 +53,10 @@ class VisualizationMixin:
                 num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
                 message += f'\nTotal number of parameters in model: {num_params}'
 
-            iters = {key: value.get('iter', 0) for key, value in self.train_steps.items()}
-            message += f'\nTotal number of passed training iterations: {sum(list(iters.values()))}\n'
-            if len(iters) > 1:
-                message += 'Number of training iterations for individual train steps:'
-                message += pformat(iters) + '\n'
+            message += f'\nTotal number of passed training iterations: {self.iteration}\n'
 
             message += template.format('Last iteration params')
-            iter_info = {**self.iter_info}
-            iter_info.pop('lr') #TODO : make a separate container for LR
-            message += pformat(iter_info)
+            message += pformat(self.iter_info)
         return message
 
     def short_repr(self):
@@ -106,7 +96,7 @@ class VisualizationMixin:
     def show_lr(self):
         """ Plot graph of learning rate over iterations. """
         plt.figure(figsize=(8, 6))
-        plt.plot(self.iter_info['lr'])
+        plt.plot(self.lr_list)
 
         plt.title('Learning rate', fontsize=18)
         plt.xlabel('Iterations', fontsize=12)
