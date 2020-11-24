@@ -1270,12 +1270,11 @@ class Pipeline:
         return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn,
                                                         components=components, batch_class=batch_class))
 
-    def _put_batches_into_queue(self, gen_batch, notifier):
+    def _put_batches_into_queue(self, gen_batch):
         while not self._stop_flag:
             self._prefetch_count.put(1, block=True)
             try:
                 batch = next(gen_batch)
-                notifier.update(pipeline=self, batch=batch)
             except StopIteration:
                 break
             else:
@@ -1283,7 +1282,7 @@ class Pipeline:
                 self._prefetch_queue.put(future, block=True)
         self._prefetch_queue.put(None, block=True)
 
-    def _run_batches_from_queue(self):
+    def _run_batches_from_queue(self, notifier):
         skip_batch = False
         while not self._stop_flag:
             future = self._prefetch_queue.get(block=True)
@@ -1294,6 +1293,7 @@ class Pipeline:
 
             try:
                 batch = future.result()
+                notifier.update(pipeline=self, batch=batch)
             except SkipBatchException:
                 skip_batch = True
             except Exception:   # pylint: disable=broad-except
@@ -1553,8 +1553,8 @@ class Pipeline:
             self._prefetch_queue = q.Queue(maxsize=prefetch)
             self._batch_queue = q.Queue(maxsize=1)
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
-            self._service_executor.submit(self._put_batches_into_queue, batch_generator, notifier)
-            self._service_executor.submit(self._run_batches_from_queue)
+            self._service_executor.submit(self._put_batches_into_queue, batch_generator)
+            self._service_executor.submit(self._run_batches_from_queue, notifier)
 
             while not self._stop_flag:
                 batch_res = self._batch_queue.get(block=True)
