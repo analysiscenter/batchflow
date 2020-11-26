@@ -29,7 +29,7 @@ def eval_expr(expr, **kwargs):
         for val in expr:
             _expr.append(eval_expr(val, **kwargs))
         expr = type(expr)(_expr)
-    elif isinstance(expr, dict):
+    elif isinstance(expr, (dict, Config)):
         _expr = type(expr)()
         for key, val in expr.items():
             key = eval_expr(key, **kwargs)
@@ -48,8 +48,9 @@ def swap(op):
 
 AN_EXPR = "#!__op__"
 
-TRIPLE_OPS = {
-    '#slice': lambda a, b, c: slice(a, b, c)
+TERNARY_OPS = {
+    '#slice': lambda a, b, c: slice(a, b, c),
+    '#call': lambda a, b, c: a(*b, **c),
 }
 
 BINARY_OPS = {
@@ -65,8 +66,9 @@ BINARY_OPS = {
     '__and__': operator.and_, '__or__': operator.or_, '__xor__': operator.xor,
     '__lt__': operator.lt, '__le__': operator.le, '__gt__': operator.gt, '__ge__': operator.ge,
     '__eq__': operator.eq, '__ne__': operator.ne,
-    '#item': lambda a, b: a[b], '#format': lambda a, b: b.format(a),
-    '#attr': lambda a, b: getattr(a, b), '#call': lambda a, b: a(*b[0], **b[1]),
+    '#item': lambda a, b: a[b],
+    '#format': lambda a, b: b.format(a),
+    '#attr': lambda a, b: getattr(a, b),
 }
 
 UNARY_OPS = {
@@ -75,7 +77,7 @@ UNARY_OPS = {
 }
 
 
-OPERATIONS = {**TRIPLE_OPS, **BINARY_OPS, **UNARY_OPS}
+OPERATIONS = {**TERNARY_OPS, **BINARY_OPS, **UNARY_OPS}
 
 
 def add_ops(cls):
@@ -133,7 +135,6 @@ class NamedExpression(metaclass=MetaNamedExpression):
         self.name = name
         self.mode = mode
         self.params = None
-        self._call = False
 
     def __getattr__(self, name):
         return AlgebraicNamedExpression(op='#attr', a=self, b=name)
@@ -144,9 +145,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
         return AlgebraicNamedExpression(op='#item', a=self, b=key)
 
     def __call__(self, *args, **kwargs):
-        if isinstance(self, F):
-            self._call = False
-        return AlgebraicNamedExpression(op='#call', a=self, b=(args, kwargs))
+        return AlgebraicNamedExpression(op='#call', a=self, b=args, c=kwargs)
 
     def str(self):
         """ Convert a named expression value to a string """
@@ -300,7 +299,11 @@ class AlgebraicNamedExpression(NamedExpression):
 
     def get(self, **kwargs):
         """ Return a value of an algebraic expression """
-        a = eval_expr(self.a, **kwargs)
+        if self.op == "#call" and isinstance(self.a, F):
+            # Do not call F-func, just return a reference to it
+            a = eval_expr(self.a, **kwargs, _call=False)
+        else:
+            a = eval_expr(self.a, **kwargs)
         b = eval_expr(self.b, **kwargs)
         c = eval_expr(self.c, **kwargs)
         if self.op in UNARY_OPS:
@@ -515,38 +518,40 @@ class F(NamedExpression):
     Take into account that the actual calls will look like `current_batch.rotate(angle=30)`,
     `make_data(current_batch)` and `prepare_data(current_batch, 115, item=10)`.
     """
-    def __init__(self, name, mode='w', _pass=True):
-        super().__init__(name, mode)
-        self._pass = _pass
-        self._call = True
+    def get(self, _pass=True, _call=True, **kwargs):
+        """ Return a value from a callable
+        _pass : bool
+            Whether to pass the current batch to the function
 
-    def get(self, **kwargs):
-        """ Return a value from a callable """
+        _call : bool
+            Whether to call name-function while evaluating the expression.
+            Sometimes we might not want calling the func, e.g. when evaluating an F-expr within a call-expression
+            F(func)(1, arg2=10), since we want to evaluate the whole expression.
+        """
         name, kwargs = self._get(**kwargs)
 
-        args = []
-        if self._pass:
+        if _pass:
             batch = kwargs['batch']
             pipeline = batch.pipeline
 
             if isinstance(batch, _DummyBatch):
-                args += [pipeline]
+                args = [pipeline]
             else:
-                args += [batch]
+                args = [batch]
             name = partial(name, *args)
-        return name() if self._call else name
+        return name() if _call else name
 
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """
         _ = args, kwargs
-        raise NotImplementedError("Assigning a value with a callable is not supported")
+        raise NotImplementedError("Assigning a value to a callable is not supported")
 
 
 class L(F):
     """ A function, method or any other callable """
-    def __init__(self, name, mode='w'):
-        super().__init__(name, mode=mode, _pass=False)
-
+    def get(self, **kwargs):
+        """ Return a value from a callable """
+        return super().get(**kwargs, _pass=False)
 
 class D(NamedExpression):
     """ Dataset attribute or dataset itself

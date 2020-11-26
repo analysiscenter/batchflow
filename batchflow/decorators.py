@@ -289,8 +289,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
-        @asyncio.coroutine
-        def wait_for_all(futures, loop):
+        async def wait_for_all(futures, loop):
             """ Wait for all futures to complete """
             return asyncio.gather(*futures, loop=loop, return_exceptions=True)
 
