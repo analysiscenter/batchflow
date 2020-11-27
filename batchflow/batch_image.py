@@ -7,11 +7,11 @@ import numpy as np
 try:
     from skimage.transform import resize # pylint: disable=unused-import
 except ImportError:
-    pass
+    resize = None
 try:
-    import scipy.ndimage
+    from scipy import ndimage
 except ImportError:
-    pass
+    ndimage = None
 
 import PIL
 import PIL.ImageOps
@@ -210,9 +210,11 @@ class BaseImagesBatch(Batch):
         return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
 
 
-@add_methods(transformations={**get_scipy_transforms(),
-                              'pad': np.pad,
-                              'resize': resize}, prefix='_sp_', suffix='_')
+transformations = {'pad': np.pad}
+if resize: transformations.update({'resize': resize})
+if ndimage: transformations.update(get_scipy_transforms())
+
+@add_methods(transformations, prefix='_sp_', suffix='_')
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 
