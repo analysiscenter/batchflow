@@ -45,15 +45,22 @@ jobs:
       with:
         args: '{\"channel\": \"#commits\", \"attachments\": [{\"color\": \"danger\", \"text\": \"<${{ github.event.commits[0].url }}|${{ github.repository }}: *${{ github.event.commits[0].message }}*> by ${{ github.event.commits[0].author.name }}\n<${{ github.event.commits[0].url }}/checks|Workflow ${{ github.workflow }}>: `${{ job.status }}`\"}]}'
 
+  
   test_requirements:
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.6, 3.7]
 
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/setup-python@v1
+
+    - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
+      uses: actions/setup-python@v1
       with:
-        python-version: '3.6' 
+        python-version: ${{ matrix.python-version }}
 
     - name: Install dependencies
       run: |
