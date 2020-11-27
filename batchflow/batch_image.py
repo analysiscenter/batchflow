@@ -33,7 +33,7 @@ def get_scipy_transforms():
     ref_counter = 1001
     hooks = ['input : ndarray', 'input : array_like']
 
-    for function_name in scipy.ndimage.__dict__['__all__']:
+    for function_name in ndimage.__dict__['__all__']:
         function = getattr(scipy.ndimage, function_name)
         doc = getattr(function, '__doc__')
         if doc is not None and (hooks[0] in doc or hooks[1] in doc):

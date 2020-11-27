@@ -4,7 +4,6 @@
 import pytest
 
 from batchflow import Config
-from batchflow.models.tf import TFModel
 
 
 
@@ -15,6 +14,7 @@ LOCATIONS = set(['initial_block', 'body', 'block', 'head'])
 @pytest.fixture()
 def single_config():
     """ Fixture that returns the simplest config for single-input model. """
+    from batchflow.models.tf import TFModel
 
     class SingleModel(TFModel):
         model_args = Config()
@@ -66,6 +66,7 @@ def single_config():
 @pytest.fixture()
 def multi_config():
     """ Fixture that returns the simplest config for multi-input model. """
+    from batchflow.models.tf import TFModel
 
     class MultiModel(TFModel):
         model_args = Config()
