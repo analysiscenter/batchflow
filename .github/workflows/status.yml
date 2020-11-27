@@ -44,3 +44,28 @@ jobs:
       uses: pullreminders/slack-action@master
       with:
         args: '{\"channel\": \"#commits\", \"attachments\": [{\"color\": \"danger\", \"text\": \"<${{ github.event.commits[0].url }}|${{ github.repository }}: *${{ github.event.commits[0].message }}*> by ${{ github.event.commits[0].author.name }}\n<${{ github.event.commits[0].url }}/checks|Workflow ${{ github.workflow }}>: `${{ job.status }}`\"}]}'
+
+  test_requirements:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/setup-python@v1
+      with:
+        python-version: '3.6' 
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install pytest
+    
+    - name: Run 'import batchflow' in clean environemnt
+      run: python -c 'import batchflow' 
+
+    - name: Run basic tests
+      run: |
+        cd batchflow/tests
+        pytest --disable-pytest-warnings -v dataset_test.py \
+                                            filesindx_test.py \
+                                            datasetindex_test.py
