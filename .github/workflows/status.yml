@@ -62,12 +62,12 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install dependencies
+    - name: Install batchflow requirements
       run: |
         pip install -r requirements.txt
         pip install pytest
     
-    - name: Run 'import batchflow' in clean environemnt
+    - name: Run 'import batchflow' in installed environemnt
       run: python -c 'import batchflow' 
 
     - name: Run basic tests
