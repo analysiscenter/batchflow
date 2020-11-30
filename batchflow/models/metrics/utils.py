@@ -3,7 +3,7 @@ import numpy as np
 import numpy.ma as ma
 try:
     from scipy.ndimage import measurements
-except ImportError: 
+except ImportError:
     pass
 try:
     from numba import njit
