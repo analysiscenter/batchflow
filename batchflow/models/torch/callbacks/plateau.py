@@ -89,27 +89,12 @@ class ReduceLROnPlateau(PlateauCallback):
 
     Parameters
     ----------
-    mode : str
-        Mode of computing whether the loss has plateaued or not.
-        If `complex`, then we compare means of loss over the last `patience` / 2 iterations and the previous last.
-        If `pytorch` or `keras`, we compare the best (minimum) value over the last `patience`
-        iterations with the best value overall.
-        If `mean`, we compare the mean value over the last `patience` iterations with the best value overall.
-    patience : int
-        Length of analyzed interval. The bigger, the more stabilized loss should be to considered to be on plateau.
-    min_delta : float
-        If the difference between compared values (see `mode`) is smaller than this delta, then we consider
-        loss to be on plateau. The lower, the more stabilized loss should be considered to be on plateau.
-    cooldown : int
-        Number of iterations to skip after performing `action`.
     factor : float
         Value to multiply learning rate on.
     min_lr : float
         Minimum value of the set learning rate.
-    stream : None, callable or str
-        If None, then no logging is performed.
-        If callable, then used to display message, for example, `print`.
-        If str, then must be path to file to write log to.
+    args : dict
+        The same args as in :class:`PlateauCallback`.
     """
     def __init__(self, mode='complex', patience=10, min_delta=0.001, cooldown=None,
                  factor=0.1, min_lr=0.0, stream=None):
@@ -131,23 +116,8 @@ class EarlyStopping(PlateauCallback):
 
     Parameters
     ----------
-    mode : str
-        Mode of computing whether the loss has plateaued or not.
-        If `complex`, then we compare means of loss over the last `patience` / 2 iterations and the previous last.
-        If `pytorch` or `keras`, we compare the best (minimum) value over the last `patience`
-        iterations with the best value overall.
-        If `mean`, we compare the mean value over the last `patience` iterations with the best value overall.
-    patience : int
-        Length of analyzed interval. The bigger, the more stabilized loss should be to considered to be on plateau.
-    min_delta : float
-        If the difference between compared values (see `mode`) is smaller than this delta, then we consider
-        loss to be on plateau. The lower, the more stabilized loss should be considered to be on plateau.
-    cooldown : int
-        Number of iterations to skip after performing `action`.
-    stream : None, callable or str
-        If None, then no logging is performed.
-        If callable, then used to display message, for example, `print`.
-        If str, then must be path to file to write log to.
+    args : dict
+        The same args as in :class:`PlateauCallback`.
     """
     def __init__(self, mode='complex', patience=10, min_delta=0.001, cooldown=None, stream=None):
         cooldown = cooldown or patience

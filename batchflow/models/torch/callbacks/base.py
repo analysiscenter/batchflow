@@ -80,9 +80,9 @@ class LogCallback(BaseCallback):
         self.shapes = shapes
         self.microbatch = microbatch
 
-        self.header = self.make_header()
+        header = self.make_header()
         super().__init__(stream=stream)
-        self.stream(self.header)
+        self.stream(header)
 
     def make_header(self):
         """ Create the log description. """

@@ -916,7 +916,8 @@ class TorchModel(BaseModel, VisualizationMixin):
             'actual_model_outputs_shape': get_shape(_targets),
         })
 
-        [callback.on_iter_end() for callback in self.callbacks]
+        for callback in self.callbacks:
+            callback.on_iter_end()
         return output
 
     def _train(self, *args, fetches=None, sync_frequency=True):
