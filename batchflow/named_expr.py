@@ -553,6 +553,7 @@ class L(F):
         """ Return a value from a callable """
         return super().get(**kwargs, _pass=False)
 
+
 class D(NamedExpression):
     """ Dataset attribute or dataset itself
 
@@ -615,10 +616,37 @@ class R(NamedExpression):
             self.random_state = np.random.RandomState(seed)
         self.args = args
         self.kwargs = kwargs
+
+        if not isinstance(size, (type(None), NamedExpression, int, tuple)):
+            raise TypeError('size is expected to be int or tuple of int or a named expression')
         self.size = size
 
-    def get(self, **kwargs):
-        """ Return a value of a random variable """
+    def get(self, size=None, **kwargs):
+        """ Return a value of a random variable
+
+        Parameters
+        ----------
+        size : int, tuple of int
+            Output shape. If the given shape is (m, n, k), then m * n * k samples are drawn
+            and returned as m x n x k array.
+            If size was also specified at instance creation, then output shape is extended from the beginning.
+            So `size` is treated like a batch size, while size specified at instantiation is an item size.
+
+        Examples
+        --------
+        ::
+
+            ne = R('normal', 0, 1, size=(10, 20)))
+            value = ne.get(batch)
+            # value.shape will be (10, 20)
+
+            value = ne.get(batch, size=30)
+            # value.shape will be (30, 10, 20)
+            # so size is treated like a batch size
+        """
+        if not isinstance(size, (type(None), int, tuple)):
+            raise TypeError('size is expected to be int or tuple of int')
+
         name, kwargs = self._get(**kwargs)
         args = self.args
 
@@ -631,9 +659,20 @@ class R(NamedExpression):
             raise TypeError('An expression should be an int, an iterable or a numpy distribution name')
 
         args = eval_expr(args, **kwargs)
-        if self.size is not None:
-            self.kwargs['size'] = self.size
-        kwargs = eval_expr(self.kwargs, **kwargs)
+
+        size, kwsize = eval_expr((self.size, size), **kwargs)
+        if kwsize is not None:
+            if size is None:
+                size = kwsize
+            else:
+                if isinstance(size, int):
+                    size = (size,)
+                if isinstance(kwsize, int):
+                    kwsize = (kwsize,)
+                size = kwsize + size
+
+        kwargs = {**self.kwargs, 'size': size}
+        kwargs = eval_expr(kwargs)
 
         return name(*args, **kwargs)
 
@@ -676,7 +715,7 @@ class W(NamedExpression):
 
 
 class P(W):
-    """ A wrapper for actions parallelized with @inbatch_parallel
+    """ A wrapper for values passed to actions parallelized with @inbatch_parallel
 
     Examples
     --------
@@ -716,22 +755,33 @@ class P(W):
         return self.name
 
     def get(self, *args, parallel=False, **kwargs):   # pylint:disable=arguments-differ
-        """ Return a wrapped named expression """
+        """ Calculate and return a value of the expression """
         _ = args
+
+        name, kwargs = self._get(**kwargs)
+        batch = kwargs['batch']
+
+        # it's called from the decorator, so values were pre-calculated, just return them
         if parallel:
-            name, kwargs = self._get(**kwargs)
-            batch = kwargs['batch']
-            if isinstance(name, R):
-                val = np.array([name.get(**kwargs) for _ in batch])
-            elif isinstance(name, NamedExpression):
-                val = name.get(**kwargs)
-            else:
-                val = name
-            if len(val) < len(batch):
-                raise ValueError('%s returns a value (len=%d) which does not fit the batch size (len=%d)'
-                                 % (self, len(val), len(batch)))
-            return val
-        return self
+            # However, we can still have some R-expressions, e.g. for probabilities
+            if isinstance(self.name, R):
+                return self.name.get(**kwargs, size=batch.size)
+            return self.name
+
+        # pre-calculate values to pass them into decorator which takes them one by one
+        if isinstance(name, R):
+            values = name.get(**kwargs, size=batch.size)
+        elif isinstance(name, NamedExpression):
+            values = name.get(**kwargs)
+        else:
+            values = name
+
+        if len(values) != len(batch):
+            raise ValueError('%s returns a value (len=%d) which does not fit the batch size (len=%d)'
+                                % (self, len(values), len(batch)))
+
+        # return P-expr to be recognized by the decorator
+        return P(values)
 
     def assign(self, value, **kwargs):
         """ Assign a value """

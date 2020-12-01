@@ -3,10 +3,15 @@ import sys
 from contextlib import ExitStack as does_not_raise
 
 import pytest
+import numpy as np
 
 sys.path.append('..')
-from batchflow import B, C, D, F, L, V, R, P, I, Dataset, Pipeline
+from batchflow import B, C, D, F, L, V, R, P, I, Dataset, Pipeline, Batch, apply_parallel, inbatch_parallel, action
 
+
+#--------------------
+#      COMMON
+#--------------------
 
 @pytest.mark.parametrize('named_expr', [
     C('option'),
@@ -15,7 +20,7 @@ from batchflow import B, C, D, F, L, V, R, P, I, Dataset, Pipeline
     D('size'),
     V('var'),
     R('normal', 0, 1),
-    P(R('normal', 0, 1)),
+    R('normal', 0, 1, size=B.size),
     F(lambda batch: 0),
     L(lambda: 0),
 ])
@@ -34,6 +39,81 @@ def test_general_get(named_expr):
     if failed:
         pytest.fail("Name does not exist")
 
+
+#--------------------
+#         P
+#--------------------
+BATCH_SIZE = 3
+
+class MyBatch(Batch):
+    components = 'images', 'masks'
+
+    @apply_parallel
+    def ap_test(self, item, param):
+        if isinstance(item, tuple):
+            return item[0] * param, item[1] * param
+        return item * param
+
+    @action
+    @inbatch_parallel('images')
+    def ip_test(self, item, param):
+        return item * param
+
+
+ARRAY_INIT = np.arange(BATCH_SIZE).reshape((-1, 1))
+
+P_NAMED_EXPRS = [
+    R('normal', 0, 1),
+    R('normal', 0, 1, size=2),
+    R('normal', C('mean'), C('std'), size=B.size//2),
+    V('var'),
+    C('option'),
+]
+
+@pytest.mark.parametrize('named_expr', P_NAMED_EXPRS)
+@pytest.mark.parametrize('src', [
+    'images',
+    ['images', 'masks'],
+    ('images', 'masks'),
+])
+def test_apply_parallel_p(named_expr, src):
+    """ Check if P() is evalauted properly """
+    pipeline = (Dataset(10, MyBatch).pipeline(dict(mean=0., std=1., option=ARRAY_INIT))
+        .add_namespace(np)
+        .init_variable('var', ARRAY_INIT)
+        .update(B.images, ARRAY_INIT)
+        .update(B.masks, ARRAY_INIT)
+        .ap_test(src=src, param=P(named_expr))
+        .run(BATCH_SIZE, lazy=True)
+    )
+
+    b = pipeline.next_batch()
+
+    if isinstance(src, str):
+        assert True
+    else:
+        assert (b.images == b.masks).all()
+
+
+@pytest.mark.parametrize('named_expr', P_NAMED_EXPRS)
+def test_inbatch_parallel_p(named_expr):
+    """ Check if P() is evalauted properly """
+    pipeline = (Dataset(10, MyBatch).pipeline(dict(mean=0., std=1., option=ARRAY_INIT))
+        .add_namespace(np)
+        .init_variable('var', ARRAY_INIT)
+        .update(B.images, ARRAY_INIT)
+        .update(B.masks, ARRAY_INIT)
+        .ip_test(param=P(named_expr))
+        .run(BATCH_SIZE, lazy=True)
+    )
+
+    _ = pipeline.next_batch()
+
+    assert True
+
+#--------------------
+#         I
+#--------------------
 NAMES = ['c', 'm', 'r'] * 4
 EXPECTATIONS = ([does_not_raise()] * 5 + [pytest.raises(ValueError)]) * 2
 LIMIT_NAME = ['n_epochs'] * 6 + ['n_iters'] * 6
@@ -44,7 +124,7 @@ RESULTS = [1, 5, .2, 1, None, -1, 1, 5, .2, 1, None, -1]
                          list(zip(NAMES, EXPECTATIONS, LIMIT_NAME, LIMIT_VALUE, RESULTS))
 )
 def test_i(name, expectation, limit_name, limit_value, result):
-    """Test checks for behaviour of I under different pipeline configurations.
+    """ Check for behaviour of I under different pipeline configurations.
 
     name
         Name of I, defines its output.
@@ -52,7 +132,7 @@ def test_i(name, expectation, limit_name, limit_value, result):
         Test is expected to raise an error when names requires calculaion of total iterations (e.g. for 'm')
         and this number is not defined in pipeline (limit_value is None).
     limit_name
-        n_epochs or n_iters
+        'n_epochs' or 'n_iters'
     limit_value
         Total numer of epochs or iteration to run.
     result
@@ -70,6 +150,11 @@ def test_i(name, expectation, limit_name, limit_value, result):
         _ = pipeline.next_batch()
 
     assert pipeline.get_variable('var') == result
+
+
+#--------------------
+#         D
+#--------------------
 
 SIZE = [30]
 N_SPLITS = [2, 3, 6, 5]

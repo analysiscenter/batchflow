@@ -106,7 +106,6 @@ def apply_parallel(*args, **kwargs):
         transformed.
         Note, that if no defaults redefined those from the nearest
         parent class will be used in :class:`batch.MethodsTransformingMeta`.
-
         """
     def mark(method):
         method.apply_kwargs = kwargs
@@ -125,7 +124,7 @@ def any_action_failed(results):
     return any(isinstance(res, Exception) for res in results)
 
 def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kwargs):
-    """ Decorator for parallel methods in :class:`~dataset.Batch` classes"""
+    """ Decorator for parallel methods in :class:`~batchflow.Batch` classes"""
     if target not in ['nogil', 'threads', 'mpc', 'async', 'for', 't', 'm', 'a', 'f']:
         raise ValueError("target should be one of 'threads', 'mpc', 'async', 'for'")
 
