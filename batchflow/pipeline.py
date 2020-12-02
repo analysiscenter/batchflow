@@ -19,7 +19,7 @@ from .base import Baseset
 from .config import Config
 from .batch import Batch
 from .decorators import deprecated
-from .exceptions import SkipBatchException, EmptyBatchSequence
+from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
 from .named_expr import NamedExpression, V, eval_expr
 from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
@@ -1277,7 +1277,7 @@ class Pipeline:
             try:
                 batch = next(gen_batch)
                 notifier.update(pipeline=self, batch=batch)
-            except StopIteration:
+            except (StopIteration, StopPipeline):
                 break
             else:
                 future = self._executor.submit(self.execute_for, batch, new_loop=True)
@@ -1402,7 +1402,7 @@ class Pipeline:
             while cur_len < _action['batch_size']:
                 try:
                     new_batch = pipeline.next_batch(*args, **kwargs)
-                except StopIteration:
+                except (StopIteration, StopPipeline):
                     break
                 else:
                     batches.append(new_batch)
@@ -1576,6 +1576,8 @@ class Pipeline:
                     notifier.update(pipeline=self, batch=batch)
                 except SkipBatchException:
                     pass
+                except StopPipeline:
+                    break
                 else:
                     is_empty = False
                     yield batch_res
