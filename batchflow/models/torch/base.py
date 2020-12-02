@@ -290,13 +290,16 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.device = None
         self.devices = []
 
-        # Train procedure
+        # Train procedure and ifrastructure
         self.loss = None
         self.optimizer = None
         self.decay = None
         self.decay_step = None
 
+        self.callbacks = []
+
         # Memory amortization: accumulate gradients to update weights later
+        self.sync_frequency = 1
         self.sync_counter = 0
         self.microbatch = None
 
@@ -310,6 +313,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.loss_list = []
 
         # Profile kernels used
+        self.profile = False
         self.profilers = []
         self.profile_info = None
         super().__init__(config)
@@ -322,10 +326,18 @@ class TorchModel(BaseModel, VisualizationMixin):
 
     def build(self):
         """ Build the model. """
+        # Create config from default and external one
         self.full_config = self.combine_configs()
         self._get_devices()
         self._get_placeholder_shapes()
         self.full_config = self.build_config()
+
+        # Store some of the config values
+        self.microbatch = self.full_config.get('microbatch', None)
+        self.sync_frequency = self.full_config.get('sync_frequency', 1)
+        self.profile = self.full_config.get('profile', False)
+
+        self.callbacks = [callback.set_model(self) for callback in self.full_config.get('callbacks', [])]
 
         # If the inputs are set in config with their shapes we can build right away
         if self.input_shapes:
@@ -813,20 +825,19 @@ class TorchModel(BaseModel, VisualizationMixin):
             model.train(B('images'), B('labels'), fetches='loss')
         """
         # Prepare inputs and targets: convert to Torch Tensors and transfer to device
-        config = self.full_config
         *inputs, targets = self._fill_input(*args, **{**(feed_dict or {}), **kwargs})
 
         # Parse arguments
         if sync_frequency is True:
-            sync_frequency = config['sync_frequency']
+            sync_frequency = self.sync_frequency
         elif sync_frequency is False or sync_frequency is None:
             sync_frequency = 1
 
         if microbatch:
             if microbatch is True:
-                microbatch = config.get('microbatch')
+                microbatch = self.microbatch
             else:
-                microbatch = microbatch or config.get('microbatch')
+                microbatch = microbatch or self.microbatch
 
         # Split data into microbatches, if needed
         if microbatch:
@@ -859,7 +870,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.model.train()
 
         # Set up the profiling, if needed
-        profile = profile or config.profile
+        profile = profile or self.profile
         if profile:
             profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
             profiler.__enter__()
@@ -904,6 +915,9 @@ class TorchModel(BaseModel, VisualizationMixin):
             'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
             'actual_model_outputs_shape': get_shape(_targets),
         })
+
+        for callback in self.callbacks:
+            callback.on_iter_end()
         return output
 
     def _train(self, *args, fetches=None, sync_frequency=True):

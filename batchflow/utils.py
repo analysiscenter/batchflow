@@ -4,7 +4,10 @@ import functools
 import itertools
 
 import numpy as np
-import pandas as pd
+try:
+    import pandas as pd
+except ImportError:
+    from . import _fake as pd
 from matplotlib import pyplot as plt
 from matplotlib import colors as mcolors
 

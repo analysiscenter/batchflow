@@ -7,12 +7,15 @@ import warnings
 import functools
 
 import dill
-import pandas as pd
 try:
     import blosc
 except ImportError:
     pass
 import numpy as np
+try:
+    import pandas as pd
+except ImportError:
+    from . import _fake as pd
 try:
     import feather
 except ImportError:
@@ -20,7 +23,7 @@ except ImportError:
 try:
     import dask.dataframe as dd
 except ImportError:
-    from ._fake import DataFrame as dd
+    from . import _fake as dd
 
 from .dsindex import DatasetIndex, FilesIndex
 # renaming apply_parallel decorator is needed as Batch.apply_parallel method is also in the same namespace
@@ -483,7 +486,7 @@ class Batch(metaclass=MethodsTransformingMeta):
             the source to get data from, can be:
             - None
             - str - a component name, e.g. 'images' or 'masks'
-            - tuple of str - several component names
+            - tuple or list of str - several component names
             - sequence - data as a numpy-array, data frame, etc
 
         dst : str or array
@@ -512,6 +515,8 @@ class Batch(metaclass=MethodsTransformingMeta):
             images = func(images)
             masks = func(masks)
 
+        However, named expressions will be evaluated only once before the first call.
+
         Whereas `apply_parallel(func, src=('images', 'masks'))` (i.e. when `src` takes a tuple of component names,
         not the list as in the previous example) passes both components data into `func` simultaneously::
 
@@ -519,7 +524,6 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         Examples
         --------
-
         ::
 
             apply_parallel(make_masks_fn, src='images', dst='masks')
@@ -530,13 +534,18 @@ class Batch(metaclass=MethodsTransformingMeta):
         """
         kwargs = {**self.apply_defaults, **kwargs}
 
-        src, dst = [kwargs.pop(name, None) for name in ('src', 'dst')]
+        if isinstance(p, float):
+            # calculate probabilities for each item
+            p = P(R('binomial', 1, p)).get(batch=self)
 
+        src = kwargs.pop('src', None)
+        dst = kwargs.pop('dst', None)
+
+        if isinstance(src, list) and not (dst is None or isinstance(dst, list) and len(src) == len(dst)):
+            raise ValueError("src and dst must have equal length")
         if isinstance(src, list) and (dst is None or isinstance(dst, list) and len(src) == len(dst)):
             if dst is None:
                 dst = src
-            if isinstance(p, float):
-                p = P(np.random.binomial(1, p, size=len(self)))
 
             for ones, oned in zip(src, dst):
                 kwargs['src'] = ones
@@ -551,10 +560,8 @@ class Batch(metaclass=MethodsTransformingMeta):
         else:
             init = src
 
-        if isinstance(p, float):
-            p = P(R('binomial', 1, p))
-
-        post, target = [kwargs.pop(name, None) for name in ('post', 'target')]
+        post = kwargs.pop('post', None)
+        target = kwargs.pop('target', None)
 
         parallel = inbatch_parallel(init=init, post=post, target=target, src=src, dst=dst)
         # unbind the method to pass self explicitly
