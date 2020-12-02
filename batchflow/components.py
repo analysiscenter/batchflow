@@ -2,7 +2,10 @@
 import copy as cp
 
 import numpy as np
-import pandas as pd
+try:
+    import pandas as pd
+except ImportError:
+    from . import _fake as pd
 
 from .utils import is_iterable
 
