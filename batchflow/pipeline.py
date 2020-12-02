@@ -1,4 +1,5 @@
 """ Contains pipeline class """
+# pylint:disable=undefined-variable
 import sys
 import time
 from functools import partial
