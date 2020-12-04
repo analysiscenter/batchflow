@@ -341,33 +341,65 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
     for i in range(n_items, nrows * ncols):
         fig.delaxes(ax[i])
 
-def save_data_to(what, where, **kwargs):
-    """ Store data to specified locations
+
+def save_data_to(data, dst, **kwargs):
+    """ Store data to a given destination
 
     Parameters
     ----------
-    what : value or a list of values
+    data : value or a list of values
 
-    where : NamedExpression, array or a list of them
+    dst : NamedExpression, array or a list of them
 
     kwargs
         arguments to be passed into a NamedExpression
     """
-    if not isinstance(where, (tuple, list)):
-        where = [where]
-        if isinstance(what, (tuple, list)):
-            what = [what]
-    if not isinstance(what, (tuple, list)):
-        what = [what]
+    if not isinstance(dst, (tuple, list)):
+        dst = [dst]
+        if isinstance(dst, (tuple, list)):
+            data = [data]
+    if not isinstance(data, (tuple, list)):
+        data = [data]
 
-    if len(where) != len(what):
+    if len(dst) != len(data):
         raise ValueError("The lengths of outputs and saving locations mismatch")
 
-    for i, var in enumerate(where):
-        item = what[i]
+    for i, var in enumerate(dst):
+        item = data[i]
         if isinstance(var, NamedExpression):
             var.set(item, **kwargs)
         elif isinstance(var, np.ndarray):
             var[:] = item
         else:
-            where[i] = item
+            dst[i] = item
+
+
+def read_data_from(src, **kwargs):
+    """ Read data from a given source
+
+    Parameters
+    ----------
+    src : NamedExpression, array or a list of them
+
+    kwargs
+        arguments to be passed into a NamedExpression
+    """
+    if not isinstance(src, (tuple, list)):
+        src_ = [src]
+        data = [None]
+    else:
+        src_ = src
+        data = [None] * len(src)
+
+    for i, var in enumerate(src_):
+        if isinstance(var, NamedExpression):
+            data[i] = var.get(**kwargs)
+        else:
+            data[i] = var
+
+    if isinstance(src, (tuple, list)):
+        data = type(src)(data)
+    else:
+        data = data[0]
+
+    return data
