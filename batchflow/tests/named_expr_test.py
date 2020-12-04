@@ -6,7 +6,7 @@ import pytest
 import numpy as np
 
 sys.path.append('..')
-from batchflow import B, C, D, F, L, V, R, P, I, Dataset, Pipeline, Batch, apply_parallel, inbatch_parallel, action
+from batchflow import B, C, D, L, V, R, P, I, Dataset, Pipeline, Batch, apply_parallel, inbatch_parallel, action
 
 
 #--------------------
@@ -21,7 +21,6 @@ from batchflow import B, C, D, F, L, V, R, P, I, Dataset, Pipeline, Batch, apply
     V('var'),
     R('normal', 0, 1),
     R('normal', 0, 1, size=B.size),
-    F(lambda batch: 0),
     L(lambda: 0),
 ])
 def test_general_get(named_expr):

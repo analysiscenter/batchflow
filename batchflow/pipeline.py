@@ -937,7 +937,7 @@ class Pipeline:
         - B('name') - a batch class attribute or component name
         - V('name') - a pipeline variable name
         - C('name') - a pipeline config option
-        - F(name) - a callable which takes (batch, model)
+        - L(name) - a callable
         - R('name') - a random value from a given distribution
 
         These expressions are substituted by their actual values.
@@ -991,7 +991,7 @@ class Pipeline:
         - B('name') - a batch class attribute or component name
         - V('name') - a pipeline variable name
         - C('name') - a pipeline config option
-        - F(name) - a callable which takes (batch, model)
+        - L(name) - a callable
         - R('name') - a random value from a distribution 'name'
 
         These expressions are substituted by their actual values.
