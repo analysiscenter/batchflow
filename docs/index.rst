@@ -137,7 +137,7 @@ BatchFlow has the following strict requirments:
 * tqdm
 * matplotlib
 
-Some BatchFlow modules also depends on other optional packages:
+Some BatchFlow modules also depend on other mandatory packages:
 
 * pandas and multiprocess for ``batchflow.research``
 * torch for ``batchflow.models.torch``
