@@ -13,7 +13,10 @@ from cProfile import Profile
 from pstats import Stats
 import queue as q
 import numpy as np
-import pandas as pd
+try:
+    import pandas as pd
+except ImportError:
+    from . import _fake as pd
 
 from .base import Baseset
 from .config import Config

@@ -11,7 +11,6 @@ from io import BytesIO
 import PIL
 import tqdm
 import numpy as np
-from sklearn.preprocessing import LabelEncoder
 
 from . import ImagesOpenset
 
@@ -68,7 +67,7 @@ class Imagenette(ImagesOpenset):
         def _gather_extracted(archive, files):
             images = np.array([_extract(archive, file) for file in files], dtype=object)
             labels = np.array([_image_class(file.name) for file in files])
-            labels_encoded = LabelEncoder().fit_transform(labels)
+            _, labels_encoded = np.unique(labels, return_inverse=True)
             return images, labels_encoded
 
         if path is None:

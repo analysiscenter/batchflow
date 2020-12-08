@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from .base import TorchModel
 from .utils import get_shape
-from .layers import ConvBlock, Upsample, Combine, Crop
+from .layers import ConvBlock, Upsample, Combine
 from .blocks import DefaultBlock
 from ..utils import unpack_args
 
