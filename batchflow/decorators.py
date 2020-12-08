@@ -382,9 +382,9 @@ def parallel(*args, use_self=None, **kwargs):
     return inbatch_parallel(*args, _use_self=use_self, **kwargs)
 
 
-def njit(nogil=True):
+def njit(nogil=True, parallel=True):  # pylint: disable=redefined-outer-name
     """ Fake njit decorator to use when numba is not installed """
-    _ = nogil
+    _, _ = nogil, parallel
     def njit_fake_decorator(method):
         """ Return a decorator """
         @functools.wraps(method)
