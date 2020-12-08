@@ -405,7 +405,7 @@ class C(PipelineNamedExpression):
     def assign(self, value, **kwargs):
         """ Assign a value to a pipeline config """
         name, pipeline, _ = self._get_params(**kwargs)
-        pipeline.cconfig[name] = value
+        pipeline.config[name] = value
 
 
 class V(PipelineNamedExpression):
@@ -503,16 +503,16 @@ class I(PipelineNamedExpression):
         raise NotImplementedError("Assigning a value to an iteration number is not supported")
 
 
-class L(NamedExpression):
+class F(NamedExpression):
     """ A function, method or any other callable that might take arguments
 
     Examples
     --------
     ::
 
-        L(MyBatch.rotate)(B(), angle=30)
-        L(make_data)
-        L(prepare_data)(batch=B(), item=10)
+        F(MyBatch.rotate)(B(), angle=30)
+        F(make_data)
+        F(prepare_data)(batch=B(), item=10)
 
     """
     def get(self, _call=True, **kwargs):

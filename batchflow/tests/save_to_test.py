@@ -16,7 +16,7 @@ class TestSaveTo:
 
         arr = np.zeros(3)
 
-        save_data_to(what=[1, 2, 3], where=arr)
+        save_data_to(data=[1, 2, 3], dst=arr)
 
         assert isinstance(arr, np.ndarray)
         assert (arr == [1, 2, 3]).all()
@@ -25,7 +25,7 @@ class TestSaveTo:
     def test_save_to_c(self):
         pipeline = Pipeline(config=Config(some=100))
 
-        save_data_to(what=200, where=C('value'), pipeline=pipeline)
+        save_data_to(data=200, dst=C('value'), pipeline=pipeline)
 
         assert pipeline.config['some'] == 100
         assert pipeline.config['value'] == 200
@@ -35,7 +35,7 @@ class TestSaveTo:
         arr = np.zeros(3)
         pipeline = Pipeline(config=Config(some=100))
 
-        save_data_to(what=[[1, 2, 3], 200], where=[arr, C('value')], pipeline=pipeline)
+        save_data_to(data=[[1, 2, 3], 200], dst=[arr, C('value')], pipeline=pipeline)
 
         assert (arr == [1, 2, 3]).all()
         assert pipeline.config['value'] == 200

@@ -14,7 +14,7 @@ There are several types of named expressions:
 * V('name') - a pipeline variable name
 * C('name') - a pipeline config option
 * D('name') - a dataset attribute
-* L(...) - a callable
+* F(...) - a callable
 * R(...) - a random value
 * W(...) - a wrapper for a named expression
 * P(...) - a wrapper for parallel actions
@@ -179,7 +179,7 @@ For instance, at each iteration dataset items can be rotated at a random angle w
         ...
 
 
-L - callable
+F - callable
 ============
 A function which might take arguments.
 
@@ -187,13 +187,13 @@ The callable can be a lambda function::
 
     pipeline
         .init_model('dynamic', MyModel, 'my_model', config={
-            'inputs/images/shape': L(lambda batch: batch.images.shape[1:])(B())}}
+            'inputs/images/shape': F(lambda image_shape: (-1,) + image_shape)(B.image_shape)}}
         })
 
 or a batch class method::
 
     pipeline
-        .train_model(model_name, make_data=L(MyBatch.pack_to_feed_dict)(B(), task='segmentation'))
+        .train_model(model_name, make_data=F(MyBatch.pack_to_feed_dict)(B(), task='segmentation'))
 
 or an arbitrary function::
 
@@ -204,24 +204,24 @@ or an arbitrary function::
 
     pipeline
         ...
-        .update_variable(var_name, L(get_boxes)(B(), C('image_shape')))
+        .update_variable(var_name, F(get_boxes)(B(), C('image_shape')))
         ...
 
 or any other Python callable.
 
 As static models are initialized before a pipeline is run (i.e. before any batch is created),
-all ``L``-functions specified in static ``init_model`` cannot get ``batch``::
+all ``F``-functions specified in static ``init_model`` cannot get ``batch``::
 
     pipeline
         .init_model('static', MyModel, 'my_model', config={
-            'inputs/images/shape': L(lambda image_shape: (-1,) + image_shape)(C.input_shape)}}
+            'inputs/images/shape': F(get_shape)(C.input_shape)}}
         })
 
 It can also be an arbitrary function with arbitrary arguments::
 
     pipeline
         ...
-        .init_variable('logfile', L(open)('file.log', 'w'))
+        .init_variable('logfile', F(open)('file.log', 'w'))
     ...
 
 
