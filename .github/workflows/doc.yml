@@ -1,6 +1,11 @@
 name: docs
 
 on:
+  workflow_run:
+    workflows: ["release"]
+    types:
+      - requested
+
   pull_request:
     types: [closed]
     branches:
@@ -34,7 +39,9 @@ jobs:
         git checkout --orphan gh-pages
         rm -rf *
         git fetch
-        git checkout origin/master -- batchflow docs
+        git reset
+        git clean -fdx
+        git checkout ${{ github.sha }} -- batchflow docs
         cd docs
         make html
 
