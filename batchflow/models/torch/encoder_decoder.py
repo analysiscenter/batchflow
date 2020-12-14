@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from .base import TorchModel
 from .utils import get_shape
-from .layers import ConvBlock, Upsample, Combine, Crop
+from .layers import ConvBlock, Upsample, Combine
 from .blocks import DefaultBlock
 from ..utils import unpack_args
 
@@ -146,7 +146,8 @@ class DecoderModule(nn.ModuleDict):
 
                 elif letter in ['c']:
                     if self.skip and (i < len(inputs) - 2):
-                        args = {**kwargs, **combine_args, **unpack_args(combine_args, i, num_stages)}
+                        args = {'factor': factor[i],
+                                **kwargs, **combine_args, **unpack_args(combine_args, i, num_stages)}
 
                         layer = Combine(inputs=[x, inputs[-i - 3]], **args)
                         x = layer([x, inputs[-i - 3]])
@@ -279,12 +280,6 @@ class Decoder(TorchModel):
         if layer is not None:
             inputs = layer(inputs)
             layers.append(layer)
-
-        if target_shape:
-            if get_shape(inputs) != target_shape:
-                layer = Crop(resize_to=target_shape)
-                inputs = layer(inputs)
-                layers.append(layer)
 
         if classes:
             if get_shape(inputs)[1] != classes:

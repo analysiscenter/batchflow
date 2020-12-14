@@ -106,7 +106,6 @@ def apply_parallel(*args, **kwargs):
         transformed.
         Note, that if no defaults redefined those from the nearest
         parent class will be used in :class:`batch.MethodsTransformingMeta`.
-
         """
     def mark(method):
         method.apply_kwargs = kwargs
@@ -125,7 +124,7 @@ def any_action_failed(results):
     return any(isinstance(res, Exception) for res in results)
 
 def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kwargs):
-    """ Decorator for parallel methods in :class:`~dataset.Batch` classes"""
+    """ Decorator for parallel methods in :class:`~batchflow.Batch` classes"""
     if target not in ['nogil', 'threads', 'mpc', 'async', 'for', 't', 'm', 'a', 'f']:
         raise ValueError("target should be one of 'threads', 'mpc', 'async', 'for'")
 
@@ -141,9 +140,9 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             if isinstance(init, str):
                 try:
                     init_fn = getattr(self, init)
-                except AttributeError:
+                except AttributeError as e:
                     raise ValueError("init should refer to a method or property of the class", type(self).__name__,
-                                     "returning the list of arguments")
+                                     "returning the list of arguments") from e
             elif callable(init):
                 init_fn = init
             else:
@@ -153,8 +152,8 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 if isinstance(post, str):
                     try:
                         post_fn = getattr(self, post)
-                    except AttributeError:
-                        raise ValueError("post should refer to a method of the class", type(self).__name__)
+                    except AttributeError as e:
+                        raise ValueError("post should refer to a method of the class", type(self).__name__) from e
                 elif callable(post):
                     post_fn = post
                 else:
@@ -289,8 +288,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
-        @asyncio.coroutine
-        def wait_for_all(futures, loop):
+        async def wait_for_all(futures, loop):
             """ Wait for all futures to complete """
             return asyncio.gather(*futures, loop=loop, return_exceptions=True)
 
@@ -384,9 +382,9 @@ def parallel(*args, use_self=None, **kwargs):
     return inbatch_parallel(*args, _use_self=use_self, **kwargs)
 
 
-def njit(nogil=True):
+def njit(nogil=True, parallel=True):  # pylint: disable=redefined-outer-name
     """ Fake njit decorator to use when numba is not installed """
-    _ = nogil
+    _, _ = nogil, parallel
     def njit_fake_decorator(method):
         """ Return a decorator """
         @functools.wraps(method)

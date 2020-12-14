@@ -15,7 +15,8 @@ from .pooling import MaxPooling
 
 @add_as_function
 class Dropblock(Layer):
-    """ Drop Block module.
+    """ Drop Block module
+    Used for `O` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------

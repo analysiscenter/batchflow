@@ -51,6 +51,7 @@ class VGG(TFModel):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
         config['common/conv/use_bias'] = False
         config['body/block'] = dict(layout='cna', pool_size=2, pool_strides=2)
@@ -61,6 +62,7 @@ class VGG(TFModel):
         return config
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super().build_config(names)
         if isinstance(config['head/units'], list):
             config['head/units'][-1] = self.num_classes('targets')
@@ -123,7 +125,8 @@ class VGG(TFModel):
         layout = kwargs.pop('layout') * (depth3 + depth1) + 'p' * downscale
         kernels = [3] * depth3 + [1] * depth1
         with tf.variable_scope(name):
-            x = conv_block(inputs, layout, filters, kernels, name='conv', **kwargs)
+            x = conv_block(inputs, layout=layout, filters=filters, kernel_size=kernels,
+                           name='conv', **kwargs)
             x = tf.identity(x, name='output')
         return x
 

@@ -1,16 +1,17 @@
 """ Contains helper functions """
-import sys
 import copy
-import math
 import functools
-import tqdm
+import itertools
 
 import numpy as np
-import pandas as pd
+try:
+    import pandas as pd
+except ImportError:
+    from . import _fake as pd
 from matplotlib import pyplot as plt
 from matplotlib import colors as mcolors
 
-from .named_expr import NamedExpression, eval_expr
+from .named_expr import NamedExpression
 
 
 def is_iterable(obj):
@@ -150,8 +151,13 @@ def show_research(df, layouts=None, titles=None, average_repetitions=False, log_
         If True, values will be logarithmised.
     rolling_window : int of sequence of ints, optional
         Size of rolling window.
-    color: sequence of matplotlib.colors, optional
-        Colors for plots would be randomly sampled from given set.
+    color: str or sequence of matplotlib.colors, optional
+        If str, should be a name of matplotlib colormap,
+        colors for plots will be selected from that colormap.
+        If sequence of colors, they will be used for plots,
+        if sequence length is less, than number of lines to plot,
+        colors will be repeated in cycle
+        If None (default), `mcolors.TABLEAU_COLORS` sequence is used
     kwargs:
         Additional named arguments directly passed to `plt.subplots`.
         With default parameters:
@@ -175,8 +181,12 @@ def show_research(df, layouts=None, titles=None, average_repetitions=False, log_
     if color is None:
         color = list(mcolors.TABLEAU_COLORS.keys())
     df_len = len(df['config'].unique())
-    replace = not len(color) > df_len
-    chosen_colors = np.random.choice(color, replace=replace, size=df_len)
+
+    if isinstance(color, str):
+        cmap = plt.get_cmap(color)
+        chosen_colors = [cmap(i/df_len) for i in range(df_len)]
+    else:
+        chosen_colors = list(itertools.islice(itertools.cycle(color), df_len))
 
     kwargs = {'figsize': (9 * len(layouts), 7), 'nrows': 1, 'ncols': len(layouts), **kwargs}
 
@@ -265,45 +275,6 @@ def print_results(df, layout, average_repetitions=False, sort_by=None, ascending
     return res_df
 
 
-def create_bar(bar, batch_size, n_iters, n_epochs, drop_last, length):
-    """ Create progress bar with desired number of total iterations."""
-    if n_iters is not None:
-        total = n_iters
-    elif n_epochs is None:
-        total = sys.maxsize
-    elif drop_last:
-        total = length // batch_size * n_epochs
-    else:
-        total = math.ceil(length * n_epochs / batch_size)
-
-    if callable(bar):
-        progressbar = bar(total=total)
-    elif bar == 'n':
-        progressbar = tqdm.tqdm_notebook(total=total)
-    else:
-        progressbar = tqdm.tqdm(total=total)
-    return progressbar
-
-
-def update_bar(bar, bar_desc, **kwargs):
-    """ Update bar with description and one step."""
-    current_iter = bar.n
-    if bar_desc:
-        if callable(bar_desc) and not isinstance(bar_desc, NamedExpression):
-            desc = bar_desc()
-
-        if current_iter == 0:
-            # During the first iteration we can't get items from empty containers (lists, dicts, etc)
-            try:
-                desc = eval_expr(bar_desc, **kwargs)
-                desc = str(desc)
-            except LookupError:
-                desc = None
-        else:
-            desc = eval_expr(bar_desc, **kwargs)
-            desc = str(desc)
-        bar.set_description(desc)
-    bar.update(1)
 
 def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_names=None, **kwargs):
     """ Plot images and optionally true labels as well as predicted class proba.

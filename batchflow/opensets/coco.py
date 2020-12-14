@@ -24,9 +24,6 @@ class BaseCOCO(ImagesOpenset):
     TRAIN_IMAGES_URL = 'http://images.cocodataset.org/zips/train2017.zip'
     TEST_IMAGES_URL = 'http://images.cocodataset.org/zips/val2017.zip'
 
-    def __init__(self, *args, preloaded=None, **kwargs):
-        super().__init__(*args, preloaded=preloaded, **kwargs)
-
     def _rgb_images_paths(self, path):
         """Find RGB images(avoid grayscale) in the folder and return their paths. """
         return  [filename for filename in glob(path + '/*') if Image.open(filename).mode == 'RGB']

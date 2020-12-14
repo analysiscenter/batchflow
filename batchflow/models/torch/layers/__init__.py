@@ -8,4 +8,4 @@ from .pooling import MaxPool, AvgPool, Pool, AdaptiveMaxPool, AdaptiveAvgPool, A
 from .resize import IncreaseDim, Reshape, Interpolate, PixelShuffle, SubPixelConv, \
 					Upsample, Combine, Crop
 from .attention import SelfAttention, SEBlock, SCSEBlock, SimpleSelfAttention, BAM, CBAM, FPA, SelectiveKernelConv
-from .modules import PyramidPooling, ASPP
+from .modules import PyramidPooling, ASPP, KSAC

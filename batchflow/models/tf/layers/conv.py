@@ -10,6 +10,7 @@ from .layer import Layer, add_as_function
 @add_as_function
 class Conv(Layer):
     """ Nd convolution layer. Just a wrapper around TensorFlow layers for corresponding dimensions.
+    Used for `c` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     See also
     --------
@@ -107,6 +108,7 @@ class Conv1DTransposeNn:
 @add_as_function
 class ConvTranspose(Layer):
     """ Transposed Nd convolution layer.
+    Used for `t` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -209,6 +211,7 @@ class DepthwiseConvND:
 @add_as_function
 class DepthwiseConv(Layer):
     """ Make Nd depthwise convolutions that act separately on channels.
+    Used for `w` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -251,6 +254,7 @@ class DepthwiseConv(Layer):
 @add_as_function
 class DepthwiseConvTranspose(Layer):
     """ Make Nd depthwise transpose convolutions that act separately on channels.
+    Used for `W` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -348,6 +352,7 @@ class SeparableConvND:
 class SeparableConv(Layer):
     """ Make Nd depthwise convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
+    Used for `C` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -399,6 +404,7 @@ class SeparableConv(Layer):
 class SeparableConvTranspose(Layer):
     """ Make Nd depthwise transpose convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
+    Used for `T` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------

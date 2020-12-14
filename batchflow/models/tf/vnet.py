@@ -54,6 +54,7 @@ class VNet(EncoderDecoder):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = super().default_config()
 
         config['initial_block'] += dict(layout='cna Rcna+', kernel_size=5, filters=16)

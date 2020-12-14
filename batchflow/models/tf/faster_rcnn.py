@@ -18,6 +18,7 @@ class FasterRCNN(TFModel):
 
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = TFModel.default_config()
 
         config['output']['prefix'] = ['reg', 'cls']
@@ -30,6 +31,7 @@ class FasterRCNN(TFModel):
         return config
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super().build_config(names)
         config['head']['image_shape'] = self.get_spatial_shape('images')
         config['head']['batch_size'] = config['batch_size']
@@ -42,6 +44,7 @@ class FasterRCNN(TFModel):
         return config
 
     def initial_block(self, inputs, base_network, name='initial_block', **kwargs):
+        """ Transform inputs.  See :meth: `~.TFModel.initial_block` """
         train_mode = tf.placeholder(tf.bool, shape=(), name='train_mode')
         self.store_to_attr('train_mode', train_mode)
 
@@ -49,6 +52,7 @@ class FasterRCNN(TFModel):
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
+        """ Base layers.  See :meth: `~.TFModel.body` """
         return conv_block(inputs, 'ca', filters=512, kernel_size=3, name=name, **kwargs)
 
     def create_anchors_tensors(self):
@@ -67,6 +71,7 @@ class FasterRCNN(TFModel):
 
 
     def head(self, inputs, image_shape, name='head', **kwargs):
+        """ The last network layers which produce predictions. See :meth: `~.TFModel.head` """
         _ = name
 
         if kwargs['data_format'] == 'channels_last':

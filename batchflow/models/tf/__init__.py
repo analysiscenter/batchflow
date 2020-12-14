@@ -1,4 +1,8 @@
-""" Contains tensorflow models and functions """
+""" Contains tensorflow models and functions.
+
+.. note::
+    This module requires TensorFlow package.
+ """
 import sys
 import tensorflow as tf_
 
@@ -22,13 +26,17 @@ sys.modules['tensorflow'] = SilentTF()
 
 
 from .base import TFModel
+from .utils import get_shape, get_num_dims, get_channels_axis, get_num_channels, \
+                   get_batch_size, get_spatial_dim, get_spatial_shape
 from .vgg import VGG, VGG16, VGG19, VGG7
 from .linknet import LinkNet
 from .unet import UNet, UNetPP
 from .vnet import VNet
 from .fcn import FCN, FCN32, FCN16, FCN8
 from .resnet import ResNet, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
-                    ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152
+                    ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152, \
+                    SEResNet18, SEResNet34, SEResNet50, SEResNet101, SEResNet152, \
+                    SEResNeXt18, SEResNeXt34, SEResNeXt50, SEResNeXt101, SEResNeXt152
 from .inception_v1 import Inception_v1
 from .inception_v3 import Inception_v3
 from .inception_v4 import Inception_v4

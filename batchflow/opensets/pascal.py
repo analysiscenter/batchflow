@@ -98,6 +98,7 @@ class PascalSegmentation(BasePascal):
         return os.path.join(dirname(self.SETS_PATH), 'SegmentationClass', name + '.png')
 
     def download(self, path):
+        """ Download a dataset from the source web-site """
         self.download_archive(path)
         with tarfile.open(self.localname, "r") as archive:
             train_ids = self._extract_ids(archive, 'train')
@@ -143,7 +144,8 @@ class PascalClassification(BasePascal):
         return labels
 
     def download(self, path):
-        self.download_archive()
+        """ Download a dataset from the source web-site """
+        self.download_archive(path)
         with tarfile.open(self.localname, "r") as archive:
             d = defaultdict(list)
             class_files = [os.path.join(self.SETS_PATH, self.task, name.replace(' ', '')) + '_trainval.txt'

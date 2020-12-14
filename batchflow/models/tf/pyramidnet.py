@@ -42,6 +42,7 @@ class PyramidNet(ResNet):
     """
     @classmethod
     def default_config(cls):
+        """ Define model defaults. See :meth: `~.TFModel.default_config` """
         config = ResNet.default_config()
         config['body/block/widening'] = 8
         config['body/block/zero_pad'] = True
@@ -49,9 +50,12 @@ class PyramidNet(ResNet):
 
     @classmethod
     def default_layout(cls, bottleneck, **kwargs):
+        """ Define conv block layout """
+        _ = kwargs
         return 'nc nac nac n' if bottleneck else 'nc nac n'
 
     def build_config(self, names=None):
+        """ Define model's architecture configuration. See :meth: `~.TFModel.build_config` """
         config = super(ResNet, self).build_config(names)
 
         if config.get('body/filters') is None:

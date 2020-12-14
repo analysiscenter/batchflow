@@ -127,6 +127,22 @@ Relative import is also possible::
     from .batchflow import Dataset
 
 
+Requirements
+-----------
+
+BatchFlow has the following strict requirments:
+
+* numpy
+* dill
+* tqdm
+* matplotlib
+
+Some BatchFlow modules also depend on other mandatory packages:
+
+* pandas and multiprocess for ``batchflow.research``
+* torch for ``batchflow.models.torch``
+* tensorflow ``for batchflow.models.tf``
+
 
 Citing BatchFlow
 ================
