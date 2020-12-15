@@ -6,10 +6,6 @@ from copy import copy
 import numpy as np
 import scipy.stats as ss
 
-# used when truncating a Sampler. If we cannot obtain a needed amount of points
-# from the region of interest, we throw a Warning or ValueError
-MAX_ITERS = 1e7
-
 # aliases for Numpy, Scipy-Stats, TensorFlow-samplers
 ALIASES = {
     'n': {'np': 'normal', 'ss': 'norm', 'tf': 'Normal'},
@@ -177,7 +173,7 @@ class Sampler():
         """
         return ApplySampler(self, transform)
 
-    def truncate(self, high=None, low=None, expr=None, prob=0.5, max_iters=MAX_ITERS, sample_anyways=False):
+    def truncate(self, high=None, low=None, expr=None, prob=0.5, max_iters=None, sample_anyways=False):
         """ Truncate a sampler. Resulting sampler produces points satisfying ``low <= pts <= high``.
         If ``expr`` is suplied, the condition is ``low <= expr(pts) <= high``.
 
@@ -198,7 +194,7 @@ class Sampler():
             can improve the performance of sampling-method of truncated sampler.
         max_iters : float, optional
             if the number of iterations needed for obtaining the sample exceeds this number,
-            either a warning or error is raised. By default is set to MAX_ITERS (global constant).
+            either a warning or error is raised. By default is set to 1e7 (constant of TruncateSampler-class).
         sample_anyways : bool, optional
             If set to True, when exceeding `self.max_iters` number of iterations the procedure throws a warning
             but continues. If set to False, the error is raised.
@@ -270,7 +266,11 @@ class ApplySampler(Sampler):
 class TruncateSampler(Sampler):
     """ Class for implementing `truncate` (truncation by a condition) operation on `Sampler`-instances.
     """
-    def __init__(self, sampler, high=None, low=None, expr=None, prob=0.5, max_iters=MAX_ITERS,
+    # Used when truncating a Sampler. If we cannot obtain a needed amount of points
+    # from the region of interest using this number of iterations, we throw a Warning or ValueError
+    max_iters = 1e7
+
+    def __init__(self, sampler, high=None, low=None, expr=None, prob=0.5, max_iters=None,
                  sample_anyways=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bases = [sampler]
@@ -279,7 +279,7 @@ class TruncateSampler(Sampler):
         self.expr = expr
         self.prob = prob
         self.sample_anyways = sample_anyways
-        self.max_iters = max_iters
+        self.max_iters = max_iters or self.max_iters
 
     def sample(self, size):
         """ Sampling method of a sampler subjugated to truncation. Check out the docstring of
@@ -317,7 +317,7 @@ class TruncateSampler(Sampler):
             if high is None and low is None:
                 cond &= expr(sample).all(axis=1)
 
-            # check if we reached MAX_ITERS-number of iterations
+            # check if we reached max_iters-number of iterations
             if ctr > self.max_iters:
                 if self.sample_anyways:
                     warnings.warn("Already took {} number of iteration to make a sample. Yet, `sample_anyways`"
