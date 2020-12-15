@@ -4,7 +4,10 @@
 import warnings
 from copy import copy
 import numpy as np
-import scipy.stats as ss
+try:
+    import scipy.stats as ss
+except ImportError:
+    pass
 
 # aliases for Numpy, Scipy-Stats, TensorFlow-samplers
 ALIASES = {

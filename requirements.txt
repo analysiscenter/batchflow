@@ -1,4 +1,4 @@
-numpy>=1.16.4
-pylint>=2.4.4
-nbconvert>=5.6.1
-notebook>=6.0.2
+numpy
+dill
+tqdm
+matplotlib

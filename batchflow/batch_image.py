@@ -4,9 +4,6 @@ import warnings
 from numbers import Number
 
 import numpy as np
-from skimage.transform import resize # pylint: disable=unused-import
-import scipy.ndimage
-
 import PIL
 import PIL.ImageOps
 import PIL.ImageChops
@@ -16,60 +13,6 @@ import PIL.ImageEnhance
 from .batch import Batch
 from .decorators import action, apply_parallel, inbatch_parallel
 from .dsindex import FilesIndex
-
-
-def get_scipy_transforms():
-    """ Returns ``dict`` {'function_name' : function} of functions from scipy.ndimage.
-
-    Function is included if it has 'input : ndarray' or 'input : array_like' in its docstring.
-    """
-    scipy_transformations = {}
-    ref_counter = 1001
-    hooks = ['input : ndarray', 'input : array_like']
-
-    for function_name in scipy.ndimage.__dict__['__all__']:
-        function = getattr(scipy.ndimage, function_name)
-        doc = getattr(function, '__doc__')
-        if doc is not None and (hooks[0] in doc or hooks[1] in doc):
-            # Re-enumerate references in docs and add missing links
-            for i in range(5):
-                ref = '[{}]'.format(i)
-
-                if ref in doc[doc.find('References'):]:
-                    place = doc.find('Parameters') - 6
-                    doc = '\n'.join([doc[:place],
-                                     '\n    See [{}]_ for more details.'.format(ref_counter),
-                                     doc[place:]])
-                if ref in doc:
-                    doc = doc.replace(ref, '[{}]'.format(ref_counter))
-                    ref_counter += 1
-            function.__doc__ = doc
-
-            scipy_transformations[function_name] = function
-    return scipy_transformations
-
-
-def add_methods(transformations=None, prefix='_', suffix='_'):
-    """ Bounds given functions to a decorated class
-
-    All bounded methods' names will be extended with ``prefix`` and ``suffix``.
-    For example, if ``transformations``={'method_name': method}, ``suffix``='_all' and ``prefix``='_'
-    then a decorated class will have '_method_name_all' method.
-
-    Parameters
-    ----------
-    transformations : dict
-        dict of the form {'method_name' : function_to_bound} -- functions to bound to a class
-    prefix : str
-    suffix : str
-    """
-    def _decorator(cls):
-        for func_name, func in transformations.items():
-            method_name = ''.join((prefix, func_name, suffix))
-            added_method = staticmethod(func)
-            setattr(cls, method_name, added_method)
-        return cls
-    return _decorator
 
 
 class BaseImagesBatch(Batch):
@@ -204,9 +147,6 @@ class BaseImagesBatch(Batch):
         return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
 
 
-@add_methods(transformations={**get_scipy_transforms(),
-                              'pad': np.pad,
-                              'resize': resize}, prefix='_sp_', suffix='_')
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 

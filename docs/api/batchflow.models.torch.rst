@@ -2,6 +2,8 @@
 batchflow.models.torch
 ======================
 
+.. automodule:: batchflow.models.torch
+
 .. toctree::
 
     batchflow.models.torch.models
