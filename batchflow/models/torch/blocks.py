@@ -298,3 +298,16 @@ class DenseBlock(ConvBlock):
     def forward(self, x):
         x = super().forward(x)
         return x if self.skip else x[:, self.input_num_channels:]
+
+
+class ResNeStBlock(ConvBlock):
+    def __init__(self, inputs=None, layout='Sac', filters=32, kernel_size=3, radix=2, cardinality=1,
+                 strides=1, downsample=False, attention='sac', op='+a', **kwargs):
+        if isinstance(filters, str):
+            filters = safe_eval(filters, get_num_channels(inputs))
+
+        layer_params = {'self_attention/radix': radix,
+                        'self_attention/cardinality': cardinality}
+        layout = 'R' + layout + op
+        super().__init__(layer_params, inputs=inputs, layout=layout, filters=filters, kernel_size=kernel_size, strides=strides,
+                         attention=attention, **kwargs)
