@@ -80,6 +80,11 @@ class SelfAttention(nn.Module):
         """ Feature Pyramid Attention. """
         return FPA(inputs=inputs, pyramid_kernel_size=pyramid_kernel_size, bottleneck=bottleneck, **kwargs)
 
+    @staticmethod
+    def sac(inputs, radix=2, cardinality=1, **kwargs):
+        """ Split-Attention Block. """
+        return SplitAttentionConv(inputs=inputs, radix=radix, cardinality=cardinality, **kwargs)
+
     ATTENTIONS = {
         squeeze_and_excitation: ['se', 'squeeze_and_excitation', 'SE', True],
         scse: ['scse', 'SCSE'],
@@ -88,6 +93,7 @@ class SelfAttention(nn.Module):
         cbam: ['cbam', 'CBAM'],
         fpa: ['fpa', 'FPA'],
         identity: ['identity', None, False],
+        sac: ['sac', 'SAC']
     }
     ATTENTIONS = {alias: getattr(method, '__func__') for method, aliases in ATTENTIONS.items() for alias in aliases}
 
@@ -547,3 +553,71 @@ class SelectiveKernelConv(nn.Module):
         layer_desc = ('{class}({in_filters}, {out_filters}, '
                       'kernel_sizes={kernel_sizes}, dilations={dilations})').format(**self.desc_kwargs)
         return layer_desc
+
+
+class SplitAttentionConv(nn.Module):
+    def __init__(self, inputs, kernels=3, radix=1, cardinality=1, downsample=1,
+                 strides=1, padding='same', **kwargs):
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        super().__init__()
+        self.radix = radix
+        self.cardinality = cardinality
+        num_channels = get_num_channels(inputs)
+        self.channels = num_channels * self.radix
+        self.inner_filters = self.channels // downsample
+
+        self.conv0 = ConvBlock(inputs=inputs, layout='cna', filters=self.channels, kernel_size=1,
+                              groups=self.cardinality*self.radix, strides=strides, padding=padding, **kwargs)
+        inputs = self.conv0(inputs)
+
+        self.conv1 = ConvBlock(inputs=inputs, layout='cna', filters=self.channels, kernel_size=kernels,
+                               groups=self.cardinality*self.radix, strides=strides, padding=padding, **kwargs)
+        inputs = self.conv1(inputs)
+
+        inputs = sum(torch.split(inputs, inputs.shape[1] // self.radix, dim=1))
+        inputs = torch.nn.functional.adaptive_avg_pool2d(inputs, 1)
+
+        self.fc1 = ConvBlock(inputs=inputs, layout='cna', filters=self.inner_filters, kernel_size=1,
+                             groups=self.cardinality, **kwargs)
+        inputs = self.fc1(inputs)
+
+        self.fc2 = ConvBlock(inputs=inputs, layout='cna', filters=self.channels, kernel_size=1,
+                             groups=self.cardinality, **kwargs)
+        self.rsoftmax = RadixSoftmax(radix, self.cardinality)
+
+    def forward(self, x):
+        x = self.conv0(x)
+        x = self.conv1(x)
+        batch, rchannel = x.shape[:2]
+        if self.radix > 1:
+            splitted = torch.split(x, int(rchannel//self.radix), dim=1)
+            gap = sum(splitted)
+        gap = torch.nn.functional.adaptive_avg_pool2d(gap, 1)
+        gap = self.fc1(gap)
+        att = self.fc2(gap)
+        att = self.rsoftmax(att).view(batch, -1, 1, 1)
+
+        if self.radix > 1:
+            attens = torch.split(att, rchannel//self.radix, dim=1)
+            result = sum([att*split for (att, split) in zip(attens, splitted)])
+        else:
+            result = att * x
+        return result.contiguous()
+
+
+class RadixSoftmax(nn.Module):
+    def __init__(self, radix, cardinality):
+        super(RadixSoftmax, self).__init__()
+        self.radix = radix
+        self.cardinality = cardinality
+
+    def forward(self, x):
+        batch = x.size(0)
+        if self.radix > 1:
+            x = x.view(batch, self.cardinality, self.radix, -1).transpose(1, 2)
+            x = torch.nn.functional.softmax(x, dim=1)
+            x = x.reshape(batch, -1)
+        else:
+            x = torch.sigmoid(x)
+        return x
+
