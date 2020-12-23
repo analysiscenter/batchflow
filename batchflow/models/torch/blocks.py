@@ -301,13 +301,28 @@ class DenseBlock(ConvBlock):
 
 
 class ResNeStBlock(ConvBlock):
-    def __init__(self, inputs=None, layout='Sac', filters=32, kernel_size=3, radix=2, cardinality=1,
-                 strides=1, downsample=False, attention='sac', op='+a', **kwargs):
+    """ !! """
+    def __init__(self, inputs=None, layout='S', filters='same', kernel_size=3, radix=2, cardinality=1,
+                 strides=1, reduction_factor=1, attention='sac', op='+a', n_reps=1, **kwargs):
         if isinstance(filters, str):
             filters = safe_eval(filters, get_num_channels(inputs))
 
-        layer_params = {'self_attention/radix': radix,
-                        'self_attention/cardinality': cardinality}
+        if get_num_channels(inputs) != filters:
+            # If main flow changes the number of filters, so must do the side branch.
+            # No activation, because it will be applied after summation with the main flow
+            branch_params = {'layout': 'cn', 'filters': filters,
+                             'kernel_size': 1, 'strides': strides}
+        else:
+            branch_params = {}
         layout = 'R' + layout + op
-        super().__init__(layer_params, inputs=inputs, layout=layout, filters=filters, kernel_size=kernel_size, strides=strides,
-                         attention=attention, **kwargs)
+
+        layer_params = [{'branch': branch_params,
+                         'branch/strides': strides}]
+
+        layer_params += [{}]*(n_reps-1)
+
+        self_attention = dict(radix=radix, cardinality=cardinality, kernel_size=kernel_size,
+                              filters=filters, strides=strides, reduction_factor=reduction_factor)
+
+        super().__init__(*layer_params, inputs=inputs, layout=layout, attention=attention, self_attention=self_attention,
+                         **kwargs)
