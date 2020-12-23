@@ -301,7 +301,41 @@ class DenseBlock(ConvBlock):
 
 
 class ResNeStBlock(ConvBlock):
-    """ !! """
+    """ ResNeSt Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is a
+    split attention block that might have different radix and cardinality values.
+
+    Parameters
+    ----------
+    inputs : torch.Tensor
+        Example of input tensor to this layer.
+    layout : str
+        A sequence of letters, each letter meaning individual operation.
+        See more in :class:`~.layers.conv_block.BaseConvBlock` documentation. Default is 'S'.
+    filters : int, str
+        If `str`, then number of filters is calculated by its evaluation. ``'S'`` and ``'same'`` stand for the
+        number of filters in the previous tensor. Note the `eval` usage under the hood.
+        If int, then number of filters in the output tensor. Default value is 'same'.
+    kernel_size : int, list of int
+        Convolution kernel size. Default is 3.
+    radix : int
+        The number of splits within a cardinal group. Default is 2.
+    cardinality : int
+        The number of feature-map groups. Given feature-map is splitted to groups with same size. Default is 1.
+    strides : int, list of int
+        Convolution stride. Default is 1.
+    reduction_factor : int
+        The number reflecting the size of the filter reduction in the inner layer. Default is 1.
+    attention : str
+        Name of self-attention module. For more info about possible operations,
+        check :class:`~.layers.SelfAttention`.
+    op : str or callable
+        Operation for combination shortcut and residual.
+        See more :class:`~.layers.Combine` documentation. Default is '+a'.
+    n_reps : int
+        Number of times to repeat the whole block. Default is 1.
+    kwargs : dict
+        Other named arguments for the :class:`~.layers.ConvBlock`.
+    """
     def __init__(self, inputs=None, layout='S', filters='same', kernel_size=3, radix=2, cardinality=1,
                  strides=1, reduction_factor=1, attention='sac', op='+a', n_reps=1, **kwargs):
         if isinstance(filters, str):
@@ -321,6 +355,7 @@ class ResNeStBlock(ConvBlock):
 
         layer_params += [{}]*(n_reps-1)
 
+        # All given parameters are going directly to attention module due to the lack of other operations in the block.
         self_attention = dict(radix=radix, cardinality=cardinality, kernel_size=kernel_size,
                               filters=filters, strides=strides, reduction_factor=reduction_factor)
 
