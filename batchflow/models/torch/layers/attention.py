@@ -561,7 +561,24 @@ class SelectiveKernelConv(nn.Module):
 
 
 class SplitAttentionConv(nn.Module):
-    """!!"""
+    """ Split Attention.
+
+    Hang Zhang et al. "`ResNeSt: Split-Attention Networks
+    <https://arxiv.org/abs/2004.08955>`_"
+
+    Parameters
+    ----------
+    kernel_size : int or list of int
+        Kernel size for convolution in cardinality groups.
+    radix : int
+        The number of splits within a cardinal group. Default is 2.
+    cardinality : int
+        The number of feature-map groups. Given feature-map is splitted to groups with same size. Default is 1.
+    reduction_factor : int
+        The number reflecting the size of the filter reduction in the inner layer. Default is 1.
+    kwargs : dict
+        Other named arguments for the :class:`~.layers.ConvBlock`.
+    """
     def __init__(self, inputs, filters, kernel_size=3, radix=1, cardinality=1, reduction_factor=1,
                  strides=1, padding='same', **kwargs):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
@@ -603,7 +620,7 @@ class SplitAttentionConv(nn.Module):
                              groups=self.cardinality, **kwargs)
         inputs = self.fc2(inputs)
 
-        self.rsoftmax = RadixSoftmax(radix, self.cardinality)
+        self.rsoftmax = RadixSoftmax(self.radix, self.cardinality)
         inputs = self.rsoftmax(inputs).view(batch, -1, 1, 1)
         if self.radix > 1:
             inputs = torch.split(inputs, rchannel//self.radix, dim=1)
