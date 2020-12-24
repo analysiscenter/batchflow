@@ -336,15 +336,18 @@ class ResNeStBlock(ConvBlock):
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`.
     """
-    def __init__(self, inputs=None, layout='S', filters='same', kernel_size=3, radix=2, cardinality=1,
-                 strides=1, reduction_factor=1, attention='sac', op='+a', n_reps=1, **kwargs):
+    def __init__(self, inputs=None, layout='cnScn', filters='same', kernel_size=3, radix=2, cardinality=1,
+                 strides=1, reduction_factor=1, external_mult=4, bottleneck_width=64, attention='sac', op='+a',
+                 n_reps=1, **kwargs):
         if isinstance(filters, str):
             filters = safe_eval(filters, get_num_channels(inputs))
 
-        if get_num_channels(inputs) != filters:
+        block_filters = int(filters * (bottleneck_width / 64.)) * cardinality
+
+        if get_num_channels(inputs) != (filters*external_mult):
             # If main flow changes the number of filters, so must do the side branch.
             # No activation, because it will be applied after summation with the main flow
-            branch_params = {'layout': 'cn', 'filters': filters,
+            branch_params = {'layout': 'cn', 'filters': filters * external_mult,
                              'kernel_size': 1, 'strides': strides}
         else:
             branch_params = {}
@@ -357,7 +360,9 @@ class ResNeStBlock(ConvBlock):
 
         # All given parameters are going directly to attention module due to the lack of other operations in the block.
         self_attention = dict(radix=radix, cardinality=cardinality, kernel_size=kernel_size,
-                              filters=filters, strides=strides, reduction_factor=reduction_factor)
+                              filters=block_filters, strides=strides, reduction_factor=reduction_factor,
+                              external_mult=external_mult)
 
-        super().__init__(*layer_params, inputs=inputs, layout=layout, attention=attention, self_attention=self_attention,
-                         **kwargs)
+        super().__init__(*layer_params, inputs=inputs, layout=layout, attention=attention,
+                        self_attention=self_attention, kernel_size=1,  strides=strides,
+                        filters=[block_filters, filters*external_mult], **kwargs)

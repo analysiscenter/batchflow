@@ -27,10 +27,11 @@ class RadixSoftmax(nn.Module):
     ----
     If `radix` is 1, common sigmoid is used.
     """
-    def __init__(self, radix, cardinality):
+    def __init__(self, radix, cardinality, add_dims=0):
         super(RadixSoftmax, self).__init__()
         self.radix = radix
         self.cardinality = cardinality
+        self.add_dims = add_dims
 
     def forward(self, x):
         batch = x.size(0)
@@ -40,4 +41,7 @@ class RadixSoftmax(nn.Module):
             x = x.reshape(batch, -1)
         else:
             x = torch.sigmoid(x)
+        if self.add_dims > 0:
+            ones = [1] * self.add_dims
+            return x.view(*x.shape, *ones)
         return x

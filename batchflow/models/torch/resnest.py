@@ -11,14 +11,15 @@ class ResNeSt(Encoder):
     def default_config(cls):
         config = super().default_config()
 
-        config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=1, bias=False, padding='same',
-                                        pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnacnacnap', filters=[32, 32, 64], kernel_size=3, bias=False, padding='same',
+                                        pool_size=3, pool_strides=2, strides=[2, 1, 1])
 
         config['body/encoder/num_stages'] = 4
         config['body/encoder/order'] = ['skip', 'block']
-        config['body/encoder/blocks'] += dict(base=ResNeStBlock, layout='S', attention='sac',
+        config['body/encoder/blocks'] += dict(base=ResNeStBlock, layout='cnScn', attention='sac',
                                               filters=[64, 128, 256, 512],
-                                              n_reps=[1, 1, 1, 1], radix=2, cardinality=1)
+                                              n_reps=[1, 1, 1, 1], radix=2, cardinality=1,
+                                              external_mult=4)
 
         config['head'] += dict(layout='Vdf', dropout_rate=.4)
 
