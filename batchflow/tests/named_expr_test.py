@@ -12,7 +12,6 @@ from batchflow import B, C, D, F, V, R, P, I, Dataset, Pipeline, Batch, apply_pa
 #--------------------
 #      COMMON
 #--------------------
-
 @pytest.mark.parametrize('named_expr', [
     C('option'),
     C('not defined', default=10),
@@ -22,6 +21,7 @@ from batchflow import B, C, D, F, V, R, P, I, Dataset, Pipeline, Batch, apply_pa
     R('normal', 0, 1),
     R('normal', 0, 1, size=B.size),
     F(lambda: 0),
+    F(lambda x: x)(0),
 ])
 def test_general_get(named_expr):
     pipeline = (Dataset(10).pipeline({'option': 0})

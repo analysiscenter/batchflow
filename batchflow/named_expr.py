@@ -194,6 +194,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
             name, kwargs = self._get_params(**kwargs)
         """
         raise NotImplementedError('Cannot get a value from an abstract named expression')
+
     def set(self, value, mode=None, eval=True, **kwargs):
         """ Set a value to a named expression
 
@@ -289,7 +290,10 @@ class AlgebraicNamedExpression(NamedExpression):
 
     def get(self, **kwargs):
         """ Return a value of an algebraic expression """
-        a = eval_expr(self.a, **kwargs)
+        if self.op == '#call':
+            a = eval_expr(self.a, _call=False, **kwargs)
+        else:
+            a = eval_expr(self.a, **kwargs)
         b = eval_expr(self.b, **kwargs)
         c = eval_expr(self.c, **kwargs)
         if self.op in UNARY_OPS:
@@ -450,6 +454,7 @@ class M(PipelineNamedExpression):
         _ = value, batch, pipeline
         raise ValueError('Assigning a value to a model is not possible.')
 
+
 class I(PipelineNamedExpression):
     """ Iteration counter
 
@@ -516,9 +521,17 @@ class F(NamedExpression):
 
     """
     def get(self, _call=True, **kwargs):
-        """ Return a value from a callable """
+        """ Return a value from a callable
+
+        Parameters
+        ----------
+        _call : bool
+            Whether to call name-function while evaluating the expression.
+            Sometimes we might not want calling the func, e.g. when evaluating an F-expr within a call-expression
+            F(func)(1, arg2=10), since we want to evaluate the whole expression.
+        """
         name, _ = self._get_params(**kwargs)
-        return name
+        return name() if _call else name
 
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """
