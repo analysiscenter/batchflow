@@ -579,31 +579,29 @@ class SplitAttentionConv(nn.Module):
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`.
     """
-    def __init__(self, inputs, filters, kernel_size=3, radix=1, cardinality=1, reduction_factor=1,
-                 strides=1, padding='same', **kwargs):
+    def __init__(self, inputs, filters, layout='cna', kernel_size=3, radix=1, cardinality=1, reduction_factor=1,
+                 external_mult=4, strides=1, padding='same', **kwargs):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
         self.radix = radix
         self.cardinality = cardinality
         self.channels = filters * self.radix
-        self.inner_filters = self.channels // reduction_factor
 
+        self.inner_filters = self.channels // reduction_factor
+        self.external_mult = external_mult
+        channel_dim = inputs.dim() - 2
         self.desc_kwargs = {
             'class': self.__class__.__name__,
             'in_filters': get_num_channels(inputs),
-            'out_filters': filters,
+            'out_filters': filters*external_mult,
             'radix': self.radix,
             'cardinality': self.cardinality,
             'reduction_factor': reduction_factor
         }
-
-        self.conv0 = ConvBlock(inputs=inputs, layout='cna', filters=self.channels, kernel_size=1,
-                              groups=self.cardinality*self.radix, strides=strides, padding=padding, **kwargs)
-        inputs = self.conv0(inputs)
-
-        self.conv1 = ConvBlock(inputs=inputs, layout='cna', filters=self.channels, kernel_size=kernel_size,
-                               groups=self.cardinality*self.radix, strides=strides, padding=padding, **kwargs)
-        inputs = self.conv1(inputs)
+        self.inner_radix_conv = ConvBlock(inputs=inputs, layout=layout, filters=self.channels, kernel_size=3,
+                                          groups=self.cardinality*self.radix, strides=strides, padding=padding,
+                                          **kwargs)
+        inputs = self.inner_radix_conv(inputs)
         x = inputs
 
         batch, rchannel = inputs.shape[:2]
@@ -611,39 +609,31 @@ class SplitAttentionConv(nn.Module):
             splitted = torch.split(inputs, rchannel//self.radix, dim=1)
             inputs = sum(splitted)
 
-        inputs = torch.nn.functional.adaptive_avg_pool2d(inputs, 1)
-        self.fc1 = ConvBlock(inputs=inputs, layout='cna', filters=self.inner_filters, kernel_size=1,
-                             groups=self.cardinality, **kwargs)
-        inputs = self.fc1(inputs)
+        inner_conv1d_layout = 'V>' + 'cnc'
+        self.avgpool_conv1d = ConvBlock(inputs=inputs, layout=inner_conv1d_layout,
+                                        filters=[self.inner_filters, self.channels],
+                                        kernel_size=1, groups=self.cardinality, dim=channel_dim,
+                                        bias=True, **kwargs)
+        inputs = self.avgpool_conv1d(inputs)
 
-        self.fc2 = ConvBlock(inputs=inputs, layout='cna', filters=self.channels, kernel_size=1,
-                             groups=self.cardinality, **kwargs)
-        inputs = self.fc2(inputs)
-
-        self.rsoftmax = RadixSoftmax(self.radix, self.cardinality)
-        inputs = self.rsoftmax(inputs).view(batch, -1, 1, 1)
+        self.rsoftmax = RadixSoftmax(self.radix, self.cardinality, add_dims=channel_dim)
+        inputs = self.rsoftmax(inputs)
         if self.radix > 1:
             inputs = torch.split(inputs, rchannel//self.radix, dim=1)
             inputs = sum([inp*split for (inp, split) in zip(inputs, splitted)])
         else:
             inputs = inputs * x
-        self.conv2 = ConvBlock(inputs=inputs, layout='cn', filters='same', kernel_size=1, strides=strides,
-                               padding=padding, **kwargs)
 
     def forward(self, x):
-        x = self.conv0(x)
-        x = self.conv1(x)
+        x = self.inner_radix_conv(x)
         batch, rchannel = x.shape[:2]
         if self.radix > 1:
             splitted = torch.split(x, rchannel//self.radix, dim=1)
-            gap = sum(splitted)
+            concatted = sum(splitted)
         else:
-            gap = x
-        gap = torch.nn.functional.adaptive_avg_pool2d(gap, 1)
-        gap = self.fc1(gap)
-        att = self.fc2(gap)
-        att = self.rsoftmax(att).view(batch, -1, 1, 1)
-
+            concatted = x
+        att = self.avgpool_conv1d(concatted)
+        att = self.rsoftmax(att)
         if self.radix > 1:
             attens = torch.split(att, rchannel//self.radix, dim=1)
             result = sum([att*split for (att, split) in zip(attens, splitted)])
