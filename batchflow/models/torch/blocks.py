@@ -302,7 +302,16 @@ class DenseBlock(ConvBlock):
 
 class ResNeStBlock(ConvBlock):
     """ ResNeSt Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is a
-    split attention block that might have different radix and cardinality values.
+    split attention block that might have different (`radix`) and (`cardinality`) values, also, the amount of filters
+    after block might be increasing by `external_mult` argument. Moreover, the block allows to reduce number of
+    filters inside the entire block via `bottleneck_width` or just inside attention part via `reduction_factor`.
+
+    The number of filters inside ResNeSt Attention calculates as following:
+    >>> filters = int(filters * (bottleneck_width / 64.)) * cardinality
+
+    The implementation was inspired by the authors' code (`<https://github.com/zhanghang1989/ResNeSt>`_), thus
+    the first 1x1 convolution is not split into groups, the first dance block does not contain activation,
+    and the second does not contain normalization. Constant 64 for `bottleneck_width` is also chosen by the authors.
 
     Parameters
     ----------
@@ -310,7 +319,7 @@ class ResNeStBlock(ConvBlock):
         Example of input tensor to this layer.
     layout : str
         A sequence of letters, each letter meaning individual operation.
-        See more in :class:`~.layers.conv_block.BaseConvBlock` documentation. Default is 'S'.
+        See more in :class:`~.layers.conv_block.BaseConvBlock` documentation. Default is 'cnScn'.
     filters : int, str
         If `str`, then number of filters is calculated by its evaluation. ``'S'`` and ``'same'`` stand for the
         number of filters in the previous tensor. Note the `eval` usage under the hood.
@@ -325,9 +334,11 @@ class ResNeStBlock(ConvBlock):
         Convolution stride. Default is 1.
     reduction_factor : int
         The number reflecting the size of the filter reduction in the inner layer. Default is 1.
+    bottleneck_width : int
+        The size of the reduction in the number of filters in the entire block. Default is 64.
     attention : str
         Name of self-attention module. For more info about possible operations,
-        check :class:`~.layers.SelfAttention`.
+        check :class:`~.layers.SelfAttention`. Default is `sac`.
     op : str or callable
         Operation for combination shortcut and residual.
         See more :class:`~.layers.Combine` documentation. Default is '+a'.

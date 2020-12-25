@@ -9,8 +9,7 @@ class RadixSoftmax(nn.Module):
     Hang Zhang et al. "`ResNeSt: Split-Attention Networks
     <https://arxiv.org/abs/2004.08955>`_"
 
-    Softmax for items grouped by `cardinality` in each group. Obtaining feature-map is reshaped to the
-    shape: (batch, `cardinality`, `radix`, -1) and softmax operation is taken by the first dimention.
+    Applying the softmax for feature map grouped by `radix` gropus.
 
     Parameters
     ----------
