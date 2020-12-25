@@ -45,7 +45,7 @@ class SelfAttention(nn.Module):
             Hanchao Li, Pengfei Xiong, Jie An, Lingxue Wang.
             Pyramid Attention Network for Semantic Segmentation <https://arxiv.org/abs/1805.10180>'_"
 
-            if `sac`, then split attention.
+            If `sac`, then split attention.
             Hang Zhang et al. "`ResNeSt: Split-Attention Networks
             <https://arxiv.org/abs/2004.08955>`_"
     """
@@ -566,6 +566,12 @@ class SplitAttentionConv(nn.Module):
     Hang Zhang et al. "`ResNeSt: Split-Attention Networks
     <https://arxiv.org/abs/2004.08955>`_"
 
+    Feature maps are passed into convolution with kernel_size=`kernel_size`with groups=`cardinality`*`radix`.
+    Then, the result is split into `cardinality` groups and summed up by groups. Attention part contains two dense b
+    locks with groups=`cardinality`. RadixSoftmax is adding to the output of the last dense block. RadixSoftmax getting
+    applying a softmax for feature maps grouped to `radix` groups. The last layer of the block is a 1x1 convolution
+    that increases feature map from `filters` to `filters`*`external_mult`.
+
     Parameters
     ----------
     kernel_size : int or list of int
@@ -576,6 +582,8 @@ class SplitAttentionConv(nn.Module):
         The number of feature-map groups. Given feature-map is splitted to groups with same size. Default is 1.
     reduction_factor : int
         The number reflecting the size of the filter reduction in the inner layer. Default is 1.
+    external_mult : int
+        Factor to increase the number of filters after ResNeSt block. Default 4.
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`.
     """
