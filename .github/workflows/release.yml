@@ -1,6 +1,9 @@
 name: release
 
 on:
+  push: # tmp option to make workflow re-run on every update in branch
+    branches:
+    - release_action
   release:
     types: [published]
 
