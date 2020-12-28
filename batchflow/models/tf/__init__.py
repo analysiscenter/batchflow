@@ -1,4 +1,8 @@
-""" Contains tensorflow models and functions """
+""" Contains tensorflow models and functions.
+
+.. note::
+    This module requires TensorFlow package.
+ """
 import sys
 import tensorflow as tf_
 

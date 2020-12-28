@@ -1,4 +1,5 @@
 """ Contains pipeline class """
+# pylint:disable=undefined-variable
 import sys
 import time
 from functools import partial
@@ -12,13 +13,16 @@ from cProfile import Profile
 from pstats import Stats
 import queue as q
 import numpy as np
-import pandas as pd
+try:
+    import pandas as pd
+except ImportError:
+    from . import _fake as pd
 
 from .base import Baseset
 from .config import Config
 from .batch import Batch
 from .decorators import deprecated
-from .exceptions import SkipBatchException, EmptyBatchSequence
+from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
 from .named_expr import NamedExpression, V, eval_expr
 from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
@@ -1401,7 +1405,7 @@ class Pipeline:
             while cur_len < _action['batch_size']:
                 try:
                     new_batch = pipeline.next_batch(*args, **kwargs)
-                except StopIteration:
+                except (StopIteration, StopPipeline):
                     break
                 else:
                     batches.append(new_batch)
@@ -1509,6 +1513,8 @@ class Pipeline:
         target = kwargs.pop('target', 'threads')
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
+        if 'bar' in kwargs:
+            warnings.warn('`bar` argument is deprecated and renamed to `notifier`', DeprecationWarning, stacklevel=2)
         notifier = kwargs.pop('notifier', kwargs.pop('bar', None))
         total = kwargs.pop('total', None)
 
@@ -1576,6 +1582,8 @@ class Pipeline:
                     notifier.update(pipeline=self, batch=batch_res)
                 except SkipBatchException:
                     pass
+                except StopPipeline:
+                    break
                 else:
                     is_empty = False
                     yield batch_res

@@ -2,6 +2,8 @@
 batchflow.models.tf
 ===================
 
+.. automodule:: batchflow.models.tf
+
 .. toctree::
 
     batchflow.models.tf.models

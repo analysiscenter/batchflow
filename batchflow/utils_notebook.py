@@ -2,10 +2,8 @@
 import os
 import re
 import json
-import requests
 
-# Additionally imports `ipykernel`, `notebook`, `nbconvert` and `pylint`, if needed
-
+# Additionally imports 'requests`, 'ipykernel`, `notebook`, `nbconvert` and `pylint`, if needed
 
 
 def in_notebook():
@@ -29,6 +27,7 @@ def get_notebook_path():
     if not in_notebook():
         return None
 
+    import requests
     import ipykernel
     from notebook.notebookapp import list_running_servers
 
