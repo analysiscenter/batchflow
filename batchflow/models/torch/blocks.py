@@ -304,14 +304,14 @@ class ResNeStBlock(ConvBlock):
     """ ResNeSt Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is a
     split attention block that might have different (`radix`) and (`cardinality`) values, also, the amount of filters
     after block might be increasing by `external_mult` argument. Moreover, the block allows to reduce number of
-    filters inside the entire block via `bottleneck_width` or just inside attention part via `reduction_factor`.
+    filters inside the entire block via `bottleneck_width` or just inside an attention part via `reduction_factor`.
 
     The number of filters inside ResNeSt Attention calculates as following:
     >>> filters = int(filters * (bottleneck_width / 64.)) * cardinality
 
     The implementation was inspired by the authors' code (`<https://github.com/zhanghang1989/ResNeSt>`_), thus
-    the first 1x1 convolution is not split into groups, the first dance block does not contain activation,
-    and the second does not contain normalization. Constant 64 for `bottleneck_width` is also chosen by the authors.
+    the first 1x1 convolution is not split into groups, the second fully connected block does not contain
+    normalization. Constant 64 for `bottleneck_width` is also chosen by the authors.
 
     Parameters
     ----------
@@ -347,7 +347,7 @@ class ResNeStBlock(ConvBlock):
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`.
     """
-    def __init__(self, inputs=None, layout='cnScn', filters='same', kernel_size=3, radix=2, cardinality=1,
+    def __init__(self, inputs=None, layout='cnaScn', filters='same', kernel_size=3, radix=2, cardinality=1,
                  strides=1, reduction_factor=1, external_mult=4, bottleneck_width=64, attention='sac', op='+a',
                  n_reps=1, **kwargs):
         if isinstance(filters, str):
