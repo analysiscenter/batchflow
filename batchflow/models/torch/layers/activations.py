@@ -9,7 +9,7 @@ class RadixSoftmax(nn.Module):
     Hang Zhang et al. "`ResNeSt: Split-Attention Networks
     <https://arxiv.org/abs/2004.08955>`_"
 
-    Applying the softmax for feature map grouped by `radix` gropus.
+    Applying the softmax for feature map grouped into `radix` gropus.
 
     Parameters
     ----------

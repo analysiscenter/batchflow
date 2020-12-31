@@ -566,11 +566,11 @@ class SplitAttentionConv(nn.Module):
     Hang Zhang et al. "`ResNeSt: Split-Attention Networks
     <https://arxiv.org/abs/2004.08955>`_"
 
-    Feature maps are passed into convolution with kernel_size=`kernel_size`with groups=`cardinality`*`radix`.
-    Then, the result is split into `cardinality` groups and summed up by groups. Attention part contains two dense b
-    locks with groups=`cardinality`. RadixSoftmax is adding to the output of the last dense block. RadixSoftmax getting
-    applying a softmax for feature maps grouped to `radix` groups. The last layer of the block is a 1x1 convolution
-    that increases feature map from `filters` to `filters`*`external_mult`.
+    Feature maps are passed into the convolution with kernel_size=`kernel_size` and groups=`cardinality`*`radix`.
+    Then, the result is split into `cardinality` groups and summed up by groups. Attention part contains two dense
+    blocks with groups=`cardinality`. RadixSoftmax is adding to the output of the last dense block. Is applying a
+    softmax for feature maps grouped into `radix` groups. The last layer of the block is a 1x1 convolution that
+    increases the feature map from `filters` to `filters`*`external_mult`.
 
     Parameters
     ----------
@@ -617,7 +617,7 @@ class SplitAttentionConv(nn.Module):
             splitted = torch.split(inputs, rchannel//self.radix, dim=1)
             inputs = sum(splitted)
 
-        inner_conv1d_layout = 'V>' + 'cnc'
+        inner_conv1d_layout = 'V>' + 'cnac'
         self.avgpool_conv1d = ConvBlock(inputs=inputs, layout=inner_conv1d_layout,
                                         filters=[self.inner_filters, self.channels],
                                         kernel_size=1, groups=self.cardinality, dim=channel_dim,
