@@ -567,10 +567,10 @@ class SplitAttentionConv(nn.Module):
     <https://arxiv.org/abs/2004.08955>`_"
 
     Feature maps are passed into the convolution with kernel_size=`kernel_size` and groups=`cardinality`*`radix`.
-    Then, the result is split into `cardinality` groups and summed up by groups. Attention part contains two dense
-    blocks with groups=`cardinality`. RadixSoftmax is adding to the output of the last dense block. Is applying a
-    softmax for feature maps grouped into `radix` groups. The last layer of the block is a 1x1 convolution that
-    increases the feature map from `filters` to `filters`*`external_mult`.
+    Then, the result is split into `cardinality` groups and summed up by groups. Then, an attention takes place.
+    It contains two dense blocks with groups=`cardinality`. RadixSoftmax is adding to the output of the last dense
+    block. Is applying a softmax for feature maps grouped into `radix` groups. The last layer of the block is a 1x1
+    convolution that increases the feature map from `filters` to `filters`*`external_mult`.
 
     Parameters
     ----------
