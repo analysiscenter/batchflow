@@ -17,6 +17,7 @@ class RadixSoftmax(nn.Module):
         The number of splits within a cardinal group. Default is 2.
     cardinality : int
         The number of feature-map groups. Given feature-map is splitted to groups with same size. Default is 1.
+
     Returns
     -------
     x : torch Tensor

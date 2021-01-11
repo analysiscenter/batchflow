@@ -302,9 +302,11 @@ class DenseBlock(ConvBlock):
 
 class ResNeStBlock(ConvBlock):
     """ ResNeSt Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is a
-    split attention block that might have different (`radix`) and (`cardinality`) values, also, the amount of filters
-    after block might be increasing by `external_mult` argument. Moreover, the block allows to reduce number of
-    filters inside the entire block via `bottleneck_width` or just inside an attention part via `reduction_factor`.
+    split attention block that might have different (`radix`) and (`cardinality`) values that aimed to control the
+    number of groups within a second convolution (`radix`*`cardinality`), an attention part (`radix`) and RadixSoftmax.
+    Also, the amount of filters after block might be increasing by `external_mult` argument. Moreover, the block allows
+    to reduce number of filters inside the entire block via `bottleneck_width` or just inside an attention part via
+    `reduction_factor`.
 
     The number of filters inside ResNeSt Attention calculates as following:
     >>> filters = int(filters * (bottleneck_width / 64.)) * cardinality
