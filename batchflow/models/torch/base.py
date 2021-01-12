@@ -13,6 +13,12 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
+try:
+    import cupy as cp
+    CUPY_AVAILABLE = True
+except ImportError:
+    CUPY_AVAILABLE = False
+
 from .visualization import VisualizationMixin
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
@@ -553,7 +559,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
     def _placeholder_data(self):
         data = [np.zeros(shape, dtype=np.float32) for shape in self.input_shapes]
-        data = self._fill_param(data)
+        data = self.transfer_to_device(data)
         return data
 
     def _make_block(self, name, method, config, inputs):
@@ -736,23 +742,8 @@ class TorchModel(BaseModel, VisualizationMixin):
 
 
     # Transfer data to/from device(s)
-    def _fill_value(self, value):
-        if value.dtype not in [np.float32, 'float32']:
-            value = value.astype(np.float32)
-
-        value = torch.from_numpy(value)
-        if self.device:
-            value = value.to(self.device)
-        return value
-
-    def _fill_param(self, inputs):
-        if isinstance(inputs, (tuple, list)):
-            inputs = [self._fill_value(item) for item in inputs]
-        else:
-            inputs = self._fill_value(inputs)
-        return inputs
-
-    def _fill_input(self, *args, **kwargs):
+    def parse_inputs(self, *args, **kwargs):
+        """ Convert arguments (either positional or keyword) into inputs and targets of a neural network. """
         if args and kwargs:
             raise ValueError('Use either positional or keyword arguments in `train` call.')
 
@@ -763,21 +754,47 @@ class TorchModel(BaseModel, VisualizationMixin):
 
             args = [kwargs.get(name) for name in (self.input_names or list(kwargs.keys()))]
             args.append(targets)
-        return tuple([self._fill_param(arg) for arg in args])
+        return args
 
-    def _fill_output(self, fetches, outputs):
+    def transfer_to_device(self, data):
+        """ Transfer (possibly nested) structure to device and return the same structure. """
+        if isinstance(data, (tuple, list)):
+            return [self.transfer_to_device(item) for item in data]
+
+        if isinstance(data, np.ndarray):
+            if data.dtype not in [np.float32, 'float32']:
+                data = data.astype(np.float32)
+            data = torch.from_numpy(data).to(self.device)
+            return data
+
+        if isinstance(data, torch.Tensor):
+            data = data.to(self.device)
+            return data
+
+        if CUPY_AVAILABLE and isinstance(data, cp.ndarray):
+            if data.device.id == self.device.index:
+                data = torch.utils.dlpack.from_dlpack(data.toDlpack())
+                return data
+            raise TypeError(f'cupy arrays should reside on the same GPU, as model itself: {self.device}.')
+
+        if data is None:
+            return None
+        raise TypeError('Passed data should either be a `np.ndarray`, `torch.Tensor` or `cupy.ndarray`. ')
+
+    def parse_output(self, fetches, outputs):
+        """ Retrieve tensors from device in the same structure, as `fetches`. """
         fetches = fetches if fetches is not None else []
         _fetches = [fetches] if isinstance(fetches, str) else fetches
 
         output = []
-        for f in _fetches:
-            if f in outputs:
-                v = outputs[f]
-                if isinstance(v, (torch.Tensor, torch.autograd.Variable)):
-                    v = v.detach().cpu().numpy()
-                output.append(v)
+        for name in _fetches:
+            if name in outputs:
+                value = outputs[name]
+                if isinstance(value, (torch.Tensor, torch.autograd.Variable)):
+                    value = value.detach().cpu().numpy()
+                output.append(value)
             else:
-                raise KeyError('Unknown value to fetch', f)
+                raise KeyError('Unknown value to fetch', name)
 
         output = output[0] if isinstance(fetches, str) else type(fetches)(output)
         return output
@@ -825,7 +842,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             model.train(B('images'), B('labels'), fetches='loss')
         """
         # Prepare inputs and targets: convert to Torch Tensors and transfer to device
-        *inputs, targets = self._fill_input(*args, **{**(feed_dict or {}), **kwargs})
+        *inputs, targets = self.parse_inputs(*args, **{**(feed_dict or {}), **kwargs})
 
         # Parse arguments
         if sync_frequency is True:
@@ -843,28 +860,28 @@ class TorchModel(BaseModel, VisualizationMixin):
         if microbatch:
             microbatch = 1 if microbatch is True else microbatch
             steps = len(targets) // microbatch
-            splitted_inputs = [[item[i:i + microbatch] for item in inputs] for i in range(0, len(targets), microbatch)]
-            splitted_targets = [targets[i:i + microbatch] for i in range(0, len(targets), microbatch)]
+            split_inputs = [[item[i:i + microbatch] for item in inputs] for i in range(0, len(targets), microbatch)]
+            split_targets = [targets[i:i + microbatch] for i in range(0, len(targets), microbatch)]
         else:
             steps = 1
-            splitted_inputs = [inputs]
-            splitted_targets = [targets]
+            split_inputs = [inputs]
+            split_targets = [targets]
 
         # Create Pytorch model if it is yet to be initialized, based on the actual inputs
         if self.model is None:
             self.model_lock.acquire()
-            if isinstance(splitted_inputs[0], (list, tuple)):
-                self.input_shapes = [get_shape(item) for item in splitted_inputs[0]]
+            if isinstance(split_inputs[0], (list, tuple)):
+                self.input_shapes = [get_shape(item) for item in split_inputs[0]]
             else:
-                self.input_shapes = get_shape(splitted_inputs[0])
+                self.input_shapes = get_shape(split_inputs[0])
 
-            self.target_shape = get_shape(splitted_targets[0])
+            self.target_shape = get_shape(split_targets[0])
             if self.classes is None:
                 if len(self.target_shape) > 1: # segmentation
                     self.classes = self.target_shape[1]
 
             self.build_config()
-            self._build([item[:2] for item in splitted_inputs[0]])
+            self._build([item[:2] for item in split_inputs[0]])
             self.model_lock.release()
 
         self.model.train()
@@ -881,8 +898,11 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Train on each of the microbatches
         outputs = []
         for i in range(steps):
-            _inputs = splitted_inputs[i]
-            _targets = splitted_targets[i]
+            _inputs = split_inputs[i]
+            _targets = split_targets[i]
+
+            _inputs = self.transfer_to_device(_inputs)
+            _targets = self.transfer_to_device(_targets)
 
             output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps)
             outputs.append(output)
@@ -936,9 +956,10 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Whether to update weights or keep accumulating
         if self.sync_counter == sync_frequency - 1:
             # Correct accumulated gradients
-            for p in self.model.parameters():
-                if p.grad is not None:
-                    p.grad /= sync_frequency
+            if sync_frequency > 1:
+                for p in self.model.parameters():
+                    if p.grad is not None:
+                        p.grad /= sync_frequency
 
             # Store learning rate: once per sync
             # Note: we do it before decay, so it is actual LR used on this iteration
@@ -976,7 +997,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                                          predictions=config['predictions'],
                                          ops=config['output'])
         output_container = {**output_container, **additional_outputs}
-        output = self._fill_output(fetches, output_container)
+        output = self.parse_output(fetches, output_container)
         return output
 
 
@@ -1018,10 +1039,12 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         with torch.no_grad():
             output_container = {}
+            inputs = self.transfer_to_device(inputs)
             predictions = self.model(inputs)
             output_container['predictions'] = predictions
 
             if targets is not None:
+                targets = self.transfer_to_device(targets)
                 loss = sum([loss(predictions, targets) for loss in self.loss]) / len(self.loss)
                 output_container['loss'] = loss
 
@@ -1032,7 +1055,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
                                          ops=config['output'])
         output_container = {**output_container, **additional_outputs}
-        output = self._fill_output(fetches, output_container)
+        output = self.parse_output(fetches, output_container)
         return output
 
     def _make_prediction_inputs(self, *args, targets=None, feed_dict=None, **kwargs):
@@ -1050,7 +1073,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             model.predict(images=B('images'), targets=B('labels'))
             model.predict(B('images'), targets=B('labels'), masks=B('masks'))
         """
-        # Concatenate `kwargs` and `feed_dict`; if not empty, use keywords in `_fill_input`
+        # Concatenate `kwargs` and `feed_dict`; if not empty, use keywords in `parse_input`
         feed_dict = {**(feed_dict or {}), **kwargs}
         if len(feed_dict) == 1:
             _, value = feed_dict.popitem()
@@ -1058,13 +1081,13 @@ class TorchModel(BaseModel, VisualizationMixin):
         if feed_dict:
             if targets is not None and 'targets' in feed_dict.keys():
                 warnings.warn("`targets` already present in `feed_dict`, so those passed as keyword arg won't be used")
-            *inputs, targets = self._fill_input(*args, **feed_dict)
+            *inputs, targets = self.parse_inputs(*args, **feed_dict)
 
         # Positional arguments only
         else:
-            inputs = self._fill_input(*args)
+            inputs = self.parse_inputs(*args)
             if targets is not None:
-                targets = self._fill_input(targets)[0]
+                targets = self.parse_inputs(targets)[0]
         inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
         return inputs, targets
 
