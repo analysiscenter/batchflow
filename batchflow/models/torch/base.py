@@ -881,7 +881,9 @@ class TorchModel(BaseModel, VisualizationMixin):
                     self.classes = self.target_shape[1]
 
             self.build_config()
-            self._build([item[:2] for item in split_inputs[0]])
+            build_inputs = [item[:2] for item in split_inputs[0]]
+            build_inputs = self.transfer_to_device(build_inputs)
+            self._build(build_inputs)
             self.model_lock.release()
 
         self.model.train()
