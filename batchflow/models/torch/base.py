@@ -308,6 +308,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.sync_frequency = 1
         self.sync_counter = 0
         self.microbatch = None
+        self.sam_parameter_placeholder = False
+        self.sam_rho = 0.05
 
         # Store info about passed train iterations
         self.iteration = 0
@@ -341,6 +343,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Store some of the config values
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
+        self.sam_parameter_placeholder = self.full_config.get('sam_parameter_placeholder', False)
+        self.sam_rho = self.full_config.get('sam_rho', 0.05)
         self.profile = self.full_config.get('profile', False)
 
         self.callbacks = [callback.set_model(self) for callback in self.full_config.get('callbacks', [])]
@@ -385,6 +389,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         config['profile'] = False
         config['microbatch'] = None
         config['sync_frequency'] = 1
+        config['sam_parameter_placeholder'] = False
+        config['sam_rho'] = 0.05
 
         config['loss'] = None
         config['optimizer'] = 'Adam'
@@ -802,7 +808,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
     # Apply model to train/predict on given data
     def train(self, *args, feed_dict=None, fetches=None, use_lock=True, profile=False,
-              sync_frequency=True, microbatch=True, **kwargs):
+              sync_frequency=True, microbatch=True, sam_parameter_placeholder=None, sam_rho=None, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -867,6 +873,11 @@ class TorchModel(BaseModel, VisualizationMixin):
             split_inputs = [inputs]
             split_targets = [targets]
 
+        if sam_parameter_placeholder is None:
+            sam_parameter_placeholder = self.sam_parameter_placeholder
+        if sam_rho is None:
+            sam_rho = self.sam_rho
+
         # Create Pytorch model if it is yet to be initialized, based on the actual inputs
         if self.model is None:
             self.model_lock.acquire()
@@ -904,7 +915,8 @@ class TorchModel(BaseModel, VisualizationMixin):
             _inputs = self.transfer_to_device(_inputs)
             _targets = self.transfer_to_device(_targets)
 
-            output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps)
+            output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps,
+                                 sam_parameter_placeholder=sam_parameter_placeholder, sam_rho=sam_rho)
             outputs.append(output)
 
         # Store the average value of loss over the entire batch
@@ -940,15 +952,53 @@ class TorchModel(BaseModel, VisualizationMixin):
             callback.on_iter_end()
         return output
 
-    def _train(self, *args, fetches=None, sync_frequency=True):
+    def _train(self, *args, fetches=None, sync_frequency=True, sam_parameter_placeholder=False, sam_rho=0.05):
         # Parse inputs
         *inputs, targets = args
         inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
 
         # Apply model, compute loss and gradients
         predictions = self.model(inputs)
+
+        if self.iteration >= 1 and sam_parameter_placeholder:
+            # Store grads from previous microbatches
+            for p in self.model.parameters():
+                if p.grad is not None:
+                    self.optimizer.state[p]['previous_grad'] = p.grad.clone().detach()
+                    p.grad = None
+
         loss = sum(loss_fn(predictions, targets) for loss_fn in self.loss) / len(self.loss)
         loss.backward()
+
+        if self.iteration >= 1 and sam_parameter_placeholder:
+            #pylint: disable=protected-access
+            # Use obtained grad to move to the local maxima
+            grads = []
+            params_with_grads = []
+            for p in self.model.parameters():
+                if p.grad is not None:
+                    grads.append(p.grad.clone().detach())
+                    params_with_grads.append(p)
+                    p.grad = None
+            grad_norm = torch.stack([g.detach().norm(2).to(self.device) for g in grads]).norm(2)
+            epsilons = [eps * sam_rho / grad_norm for eps in grads]
+            # epsilons = grads
+            # torch._foreach_mul_(epsilons, rho / grad_norm)
+            params_with_grads = [p + eps for p, eps in zip(params_with_grads, epsilons)]
+            # torch._foreach_add_(params_with_grads, epsilons)
+
+            # Compute new gradients: direction to move to minimize the local maxima
+            predictions = self.model(inputs)
+            loss_inner = sum(loss_fn(predictions, targets) for loss_fn in self.loss) / len(self.loss)
+            loss_inner.backward()
+
+            # Cancel the previous update to model parameters, add stored gradients from previous microbatches
+            params_with_grads = [p - eps for p, eps in zip(params_with_grads, epsilons)]
+            # torch._foreach_sub(params_with_grads, epsilons)
+            for p in self.model.parameters():
+                previous_grad = self.optimizer.state[p].get('previous_grad')
+                if previous_grad is not None:
+                    p.grad.add_(previous_grad)
 
         # Store loss value for every microbatch
         self._loss_list.append(loss.detach().cpu().numpy())
