@@ -5,11 +5,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .core import Activation
 from .conv import Conv
 from .resize import Combine
 from .pooling import GlobalPool, ChannelPool
-from .activations import RadixSoftmax
+from .activation import RadixSoftmax, Activation
 from ..utils import get_shape, get_num_dims, get_num_channels, safe_eval
 
 
@@ -570,7 +569,7 @@ class SplitAttentionConv(nn.Module):
     Then, the result is split into `cardinality` groups and summed up by groups. Then, an attention takes place.
     It contains two dense blocks with groups=`cardinality`. RadixSoftmax is adding to the output of the last dense
     block. Is applying a softmax for feature maps grouped into `radix` groups. The last layer of the block is a 1x1
-    convolution that increases the feature map from `filters` to `filters`*`external_mult`.
+    convolution that increases the feature map from `filters` to `filters`*`scaling_factor`.
 
     Parameters
     ----------
@@ -582,13 +581,13 @@ class SplitAttentionConv(nn.Module):
         The number of feature-map groups. Given feature-map is splitted to groups with same size. Default is 1.
     reduction_factor : int
         The number reflecting the size of the filter reduction in the inner layer. Default is 1.
-    external_mult : int
-        Factor to increase the number of filters after ResNeSt block. Default 4.
+    scaling_factor : int
+        Factor to increase the number of filters after ResNeSt block. Default 1.
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`.
     """
     def __init__(self, inputs, filters, layout='cna', kernel_size=3, radix=1, cardinality=1, reduction_factor=1,
-                 external_mult=4, strides=1, padding='same', **kwargs):
+                 scaling_factor=1, strides=1, padding='same', **kwargs):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
         self.radix = radix
@@ -596,12 +595,11 @@ class SplitAttentionConv(nn.Module):
         self.channels = filters * self.radix
 
         self.inner_filters = self.channels // reduction_factor
-        self.external_mult = external_mult
         channel_dim = inputs.dim() - 2
         self.desc_kwargs = {
             'class': self.__class__.__name__,
             'in_filters': get_num_channels(inputs),
-            'out_filters': filters*external_mult,
+            'out_filters': filters*scaling_factor,
             'radix': self.radix,
             'cardinality': self.cardinality,
             'reduction_factor': reduction_factor
@@ -621,7 +619,7 @@ class SplitAttentionConv(nn.Module):
         self.avgpool_conv1d = ConvBlock(inputs=inputs, layout=inner_conv1d_layout,
                                         filters=[self.inner_filters, self.channels],
                                         kernel_size=1, groups=self.cardinality, dim=channel_dim,
-                                        bias=True, **kwargs)
+                                        bias=True)
         inputs = self.avgpool_conv1d(inputs)
 
         self.rsoftmax = RadixSoftmax(self.radix, self.cardinality, add_dims=channel_dim)
@@ -647,7 +645,7 @@ class SplitAttentionConv(nn.Module):
             result = sum([att*split for (att, split) in zip(attens, splitted)])
         else:
             result = att * x
-        return result.contiguous()
+        return result
 
     def __repr__(self):
         if getattr(self, 'debug', False):

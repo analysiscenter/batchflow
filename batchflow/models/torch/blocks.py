@@ -304,12 +304,12 @@ class ResNeStBlock(ConvBlock):
     """ ResNeSt Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is a
     split attention block that might have different (`radix`) and (`cardinality`) values that aimed to control the
     number of groups within a second convolution (`radix`*`cardinality`), an attention part (`radix`) and RadixSoftmax.
-    Also, the amount of filters after block might be increasing by `external_mult` argument. Moreover, the block allows
+    Also, the amount of filters after block might be increasing by `scaling_factor` argument. Moreover, the block allows
     to reduce number of filters inside the entire block via `bottleneck_width` or just inside an attention part via
     `reduction_factor`.
 
     The number of filters inside ResNeSt Attention calculates as following:
-    >>> filters = int(filters * (bottleneck_width / 64.)) * cardinality
+    >>> filters = int(filters // reduction_factor) * cardinality
 
     The implementation was inspired by the authors' code (`<https://github.com/zhanghang1989/ResNeSt>`_), thus
     the first 1x1 convolution is not split into groups, the second fully connected block does not contain
@@ -321,7 +321,8 @@ class ResNeStBlock(ConvBlock):
         Example of input tensor to this layer.
     layout : str
         A sequence of letters, each letter meaning individual operation.
-        See more in :class:`~.layers.conv_block.BaseConvBlock` documentation. Default is 'cnScn'.
+        See more in :class:`~.layers.conv_block.BaseConvBlock` documentation.
+        !!!!!!!!!!!!!!!NOW THIS PARAMETER PASSED INTO SELF_ATTENTION !!!!!!!!Default is 'cna'.
     filters : int, str
         If `str`, then number of filters is calculated by its evaluation. ``'S'`` and ``'same'`` stand for the
         number of filters in the previous tensor. Note the `eval` usage under the hood.
@@ -335,36 +336,33 @@ class ResNeStBlock(ConvBlock):
     strides : int, list of int
         Convolution stride. Default is 1.
     reduction_factor : int
-        The number reflecting the size of the filter reduction in the inner layer. Default is 1.
-    bottleneck_width : int
-        The size of the reduction in the number of filters in the entire block. Default is 64.
-    attention : str
-        Name of self-attention module. For more info about possible operations,
-        check :class:`~.layers.SelfAttention`. Default is `sac`.
+        !!!!!!!NOW IS FOR ALL REDUCTION!!!The number reflecting the size of the filter reduction in the inner layer. Default is 1.
+    scaling_factor : int
+        Factor to increase the number of filters after ResNeSt block. Default 1.
     op : str or callable
         Operation for combination shortcut and residual.
         See more :class:`~.layers.Combine` documentation. Default is '+a'.
     n_reps : int
         Number of times to repeat the whole block. Default is 1.
     kwargs : dict
-        Other named arguments for the :class:`~.layers.ConvBlock`.
+        Other named arguments for the :class:`~.layers.ConvBlock`. (ЧТО ОНИ ВСЕ ИДУТ ТОЛЬКО В КОНВ 3х3)
     """
-    def __init__(self, inputs=None, layout='cnaScn', filters='same', kernel_size=3, radix=2, cardinality=1,
-                 strides=1, reduction_factor=1, external_mult=4, bottleneck_width=64, attention='sac', op='+a',
-                 n_reps=1, **kwargs):
+    # изменить лейаут (из аргументов должен идти сразу в self_attention.)
+    def __init__(self, inputs=None, layout='cna', filters='same', kernel_size=3, radix=2, cardinality=1,
+                 strides=1, reduction_factor=1, scaling_factor=1, op='+a', n_reps=1, **kwargs):
         if isinstance(filters, str):
             filters = safe_eval(filters, get_num_channels(inputs))
 
-        block_filters = int(filters * (bottleneck_width / 64.)) * cardinality
+        block_filters = int(filters // reduction_factor) * cardinality
 
-        if get_num_channels(inputs) != (filters*external_mult):
+        if get_num_channels(inputs) != (filters*scaling_factor):
             # If main flow changes the number of filters, so must do the side branch.
             # No activation, because it will be applied after summation with the main flow
-            branch_params = {'layout': 'cn', 'filters': filters * external_mult,
+            branch_params = {'layout': 'cn', 'filters': filters*scaling_factor,
                              'kernel_size': 1, 'strides': strides}
         else:
             branch_params = {}
-        layout = 'R' + layout + op
+        layout = 'R' + 'cnaScn' + op
 
         layer_params = [{'branch': branch_params,
                          'branch/strides': strides}]
@@ -374,8 +372,8 @@ class ResNeStBlock(ConvBlock):
         # All given parameters are going directly to attention module due to the lack of other operations in the block.
         self_attention = dict(radix=radix, cardinality=cardinality, kernel_size=kernel_size,
                               filters=block_filters, strides=strides, reduction_factor=reduction_factor,
-                              external_mult=external_mult)
+                              scaling_factor=scaling_factor, **kwargs)
 
-        super().__init__(*layer_params, inputs=inputs, layout=layout, attention=attention,
-                        self_attention=self_attention, kernel_size=1,  strides=strides,
-                        filters=[block_filters, filters*external_mult], **kwargs)
+        super().__init__(*layer_params, inputs=inputs, layout=layout, attention='sac',
+                         self_attention=self_attention, kernel_size=1,
+                         filters=[block_filters, filters*scaling_factor])
