@@ -16,10 +16,11 @@ class ResNeSt(Encoder):
 
         config['body/encoder/num_stages'] = 4
         config['body/encoder/order'] = ['skip', 'block']
-        config['body/encoder/blocks'] += dict(base=ResNeStBlock, layout='cnaScn', attention='sac',
+        config['body/encoder/blocks'] += dict(base=ResNeStBlock, layout='cna',
                                               filters=[64, 128, 256, 512],
                                               n_reps=[1, 1, 1, 1], radix=2, cardinality=1,
-                                              external_mult=4, reduction_factor=4)
+                                              reduction_factor=4, scaling_factor=1,
+                                              strides=[1, 2, 2, 2])
 
         config['head'] += dict(layout='Vdf', dropout_rate=.4)
 

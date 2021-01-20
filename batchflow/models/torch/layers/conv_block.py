@@ -6,12 +6,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
+from .core import Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
 from .resize import IncreaseDim, Reshape, Interpolate, SubPixelConv, Combine
 from .attention import SelfAttention
+from .activation import Activation
 from ..utils import get_shape
 from ...utils import unpack_args
 from .... import Config
@@ -402,8 +403,13 @@ class BaseConvBlock(nn.ModuleDict):
     def __repr__(self):
         if getattr(self, 'short_repr', False):
             msg = f'layout={self.layout}\n'
-            msg += '\n'.join([f'{key}' for key in self.keys()])
-            return f'{msg}\n'
+            # msg += '\n'.join([f'{key}' for key in self.keys()])
+
+            for i, (key, value) in enumerate(self.items()):
+                layer_repr = repr(value.layer) if hasattr(value, 'layer') else key.split(':')[0]
+                layer_msg = f'({i}) : {key.split(":")[1]} : {layer_repr} \n'
+                msg += layer_msg
+            return f'{msg}'
         return super().__repr__()
 
 
