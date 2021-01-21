@@ -301,19 +301,29 @@ class DenseBlock(ConvBlock):
 
 
 class ResNeStBlock(ConvBlock):
-    """ ResNeSt Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is a
-    split attention block that might have different (`radix`) and (`cardinality`) values that aimed to control the
-    number of groups within a second convolution (`radix`*`cardinality`), an attention part (`radix`) and RadixSoftmax.
-    Also, the amount of filters after block might be increasing by `scaling_factor` argument. Moreover, the block allows
-    to reduce number of filters inside the entire block via `bottleneck_width` or just inside an attention part via
-    `reduction_factor`.
+    """ ResNeSt Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is processed the input
+    tensor as follows:
+    * First of all, it goes through 1x1 convolution with normalization and activation.
+    * Then `sac` is applied:
+        * Here, we split feature maps into `cardinality`*`radix` groups and apply convolution with
+          kernel_size=`kernel_size` with normalization and activation (these operations are controlled by the `layout`)
+        * Then we split the result into `radix` groups.
+        * Then attention takes place:
+            * Here, we summarize feature maps by groups and apply Global Average Pooling.
+            * Then we apply two 1x1 convolutions with groups=`cardinality`. The number of filters in the first
+              convolution is `filters`*`radix` // `reduction_factor`.
+            * Then we use RadixSoftmax, which applies a softmax for feature maps grouped into `radix` groups.
+            * Then, the resulting groups are summed up with feature maps before the attention part.
+    * The last layer of the block is a 1x1 convolution that increases the feature map from `filters` to
+      `filters`*`scaling_factor`.
+    * In the end, skip connection applies to the result of the ResNeStBlock.
 
     The number of filters inside ResNeSt Attention calculates as following:
     >>> filters = int(filters // reduction_factor) * cardinality
 
     The implementation was inspired by the authors' code (`<https://github.com/zhanghang1989/ResNeSt>`_), thus
     the first 1x1 convolution is not split into groups, the second fully connected block does not contain
-    normalization. Constant 64 for `bottleneck_width` is also chosen by the authors.
+    normalization.
 
     Parameters
     ----------
@@ -322,7 +332,8 @@ class ResNeStBlock(ConvBlock):
     layout : str
         A sequence of letters, each letter meaning individual operation.
         See more in :class:`~.layers.conv_block.BaseConvBlock` documentation.
-        !!!!!!!!!!!!!!!NOW THIS PARAMETER PASSED INTO SELF_ATTENTION !!!!!!!!Default is 'cna'.
+        `layout` describes a first convolution in the :class:`~.attention.SplitAttentionConv`.
+        Default is 'cna'.
     filters : int, str
         If `str`, then number of filters is calculated by its evaluation. ``'S'`` and ``'same'`` stand for the
         number of filters in the previous tensor. Note the `eval` usage under the hood.
@@ -336,23 +347,25 @@ class ResNeStBlock(ConvBlock):
     strides : int, list of int
         Convolution stride. Default is 1.
     reduction_factor : int
-        !!!!!!!NOW IS FOR ALL REDUCTION!!!The number reflecting the size of the filter reduction in the inner layer. Default is 1.
+        Factor of the filter reduction during :class:`~.attention.SplitAttentionConv`. Default is 1.
     scaling_factor : int
-        Factor to increase the number of filters after ResNeSt block. Default 1.
+        Factor increasing the number of filters after ResNeSt block. Thus, the number of output filters is
+        `filters`*`scaling_factor`. Default 1.
     op : str or callable
         Operation for combination shortcut and residual.
         See more :class:`~.layers.Combine` documentation. Default is '+a'.
     n_reps : int
         Number of times to repeat the whole block. Default is 1.
     kwargs : dict
-        Other named arguments for the :class:`~.layers.ConvBlock`. (ЧТО ОНИ ВСЕ ИДУТ ТОЛЬКО В КОНВ 3х3)
+        Other named arguments for the first :class:`~.layers.ConvBlock` in an :class:`~.attention.SplitAttentionConv`.
     """
-    # изменить лейаут (из аргументов должен идти сразу в self_attention.)
     def __init__(self, inputs=None, layout='cna', filters='same', kernel_size=3, radix=2, cardinality=1,
                  strides=1, reduction_factor=1, scaling_factor=1, op='+a', n_reps=1, **kwargs):
         if isinstance(filters, str):
             filters = safe_eval(filters, get_num_channels(inputs))
 
+        # Multiplying by `cardinality` is needed to maintain the possibility of division into groups within
+        # `SplitAttentionConv`.
         block_filters = int(filters // reduction_factor) * cardinality
 
         if get_num_channels(inputs) != (filters*scaling_factor):
@@ -370,9 +383,12 @@ class ResNeStBlock(ConvBlock):
         layer_params += [{}]*(n_reps-1)
 
         # All given parameters are going directly to attention module due to the lack of other operations in the block.
-        self_attention = dict(radix=radix, cardinality=cardinality, kernel_size=kernel_size,
-                              filters=block_filters, strides=strides, reduction_factor=reduction_factor,
-                              scaling_factor=scaling_factor, **kwargs)
+        self_attention = {
+            "radix": radix, "cardinality": cardinality,
+            "kernel_size": kernel_size, "filters": block_filters, "strides": strides,
+            "reduction_factor": reduction_factor, "scaling_factor": scaling_factor,
+            **kwargs
+        }
 
         super().__init__(*layer_params, inputs=inputs, layout=layout, attention='sac',
                          self_attention=self_attention, kernel_size=1,

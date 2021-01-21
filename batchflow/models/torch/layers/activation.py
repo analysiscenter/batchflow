@@ -30,22 +30,22 @@ class RadixSoftmax(nn.Module):
     ----
     If `radix` is 1, common sigmoid is used.
     """
-    def __init__(self, radix, cardinality, add_dims=0):
+    def __init__(self, radix, cardinality):
         super(RadixSoftmax, self).__init__()
         self.radix = radix
         self.cardinality = cardinality
-        self.add_dims = add_dims
 
     def forward(self, x):
         batch = x.size(0)
+        input_dim = x.dim()
         if self.radix > 1:
             x = x.view(batch, self.cardinality, self.radix, -1).transpose(1, 2)
             x = torch.nn.functional.softmax(x, dim=1)
             x = x.reshape(batch, -1)
         else:
             x = torch.sigmoid(x)
-        if self.add_dims > 0:
-            ones = [1] * self.add_dims
+        if input_dim > x.dim():
+            ones = [1] * (input_dim - x.dim())
             return x.view(*x.shape, *ones)
         return x
 
@@ -76,11 +76,13 @@ class Activation(nn.Module):
     def __init__(self, activation, *args, **kwargs):
         super().__init__()
         self.args, self.kwargs = tuple(), {}
-
         if isinstance(activation, str):
             name = activation.lower()
             if name in self.FUNCTIONS:
-                activation = getattr(nn, self.FUNCTIONS[name])
+                if isinstance(self.FUNCTIONS[name], str):
+                    activation = getattr(nn, self.FUNCTIONS[name])
+                else:
+                    activation = self.FUNCTIONS[name]
             else:
                 raise ValueError('Unknown activation', activation)
 
