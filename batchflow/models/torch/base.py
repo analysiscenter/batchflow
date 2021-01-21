@@ -892,6 +892,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                     self.classes = self.target_shape[1]
 
             self.build_config()
+            # Can use the first two items to build model: no need for the whole tensor
             build_inputs = [item[:2] for item in split_inputs[0]]
             build_inputs = self.transfer_to_device(build_inputs)
             self._build(build_inputs)
