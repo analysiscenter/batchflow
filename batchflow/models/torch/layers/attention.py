@@ -565,11 +565,16 @@ class SplitAttentionConv(nn.Module):
     Hang Zhang et al. "`ResNeSt: Split-Attention Networks
     <https://arxiv.org/abs/2004.08955>`_"
 
-    Feature maps are passed into the convolution with kernel_size=`kernel_size` and groups=`cardinality`*`radix`.
-    Then, the result is split into `cardinality` groups and summed up by groups. Then, an attention takes place.
-    It contains two dense blocks with groups=`cardinality`. RadixSoftmax is adding to the output of the last dense
-    block. Is applying a softmax for feature maps grouped into `radix` groups. The last layer of the block is a 1x1
-    convolution that increases the feature map from `filters` to `filters`*`scaling_factor`.
+    This block contains the following operations:
+    * First of all, we split feature maps into `cardinality`*`radix` groups and apply convolution with
+      kernel_size=`kernel_size` with normalization and activation (these operations are controlled by the `layout`)
+    * Then we split the result into `cardinality` groups.
+    * Then attention takes place:
+        * Here, we summarize feature maps by groups and apply Global Average Pooling.
+        * Then we apply two 1x1 convolutions with groups=`cardinality`. The number of filters in the first
+            convolution is `filters`*`radix` // `reduction_factor`.
+        * Then we use RadixSoftmax, which applies a softmax for feature maps grouped into `cardinality` groups.
+        * Then, the resulting groups are summed up with feature maps before the attention part.
 
     Parameters
     ----------
@@ -580,11 +585,12 @@ class SplitAttentionConv(nn.Module):
     cardinality : int
         The number of feature-map groups. Given feature-map is splitted to groups with same size. Default is 1.
     reduction_factor : int
-        The number reflecting the size of the filter reduction in the inner layer. Default is 1.
+        Factor of the filter reduction during :class:`~.attention.SplitAttentionConv`. Default is 1.
     scaling_factor : int
-        Factor to increase the number of filters after ResNeSt block. Default 1.
+        Factor increasing the number of filters after ResNeSt block. Thus, the number of output filters is
+        `filters`*`scaling_factor`. Default 1.
     kwargs : dict
-        Other named arguments for the :class:`~.layers.ConvBlock`.
+        Other named arguments only for the first :class:`~.layers.ConvBlock`.
     """
     def __init__(self, inputs, filters, layout='cna', kernel_size=3, radix=1, cardinality=1, reduction_factor=1,
                  scaling_factor=1, strides=1, padding='same', **kwargs):
@@ -602,8 +608,10 @@ class SplitAttentionConv(nn.Module):
             'out_filters': filters*scaling_factor,
             'radix': self.radix,
             'cardinality': self.cardinality,
-            'reduction_factor': reduction_factor
+            'reduction_factor': reduction_factor,
+            'scaling_factor': scaling_factor
         }
+
         self.inner_radix_conv = ConvBlock(inputs=inputs, layout=layout, filters=self.channels, kernel_size=3,
                                           groups=self.cardinality*self.radix, strides=strides, padding=padding,
                                           **kwargs)
@@ -622,8 +630,9 @@ class SplitAttentionConv(nn.Module):
                                         bias=True)
         inputs = self.avgpool_conv1d(inputs)
 
-        self.rsoftmax = RadixSoftmax(self.radix, self.cardinality, add_dims=channel_dim)
+        self.rsoftmax = RadixSoftmax(self.radix, self.cardinality)
         inputs = self.rsoftmax(inputs)
+
         if self.radix > 1:
             inputs = torch.split(inputs, rchannel//self.radix, dim=1)
             inputs = sum([inp*split for (inp, split) in zip(inputs, splitted)])
@@ -652,5 +661,6 @@ class SplitAttentionConv(nn.Module):
             return super().__repr__()
         layer_desc = ('{class}({in_filters}, {out_filters}, '
                       'radix={radix}, cardinality={cardinality}, '
-                      'reduction_factor={reduction_factor})').format(**self.desc_kwargs)
+                      'reduction_factor={reduction_factor}, '
+                      'scaling_factor={scaling_factor})').format(**self.desc_kwargs)
         return layer_desc
