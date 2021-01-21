@@ -195,6 +195,16 @@ class TorchModel(BaseModel, VisualizationMixin):
         If True, then every batch is split into individual items (same as microbatch equals 1).
         If False or None, then feature is not used. Default is not to use microbatching.
 
+    sam_rho : float
+        Foret P. et al. "`Sharpness-Aware Minimization for Efficiently Improving Generalization
+        <https://arxiv.org/abs/2010.01412>`_".
+        If evaluates to False, then SAM is not used.
+        If float, then controls the size of neighborhood (check the paper for details).
+    sam_individual_norm : bool
+        If True, then each gradient is scaled according to its own L2 norm.
+        If False, then one common gradient norm is computed and used as a scaler for all gradients.
+
+
     order : sequence
         Defines sequence of network blocks in the architecture. Default is initial_block -> body -> head.
         Each element of the sequence must be either a string, a tuple or a dict.
@@ -308,8 +318,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.sync_frequency = 1
         self.sync_counter = 0
         self.microbatch = None
-        self.sam_parameter_placeholder = False
-        self.sam_rho = 0.05
+        self.sam_rho = 0.0
+        self.sam_individual_norm = True
 
         # Store info about passed train iterations
         self.iteration = 0
@@ -343,8 +353,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Store some of the config values
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
-        self.sam_parameter_placeholder = self.full_config.get('sam_parameter_placeholder', False)
-        self.sam_rho = self.full_config.get('sam_rho', 0.05)
+        self.sam_rho = self.full_config.get('sam_rho', 0.00)
+        self.sam_individual_norm = self.full_config.get('sam_individual_norm', False)
         self.profile = self.full_config.get('profile', False)
 
         self.callbacks = [callback.set_model(self) for callback in self.full_config.get('callbacks', [])]
@@ -389,8 +399,9 @@ class TorchModel(BaseModel, VisualizationMixin):
         config['profile'] = False
         config['microbatch'] = None
         config['sync_frequency'] = 1
-        config['sam_parameter_placeholder'] = False
-        config['sam_rho'] = 0.05
+
+        config['sam_rho'] = 0.0
+        config['sam_individual_norm'] = True
 
         config['loss'] = None
         config['optimizer'] = 'Adam'
@@ -808,7 +819,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
     # Apply model to train/predict on given data
     def train(self, *args, feed_dict=None, fetches=None, use_lock=True, profile=False,
-              sync_frequency=True, microbatch=True, sam_parameter_placeholder=None, sam_rho=None, **kwargs):
+              sync_frequency=True, microbatch=True, sam_rho=None, sam_individual_norm=None, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -831,6 +842,14 @@ class TorchModel(BaseModel, VisualizationMixin):
             accumulating gradients from microbatches and applying them once in the end.
             If True, then value from config is used (default value is not to use microbatching).
             If False or None, then microbatching is not used.
+        sam_rho : float
+            Foret P. et al. "`Sharpness-Aware Minimization for Efficiently Improving Generalization
+            <https://arxiv.org/abs/2010.01412>`_".
+            If evaluates to False, then SAM is not used.
+            If float, then controls the size of neighborhood (check the paper for details).
+        sam_individual_norm : bool
+            If True, then each gradient is scaled according to its own L2 norm.
+            If False, then one common gradient norm is computed and used as a scaler for all gradients.
         profile : bool
             Whether to collect stats of model training timings.
             If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
@@ -873,10 +892,12 @@ class TorchModel(BaseModel, VisualizationMixin):
             split_inputs = [inputs]
             split_targets = [targets]
 
-        if sam_parameter_placeholder is None:
-            sam_parameter_placeholder = self.sam_parameter_placeholder
+        # Prepara parameters for SAM
         if sam_rho is None:
             sam_rho = self.sam_rho
+        if sam_individual_norm is None:
+            sam_individual_norm = self.sam_individual_norm
+        use_sam = bool(sam_rho)
 
         # Create Pytorch model if it is yet to be initialized, based on the actual inputs
         if self.model is None:
@@ -891,8 +912,8 @@ class TorchModel(BaseModel, VisualizationMixin):
                 if len(self.target_shape) > 1: # segmentation
                     self.classes = self.target_shape[1]
 
-            self.build_config()
             # Can use the first two items to build model: no need for the whole tensor
+            self.build_config()
             build_inputs = [item[:2] for item in split_inputs[0]]
             build_inputs = self.transfer_to_device(build_inputs)
             self._build(build_inputs)
@@ -919,7 +940,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             _targets = self.transfer_to_device(_targets)
 
             output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps,
-                                 sam_parameter_placeholder=sam_parameter_placeholder, sam_rho=sam_rho)
+                                 use_sam=use_sam, sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
             outputs.append(output)
 
         # Store the average value of loss over the entire batch
@@ -947,15 +968,18 @@ class TorchModel(BaseModel, VisualizationMixin):
             'microbatch': microbatch,
             'sync_frequency': sync_frequency,
             'steps': steps,
+            'use_sam': use_sam, 'sam_rho': sam_rho,
+            'sam_individual_norm': sam_individual_norm,
             'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
             'actual_model_outputs_shape': get_shape(_targets),
         })
 
+        # Call the callbacks
         for callback in self.callbacks:
             callback.on_iter_end()
         return output
 
-    def _train(self, *args, fetches=None, sync_frequency=True, sam_parameter_placeholder=False, sam_rho=0.05):
+    def _train(self, *args, fetches=None, sync_frequency=True, use_sam=False, sam_rho=0.05, sam_individual_norm=True):
         # Parse inputs
         *inputs, targets = args
         inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
@@ -963,8 +987,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Apply model, compute loss and gradients
         predictions = self.model(inputs)
 
-        if self.iteration >= 1 and sam_parameter_placeholder:
-            # Store grads from previous microbatches
+        # SAM: store grads from previous microbatches
+        if self.iteration >= 1 and use_sam:
             for p in self.model.parameters():
                 if p.grad is not None:
                     self.optimizer.state[p]['previous_grad'] = p.grad.clone().detach()
@@ -973,9 +997,9 @@ class TorchModel(BaseModel, VisualizationMixin):
         loss = sum(loss_fn(predictions, targets) for loss_fn in self.loss) / len(self.loss)
         loss.backward()
 
-        if self.iteration >= 1 and sam_parameter_placeholder:
-            #pylint: disable=protected-access
-            # Use obtained grad to move to the local maxima
+        # SAM: use obtained grads to move to the local maxima
+        if self.iteration >= 1 and use_sam:
+            # Fetch gradients
             grads = []
             params_with_grads = []
             for p in self.model.parameters():
@@ -983,12 +1007,14 @@ class TorchModel(BaseModel, VisualizationMixin):
                     grads.append(p.grad.clone().detach())
                     params_with_grads.append(p)
                     p.grad = None
-            grad_norm = torch.stack([g.detach().norm(2).to(self.device) for g in grads]).norm(2)
-            epsilons = [eps * sam_rho / grad_norm for eps in grads]
-            # epsilons = grads
-            # torch._foreach_mul_(epsilons, rho / grad_norm)
+
+            # Move to the local maxima
+            if sam_individual_norm:
+                epsilons = [grad * sam_rho / (grad.detach().norm(2).to(self.device)) for grad in grads]
+            else:
+                grad_norm = torch.stack([g.detach().norm(2).to(self.device) for g in grads]).norm(2)
+                epsilons = [eps * sam_rho / grad_norm for eps in grads]
             params_with_grads = [p + eps for p, eps in zip(params_with_grads, epsilons)]
-            # torch._foreach_add_(params_with_grads, epsilons)
 
             # Compute new gradients: direction to move to minimize the local maxima
             predictions = self.model(inputs)
@@ -997,7 +1023,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
             # Cancel the previous update to model parameters, add stored gradients from previous microbatches
             params_with_grads = [p - eps for p, eps in zip(params_with_grads, epsilons)]
-            # torch._foreach_sub(params_with_grads, epsilons)
+
             for p in self.model.parameters():
                 previous_grad = self.optimizer.state[p].get('previous_grad')
                 if previous_grad is not None:
