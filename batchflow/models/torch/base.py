@@ -204,7 +204,6 @@ class TorchModel(BaseModel, VisualizationMixin):
         If True, then each gradient is scaled according to its own L2 norm.
         If False, then one common gradient norm is computed and used as a scaler for all gradients.
 
-
     order : sequence
         Defines sequence of network blocks in the architecture. Default is initial_block -> body -> head.
         Each element of the sequence must be either a string, a tuple or a dict.
@@ -353,7 +352,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Store some of the config values
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
-        self.sam_rho = self.full_config.get('sam_rho', 0.00)
+        self.sam_rho = self.full_config.get('sam_rho', 0.0)
         self.sam_individual_norm = self.full_config.get('sam_individual_norm', False)
         self.profile = self.full_config.get('profile', False)
 
@@ -979,7 +978,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             callback.on_iter_end()
         return output
 
-    def _train(self, *args, fetches=None, sync_frequency=True, use_sam=False, sam_rho=0.05, sam_individual_norm=True):
+    def _train(self, *args, fetches=None, sync_frequency=True, use_sam=False, sam_rho=0.0, sam_individual_norm=True):
         # Parse inputs
         *inputs, targets = args
         inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
