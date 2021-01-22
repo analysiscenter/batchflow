@@ -301,27 +301,26 @@ class DenseBlock(ConvBlock):
 
 
 class ResNeStBlock(ConvBlock):
-    """ ResNeSt Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is processed the input
-    tensor as follows:
-    * First of all, it goes through 1x1 convolution with normalization and activation.
-    * Then `sac` is applied:
-        * Here, we split feature maps into `cardinality`*`radix` groups and apply convolution with
-          kernel_size=`kernel_size` with normalization and activation (these operations are controlled by the `layout`)
-        * Then we split the result into `radix` groups.
-        * Then attention takes place:
-            * Here, we summarize feature maps by groups and apply Global Average Pooling.
-            * Then we apply two 1x1 convolutions with groups=`cardinality`. The number of filters in the first
-              convolution is `filters`*`radix` // `reduction_factor`.
-            * Then we use RadixSoftmax, which applies a softmax for feature maps grouped into `radix` groups.
-            * Then, the resulting groups are summed up with feature maps before the attention part.
-    * The last layer of the block is a 1x1 convolution that increases the feature map from `filters` to
-      `filters`*`scaling_factor`.
-    * In the end, skip connection applies to the result of the ResNeStBlock.
+    """ ResNeSt Module: apply following operations to a supplied tensor:
+        * First of all, it goes through 1x1 convolution with normalization and activation.
+        * Then Split Attention Convolution is applied:
+            * Here, we split feature maps into `cardinality`*`radix` groups and apply convolution with
+            kernel_size=`kernel_size` with normalization and activation (these operations are controlled by the `layout`)
+            * Then we split the result into `radix` groups.
+            * Then attention takes place:
+                * Here, we summarize feature maps by groups and apply Global Average Pooling.
+                * Then we apply two 1x1 convolutions with groups=`cardinality`. The number of filters in the first
+                convolution is `filters`*`radix` // `reduction_factor`.
+                * Then we use RadixSoftmax, which applies a softmax for feature maps grouped into `radix` groups.
+                * Then, the resulting groups are summed up with feature maps before the attention part.
+        * The last layer of the block is a 1x1 convolution that increases the feature map from `filters` to
+        `filters`*`scaling_factor`.
+        * In the end, skip connection applies to the result of the ResNeStBlock.
 
     The number of filters inside ResNeSt Attention calculates as following:
     >>> filters = int(filters // reduction_factor) * cardinality
 
-    The implementation was inspired by the authors' code (`<https://github.com/zhanghang1989/ResNeSt>`_), thus
+    The implementation is inspired by the authors' code (`<https://github.com/zhanghang1989/ResNeSt>`_), thus
     the first 1x1 convolution is not split into groups, the second fully connected block does not contain
     normalization.
 

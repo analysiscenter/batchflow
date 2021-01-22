@@ -578,8 +578,6 @@ class SplitAttentionConv(nn.Module):
 
     Parameters
     ----------
-    kernel_size : int or list of int
-        Kernel size for convolution in cardinality groups.
     radix : int
         The number of splits within a cardinal group. Default is 2.
     cardinality : int
@@ -592,8 +590,8 @@ class SplitAttentionConv(nn.Module):
     kwargs : dict
         Other named arguments only for the first :class:`~.layers.ConvBlock`.
     """
-    def __init__(self, inputs, filters, layout='cna', kernel_size=3, radix=1, cardinality=1, reduction_factor=1,
-                 scaling_factor=1, strides=1, padding='same', **kwargs):
+    def __init__(self, inputs, filters, layout='cna', radix=1, cardinality=1, reduction_factor=1, scaling_factor=1,
+                 strides=1, padding='same', **kwargs):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
         self.radix = radix
@@ -612,13 +610,13 @@ class SplitAttentionConv(nn.Module):
             'scaling_factor': scaling_factor
         }
 
-        self.inner_radix_conv = ConvBlock(inputs=inputs, layout=layout, filters=self.channels, kernel_size=3,
+        self.inner_radix_conv = ConvBlock(inputs=inputs, layout=layout, filters=self.channels,
                                           groups=self.cardinality*self.radix, strides=strides, padding=padding,
                                           **kwargs)
         inputs = self.inner_radix_conv(inputs)
         x = inputs
 
-        batch, rchannel = inputs.shape[:2]
+        rchannel = inputs.shape[1]
         if self.radix > 1:
             splitted = torch.split(inputs, rchannel//self.radix, dim=1)
             inputs = sum(splitted)
@@ -641,7 +639,7 @@ class SplitAttentionConv(nn.Module):
 
     def forward(self, x):
         x = self.inner_radix_conv(x)
-        batch, rchannel = x.shape[:2]
+        rchannel = x.shape[1]
         if self.radix > 1:
             splitted = torch.split(x, rchannel//self.radix, dim=1)
             concatted = sum(splitted)
