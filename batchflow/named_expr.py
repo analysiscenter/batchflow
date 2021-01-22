@@ -722,7 +722,7 @@ class P(W):
     Each image in the batch will be rotated at its own angle::
 
         pipeline
-            .rotate(angle=P(R('normal', 0, 1)))
+            .rotate(angle=P(R('normal', 0, 1, size=BATCH_SIZE)))
 
     Without ``P`` all images in the batch will be rotated at the same angle,
     as an angle is randomized across batches only::
@@ -730,15 +730,29 @@ class P(W):
         pipeline
             .rotate(angle=R('normal', 0, 1))
 
+    ``force_parallel=True`` forces recalculation of an argument for each batch item,
+    thus::
+
+        pipeline
+            .rotate(angle=P(R('normal', 0, 1)), force_parallel=True)
+
+    produces different rotation angles for each item in a batch,
+    note that ``size`` parameter of ``R`` is abscent.
+
+    When ``force_parallel=False`` (default) the argument of ``P`` should be an iterable
+    with length equal to the batch size
+
+    More examples:
+
     Generate 3 categorical random samples for each batch item::
 
         pipeline
-            .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=3))
+            .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=3), force_parallel=True))
 
     Generate random number of random samples for each batch item::
 
         pipeline
-            .some_action(P(R('normal', 0, 1, size=R('randint', 3, 8))))
+            .some_action(P(R('normal', 0, 1, size=R('randint', 3, 8)), force_parallel=True))
 
     ``P`` works with arbitrary iterables too::
 
@@ -751,8 +765,19 @@ class P(W):
     --------
     :func:`~batchflow.inbatch_parallel`
     """
+
+    def __init__(self, name, mode='w', force_parallel=False):
+        super().__init__(name, mode)
+        self._fp = force_parallel
+
     def _get_name(self, **kwargs):
         return self.name
+
+    def _get_val(self, name, from_parallel, **kwargs):
+        # if from_parallel==True it's called from the decorator, so values were pre-calculated, just return them
+        # However, we can still have some R-expressions, e.g. for probabilities
+        nm = self.name if from_parallel else name
+        return nm.get(**kwargs) if isinstance(nm, NamedExpression) else nm
 
     def get(self, *args, parallel=False, **kwargs):   # pylint:disable=arguments-differ
         """ Calculate and return a value of the expression """
@@ -761,27 +786,16 @@ class P(W):
         name, kwargs = self._get(**kwargs)
         batch = kwargs['batch']
 
-        # it's called from the decorator, so values were pre-calculated, just return them
-        if parallel:
-            # However, we can still have some R-expressions, e.g. for probabilities
-            if isinstance(self.name, R):
-                return self.name.get(**kwargs, size=batch.size)
-            return self.name
-
-        # pre-calculate values to pass them into decorator which takes them one by one
-        if isinstance(name, R):
-            values = name.get(**kwargs, size=batch.size)
-        elif isinstance(name, NamedExpression):
-            values = name.get(**kwargs)
+        if self._fp:
+            values = np.array([self._get_val(name, from_parallel=parallel, **kwargs) for _ in batch])
         else:
-            values = name
-
-        if len(values) != len(batch):
-            raise ValueError('%s returns a value (len=%d) which does not fit the batch size (len=%d)'
-                                % (self, len(values), len(batch)))
+            values = self._get_val(name, from_parallel=parallel, **kwargs)
+            if len(values) < len(batch):
+                raise ValueError('%s returns a value (len=%d) which does not fit the batch size (len=%d)'
+                                    % (self, len(values), len(batch)))
 
         # return P-expr to be recognized by the decorator
-        return P(values)
+        return values if parallel else P(values)
 
     def assign(self, value, **kwargs):
         """ Assign a value """
