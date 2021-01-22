@@ -31,7 +31,7 @@ class RadixSoftmax(nn.Module):
     If `radix` is 1, common sigmoid is used.
     """
     def __init__(self, radix, cardinality):
-        super(RadixSoftmax, self).__init__()
+        super().__init__()
         self.radix = radix
         self.cardinality = cardinality
 

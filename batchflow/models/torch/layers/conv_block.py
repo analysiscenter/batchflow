@@ -403,13 +403,8 @@ class BaseConvBlock(nn.ModuleDict):
     def __repr__(self):
         if getattr(self, 'short_repr', False):
             msg = f'layout={self.layout}\n'
-            # msg += '\n'.join([f'{key}' for key in self.keys()])
-
-            for i, (key, value) in enumerate(self.items()):
-                layer_repr = repr(value.layer) if hasattr(value, 'layer') else key.split(':')[0]
-                layer_msg = f'({i}) : {key.split(":")[1]} : {layer_repr} \n'
-                msg += layer_msg
-            return f'{msg}'
+            msg += '\n'.join([f'{key}' for key in self.keys()])
+            return f'{msg}\n'
         return super().__repr__()
 
 
