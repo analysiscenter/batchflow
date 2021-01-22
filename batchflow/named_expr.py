@@ -678,7 +678,7 @@ class P(W):
     Each image in the batch will be rotated at its own angle::
 
         pipeline
-            .rotate(angle=P(R('normal', 0, 1)))
+            .rotate(angle=P(R('normal', 0, 1, size=BATCH_SIZE)))
 
     Without ``P`` all images in the batch will be rotated at the same angle,
     as an angle is randomized across batches only::
@@ -686,15 +686,29 @@ class P(W):
         pipeline
             .rotate(angle=R('normal', 0, 1))
 
+    `force_parallel=True` forces recalculation of an argument for each batch item,
+    thus
+
+        pipeline
+            .rotate(angle=P(R('normal', 0, 1)), force_parallel=True)
+
+    produces different rotation angles for each item in a batch,
+    note that `size` parameter of `R` is abscent.
+
+    When `force_parallel=False` (default) the argument of `P` should be an iterable
+    with length equal to the batch size
+
+    More examples:
+
     Generate 3 categorical random samples for each batch item::
 
         pipeline
-            .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=3))
+            .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=3), force_parallel=True))
 
     Generate random number of random samples for each batch item::
 
         pipeline
-            .some_action(P(R('normal', 0, 1, size=R('randint', 3, 8))))
+            .some_action(P(R('normal', 0, 1, size=R('randint', 3, 8)), force_parallel=True))
 
     ``P`` works with arbitrary iterables too::
 
@@ -707,8 +721,17 @@ class P(W):
     --------
     :func:`~batchflow.inbatch_parallel`
     """
+
+    def __init__(self, name, mode='w', force_parallel=False):
+        super().__init__(name, mode)
+        self._fp = force_parallel
+
     def _get_name(self, **kwargs):
         return self.name
+
+    @staticmethod
+    def _get_val(name, **kwargs):
+        return name.get(**kwargs) if isinstance(name, NamedExpression) else name
 
     def get(self, *args, parallel=False, **kwargs):   # pylint:disable=arguments-differ
         """ Return a wrapped named expression """
@@ -716,15 +739,13 @@ class P(W):
         if parallel:
             name, kwargs = self._get(**kwargs)
             batch = kwargs['batch']
-            if isinstance(name, R):
-                val = np.array([name.get(**kwargs) for _ in batch])
-            elif isinstance(name, NamedExpression):
-                val = name.get(**kwargs)
+            if self._fp:
+                val = np.array([self._get_val(name, **kwargs) for _ in batch])
             else:
-                val = name
-            if len(val) < len(batch):
-                raise ValueError('%s returns a value (len=%d) which does not fit the batch size (len=%d)'
-                                 % (self, len(val), len(batch)))
+                val = self._get_val(name, **kwargs)
+                if len(val) < len(batch):
+                    raise ValueError('%s returns a value (len=%d) which does not fit the batch size (len=%d)'
+                                     % (self, len(val), len(batch)))
             return val
         return self
 
