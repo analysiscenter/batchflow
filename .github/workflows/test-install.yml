@@ -63,7 +63,7 @@ jobs:
     - name: Install batchflow with pip
       run: |
         pip install -U pip wheel pytest
-        pip install -e git+https://github.com/analysiscenter/batchflow.git@${GITHUB_BASE_REF##*/}#egg=batchflow
+        pip install -e git+https://github.com/analysiscenter/batchflow.git@${GITHUB_BASE_REF}#egg=batchflow
     
     - name: Run 'import batchflow'
       run: python -c 'import batchflow' 
@@ -98,7 +98,7 @@ jobs:
         pip install wheel pipenv
         pipenv --python ${{ matrix.python-version }}
         pipenv install pytest
-        pipenv install -e git+https://github.com/analysiscenter/batchflow.git@${GITHUB_BASE_REF##*/}#egg=batchflow
+        pipenv install -e git+https://github.com/analysiscenter/batchflow.git@${GITHUB_BASE_REF}#egg=batchflow
     
     - name: Run 'import batchflow' in installed environment
       run: pipenv run python -c 'import batchflow' 
