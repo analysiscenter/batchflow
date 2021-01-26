@@ -891,12 +891,11 @@ class TorchModel(BaseModel, VisualizationMixin):
             split_inputs = [inputs]
             split_targets = [targets]
 
-        # Prepara parameters for SAM
+        # Prepare parameters for SAM
         if sam_rho is None:
             sam_rho = self.sam_rho
         if sam_individual_norm is None:
             sam_individual_norm = self.sam_individual_norm
-        use_sam = bool(sam_rho)
 
         # Create Pytorch model if it is yet to be initialized, based on the actual inputs
         if self.model is None:
@@ -939,7 +938,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             _targets = self.transfer_to_device(_targets)
 
             output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps,
-                                 use_sam=use_sam, sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
+                                 sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
             outputs.append(output)
 
         # Store the average value of loss over the entire batch
@@ -967,8 +966,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             'microbatch': microbatch,
             'sync_frequency': sync_frequency,
             'steps': steps,
-            'use_sam': use_sam, 'sam_rho': sam_rho,
-            'sam_individual_norm': sam_individual_norm,
+            'sam_rho': sam_rho, 'sam_individual_norm': sam_individual_norm,
             'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
             'actual_model_outputs_shape': get_shape(_targets),
         })
@@ -978,7 +976,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             callback.on_iter_end()
         return output
 
-    def _train(self, *args, fetches=None, sync_frequency=True, use_sam=False, sam_rho=0.0, sam_individual_norm=True):
+    def _train(self, *args, fetches=None, sync_frequency=True, sam_rho=0.0, sam_individual_norm=True):
         # Parse inputs
         *inputs, targets = args
         inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
@@ -987,7 +985,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         predictions = self.model(inputs)
 
         # SAM: store grads from previous microbatches
-        if self.iteration >= 1 and use_sam:
+        if self.iteration >= 1 and bool(sam_rho):
             for p in self.model.parameters():
                 if p.grad is not None:
                     self.optimizer.state[p]['previous_grad'] = p.grad.clone().detach()
@@ -997,7 +995,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         loss.backward()
 
         # SAM: use obtained grads to move to the local maxima
-        if self.iteration >= 1 and use_sam:
+        if self.iteration >= 1 and bool(sam_rho):
             # Fetch gradients
             grads = []
             params_with_grads = []
