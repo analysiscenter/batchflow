@@ -5,6 +5,7 @@
 [![codecov](https://codecov.io/gh/analysiscenter/batchflow/branch/master/graph/badge.svg)](https://codecov.io/gh/analysiscenter/batchflow)
 [![PyPI](https://badge.fury.io/py/batchflow.svg)](https://badge.fury.io/py/batchflow)
 [![Status](https://github.com/analysiscenter/batchflow/workflows/status/badge.svg)](https://github.com/analysiscenter/batchflow/actions?query=workflow%3Astatus)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fanalysiscenter%2Fbatchflow.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fanalysiscenter%2Fbatchflow?ref=badge_shield)
 
 
 # BatchFlow
@@ -155,3 +156,7 @@ Roman Khudorozhkov et al. BatchFlow library for fast ML workflows. 2017. doi:10.
   url          = {https://doi.org/10.5281/zenodo.1041203}
 }
 ```
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fanalysiscenter%2Fbatchflow.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fanalysiscenter%2Fbatchflow?ref=badge_large)
