@@ -31,13 +31,13 @@ jobs:
       run: |
         pip install --user -U pip
         pip install --user -r requirements.txt
-        pip install pytest
     
     - name: Run 'import batchflow'
       run: python -c 'import batchflow' 
 
     - name: Run basic tests
       run: |
+        pip install -U pytest
         cd batchflow/tests
         pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
 
