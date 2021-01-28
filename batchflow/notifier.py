@@ -141,6 +141,7 @@ class Notifier:
         # Create bar; set the number of total iterations, if possible
         self.bar = None
 
+        bar_func = None
         if callable(bar):
             bar_func = bar
         elif bar in ['n', 'nb', 'notebook', 'j', 'jpn', 'jupyter']:
@@ -149,8 +150,10 @@ class Notifier:
             bar_func = tqdm_auto
         elif bar in [True, 't', 'tqdm']:
             bar_func = tqdm
-        else:
+        elif bar in [False, None]:
             bar_func = DummyBar
+        else:
+            raise ValueError('Unknown bar value:', bar)
 
         # Set default values for bars
         if 'ncols' not in kwargs:
