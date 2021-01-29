@@ -376,7 +376,7 @@ class Pipeline:
         create : bool
             whether to create a variable if it does not exist. Default is `False`.
         args, kwargs
-            parameters for :meth:`.init_variable` if ``create`` is True.
+            parameters for :meth:`~.Pipeline.init_variable` if ``create`` is True.
 
         Returns
         -------
@@ -391,6 +391,63 @@ class Pipeline:
     def v(self, name, *args, **kwargs):
         """ A shorter alias for get_variable() """
         return self.get_variable(name, *args, **kwargs)
+
+    def init_lock(self, name='lock', **kwargs):
+        """ Create a lock as a pipeline variable
+
+        Parameters
+        ----------
+        name : string
+            a lock name
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Examples
+        --------
+        >>> pp = dataset.p
+                    .init_lock("model_update")
+        """
+        self.before.init_lock(name, **kwargs)
+        return self
+
+    def acquire_lock(self, name='lock', **kwargs):
+        """ Acquire lock
+
+        Parameters
+        ----------
+        name : string
+            a lock name
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+        """
+        return self._add_action(ACQUIRE_LOCK_ID, _args=dict(lock_name=name), **kwargs)
+
+    def _exec_acquire_lock(self, batch, action):
+        if not batch.pipeline.has_variable(action['lock_name']):
+            self.init_lock(action['lock_name'])
+        batch.pipeline.v(action['lock_name']).acquire(**action['kwargs'])
+
+    def release_lock(self, name='lock', **kwargs):
+        """ Release lock
+
+        Parameters
+        ----------
+        name : string
+            a lock name
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+        """
+        return self._add_action(RELEASE_LOCK_ID, _args=dict(lock_name=name), **kwargs)
+
+    def _exec_release_lock(self, batch, action):
+        batch.pipeline.v(action['lock_name']).release(**action['kwargs'])
+
 
     def init_variable(self, name, default=None, lock=True, **kwargs):
         """ Create a variable if not exists.
@@ -428,7 +485,7 @@ class Pipeline:
         ----------
         variables : dict or tuple
             if tuple, contains variable names which will have None as default values
-            if dict, then mapping from variable names to values and init params (see :meth:`.init_variable`)
+            if dict, then mapping from variable names to values and init params (see :meth:`~.Pipeline.init_variable`)
 
         Returns
         -------
@@ -514,6 +571,29 @@ class Pipeline:
     def delete_all_variables(self):
         """ Delete all variables """
         self.variables = VariableDirectory()
+
+    def save_to(self, dst, value=None):
+        """ Save a value of a given named expression lazily during pipeline execution
+
+        Parameters
+        ----------
+        dst : NamedExpression or any data container
+            destination
+
+        value
+            an updating value, could be a value of any type or a named expression
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Notes
+        -----
+        This method does not change a value of the variable until the pipeline is run.
+        So it should be used in pipeline definition chains only.
+        :func:`~.save_data_to` is imperative and may be used to change variable value within actions.
+        """
+        return self.update(dst, value)
 
     def update(self, expr, value=None):
         """ Update a value of a given named expression lazily during pipeline execution
@@ -614,7 +694,7 @@ class Pipeline:
 
         Notes
         -----
-        As a function from any namespace (see :meth:`~Pipeline.add_namespace`) can be called within a pipeline,
+        As a function from any namespace (see :meth:`~.Pipeline.add_namespace`) can be called within a pipeline,
         `call` is convenient with lambdas::
 
             pipeline
@@ -1050,7 +1130,7 @@ class Pipeline:
         return args, kwargs
 
     def _save_output(self, batch, model, output, locations):
-        save_data_to(output, locations, batch=batch, model=model)
+        save_data_to(data=output, dst=locations, batch=batch, model=model)
 
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
@@ -1457,7 +1537,7 @@ class Pipeline:
             If `False`, than the last batch in each epoch could contain repeating indices (which might be a problem)
             and the very last batch could contain fewer than `batch_size` items.
 
-            See :meth:`DatasetIndex.gen_batch` for details.
+            See :meth:`~.DatasetIndex.gen_batch` for details.
 
         notifier : str, dict, or instance of `.Notifier`
             Configuration of displayed progress bar, if any.
@@ -1609,7 +1689,7 @@ class Pipeline:
 
         See also
         --------
-        :meth:`~Pipeline.gen_batch`
+        :meth:`~.Pipeline.gen_batch`
         """
         start_time = time.time()
         if len(args) == 0 and len(kwargs) == 0:
@@ -1643,7 +1723,7 @@ class Pipeline:
 
         See also
         --------
-        :meth:`~Pipeline.gen_batch`
+        :meth:`~.Pipeline.gen_batch`
         """
         if kwargs.pop('lazy', False):
             self._lazy_run = args, kwargs
