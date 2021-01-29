@@ -756,7 +756,7 @@ class P(W):
         if isinstance(name, R):
             values = name.get(**kwargs, size=batch.size)
         elif isinstance(name, NamedExpression):
-            values = name.get(**kwargs)
+            values = name.get(**kwargs, size=batch.size)
         else:
             values = name
 
