@@ -131,6 +131,7 @@ class Results:
         for value in chunk.values():
             if len(value) < max_len:
                 value.extend([pd.np.nan] * (max_len - len(value)))
+        return max_len
 
     def _filter_configs(self, config=None, alias=None, repetition=None):
         result = None
@@ -213,7 +214,7 @@ class Results:
                             with open(filename, 'rb') as file:
                                 res.append(self._slice_file(dill.load(file), iterations_to_load, variables))
                         res = self._concat(res, variables)
-                        self._fix_length(res)
+                        length = self._fix_length(res)
 
                         config_alias.pop_config('_dummy')
                         if concat_config:
@@ -222,7 +223,9 @@ class Results:
                             if not concat_config or not drop_columns:
                                 res.update(config_alias.alias(as_string=False))
                         else:
-                            res.update(config_alias.config())
+                            config = config_alias.config()
+                            config = {k: [v] * length for k, v in config.items()}
+                            res.update(config)
                         res.update({'repetition': _repetition.config()['repetition']})
                         res.update({'update': _update.config()['update']})
                         all_results.append(
