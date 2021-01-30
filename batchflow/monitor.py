@@ -4,10 +4,12 @@ import time
 from math import ceil
 from multiprocessing import Process, Manager, Queue
 
-import psutil
 import numpy as np
 import matplotlib.pyplot as plt
-
+try:
+    import psutil
+except ImportError:
+    pass
 try:
     import nvidia_smi
 except ImportError:

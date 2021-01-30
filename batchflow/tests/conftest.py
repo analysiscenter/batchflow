@@ -23,14 +23,14 @@ def model_setup_images_clf():
         an instance of Dataset
         a model config
     """
-    def _model_setup(data_format):
+    def _model_setup(data_format, image_shape=100):
         dataset_size = 50
         num_classes = 10
 
         if data_format == 'channels_last':
-            image_shape = (100, 100, 2)
+            image_shape = (image_shape, image_shape, 2)
         else:
-            image_shape = (2, 100, 100)
+            image_shape = (2, image_shape, image_shape)
 
         batch_shape = (dataset_size, *image_shape)
         images_array = np.random.random(batch_shape)

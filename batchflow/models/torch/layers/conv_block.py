@@ -242,8 +242,7 @@ class BaseConvBlock(nn.ModuleDict):
         'D': 'd',
         'n': 'd',
         'N': 'b',
-#         'X': 'b',
-        })
+    })
 
 
     BRANCH_LETTERS = ['R', 'B']
@@ -354,7 +353,6 @@ class BaseConvBlock(nn.ModuleDict):
                 shape_before = [str((None, *shape[1:])) for shape in shape_before]
                 shape_after = (None, *shape_after[1:])
                 layer_desc = 'Layer {}, combine "{}": {}'.format(i, letter, shape_before[0])
-                starter = ('\n' + ' '*len(layer_desc))
                 for shape in shape_before[1:]:
                     layer_desc += '\n' + ' '*(len(layer_desc) - len(shape)) + shape
                 layer_desc += ' -> {}'.format(shape_after)

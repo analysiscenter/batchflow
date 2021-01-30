@@ -7,8 +7,11 @@ from tqdm.notebook import tqdm as tqdm_notebook
 from tqdm.auto import tqdm as tqdm_auto
 
 import numpy as np
-from IPython import display
 import matplotlib.pyplot as plt
+try:
+    from IPython import display
+except ImportError:
+    pass
 
 from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .named_expr import NamedExpression, eval_expr
@@ -138,6 +141,7 @@ class Notifier:
         # Create bar; set the number of total iterations, if possible
         self.bar = None
 
+        bar_func = None
         if callable(bar):
             bar_func = bar
         elif bar in ['n', 'nb', 'notebook', 'j', 'jpn', 'jupyter']:
@@ -146,8 +150,10 @@ class Notifier:
             bar_func = tqdm_auto
         elif bar in [True, 't', 'tqdm']:
             bar_func = tqdm
-        else:
+        elif bar in [False, None]:
             bar_func = DummyBar
+        else:
+            raise ValueError('Unknown bar value:', bar)
 
         # Set default values for bars
         if 'ncols' not in kwargs:

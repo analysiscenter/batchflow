@@ -108,10 +108,11 @@ class Worker:
                             except EmptyException:
                                 signal = None
                             if signal is None:
-                                if self.timeout is not None and (time.time() - last_update_time.value) / 60 > self.timeout:
+                                execution_time = (time.time() - last_update_time.value) / 60
+                                if self.timeout is not None and execution_time > self.timeout:
                                     p = psutil.Process(pid)
                                     p.terminate()
-                                    message = 'Job {} [{}] failed in {} because of timeout'.format(job[0], pid, self.worker_name)
+                                    message = f'Job {job[0]} [{pid}] failed in {self.worker_name} because of timeout'
                                     self.logger.info(message)
                                     final_signal.exception = TimeoutError(message)
                                     results.put(copy(final_signal))

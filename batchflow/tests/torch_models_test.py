@@ -5,9 +5,10 @@ import pytest
 
 from batchflow import Pipeline
 from batchflow import B, V, C
-from batchflow.models.torch import VGG7
+from batchflow.models.torch import VGG7, EfficientNetB0
 
-MODELS = [VGG7]
+MODELS = [VGG7, EfficientNetB0]
+IM_SHAPE = [100, EfficientNetB0.resolution]
 
 
 @pytest.fixture()
@@ -45,7 +46,7 @@ def pipeline():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('model', MODELS)
+@pytest.mark.parametrize('model, image_shape', list(zip(MODELS, IM_SHAPE)))
 class Test_models:
     """ Ensure that a model can be built and trained.
 
@@ -55,10 +56,11 @@ class Test_models:
         Finally, we assert that our modification was actually applied to a model by attempting
         to build and train it with a small batch.
     """
-    @pytest.mark.parametrize('decay', [None, {'name': 'exp', 'frequency': 25}])
-    def test_data_format(self, model, model_setup_images_clf, pipeline, decay):
+
+    @pytest.mark.parametrize('decay', [None, {'name':'exp', 'frequency': 25}])
+    def test_data_format(self, model, model_setup_images_clf, pipeline, decay, image_shape):
         """ We can explicitly pass 'data_format' to inputs or common."""
-        dataset, model_config = model_setup_images_clf('channels_first')
+        dataset, model_config = model_setup_images_clf('channels_first', image_shape=image_shape)
         model_config.update(decay=decay)
         config = {'model_class': model, 'model_config': model_config}
         test_pipeline = (pipeline << dataset) << config

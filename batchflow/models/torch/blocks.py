@@ -158,6 +158,90 @@ class ResBlock(ConvBlock):
                          **kwargs)
 
 
+class MBConvBlock(ConvBlock):
+    """ Inverted Recidual, or MBConv Module: pass tensor through one or multiple (`n_reps`) blocks,
+    each of which has a sequence of narrow-wide-narrow layers, possibly with SE block in between.
+    Skip connections are added if input shape is equal to output shape.
+
+    Parameters
+    ----------
+    inputs : torch.Tensor
+        Example of input tensor to this layer.
+    expand_ratio: int
+        number of filters in the inner wide layer is `expand_ratio` times greater than number of input filters
+    filters : int, str
+        If `str`, then number of filters is calculated by its evaluation. ``'S'`` and ``'same'`` stand for the
+        number of filters in the previous tensor. Note the `eval` usage under the hood.
+        If int, then number of filters in the output tensor. Default value is 'same'.
+    kernel_size : int
+        Convolution kernel size. Default is 3.
+    strides : int
+        Convolution stride. Default is 1.
+    attention : None, bool or str
+        If None or False, then nothing is added. Default is False.
+        If True, then add a squeeze-and-excitation block.
+        If str, then any of allowed self-attentions.
+        For more info about possible operations, check :class:`~.layers.SelfAttention`.
+    n_reps : int
+        Number of times to repeat the whole block. Default is 1.
+    kwargs : dict
+        Other named arguments for the :class:`~.layers.ConvBlock`
+    """
+    def __init__(self, inputs=None, n_reps=1, expand_ratio=6, strides=1, filters='same', kernel_size=3,
+                 attention=False, **kwargs):
+
+        if isinstance(filters, str):
+            filters = safe_eval(filters, get_num_channels(inputs))
+
+        inp_filters = get_num_channels(inputs)
+
+        layer_params = []
+        for k in range(n_reps):
+            if k > 0:
+                strides = 1
+
+            inner_filters = inp_filters * expand_ratio
+
+            use_res_connect = (strides == 1) and (inp_filters == filters)
+
+            block_params = dict(layout='', filters=[], kernel_size=[], strides=[])
+
+            if use_res_connect:
+                block_params['layout'] += 'R'
+
+            if expand_ratio != 1:
+                block_params['layout'] += 'cna'
+                block_params['filters'].append(inner_filters)
+                block_params['kernel_size'].append(1)
+                block_params['strides'].append(1)
+
+            block_params['layout'] += 'wna'
+            block_params['filters'].append('dummy')
+            block_params['kernel_size'].append(kernel_size)
+            block_params['strides'].append(strides)
+
+            if attention:
+                block_params['layout'] += 'S'
+                block_params['attention'] = attention
+
+            block_params['layout'] += 'cn'
+            block_params['filters'].append(filters)
+            block_params['kernel_size'].append(1)
+            block_params['strides'].append(1)
+
+
+            if use_res_connect:
+                block_params['layout'] += '+'
+
+            layer_params.append(block_params)
+
+            inp_filters = filters
+
+        super().__init__(*layer_params, inputs=inputs, **kwargs)
+
+
+InvResBlock = MBConvBlock
+
 
 class DenseBlock(ConvBlock):
     """ DenseBlock module.

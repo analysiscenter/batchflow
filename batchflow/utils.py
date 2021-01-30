@@ -4,7 +4,10 @@ import functools
 import itertools
 
 import numpy as np
-import pandas as pd
+try:
+    import pandas as pd
+except ImportError:
+    from . import _fake as pd
 from matplotlib import pyplot as plt
 from matplotlib import colors as mcolors
 
@@ -183,7 +186,7 @@ def show_research(df, layouts=None, titles=None, average_repetitions=False, log_
         cmap = plt.get_cmap(color)
         chosen_colors = [cmap(i/df_len) for i in range(df_len)]
     else:
-        chosen_colors = itertools.cycle(color)
+        chosen_colors = list(itertools.islice(itertools.cycle(color), df_len))
 
     kwargs = {'figsize': (9 * len(layouts), 7), 'nrows': 1, 'ncols': len(layouts), **kwargs}
 
