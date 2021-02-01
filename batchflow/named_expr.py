@@ -75,7 +75,6 @@ UNARY_OPS = {
     '#str': str,
 }
 
-
 OPERATIONS = {**TERNARY_OPS, **BINARY_OPS, **UNARY_OPS}
 
 
@@ -753,10 +752,10 @@ class P(W):
             return self.name
 
         # pre-calculate values to pass them into decorator which takes them one by one
-        if isinstance(name, R):
+        if isinstance(name, R) or isinstance(name, AlgebraicNamedExpression):
             values = name.get(**kwargs, size=batch.size)
         elif isinstance(name, NamedExpression):
-            values = name.get(**kwargs, size=batch.size)
+            values = name.get(**kwargs)
         else:
             values = name
 
