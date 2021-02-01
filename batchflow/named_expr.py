@@ -77,6 +77,21 @@ UNARY_OPS = {
 
 OPERATIONS = {**TERNARY_OPS, **BINARY_OPS, **UNARY_OPS}
 
+OPERATIONS_SIGNS = {
+    '__pos__': '+', '__neg__': '-', '__invert__': '~',
+    '__add__': '+', '__radd__': '+',
+    '__sub__': '-', '__rsub__': '-',
+    '__mul__': '*', '__rmul__': '*',
+    '__floordiv__': '/', '__rfloordiv__': '/',
+    '__truediv__': '//', '__rtruediv__': '//',
+    '__mod__': '%', '__rmod__': '%',
+    '__pow__': '**', '__rpow__': '**',
+    '__matmul__': '@', '__rmatmul__': '@',
+    '__lshift__': '>>', '__rshift__': '>>',
+    '__and__': '&', '__or__': ' |', '__xor__': '^',
+    '__lt__': '<', '__le__': '<=', '__gt__': '>', '__ge__': '>=',
+    '__eq__': '==', '__ne__': '!=',
+}
 
 def add_ops(cls):
     """ Add arithmetic operations to a class.
@@ -265,11 +280,6 @@ class NamedExpression(metaclass=MetaNamedExpression):
             self.assign(value, *args, **kwargs)
 
     def __repr__(self):
-        if isinstance(self.name, str) and self.name == AN_EXPR:
-            val = "Arithmetic expression " + str(self.op) + " on " + repr(self.a)
-            if self.op in BINARY_OPS:
-                val += " and " + repr(self.b)
-            return val
         return type(self).__name__ + '(' + str(self.name) + ')'
 
     def __setstate__(self, d):
@@ -314,6 +324,36 @@ class AlgebraicNamedExpression(NamedExpression):
             setattr(a, b, value)
         elif self.op == '#item':
             a[b] = value
+
+    def __repr__(self):
+        if self.op in OPERATIONS_SIGNS:
+            if self.op in UNARY_OPS:
+                return OPERATIONS_SIGNS[self.op] + repr(self.a)
+            if self.op in BINARY_OPS:
+                return repr(self.a) + ' ' + OPERATIONS_SIGNS[self.op] + ' ' + repr(self.b)
+
+        if self.op == '__abs__':
+            return '|' + repr(self.a) + '|'
+        if self.op == '#str':
+            return 'str(' + repr(self.a) + ')'
+        if self.op == '#attr':
+            return repr(self.a) + '.' + repr(self.b)
+        if self.op == '#item':
+            return repr(self.a) + '[' + repr(self.b) +']'
+        if self.op == '#slice':
+            a = repr(self.a) if self.a else ''
+            b = repr(self.b) if self.b else ''
+            c = ':' + repr(self.c) if self.c else ''
+            return a + ':' + b + c
+
+        if self.op == '#call':
+            args = repr(self.b)[1:-1] if self.b else ''
+            if self.b:
+                kwargs = ','.join([repr(k) + '=' + repr(v) for k,v in self.c.items()])
+                args = args + ', ' + kwargs if args else kwargs
+            return repr(self.a) + '(' + args + ')'
+
+        return 'Unknown expression'
 
 
 class B(NamedExpression):
