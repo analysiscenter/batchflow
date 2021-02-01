@@ -340,6 +340,10 @@ class AlgebraicNamedExpression(NamedExpression):
             return repr(self.a) + '.' + repr(self.b)
         if self.op == '#item':
             return repr(self.a) + '[' + repr(self.b) +']'
+        if self.op == '#format':
+            a = repr(self.a) if self.a else ''
+            b = repr(self.b) if self.b else ''
+            return 'f' + b + '.' + a
         if self.op == '#slice':
             a = repr(self.a) if self.a else ''
             b = repr(self.b) if self.b else ''
