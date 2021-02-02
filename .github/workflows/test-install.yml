@@ -64,7 +64,7 @@ jobs:
       run: |
         pip install --user -U pip 
         pip install wheel
-        pip install -e git+https://github.com/${{ github.repository }}.git@${{ github.head_ref }}#egg=batchflow
+        pip install -e git+https://github.com/${{ github.event.repository.full_name  }}.git@${{ github.head_ref }}#egg=batchflow
     
     - name: Run 'import batchflow'
       run: python -c 'import batchflow' 
