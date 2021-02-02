@@ -18,7 +18,9 @@ jobs:
     - uses: actions/checkout@v1
 
     - name: Check if the branch is behind the master
-      run: git rev-list --count HEAD..origin/master | grep -w "0"
+      run: |
+        git fetch origin master
+        git rev-list --count HEAD..origin/master | grep -w "0"
 
     - name: Generate coverage report
       run: |
