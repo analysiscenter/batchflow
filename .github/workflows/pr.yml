@@ -15,11 +15,12 @@ jobs:
       image: analysiscenter1/ds-py3:cpu
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
+      with:
+        - ref: [origin/master, ${{ github.ref }}]
 
     - name: Check if the branch is behind the master
       run: |
-        git fetch origin master
         git rev-list --count HEAD..origin/master | grep -w "0"
 
     - name: Generate coverage report
