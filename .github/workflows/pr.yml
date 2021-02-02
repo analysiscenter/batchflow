@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
       with:
-        ref: [origin/master, ${{ github.ref }}]
+        fetch-refs: origin/master
 
     - name: Check if the branch is behind the master
       run: |
