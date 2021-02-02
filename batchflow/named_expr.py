@@ -757,12 +757,14 @@ class P(W):
         pipeline
             .rotate(angle=R('normal', 0, 1))
 
+    To put it simply, ``R(...)`` is evaluated as ``R(..., size=batch.size)``.
+
     Generate 3 categorical random samples for each batch item::
 
         pipeline
             .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=3))
 
-    Generate random number of random samples for each batch item::
+    Generate a random number of random samples for each batch item::
 
         pipeline
             .some_action(P(R('normal', 0, 1, size=R('randint', 3, 8))))
@@ -776,7 +778,7 @@ class P(W):
 
     See also
     --------
-    :func:`~batchflow.inbatch_parallel`
+    :func:`~.inbatch_parallel`
     """
     def _get_name(self, **kwargs):
         return self.name
@@ -814,3 +816,56 @@ class P(W):
         """ Assign a value """
         _ = kwargs
         self.name = value # pylint: disable=attribute-defined-outside-init
+
+
+class PP(P):
+    """ A wrapper for single-value expressions passed to actions parallelized with @inbatch_parallel
+    `PP(expr)` is essentialy `P([expr for _ in batch.indices])`
+
+    Examples
+    --------
+    Each image in the batch will be rotated at its own angle::
+
+        pipeline
+            .rotate(angle=PP(F(get_single_angle)))
+
+    as ``get_single_angle`` will be called ``batch.size`` times.
+
+    ``R(...)`` will be evaluated only once within ``P(...)``, but many times within ``PP(...)``::
+
+        pipeline
+            .rotate(angle=PP(R('normal', 0, 1)))
+
+    That is why ``P(R(...))`` is much more efficient than ``PP(R(...))``.
+
+    However, ``PP`` is indispensable for shape-specific operations like ``@`` or broadcasting::
+
+        pipeline
+            .rotate(angle=PP(R('normal', R('normal', 50, 15, size=3), 15)))
+
+    Internal ``R`` specifies a 3D angle mean and thus defines the shape.
+    External ``R`` knows nothing about that shape and will throw an exception within ``P``,
+    but it'll work fine within ``PP``.
+
+    See also
+    --------
+    :func:`~.inbatch_parallel`
+    :class:`~.P`
+    """
+
+    def get(self, *_, **kwargs):   # pylint:disable=arguments-differ
+        """ Calculate and return a value of the expression """
+
+        name, kwargs = self._get_params(**kwargs)
+        batch = kwargs['batch']
+
+        # pre-calculate values to pass them into decorator which takes them one by one
+        values = []
+        for _ in batch.indices:
+            if isinstance(name, NamedExpression):
+                values.append(name.get(**kwargs))
+            else:
+                values.append(name)
+
+        # return P-expr to be recognized by the decorator
+        return P(values)

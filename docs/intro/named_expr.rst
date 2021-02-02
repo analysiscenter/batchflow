@@ -18,6 +18,7 @@ There are several types of named expressions:
 * R(...) - a random value
 * W(...) - a wrapper for a named expression
 * P(...) - a wrapper for parallel actions
+* PP(...) - a wrapper for single-value expressions for parallel actions
 * I(...) - an iteration counter
 
 Named expressions can be defined in two ways:
@@ -276,3 +277,13 @@ Every image in the batch gets a noise of the same intensity (7%), but of a diffe
         .do_something(n=P([1, 2, 3, 4, 5]))
 
 However, more often ``P`` is applied to ``R``-expressions.
+
+
+PP - a parallel wrapper
+=======================
+``PP(expr)`` is essentially ``P([expr for _ in batch.indices])``.
+
+It comes in handy for shape-specific operations (e.g. `@` - matrix multiplication) or external functions which return single values.
+
+As far as ``R`` is concerned, ``P(R(...))`` is more efficient as it evaluates only once (as ``R(..., size=batch.size)``).
+Whereas ``PP(R(...))`` will evaluate ``R`` multiple times (once for each batch item).
