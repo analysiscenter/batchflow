@@ -1,5 +1,6 @@
 """ Contains named expression classes"""
 import operator
+from collections import defaultdict
 
 import numpy as np
 
@@ -29,7 +30,10 @@ def eval_expr(expr, **kwargs):
             _expr.append(eval_expr(val, **kwargs))
         expr = type(expr)(_expr)
     elif isinstance(expr, (dict, Config)):
-        _expr = type(expr)()
+        if isinstance(expr, defaultdict):
+            _expr = type(expr)(expr.default_factory)
+        else:
+            _expr = type(expr)()
         for key, val in expr.items():
             key = eval_expr(key, **kwargs)
             val = eval_expr(val, **kwargs)
