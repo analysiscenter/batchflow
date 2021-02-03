@@ -185,6 +185,9 @@ class TorchModel(BaseModel, VisualizationMixin):
         Whether to collect stats of model training timings.
         If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
 
+    amp : bool
+        Whether to use automated mixed precision during model training.
+
     sync_frequency : int
         How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
 
@@ -311,12 +314,17 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.decay = None
         self.decay_step = None
 
+        self.scaler = None
+        self.amp = True
+
         self.callbacks = []
 
         # Memory amortization: accumulate gradients to update weights later
         self.sync_frequency = 1
         self.sync_counter = 0
         self.microbatch = None
+
+        # Sharpness-aware minimization
         self.sam_rho = 0.0
         self.sam_individual_norm = True
 
@@ -352,6 +360,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Store some of the config values
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
+        self.amp = self.full_config.get('amp', True)
+
         self.sam_rho = self.full_config.get('sam_rho', 0.0)
         self.sam_individual_norm = self.full_config.get('sam_individual_norm', False)
         self.profile = self.full_config.get('profile', False)
@@ -399,12 +409,13 @@ class TorchModel(BaseModel, VisualizationMixin):
         config['microbatch'] = None
         config['sync_frequency'] = 1
 
-        config['sam_rho'] = 0.0
-        config['sam_individual_norm'] = True
-
         config['loss'] = None
         config['optimizer'] = 'Adam'
         config['decay'] = None
+        config['amp'] = True
+
+        config['sam_rho'] = 0.0
+        config['sam_individual_norm'] = True
 
         config['order'] = ['initial_block', 'body', 'head']
         config['initial_block'] = {}
@@ -571,6 +582,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         self.loss = self._make_loss(config)
         self.optimizer, self.decay, self.decay_step = self._make_optimizer(config)
+        self.scaler = torch.cuda.amp.GradScaler()
 
 
     def _placeholder_data(self):
@@ -797,6 +809,15 @@ class TorchModel(BaseModel, VisualizationMixin):
             return None
         raise TypeError('Passed data should either be a `np.ndarray`, `torch.Tensor` or `cupy.ndarray`. ')
 
+    def transfer_from_device(self, data):
+        """ Transfer (possibly nested) structure from device and return the same structure. """
+        if isinstance(data, (tuple, list)):
+            return [self.transfer_from_device(item) for item in data]
+
+        if isinstance(data, (torch.Tensor, torch.autograd.Variable)):
+            return data.detach().cpu().numpy()
+        raise TypeError('Passed data should either be a `torch.Tensor` or sequence of them. ')
+
     def parse_output(self, fetches, outputs):
         """ Retrieve tensors from device in the same structure, as `fetches`. """
         fetches = fetches if fetches is not None else []
@@ -806,8 +827,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         for name in _fetches:
             if name in outputs:
                 value = outputs[name]
-                if isinstance(value, (torch.Tensor, torch.autograd.Variable)):
-                    value = value.detach().cpu().numpy()
+                value = self.transfer_from_device(value)
                 output.append(value)
             else:
                 raise KeyError('Unknown value to fetch', name)
@@ -868,6 +888,10 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Prepare inputs and targets: convert to Torch Tensors and transfer to device
         *inputs, targets = self.parse_inputs(*args, **{**(feed_dict or {}), **kwargs})
 
+        # Lock the entire method
+        if use_lock:
+            self.model_lock.acquire()
+
         # Parse arguments
         if sync_frequency is True:
             sync_frequency = self.sync_frequency
@@ -899,7 +923,6 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Create Pytorch model if it is yet to be initialized, based on the actual inputs
         if self.model is None:
-            self.model_lock.acquire()
             if isinstance(split_inputs[0], (list, tuple)):
                 self.input_shapes = [get_shape(item) for item in split_inputs[0]]
             else:
@@ -915,7 +938,6 @@ class TorchModel(BaseModel, VisualizationMixin):
             build_inputs = [item[:2] for item in split_inputs[0]]
             build_inputs = self.transfer_to_device(build_inputs)
             self._build(build_inputs)
-            self.model_lock.release()
 
         self.model.train()
 
@@ -924,9 +946,6 @@ class TorchModel(BaseModel, VisualizationMixin):
         if profile:
             profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
             profiler.__enter__()
-
-        if use_lock:
-            self.model_lock.acquire()
 
         # Train on each of the microbatches
         outputs = []
@@ -944,9 +963,6 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Store the average value of loss over the entire batch
         self.loss_list.append(np.mean(self._loss_list[-steps:]))
 
-        if use_lock:
-            self.model_lock.release()
-
         # Parse outputs to a desired structure
         if fetches:
             outputs = [outputs] if isinstance(fetches, str) else outputs
@@ -963,10 +979,11 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Store info about current iteration
         self.iter_info.update({
+            'amp': self.amp,
             'microbatch': microbatch,
             'sync_frequency': sync_frequency,
             'steps': steps,
-            'sam_rho': sam_rho, 'sam_individual_norm': sam_individual_norm,
+            'sam': bool(sam_rho), 'sam_rho': sam_rho, 'sam_individual_norm': sam_individual_norm,
             'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
             'actual_model_outputs_shape': get_shape(_targets),
         })
@@ -974,6 +991,9 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Call the callbacks
         for callback in self.callbacks:
             callback.on_iter_end()
+
+        if use_lock:
+            self.model_lock.release()
         return output
 
     def _train(self, *args, fetches=None, sync_frequency=True, sam_rho=0.0, sam_individual_norm=True):
@@ -982,6 +1002,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
 
         # Apply model, compute loss and gradients
+        with torch.cuda.amp.autocast(enabled=self.amp):
         predictions = self.model(inputs)
 
         # SAM: store grads from previous microbatches
@@ -991,8 +1012,10 @@ class TorchModel(BaseModel, VisualizationMixin):
                     self.optimizer.state[p]['previous_grad'] = p.grad.clone().detach()
                     p.grad = None
 
-        loss = sum(loss_fn(predictions, targets) for loss_fn in self.loss) / len(self.loss)
-        loss.backward()
+        with torch.cuda.amp.autocast(enabled=self.amp):
+            loss = self.loss(predictions, targets)
+            loss = loss if sync_frequency == 1 else loss / sync_frequency
+        (self.scaler.scale(loss) if self.amp else loss).backward()
 
         # SAM: use obtained grads to move to the local maxima
         if self.iteration >= 1 and bool(sam_rho):
@@ -1011,12 +1034,17 @@ class TorchModel(BaseModel, VisualizationMixin):
             else:
                 grad_norm = torch.stack([g.detach().norm(2).to(self.device) for g in grads]).norm(2)
                 epsilons = [eps * sam_rho / grad_norm for eps in grads]
+
+            if self.amp:
+                scale = self.scaler.get_scale()
+                epsilons = [eps / scale for eps in epsilons]
             params_with_grads = [p + eps for p, eps in zip(params_with_grads, epsilons)]
 
             # Compute new gradients: direction to move to minimize the local maxima
+            with torch.cuda.amp.autocast(enabled=self.amp):
             predictions = self.model(inputs)
-            loss_inner = sum(loss_fn(predictions, targets) for loss_fn in self.loss) / len(self.loss)
-            loss_inner.backward()
+                loss_inner = self.loss(predictions, targets)
+            (self.scaler.scale(loss_inner) if self.amp else loss_inner).backward()
 
             # Cancel the previous update to model parameters, add stored gradients from previous microbatches
             params_with_grads = [p - eps for p, eps in zip(params_with_grads, epsilons)]
@@ -1031,19 +1059,20 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Whether to update weights or keep accumulating
         if self.sync_counter == sync_frequency - 1:
-            # Correct accumulated gradients
-            if sync_frequency > 1:
-                for p in self.model.parameters():
-                    if p.grad is not None:
-                        p.grad /= sync_frequency
-
             # Store learning rate: once per sync
             # Note: we do it before decay, so it is actual LR used on this iteration
             self.lr_list.append([group['lr'] for group in self.optimizer.param_groups])
 
             # Update weights and remove grads
+            if self.amp:
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
             self.optimizer.step()
-            self.optimizer.zero_grad()
+
+            # Optimization over default `zero_grad`; can be removed after PyTorch >= 1.8
+            for p in self.model.parameters():
+                p.grad = None
             self.iteration += 1
 
             # Apply decay to learning rate, if needed
@@ -1108,10 +1137,10 @@ class TorchModel(BaseModel, VisualizationMixin):
         """
         inputs, targets = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
 
-        self.model.eval()
-
         if use_lock:
             self.model_lock.acquire()
+
+        self.model.eval()
 
         with torch.no_grad():
             output_container = {}
@@ -1121,17 +1150,17 @@ class TorchModel(BaseModel, VisualizationMixin):
 
             if targets is not None:
                 targets = self.transfer_to_device(targets)
-                loss = sum([loss(predictions, targets) for loss in self.loss]) / len(self.loss)
+                loss = self.loss(predictions, targets)
                 output_container['loss'] = loss
-
-        if use_lock:
-            self.model_lock.release()
 
         config = self.full_config
         additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
                                          ops=config['output'])
         output_container = {**output_container, **additional_outputs}
         output = self.parse_output(fetches, output_container)
+
+        if use_lock:
+            self.model_lock.release()
         return output
 
     def _make_prediction_inputs(self, *args, targets=None, feed_dict=None, **kwargs):
