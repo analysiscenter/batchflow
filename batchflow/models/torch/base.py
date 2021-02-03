@@ -100,18 +100,18 @@ class TorchModel(BaseModel, VisualizationMixin):
         If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
         placeholder (usually np.ndarrays with zeros) creation. Default value is 2.
 
-    loss : str, dict, list
+    loss : str, dict
         Loss function, might be defined in multiple formats.
 
         If str, then short ``name``.
         If dict, then ``{'name': name, **kwargs}``.
-        If list, then each item is a dict of format described above.
 
         Name must be one of:
             - short name (e.g. ``'mse'``, ``'ce'``, ``'l1'``, ``'cos'``, ``'hinge'``,
               ``'huber'``, ``'logloss'``, ``'dice'``)
             - a class name from `torch losses <https://pytorch.org/docs/stable/nn.html#loss-functions>`_
               (e.g. ``'PoissonNLL'`` or ``'TripletMargin'``)
+            - an instance of `:class:torch.nn.Module`
             - callable
 
         Examples:
@@ -120,7 +120,6 @@ class TorchModel(BaseModel, VisualizationMixin):
         - ``{'loss': {'name': 'KLDiv', 'reduction': 'none'}}``
         - ``{'loss': {'name': MyCustomLoss, 'epsilon': 1e-6}}``
         - ``{'loss': my_custom_loss_fn}``
-        - ``{'loss': ['dice', 'bce']}``
 
     optimizer : str, dict
         Optimizer, might be defined in multiple formats.
@@ -623,7 +622,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
     # Create training procedure(s): loss, optimizer, decay
     def make_loss(self, loss, **kwargs):
-        """ !!. """
+        """ Set model loss. Changes the `loss` attribute. """
         loss_fn = None
         # Parse `loss` to actual module
         if isinstance(loss, str):
@@ -654,7 +653,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.loss = loss_fn
 
     def make_optimizer(self, optimizer, **kwargs):
-        """ !!. """
+        """ Set model optimizer. Changes the `optimizer` attribute. """
         # Choose the optimizer
         if callable(optimizer) or isinstance(optimizer, type):
             pass
@@ -666,7 +665,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.optimizer = optimizer(self.model.parameters(), **kwargs)
 
     def make_decay(self, decay, optimizer=None, **kwargs):
-        """ !!. """
+        """ Set model decay. Changes the `decay` and `decay_step` attribute. """
         if isinstance(decay, (tuple, list)):
             decays = decay
         else:
