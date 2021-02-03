@@ -370,7 +370,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # If the inputs are set in config with their shapes we can build right away
         if self.input_shapes:
-            self._build()
+            self._build_model()
 
 
     # Create config of model creation: combine the external and default ones
@@ -482,6 +482,14 @@ class TorchModel(BaseModel, VisualizationMixin):
             config['head/filters'] = self.classes
         return config
 
+    def unpack(self, name):
+        """ Get params from config. """
+        unpacked = unpack_fn_from_config(name, self.full_config)
+        if isinstance(unpacked, list):
+            return {name: unpacked}
+        key, kwargs = unpacked
+        return {name: key, **kwargs}
+
 
     # Prepare to build the model: determine device(s) and shape(s)
     def _get_devices(self):
@@ -550,7 +558,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
 
     # Chain multiple building blocks to create model
-    def _build(self, inputs=None):
+    def _build_model(self, inputs=None):
         config = self.full_config
         order = config.get('order')
 
@@ -580,8 +588,9 @@ class TorchModel(BaseModel, VisualizationMixin):
         else:
             self.model.to(self.device)
 
-        self.loss = self._make_loss(config)
-        self.optimizer, self.decay, self.decay_step = self._make_optimizer(config)
+        self.make_loss(**self.unpack('loss'))
+        self.make_optimizer(**self.unpack('optimizer'))
+        self.make_decay(**self.unpack('decay'), optimizer=self.optimizer)
         self.scaler = torch.cuda.amp.GradScaler()
 
 
@@ -613,9 +622,8 @@ class TorchModel(BaseModel, VisualizationMixin):
 
 
     # Create training procedure(s): loss, optimizer, decay
-    def _make_loss(self, config):
-        loss, args = unpack_fn_from_config('loss', config)
-
+    def make_loss(self, loss, **kwargs):
+        """ !!. """
         loss_fn = None
         # Parse `loss` to actual module
         if isinstance(loss, str):
@@ -632,22 +640,21 @@ class TorchModel(BaseModel, VisualizationMixin):
             loss_fn = loss
         elif callable(loss):
             # Callable: just pass other arguments in
-            loss_fn = partial(loss, **args)
+            loss_fn = partial(loss, **kwargs)
         elif isinstance(loss, type):
             # Class to make module
             pass
         else:
             raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
 
-        loss_fn = loss_fn or loss(**args)
+        loss_fn = loss_fn or loss(**kwargs)
         if isinstance(loss_fn, nn.Module):
             loss_fn.to(device=self.device)
 
-        return loss_fn
+        self.loss = loss_fn
 
-    def _make_optimizer(self, config):
-        optimizer, optimizer_args = unpack_fn_from_config('optimizer', config)
-
+    def make_optimizer(self, optimizer, **kwargs):
+        """ !!. """
         # Choose the optimizer
         if callable(optimizer) or isinstance(optimizer, type):
             pass
@@ -656,50 +663,75 @@ class TorchModel(BaseModel, VisualizationMixin):
         else:
             raise ValueError("Unknown optimizer", optimizer)
 
-        # Create optimizer
-        optimizer = optimizer(self.model.parameters(), **optimizer_args)
+        self.optimizer = optimizer(self.model.parameters(), **kwargs)
 
-        decays, list_kwargs, list_steps = self._make_decay(config)
+    def make_decay(self, decay, optimizer=None, **kwargs):
+        """ !!. """
+        if isinstance(decay, (tuple, list)):
+            decays = decay
+        else:
+            decays = [(decay, kwargs)]
 
-        if decays:
-            decays = [decay(optimizer, **decay_kwargs) for decay, decay_kwargs in zip(decays, list_kwargs)]
-        return optimizer, decays, list_steps
+        self.decay, self.decay_step = [], []
 
-    def _make_decay(self, config):
-        res = unpack_fn_from_config('decay', config)
-        res = res if isinstance(res, list) else [res]
-        decays, list_kwargs, list_steps = [], [], []
+        for decay_, decay_kwargs in decays:
+            if decay_ is None:
+                raise ValueError('Missing `name` key in the decay configuration')
 
-        for decay, decay_args in res:
-            if decay is None:
-                return decays, list_kwargs, list_steps
+            # Parse decay
+            if callable(decay_) or isinstance(decay_, type):
+                pass
+            elif isinstance(decay_, str) and hasattr(torch.optim.lr_scheduler, decay_):
+                decay = getattr(torch.optim.lr_scheduler, decay_)
+            elif decay_ in DECAYS:
+                decay_ = DECAYS.get(decay_)
+            else:
+                raise ValueError('Unknown learning rate decay method', decay_)
 
-            step_meta_keys = ['frequency', 'first_iter', 'last_iter']
-            step_meta_defaults = [None, 0, np.inf]
-            step_meta = {key: decay_args.pop(key, default) for key, default in zip(step_meta_keys, step_meta_defaults)}
-            if step_meta['frequency'] is None:
+            # Parse step parameters
+            step_params = {
+                'first_iter': 0,
+                'last_iter': np.inf,
+                **decay_kwargs
+            }
+            if 'frequency' not in step_params:
                 raise ValueError('Missing `frequency` key in the decay configuration')
 
-            if callable(decay) or isinstance(decay, type):
-                pass
-            elif isinstance(decay, str) and hasattr(torch.optim.lr_scheduler, decay):
-                decay = getattr(torch.optim.lr_scheduler, decay)
-            elif decay in DECAYS:
-                decay = DECAYS.get(decay)
-            else:
-                raise ValueError('Unknown learning rate decay method', decay)
-
-            if decay in DECAYS_DEFAULTS:
-                decay_dict = DECAYS_DEFAULTS.get(decay).copy()
+            # Set defaults for some of the decays
+            if decay_ in DECAYS_DEFAULTS:
+                decay_dict = DECAYS_DEFAULTS.get(decay_).copy()
                 if decay == DECAYS['cos']:
-                    decay_dict.update(T_max=step_meta['frequency'])
-                decay_args = {**decay_dict, **decay_args}
+                    decay_dict.update(T_max=step_params['frequency'])
+                decay_kwargs = {**decay_dict, **decay_kwargs}
 
-            decays.append(decay)
-            list_kwargs.append(decay_args)
-            list_steps.append(step_meta)
-        return decays, list_kwargs, list_steps
+            # Remove unnecessary keys from kwargs
+            for key in ['first_iter', 'last_iter', 'frequency']:
+                decay_kwargs.pop(key, None)
 
+            # Create decay or store parameters for later usage
+            if optimizer:
+                decay_ = decay_(optimizer, **decay_kwargs)
+            else:
+                decay = (decay_, decay_kwargs)
+
+            self.decay.append(decay_)
+            self.decay_step.append(step_params)
+
+
+    # Use external model
+    def set_model(self, model):
+        """ Set the underlying model to a supplied one and update training infrastructure. """
+        self.model = model
+
+        if len(self.devices) > 1:
+            self.model = nn.DataParallel(self.model, self.devices)
+        else:
+            self.model.to(self.device)
+
+        self.make_loss(**self.unpack('loss'))
+        self.make_optimizer(**self.unpack('optimizer'))
+        self.make_decay(**self.unpack('decay'), optimizer=self.optimizer)
+        self.scaler = torch.cuda.amp.GradScaler()
 
     # Define model structure
     @classmethod
@@ -764,8 +796,6 @@ class TorchModel(BaseModel, VisualizationMixin):
             return ConvBlock(inputs=inputs, **kwargs)
         return None
 
-    def set_model(self, model):
-        pass
 
     # Transfer data to/from device(s)
     def parse_inputs(self, *args, **kwargs):
@@ -935,7 +965,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             self.build_config()
             build_inputs = [item[:2] for item in split_inputs[0]]
             build_inputs = self.transfer_to_device(build_inputs)
-            self._build(build_inputs)
+            self._build_model(build_inputs)
 
         self.model.train()
 
