@@ -614,40 +614,36 @@ class TorchModel(BaseModel, VisualizationMixin):
 
     # Create training procedure(s): loss, optimizer, decay
     def _make_loss(self, config):
-        res = unpack_fn_from_config('loss', config)
-        res = res if isinstance(res, list) else [res]
+        loss, args = unpack_fn_from_config('loss', config)
 
-        losses = []
-        for loss, args in res:
-            loss_fn = None
-            # Parse `loss` to actual module
-            if isinstance(loss, str):
-                # String like 'ce', 'bdice' or 'CrossEntropy'
-                if hasattr(nn, loss):
-                    loss = getattr(nn, loss)
-                elif hasattr(nn, loss + "Loss"):
-                    loss = getattr(nn, loss + "Loss")
-                else:
-                    loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
-
-            elif isinstance(loss, nn.Module):
-                # Already a valid module
-                loss_fn = loss
-            elif callable(loss):
-                # Callable: just pass other arguments in
-                loss_fn = partial(loss, **args)
-            elif isinstance(loss, type):
-                # Class to make module
-                pass
+        loss_fn = None
+        # Parse `loss` to actual module
+        if isinstance(loss, str):
+            # String like 'ce', 'bdice' or 'CrossEntropy'
+            if hasattr(nn, loss):
+                loss = getattr(nn, loss)
+            elif hasattr(nn, loss + "Loss"):
+                loss = getattr(nn, loss + "Loss")
             else:
-                raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
+                loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
 
-            loss_fn = loss_fn or loss(**args)
-            if isinstance(loss_fn, nn.Module):
-                loss_fn.to(device=self.device)
-            losses.append(loss_fn)
+        elif isinstance(loss, nn.Module):
+            # Already a valid module
+            loss_fn = loss
+        elif callable(loss):
+            # Callable: just pass other arguments in
+            loss_fn = partial(loss, **args)
+        elif isinstance(loss, type):
+            # Class to make module
+            pass
+        else:
+            raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
 
-        return losses
+        loss_fn = loss_fn or loss(**args)
+        if isinstance(loss_fn, nn.Module):
+            loss_fn.to(device=self.device)
+
+        return loss_fn
 
     def _make_optimizer(self, config):
         optimizer, optimizer_args = unpack_fn_from_config('optimizer', config)
@@ -768,6 +764,8 @@ class TorchModel(BaseModel, VisualizationMixin):
             return ConvBlock(inputs=inputs, **kwargs)
         return None
 
+    def set_model(self, model):
+        pass
 
     # Transfer data to/from device(s)
     def parse_inputs(self, *args, **kwargs):
@@ -1003,7 +1001,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Apply model, compute loss and gradients
         with torch.cuda.amp.autocast(enabled=self.amp):
-        predictions = self.model(inputs)
+            predictions = self.model(inputs)
 
         # SAM: store grads from previous microbatches
         if self.iteration >= 1 and bool(sam_rho):
@@ -1042,7 +1040,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
             # Compute new gradients: direction to move to minimize the local maxima
             with torch.cuda.amp.autocast(enabled=self.amp):
-            predictions = self.model(inputs)
+                predictions = self.model(inputs)
                 loss_inner = self.loss(predictions, targets)
             (self.scaler.scale(loss_inner) if self.amp else loss_inner).backward()
 
@@ -1068,7 +1066,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
-            self.optimizer.step()
+                self.optimizer.step()
 
             # Optimization over default `zero_grad`; can be removed after PyTorch >= 1.8
             for p in self.model.parameters():
