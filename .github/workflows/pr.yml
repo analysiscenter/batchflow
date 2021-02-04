@@ -15,10 +15,11 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Check if the branch is behind the master
+      shell: bash {0}
       run: |
         git fetch origin master
         git rev-list --count HEAD..origin/master | grep -w "0"
-        test $? -eq 0 || echo "Your branch is behind the master. Pull the changes to your branch."
+        test $? -eq 0 || echo "Your branch is behind the master. Pull the changes to your branch." && exit 1
 
   code-cov:
 
