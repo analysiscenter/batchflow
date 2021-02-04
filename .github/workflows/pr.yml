@@ -17,6 +17,7 @@ jobs:
     - name: Check if the branch is behind the master
       run: |
         git fetch origin master
+        echo "Fetch completed"
         git rev-list --count HEAD..origin/master | grep -w "0"
 
   code-cov:
