@@ -18,11 +18,7 @@ jobs:
       run: |
         git fetch origin master
         git rev-list --count HEAD..origin/master | grep -w "0"
-        exit_code = $?
-        if [ $exit_code -ne 0 ]; then
-          echo "Your branch is behind the master. Pull the changes to your branch."
-        fi
-        exit $exit_code
+        test $? -eq 0 || echo "Your branch is behind the master. Pull the changes to your branch."
 
   code-cov:
 
