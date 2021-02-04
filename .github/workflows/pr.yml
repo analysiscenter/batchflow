@@ -16,6 +16,7 @@ jobs:
 
     - name: Check if the branch is behind the master
       run: |
+        apt install -y git
         git fetch origin master
         git rev-list --count HEAD..origin/master | grep -w "0"
 
