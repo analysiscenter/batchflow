@@ -17,8 +17,8 @@ There are several types of named expressions:
 * F(...) - a callable
 * R(...) - a random value
 * W(...) - a wrapper for a named expression
-* P(...) - a wrapper for parallel actions
-* PP(...) - a wrapper for single-value expressions for parallel actions
+* P(...) - a wrapper for parallel actions that calculates its expression as a batch-sized vector
+* PP(...) - a wrapper for parallel actions that calculate its expression batch-size times in a cycle
 * I(...) - an iteration counter
 
 Named expressions can be defined in two ways:

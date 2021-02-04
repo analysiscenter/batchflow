@@ -864,12 +864,7 @@ class PP(P):
         batch = kwargs['batch']
 
         # pre-calculate values to pass them into decorator which takes them one by one
-        values = []
-        for _ in batch.indices:
-            if isinstance(name, NamedExpression):
-                values.append(name.get(**kwargs))
-            else:
-                values.append(name)
+        values = [name.get(**kwargs) if isinstance(name, NamedExpression) else name for _ in batch.indices]
 
         # return P-expr to be recognized by the decorator
         return P(values)
