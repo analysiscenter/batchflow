@@ -1,0 +1,117 @@
+name: Test installation
+
+on:
+  pull_request:
+    branches:
+    - master
+
+jobs:
+
+# -----------------------------------------
+#    Use a module from local source
+# -----------------------------------------
+  use_as_local_module:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.6, 3.7, 3.8, 3.9]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install batchflow requirements
+      run: |
+        pip install --user -U pip
+        pip install --user -r requirements.txt
+    
+    - name: Run 'import batchflow'
+      run: python -c 'import batchflow' 
+
+    - name: Run basic tests
+      run: |
+        pip install -U pytest
+        cd batchflow/tests
+        pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
+
+
+# -----------------------------------------
+#    Install with pip
+# -----------------------------------------
+  install_with_pip:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.6, 3.7, 3.8, 3.9]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install batchflow with pip
+      run: |
+        pip install --user -U pip 
+        pip install wheel
+        pip install -e git+https://github.com/${{ github.repository }}.git@${{ github.head_ref }}#egg=batchflow
+    
+    - name: Run 'import batchflow'
+      run: python -c 'import batchflow' 
+
+    - uses: actions/checkout@v2
+    - name: Run basic tests
+      run: |
+        pip install -U pytest
+        cd batchflow/tests
+        pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
+
+
+# -----------------------------------------
+#    Install with pipenv
+# -----------------------------------------
+  install_with_pipenv:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.6, 3.7, 3.8, 3.9]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install batchflow with pipenv
+      run: |
+        pip install --user -U pip 
+        pip install wheel pipenv
+        pipenv --python ${{ matrix.python-version }}
+        pipenv install -e git+https://github.com/${{ github.repository }}@${{ github.head_ref }}#egg=batchflow
+    
+    - name: Run 'import batchflow' in installed environment
+      run: pipenv run python -c 'import batchflow' 
+
+    - uses: actions/checkout@v2
+
+    - name: Run basic tests
+      run: |
+        pipenv install pytest
+        cd batchflow/tests
+        pipenv run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py

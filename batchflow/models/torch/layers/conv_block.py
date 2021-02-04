@@ -242,7 +242,6 @@ class BaseConvBlock(nn.ModuleDict):
         'D': 'd',
         'n': 'd',
         'N': 'b',
-        'X': 'b',
         })
 
 
