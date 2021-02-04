@@ -1354,20 +1354,19 @@ class Pipeline:
         return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn,
                                                         components=components, batch_class=batch_class))
 
-    def _put_batches_into_queue(self, gen_batch, notifier):
+    def _put_batches_into_queue(self, gen_batch):
         while not self._stop_flag:
             self._prefetch_count.put(1, block=True)
             try:
                 batch = next(gen_batch)
-                notifier.update(pipeline=self, batch=batch)
-            except (StopIteration, StopPipeline):
+            except StopIteration:
                 break
             else:
                 future = self._executor.submit(self.execute_for, batch, new_loop=True)
                 self._prefetch_queue.put(future, block=True)
         self._prefetch_queue.put(None, block=True)
 
-    def _run_batches_from_queue(self):
+    def _run_batches_from_queue(self, notifier):
         skip_batch = False
         while not self._stop_flag:
             future = self._prefetch_queue.get(block=True)
@@ -1378,6 +1377,7 @@ class Pipeline:
 
             try:
                 batch = future.result()
+                notifier.update(pipeline=self, batch=batch)
             except SkipBatchException:
                 skip_batch = True
             except Exception:   # pylint: disable=broad-except
@@ -1593,7 +1593,10 @@ class Pipeline:
         target = kwargs.pop('target', 'threads')
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
+        if 'bar' in kwargs:
+            warnings.warn('`bar` argument is deprecated and renamed to `notifier`', DeprecationWarning, stacklevel=2)
         notifier = kwargs.pop('notifier', kwargs.pop('bar', None))
+        total = kwargs.pop('total', None)
 
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
             batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
@@ -1612,9 +1615,9 @@ class Pipeline:
 
         if not isinstance(notifier, Notifier):
             notifier = Notifier(**(notifier if isinstance(notifier, dict) else {'bar': notifier}),
-                                total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                 drop_last=drop_last, length=len(self._dataset.index))
-        else:
+        elif notifier.total is None:
             notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                   drop_last=drop_last, length=len(self._dataset.index))
 
@@ -1637,8 +1640,8 @@ class Pipeline:
             self._prefetch_queue = q.Queue(maxsize=prefetch)
             self._batch_queue = q.Queue(maxsize=1)
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
-            self._service_executor.submit(self._put_batches_into_queue, batch_generator, notifier)
-            self._service_executor.submit(self._run_batches_from_queue)
+            self._service_executor.submit(self._put_batches_into_queue, batch_generator)
+            self._service_executor.submit(self._run_batches_from_queue, notifier)
 
             while not self._stop_flag:
                 batch_res = self._batch_queue.get(block=True)
@@ -1656,7 +1659,7 @@ class Pipeline:
             for batch in batch_generator:
                 try:
                     batch_res = self.execute_for(batch)
-                    notifier.update(pipeline=self, batch=batch)
+                    notifier.update(pipeline=self, batch=batch_res)
                 except SkipBatchException:
                     pass
                 except StopPipeline:

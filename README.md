@@ -136,6 +136,14 @@ Relative import is also possible:
 from .batchflow import Dataset
 ```
 
+## Projects based on BatchFlow
+- [SeismiQB](https://github.com/gazprom-neft/seismiqb) - ML for seismic interpretation
+- [SeismicPro](https://github.com/gazprom-neft/SeismicPro) - ML for seismic processing
+- [PetroFlow](https://github.com/gazprom-neft/petroflow) - ML for well interpretation
+- [PyDEns](https://github.com/analysiscenter/pydens) - DL Solver for ODE and PDE
+- [RadIO](https://github.com/analysiscenter/radio) - ML for CT imaging
+- [CardIO](https://github.com/analysiscenter/cardio) - ML for heart signals
+
 
 ## Citing BatchFlow
 Please cite BatchFlow in your publications if it helps your research.

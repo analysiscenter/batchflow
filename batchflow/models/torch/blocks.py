@@ -187,7 +187,7 @@ class MBConvBlock(ConvBlock):
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
-    def __init__(self, inputs=None, n_reps=1, expand_ratio=6, strides=1, filters='same', kernel_size=3, layout='wna',
+    def __init__(self, inputs=None, n_reps=1, expand_ratio=6, strides=1, filters='same', kernel_size=3,
                  attention=False, **kwargs):
 
         if isinstance(filters, str):
@@ -215,8 +215,8 @@ class MBConvBlock(ConvBlock):
                 block_params['kernel_size'].append(1)
                 block_params['strides'].append(1)
 
-            block_params['layout'] += layout
-            block_params['filters'].append(inner_filters)
+            block_params['layout'] += 'wna'
+            block_params['filters'].append('dummy')
             block_params['kernel_size'].append(kernel_size)
             block_params['strides'].append(strides)
 
