@@ -29,12 +29,18 @@ class BaseConv(nn.Module):
         }
 
         padding = calc_padding(inputs, padding=padding, transposed=self.TRANSPOSED, **args)
-        if isinstance(padding, tuple) and isinstance(padding[0], tuple):
-            args['padding'] = 0
-            self.padding = sum(padding, ())
-        else:
+
+        if isinstance(padding, int) or \
+            (isinstance(padding, tuple) and all(isinstance(item, int) for item in padding)) or \
+            all(all(inner == item[0] and inner > 0 for inner in item) for item in padding):
+            # If every element is the same and non-negative, we can use the `padding` of Conv layers
+            if isinstance(padding, tuple) and all(isinstance(item, tuple) for item in padding):
+                padding = tuple(item[0] for item in padding)
             args['padding'] = padding
-            self.padding = 0
+            self.padding = False
+        else:
+            # Otherwise, use custom padding
+            self.padding = sum(padding, ())
 
         self.layer = self.LAYERS[get_num_dims(inputs)](**args)
 

@@ -206,6 +206,9 @@ class TorchModel(BaseModel, VisualizationMixin):
         If True, then each gradient is scaled according to its own L2 norm.
         If False, then one common gradient norm is computed and used as a scaler for all gradients.
 
+    callbacks : sequence of `:class:callbacks.BaseCallback`
+        Callbacks to call at the end of each training iteration.
+
     order : sequence
         Defines sequence of network blocks in the architecture. Default is initial_block -> body -> head.
         Each element of the sequence must be either a string, a tuple or a dict.
@@ -669,7 +672,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         if isinstance(decay, (tuple, list)):
             decays = decay
         else:
-            decays = [(decay, kwargs)]
+            decays = [(decay, kwargs)] if decay else []
 
         self.decay, self.decay_step = [], []
 
