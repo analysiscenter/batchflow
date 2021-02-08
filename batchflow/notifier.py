@@ -344,7 +344,7 @@ class Notifier:
             if isinstance(source, (str, NamedExpression)):
                 value = container['data'][iteration]
                 if isinstance(value, (int, float, np.signedinteger, np.floating)):
-                    desc = f'{name}={value:<6.6}' if isinstance(value, float) else f'{name}={value:<6}'
+                    desc = f'{name}={value:<6.6f}' if isinstance(value, (float, np.floating)) else f'{name}={value:<6}'
                     description.append(desc)
         return ';   '.join(description)
 

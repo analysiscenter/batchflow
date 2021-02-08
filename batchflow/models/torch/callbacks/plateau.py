@@ -2,7 +2,7 @@
 import numpy as np
 
 from .base import BaseCallback
-from ....batchflow.exceptions import StopPipeline
+from ....exceptions import StopPipeline
 
 
 
