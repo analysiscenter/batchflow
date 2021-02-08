@@ -16,7 +16,7 @@ from .notifier import Notifier
 from .named_expr import NamedExpression, B, C, F, V, M, D, R, W, P, PP, I
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, parallel, any_action_failed, mjit, deprecated, apply_parallel
-from .exceptions import SkipBatchException, EmptyBatchSequence
+from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
 from .sampler import Sampler, ConstantSampler, NumpySampler, HistoSampler, ScipySampler
 from .utils import save_data_to, read_data_from
 from .utils_notebook import in_notebook, get_notebook_path, get_notebook_name, pylint_notebook
