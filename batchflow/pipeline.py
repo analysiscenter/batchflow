@@ -1380,6 +1380,10 @@ class Pipeline:
                 notifier.update(pipeline=self, batch=batch)
             except SkipBatchException:
                 skip_batch = True
+            except StopPipeline:
+                self._prefetch_queue.task_done()
+                self._batch_queue.put(None)
+                break
             except Exception:   # pylint: disable=broad-except
                 exc = future.exception()
                 print("Exception in a thread:", exc)

@@ -846,6 +846,9 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         if isinstance(data, (torch.Tensor, torch.autograd.Variable)):
             return data.detach().cpu().numpy()
+
+        if isinstance(data, (np.ndarray, int, float)):
+            return data
         raise TypeError('Passed data should either be a `torch.Tensor` or sequence of them. ')
 
     def parse_output(self, fetches, outputs):
@@ -918,112 +921,114 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Prepare inputs and targets: convert to Torch Tensors and transfer to device
         *inputs, targets = self.parse_inputs(*args, **{**(feed_dict or {}), **kwargs})
 
-        # Lock the entire method
-        if use_lock:
-            self.model_lock.acquire()
+        # Lock the entire method; release in any case
+        try:
+            if use_lock:
+                self.model_lock.acquire()
 
-        # Parse arguments
-        if sync_frequency is True:
-            sync_frequency = self.sync_frequency
-        elif sync_frequency is False or sync_frequency is None:
-            sync_frequency = 1
+            # Parse arguments
+            if sync_frequency is True:
+                sync_frequency = self.sync_frequency
+            elif sync_frequency is False or sync_frequency is None:
+                sync_frequency = 1
 
-        if microbatch:
-            if microbatch is True:
-                microbatch = self.microbatch
+            if microbatch:
+                if microbatch is True:
+                    microbatch = self.microbatch
+                else:
+                    microbatch = microbatch or self.microbatch
+
+            # Split data into microbatches, if needed
+            if microbatch:
+                microbatch = 1 if microbatch is True else microbatch
+                steps = len(targets) // microbatch
+                split_inputs = [[item[i:i + microbatch] for item in inputs] for i in range(0, len(targets), microbatch)]
+                split_targets = [targets[i:i + microbatch] for i in range(0, len(targets), microbatch)]
             else:
-                microbatch = microbatch or self.microbatch
+                steps = 1
+                split_inputs = [inputs]
+                split_targets = [targets]
 
-        # Split data into microbatches, if needed
-        if microbatch:
-            microbatch = 1 if microbatch is True else microbatch
-            steps = len(targets) // microbatch
-            split_inputs = [[item[i:i + microbatch] for item in inputs] for i in range(0, len(targets), microbatch)]
-            split_targets = [targets[i:i + microbatch] for i in range(0, len(targets), microbatch)]
-        else:
-            steps = 1
-            split_inputs = [inputs]
-            split_targets = [targets]
+            # Prepare parameters for SAM
+            if sam_rho is None:
+                sam_rho = self.sam_rho
+            if sam_individual_norm is None:
+                sam_individual_norm = self.sam_individual_norm
 
-        # Prepare parameters for SAM
-        if sam_rho is None:
-            sam_rho = self.sam_rho
-        if sam_individual_norm is None:
-            sam_individual_norm = self.sam_individual_norm
+            # Create Pytorch model if it is yet to be initialized, based on the actual inputs
+            if self.model is None:
+                if isinstance(split_inputs[0], (list, tuple)):
+                    self.input_shapes = [get_shape(item) for item in split_inputs[0]]
+                else:
+                    self.input_shapes = get_shape(split_inputs[0])
 
-        # Create Pytorch model if it is yet to be initialized, based on the actual inputs
-        if self.model is None:
-            if isinstance(split_inputs[0], (list, tuple)):
-                self.input_shapes = [get_shape(item) for item in split_inputs[0]]
+                self.target_shape = get_shape(split_targets[0])
+                if self.classes is None:
+                    if len(self.target_shape) > 1: # segmentation
+                        self.classes = self.target_shape[1]
+
+                # Can use the first two items to build model: no need for the whole tensor
+                self.build_config()
+                build_inputs = [item[:2] for item in split_inputs[0]]
+                build_inputs = self.transfer_to_device(build_inputs)
+                self._build_model(build_inputs)
+
+            self.model.train()
+
+            # Set up the profiling, if needed
+            profile = profile or self.profile
+            if profile:
+                profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
+                profiler.__enter__()
+
+            # Train on each of the microbatches
+            outputs = []
+            for i in range(steps):
+                _inputs = split_inputs[i]
+                _targets = split_targets[i]
+
+                _inputs = self.transfer_to_device(_inputs)
+                _targets = self.transfer_to_device(_targets)
+
+                output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps,
+                                     sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
+                outputs.append(output)
+
+            # Store the average value of loss over the entire batch
+            self.loss_list.append(np.mean(self._loss_list[-steps:]))
+
+            # Parse outputs to a desired structure
+            if fetches:
+                outputs = [outputs] if isinstance(fetches, str) else outputs
+                output = [np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst)
+                          for lst in outputs]
+                output = output[0] if isinstance(fetches, str) else output
             else:
-                self.input_shapes = get_shape(split_inputs[0])
+                output = []
 
-            self.target_shape = get_shape(split_targets[0])
-            if self.classes is None:
-                if len(self.target_shape) > 1: # segmentation
-                    self.classes = self.target_shape[1]
+            # Exit the profiling mode
+            if profile:
+                profiler.__exit__(None, None, None)
+                self.profilers.append(profiler)
 
-            # Can use the first two items to build model: no need for the whole tensor
-            self.build_config()
-            build_inputs = [item[:2] for item in split_inputs[0]]
-            build_inputs = self.transfer_to_device(build_inputs)
-            self._build_model(build_inputs)
+            # Store info about current iteration
+            self.iter_info.update({
+                'amp': self.amp,
+                'microbatch': microbatch,
+                'sync_frequency': sync_frequency,
+                'steps': steps,
+                'sam': bool(sam_rho), 'sam_rho': sam_rho, 'sam_individual_norm': sam_individual_norm,
+                'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
+                'actual_model_outputs_shape': get_shape(_targets),
+            })
 
-        self.model.train()
+            # Call the callbacks
+            for callback in self.callbacks:
+                callback.on_iter_end()
 
-        # Set up the profiling, if needed
-        profile = profile or self.profile
-        if profile:
-            profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
-            profiler.__enter__()
-
-        # Train on each of the microbatches
-        outputs = []
-        for i in range(steps):
-            _inputs = split_inputs[i]
-            _targets = split_targets[i]
-
-            _inputs = self.transfer_to_device(_inputs)
-            _targets = self.transfer_to_device(_targets)
-
-            output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps,
-                                 sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
-            outputs.append(output)
-
-        # Store the average value of loss over the entire batch
-        self.loss_list.append(np.mean(self._loss_list[-steps:]))
-
-        # Parse outputs to a desired structure
-        if fetches:
-            outputs = [outputs] if isinstance(fetches, str) else outputs
-            output = [np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst)
-                      for lst in outputs]
-            output = output[0] if isinstance(fetches, str) else output
-        else:
-            output = []
-
-        # Exit the profiling mode
-        if profile:
-            profiler.__exit__(None, None, None)
-            self.profilers.append(profiler)
-
-        # Store info about current iteration
-        self.iter_info.update({
-            'amp': self.amp,
-            'microbatch': microbatch,
-            'sync_frequency': sync_frequency,
-            'steps': steps,
-            'sam': bool(sam_rho), 'sam_rho': sam_rho, 'sam_individual_norm': sam_individual_norm,
-            'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
-            'actual_model_outputs_shape': get_shape(_targets),
-        })
-
-        # Call the callbacks
-        for callback in self.callbacks:
-            callback.on_iter_end()
-
-        if use_lock:
-            self.model_lock.release()
+        finally:
+            if use_lock:
+                self.model_lock.release()
         return output
 
     def _train(self, *args, fetches=None, sync_frequency=True, sam_rho=0.0, sam_individual_norm=True):
@@ -1044,8 +1049,8 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         with torch.cuda.amp.autocast(enabled=self.amp):
             loss = self.loss(predictions, targets)
-            loss = loss if sync_frequency == 1 else loss / sync_frequency
-        (self.scaler.scale(loss) if self.amp else loss).backward()
+            loss_ = loss if sync_frequency == 1 else loss / sync_frequency
+        (self.scaler.scale(loss_) if self.amp else loss).backward()
 
         # SAM: use obtained grads to move to the local maxima
         if self.iteration >= 1 and bool(sam_rho):
