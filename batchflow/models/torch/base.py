@@ -185,7 +185,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
 
     amp : bool
-        Whether to use automated mixed precision during model training.
+        Whether to use automated mixed precision during model training. Default is True.
 
     sync_frequency : int
         How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
@@ -316,8 +316,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.decay = None
         self.decay_step = None
 
-        self.scaler = None
         self.amp = True
+        self.scaler = None
 
         self.callbacks = []
 
@@ -372,7 +372,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # If the inputs are set in config with their shapes we can build right away
         if self.input_shapes:
-            self._build_model()
+            self._build()
 
 
     # Create config of model creation: combine the external and default ones
@@ -560,7 +560,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
 
     # Chain multiple building blocks to create model
-    def _build_model(self, inputs=None):
+    def _build(self, inputs=None):
         config = self.full_config
         order = config.get('order')
 
@@ -720,7 +720,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             self.decay_step.append(step_params)
 
 
-    # Use external model
+    # Use an external model
     def set_model(self, model):
         """ Set the underlying model to a supplied one and update training infrastructure. """
         self.model = model
@@ -971,7 +971,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 self.build_config()
                 build_inputs = [item[:2] for item in split_inputs[0]]
                 build_inputs = self.transfer_to_device(build_inputs)
-                self._build_model(build_inputs)
+                self._build(build_inputs)
 
             self.model.train()
 
