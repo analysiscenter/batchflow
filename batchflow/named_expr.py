@@ -320,7 +320,7 @@ class AlgebraicNamedExpression(NamedExpression):
         if self.op not in ['#attr', '#item']:
             raise ValueError("Assigning a value to an arithmetic expression is not possible", self)
 
-        _, kwargs = self.get_params(**kwargs)
+        _, kwargs = self._get_params(**kwargs)
 
         a = eval_expr(self.a, **kwargs)
         b = eval_expr(self.b, **kwargs)
