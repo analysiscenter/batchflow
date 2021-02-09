@@ -1187,8 +1187,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
                 if targets is not None:
                     targets = self.transfer_to_device(targets)
-                    loss = self.loss(predictions, targets)
-                    output_container['loss'] = loss
+                    output_container['loss'] = self.loss(predictions, targets)
 
             config = self.full_config
             additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
