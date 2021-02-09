@@ -2,6 +2,7 @@
 import copy as cp
 from functools import partial
 import logging
+import threading
 
 import numpy as np
 
@@ -112,6 +113,26 @@ class OncePipeline:
             logging.warning("`init_on_each_run` in `%s` is obsolete. Use `default` instead.", name)
             default = kwargs.pop('init_on_each_run')
         self.pipeline.variables.create(name, default, lock=lock, pipeline=self, **kwargs)
+        return self
+
+    def init_lock(self, name='lock', **kwargs):
+        """ Create a lock as a pipeline variable
+
+        Parameters
+        ----------
+        name : string
+            a lock name
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Examples
+        --------
+        >>> pp = dataset.p.before
+                    .init_lock("model_update")
+        """
+        self.init_variable(name, default=threading.Lock(**kwargs))
         return self
 
     def init_model(self, mode, name=None, model_class=None, config=None):

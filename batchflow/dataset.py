@@ -5,7 +5,7 @@ import numpy as np
 from .base import Baseset
 from .batch import Batch
 from .dsindex import DatasetIndex
-from .named_expr import L
+from .named_expr import F
 from .pipeline import Pipeline
 from .components import create_item_class
 
@@ -283,7 +283,7 @@ class Dataset(Baseset):
 
     def CV(self, expr):
         """ Return a dataset which corresponds to the fold defined as NamedExpression """
-        return  L(self.cv)(expr)
+        return  F(self.cv)(expr)
 
     def cv_split(self, method='kfold', n_splits=5, shuffle=False):
         """ Create datasets for cross-validation

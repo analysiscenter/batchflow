@@ -464,33 +464,13 @@ Just call `pipeline.delete_variable("variable_name")` or `pipeline.del_variable(
 Deleting all variables
 ----------------------
 
-As simple as `pipeline.delete_all_variables()`
+As simple as `pipeline.delete_all_variables()`.
 
-Variables as locks
-------------------
-
-If you use multi-threading :doc:`prefetching <prefetch>` or :doc:`in-batch parallelism <parallel>`,
-than you might require synchronization when accessing some shared resource.
-And pipeline variables might be a handy place to store locks.::
-
-   class MyBatch(Batch):
-       ...
-       @action
-       def some_action(self):
-           ...
-           with self.pipeline.get_variable("my lock"):
-               # only one some_action will be executing at this point
-       ...
-
-   my_pipeline = my_dataset.p
-                   .init_variable("my lock", init=threading.Lock)
-                   .some_action()
-                   ...
 
 Update
 ======
 
-A pipeline might need custom calculations which can be implemented with :meth:`~Pipeline.update`::
+A pipeline might need custom calculations which can be implemented with :meth:`~.Pipeline.save_to` :meth:`~.Pipeline.update`::
 
     pipeline
         .init_variable('counter', 0)
@@ -507,7 +487,7 @@ Some other useful examples might include:
     pipeline
         .init_variable('loss_history', list)
         ...
-        .update(V('list', mode='a'), V('current_loss'))
+        .save_to(V('list', mode='a'), V('current_loss'))
 
 - collecting predictions::
 
@@ -521,9 +501,34 @@ Some other useful examples might include:
     pipeline
         .update(B('time'), L(time.time))
         ...
-        .update(B('time'), L(time.time) - B('time'))
+        .save_to(B('time'), L(time.time) - B('time'))
         .update(V('throughput'), B('images').nbytes / B('time'))
         ...
+
+The methods are synonyms and might be used interchangably to fit your pipeline narrative.
+
+
+Pipeline locks
+==============
+
+If you use multi-threading :doc:`prefetching <prefetch>` or :doc:`in-batch parallelism <parallel>`,
+than you might require synchronization when accessing some shared resource::
+
+    dataset.p
+        ...
+        .init_lock('lock_name')
+        ... # common section
+        .acquire_lock('lock_name')
+        ... # a critical section
+        .release_lock('lock_name')
+        ...
+        .run(BATCH_SIZE, prefetch=PARALLEL_BATCHES)
+
+Locks are stored as variables with the very same names. So you can access a lock easiliy as ``pipeline.v('lock_name')``
+and use it within actions or even custom functions.
+
+``init_lock`` is not required as the first acquire will create the lock if needed.
+However, ``init_lock`` allow for cleaner and tidier pipelines.
 
 
 Join and merge

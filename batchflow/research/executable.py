@@ -5,7 +5,7 @@ import time
 from copy import copy, deepcopy
 import dill
 from ..named_expr import eval_expr
-from .. import Config, Pipeline, V, L
+from .. import Config, Pipeline, V, F
 
 class PipelineStopIteration(StopIteration):
     """ Special pipeline StopIteration exception """
@@ -311,5 +311,5 @@ class Executable:
         if self.pipeline is not None:
             self.pipeline += (Pipeline()
                               .init_variable('_time', default=last_update_time)
-                              .update(V('_time').value, L(time.time))
+                              .update(V('_time').value, F(time.time))
                               )

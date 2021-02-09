@@ -46,8 +46,8 @@ source_parsers = {
 master_doc = 'index'
 
 project = 'BatchFlow'
-copyright = '2017-2019, Analysis Center'
 author = 'Analysis Center'
+copyright = '2017-2021, ' + author
 
 
 # The full version, including alpha/beta/rc tags.
@@ -79,14 +79,12 @@ todo_include_todos = False
 # choose html theme with custom css template
 html_theme = 'sphinx_rtd_theme'
 
-
 html_theme_options = {
 }
 
 html_static_path = ['_static']
 def setup(app):
-    app.add_stylesheet('custom.css')
-
+    app.add_css_file('custom.css')
 
 autoclass_content = 'class'
 add_module_names = False
@@ -100,10 +98,8 @@ intersphinx_mapping = {
 autodoc_mock_imports = ['torch']
 viewcode_follow_imported_members = True
 
-# -- Options for HTMLHelp output ------------------------------------------
-
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'BatchFlowdoc'
+htmlhelp_basename = 'doc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -130,7 +126,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'BatchFlow.tex', 'BatchFlow Documentation',
+    (master_doc, project + '.tex', project + ' Documentation',
      author, 'manual'),
 ]
 
@@ -140,7 +136,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'BatchFlow', 'BatchFlow Documentation',
+    (master_doc, project, project + ' Documentation',
      [author], 1)
 ]
 
@@ -151,9 +147,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'BatchFlow', 'BatchFlow Documentation',
-     author, 'BatchFlow', 'One line description of project.',
+    (master_doc, project, project + ' Documentation',
+     author, project, 'One line description of project.',
      'Miscellaneous'),
 ]
-
-#github_doc_root = 'http://github.com/analysiscenter/batchflow/'
