@@ -185,7 +185,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
 
     amp : bool
-        Whether to use automated mixed precision during model training. Default is True.
+        Whether to use automated mixed precision during model training and inference. Default is True.
 
     sync_frequency : int
         How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
@@ -1172,30 +1172,33 @@ class TorchModel(BaseModel, VisualizationMixin):
         """
         inputs, targets = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
 
-        if use_lock:
-            self.model_lock.acquire()
+        # Acquire lock, release anyway
+        try:
+            if use_lock:
+                self.model_lock.acquire()
 
-        self.model.eval()
+            self.model.eval()
 
-        with torch.no_grad():
-            output_container = {}
-            inputs = self.transfer_to_device(inputs)
-            predictions = self.model(inputs)
-            output_container['predictions'] = predictions
+            with torch.no_grad(), torch.cuda.amp.autocast(enabled=self.amp):
+                output_container = {}
+                inputs = self.transfer_to_device(inputs)
+                predictions = self.model(inputs)
+                output_container['predictions'] = predictions
 
-            if targets is not None:
-                targets = self.transfer_to_device(targets)
-                loss = self.loss(predictions, targets)
-                output_container['loss'] = loss
+                if targets is not None:
+                    targets = self.transfer_to_device(targets)
+                    loss = self.loss(predictions, targets)
+                    output_container['loss'] = loss
 
-        config = self.full_config
-        additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
-                                         ops=config['output'])
-        output_container = {**output_container, **additional_outputs}
-        output = self.parse_output(fetches, output_container)
+            config = self.full_config
+            additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
+                                             ops=config['output'])
+            output_container = {**output_container, **additional_outputs}
+            output = self.parse_output(fetches, output_container)
 
-        if use_lock:
-            self.model_lock.release()
+        finally:
+            if use_lock:
+                self.model_lock.release()
         return output
 
     def _make_prediction_inputs(self, *args, targets=None, feed_dict=None, **kwargs):
