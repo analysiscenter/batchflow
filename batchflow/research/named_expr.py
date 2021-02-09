@@ -79,7 +79,7 @@ class RD(ResearchNamedExpression): # ResearchDir
         return path
 
 class RID(ResearchNamedExpression): # ResearchExperimentID
-    """ NamedExpression for id (sample_index) for the current experiment """
+    """ NamedExpression for id (experiment_id) for the current experiment """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
         return kwargs['job'], kwargs['experiment']
@@ -116,8 +116,8 @@ class REP(ResearchNamedExpression): # ResearchExperimentPath
         experiment_path = unit.experiment_path # path to folder with current experiment
         index = unit.index # index of the branch corresponding to the current experiment
         if self.relative:
-            return os.path.join(experiment_path, job.ids[index])
-        return os.path.join(path, experiment_path, job.ids[index])
+            return experiment_path
+        return os.path.join(path, experiment_path)
 
 class RR(ResearchNamedExpression): # ResearchResults
     """ NamedExpression for Results of the Research """

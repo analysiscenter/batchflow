@@ -55,7 +55,6 @@ class Executable:
         self.on_root = None
         self.args = []
         self.kwargs = dict()
-        self.experiment_path = None
         self.research_path = None
         self.config = None
         self.config_from_grid = None
@@ -184,8 +183,8 @@ class Executable:
     def set_research_path(self, path):
         self.research_path = path
 
-    def dump_config(self):
-        with open(os.path.join(self.research_path, 'configs', self.config.alias(as_string=True)), 'wb') as file:
+    def dump_config(self, task_id):
+        with open(os.path.join(self.research_path, 'configs', task_id), 'wb') as file:
             dill.dump(self.config, file)
 
     def next_batch(self):
@@ -274,17 +273,15 @@ class Executable:
     def dump_result(self, task_id, iteration, filename):
         """ Dump pipeline results """
         if len(self.variables) > 0:
-            if not os.path.exists(os.path.join(self.research_path, self.experiment_path, task_id)):
-                os.makedirs(os.path.join(self.research_path, self.experiment_path, task_id))
-            self.result['sample_index'] = [task_id] * len(self.result['iteration'])
-            path = os.path.join(self.research_path, self.experiment_path, task_id, filename + '_' + str(iteration))
+            self.result['experiment_id'] = [task_id] * len(self.result['iteration'])
+            path = os.path.join(self.research_path, self.experiment_path, filename + '_' + str(iteration))
             with open(path, 'wb') as file:
                 dill.dump(self.result, file)
         self._clear_result()
 
-    def create_folder(self):
+    def create_folder(self, task_id):
         """ Create folder if it doesn't exist """
-        self.experiment_path = os.path.join('results', self.config.alias(as_string=True))
+        self.experiment_path = os.path.join('results', task_id)
         try:
             os.makedirs(os.path.join(self.research_path, self.experiment_path))
         except FileExistsError:

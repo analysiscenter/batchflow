@@ -51,9 +51,9 @@ class Job:
                 unit.set_config(config, additional_config,
                                 {**branch_config, **device_configs[index]}, worker_config, kwargs_config)
                 unit.set_research_path(self.research_path)
-                unit.dump_config()
                 unit.index = index
-                unit.create_folder()
+                unit.create_folder(self.ids[index])
+                unit.dump_config(self.ids[index])
                 units[name] = unit
 
 

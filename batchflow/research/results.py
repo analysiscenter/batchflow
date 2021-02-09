@@ -110,7 +110,7 @@ class Results:
         if len(iterations) > 0:
             elements_to_load = pd.np.array([pd.np.isin(it, iterations_to_load) for it in iterations])
             res = OrderedDict()
-            for variable in ['iteration', 'sample_index', *variables]:
+            for variable in ['iteration', 'experiment_id', *variables]:
                 if variable in dumped_file:
                     res[variable] = pd.np.array(dumped_file[variable])[elements_to_load]
         else:
@@ -118,7 +118,7 @@ class Results:
         return res
 
     def _concat(self, results, variables):
-        res = {key: [] for key in [*variables, 'iteration', 'sample_index']}
+        res = {key: [] for key in [*variables, 'iteration', 'experiment_id']}
         for chunk in results:
             if chunk is not None:
                 for key, values in res.items():
@@ -137,7 +137,7 @@ class Results:
         result = None
         if config is None and alias is None and repetition is None:
             raise ValueError('At least one of parameters config, alias and repetition must be not None')
-        result = []
+
         if repetition is not None:
             repetition = {'repetition': repetition}
         else:
@@ -146,29 +146,31 @@ class Results:
         if config is None and alias is None:
             config = dict()
 
-        for supconfig in self.configs:
+        result = {}
+        for task_id, supconfig in self.configs.items():
             if config is not None:
                 config.update(repetition)
                 _config = supconfig.config()
                 if all(item in _config.items() for item in config.items()):
-                    result.append(supconfig)
+                    result[task_id] = supconfig
             else:
                 _config = supconfig.alias()
                 alias.update(repetition)
                 if all(item in _config.items() for item in alias.items()):
-                    result.append(supconfig)
+                    result[task_id] = supconfig
         self.configs = result
 
     def _get_description(self):
         with open(os.path.join(self.path, 'description', 'research.json'), 'r') as file:
             return json.load(file)
 
-    def _load(self, names=None, variables=None, iterations=None, repetition=None, sample_index=None,
+    def _load(self, names=None, variables=None, iterations=None, repetition=None, experiment_id=None,
               configs=None, aliases=None, use_alias=True, concat_config=False, drop_columns=True, **kwargs):
-        self.configs = []
-        for filename in glob.glob(os.path.join(self.path, 'configs', '*')):
+        self.configs = {}
+        for filename in glob.glob(os.path.join(self.path, 'configs', experiment_id or '*')):
+            task_id = os.path.split(filename)[-1]
             with open(filename, 'rb') as f:
-                self.configs.append(dill.load(f))
+                self.configs[task_id] = dill.load(f)
 
         if len(kwargs) > 0:
             if configs is None:
@@ -197,41 +199,41 @@ class Results:
         iterations = self._get_list(iterations)
 
         all_results = []
-        for config_alias in self.configs:
+        for task_id, config_alias in self.configs.items():
             alias_str = config_alias.alias(as_string=True)
             _repetition = config_alias.pop_config('repetition')
             _update = config_alias.pop_config('update')
-            path = os.path.join(self.path, 'results', alias_str)
+            path = os.path.join(self.path, 'results', task_id)
 
             for unit in names:
-                sample_folders = glob.glob(os.path.join(glob.escape(path), sample_index or '*'))
-                for sample_folder in sample_folders:
-                    files = glob.glob(glob.escape(os.path.join(sample_folder, unit)) + '_[0-9]*')
-                    files = self._sort_files(files, iterations)
-                    if len(files) != 0:
-                        res = []
-                        for filename, iterations_to_load in files.items():
-                            with open(filename, 'rb') as file:
-                                res.append(self._slice_file(dill.load(file), iterations_to_load, variables))
-                        res = self._concat(res, variables)
-                        length = self._fix_length(res)
+                # sample_folders = glob.glob(os.path.join(glob.escape(path), '*'))
+                # for sample_folder in sample_folders:
+                files = glob.glob(glob.escape(os.path.join(path, unit)) + '_[0-9]*')
+                files = self._sort_files(files, iterations)
+                if len(files) != 0:
+                    res = []
+                    for filename, iterations_to_load in files.items():
+                        with open(filename, 'rb') as file:
+                            res.append(self._slice_file(dill.load(file), iterations_to_load, variables))
+                    res = self._concat(res, variables)
+                    length = self._fix_length(res)
 
-                        config_alias.pop_config('_dummy')
-                        if concat_config:
-                            res['config'] = config_alias.alias(as_string=True)
-                        if use_alias:
-                            if not concat_config or not drop_columns:
-                                res.update(config_alias.alias(as_string=False))
-                        else:
-                            config = config_alias.config()
-                            config = {k: [v] * length for k, v in config.items()}
-                            res.update(config)
-                        res.update({'repetition': _repetition.config()['repetition']})
-                        res.update({'update': _update.config()['update']})
-                        all_results.append(
-                            pd.DataFrame({
-                                'name': unit,
-                                **res
-                            })
-                            )
+                    config_alias.pop_config('_dummy')
+                    if concat_config:
+                        res['config'] = config_alias.alias(as_string=True)
+                    if use_alias:
+                        if not concat_config or not drop_columns:
+                            res.update(config_alias.alias(as_string=False))
+                    else:
+                        config = config_alias.config()
+                        config = {k: [v] * length for k, v in config.items()}
+                        res.update(config)
+                    res.update({'repetition': _repetition.config()['repetition']})
+                    res.update({'update': _update.config()['update']})
+                    all_results.append(
+                        pd.DataFrame({
+                            'name': unit,
+                            **res
+                        })
+                        )
         return pd.concat(all_results, sort=False).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)
