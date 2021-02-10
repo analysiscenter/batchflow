@@ -946,68 +946,80 @@ class Pipeline:
         """ A shorter alias for get_model_by_name() """
         return self.get_model_by_name(name, batch=batch)
 
-    def init_model(self, mode, name=None, model_class=None, config=None):
+    def init_model(self, name, model_class=None, mode='dynamic', config=None):
         """ Initialize a static or dynamic model
 
         Parameters
         ----------
-        mode : {'static', 'dynamic'}
         name : str
-            (optional) a name for the model. Default - a model class name.
+            a name for the model (to refer to it later when training or infering).
+
         model_class : class or named expression
-            (optional) a model class (if not specified in the config).
+            a model class (might also be specified in the config).
+
+        mode : {'static', 'dynamic'}
+            model creation mode:
+            - static - the model is created right now, during the pipeline definition
+            - dynamic - the model is created at the first iteration when the pipeline is run (default)
+
         config : dict or Config
-            (optional) model configurations parameters, where each key and value could be named expressions.
+            model configurations parameters, where each key and value could be named expressions.
 
         Examples
         --------
-        >>> pipeline.init_model('static', MyModel)
+        >>> pipeline.init_model('my-model', MyModel, 'static')
 
         >>> pipeline
               .init_variable('images_shape', [256, 256])
-              .init_model('static', 'my_model', MyModel, config={'input_shape': V('images_shape')})
+              .init_model('my_model', MyModel, 'static', config={'input_shape': V('images_shape')})
 
         >>> pipeline
               .init_variable('shape_name', 'images_shape')
-              .init_model('dynamic', C('model'), config={V('shape_name)': B('images_shape')})
+              .init_model('my_model', C('model'), 'dynamic', config={V('shape_name)': B('images_shape')})
 
-        >>> pipeline
-              .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        self.before.init_model(mode, name, model_class, config=config)
+        self.before.init_model(name, model_class, mode=mode, config=config)
         return self
 
-    def import_model(self, model, pipeline=None, name=None):
+    def import_model(self, name, model):
         """ Import a model from another pipeline
 
         Parameters
         ----------
-        model : str or model
-            a name of the model to import or a model itself
-        pipeline : Pipeline
-            a pipeline that holds a model
         name : str
             a name with which the model is stored in this pipeline
+
+        model : model or pipeline
+            a model or a pipeline to import from
+
+        Examples
+        --------
+        Import a model instance to the pipeline::
+
+            pipeline.import_model('my-model', custom_resnet_model)
+
+        Import 'resnet' model from train_pipeline and store it in the pipeline under the name 'my-model'::
+
+            pipeline.import_model('my-model', train_pipeline.m('resnet'))
+
+        Import 'my-model' from train_pipeline and store it as 'my-model' in the pipeline::
+
+            pipeline.import_model('my-model', train_pipeline)
         """
-        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, pipeline=pipeline, model_name=name))
+        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, model_name=name))
 
     def _exec_import_model(self, batch, action):
         model_name = self._eval_expr(action['model_name'], batch=batch)
         source = self._eval_expr(action['source'], batch=batch)
-        pipeline = self._eval_expr(action['pipeline'], batch=batch)
-        self.models.import_model(source, pipeline, model_name)
+        self.models.import_model(model_name, source)
 
-    def train_model(self, name, *args, make_data=None, save_to=None, **kwargs):
+    def train_model(self, name, *args, save_to=None, **kwargs):
         """ Train a model
 
         Parameters
         ----------
         name : str
             a model name
-
-        make_data : a callable or a named expression
-            a function or method to transform batch data to train parameters.
-            Should return dict - kwargs for `model.train(...)`.
 
         save_to : a named expression or a sequence of named expressions.
             A location where the model output will be stored.
@@ -1040,28 +1052,17 @@ class Pipeline:
 
         Would call a `resnet` model `train` method with a `feed_dict` argument:
         ``resnet.train(feed_dict={'x': batch.images})``
-
-        >>> pipeline.train_model('resnet', MyBatch.make_resnet_data)
-
-        Equivalent to::
-
-            train_data = batch.make_resnet_data(resnet_model)
-            resnet_model.train(**train_data)
         """
         return self._add_action(TRAIN_MODEL_ID, *args,
                                 _args=dict(model_name=name, make_data=make_data, save_to=save_to),
                                 **kwargs)
 
-    def predict_model(self, name, *args, make_data=None, save_to=None, **kwargs):
+    def predict_model(self, name, *args, save_to=None, **kwargs):
         """ Predict using a model
 
         Parameters
         ----------
         name : str - a model name
-
-        make_data : a callable or a named expression
-            a function or method to transform batch data to prediction parameters.
-            Should return dict - kwargs for `model.predict(...)`.
 
         save_to : a named expression or a sequence of named expressions.
             A location where the model output will be stored.
@@ -1099,34 +1100,14 @@ class Pipeline:
         Call a `tf_unet` model `train` method with `fetches` and `feed_dict` arguments:
         ``predictions = tf_unet.train(fetches='predictions', feed_dict={'x': batch.images})``
         Predictions for each batch will be stored in a pipeline variable `inferred_masks`.
-
-        >>> pipeline.predict_model('deepnet', MyBatch.make_deepnet_data)
-
-        Equivalent to::
-
-            predict_data = batch.make_deepnet_data(model=deepnet_model)
-            deepnet_model.predict(**predict_data)
         """
         return self._add_action(PREDICT_MODEL_ID, *args,
                                 _args=dict(model_name=name, make_data=make_data, save_to=save_to),
                                 **kwargs)
 
-    def _make_model_args(self, batch, action, model):
-        make_data = action.get('make_data') or  {}
-        args = action['args']
-        kwargs = dict()
-
-        if callable(make_data):
-            kwargs = make_data(batch=batch, model=model)
-        else:
-            kwargs = self._eval_expr(make_data, batch=batch)
-        if not isinstance(kwargs, dict):
-            raise TypeError("make_data should return a dict with kwargs", make_data)
-
-        kwargs = {**action['kwargs'], **kwargs}
-
-        kwargs = self._eval_expr(kwargs, batch=batch)
-
+    def _make_model_args(self, batch, action):
+        args = self._eval_expr(action['args'], batch=batch)
+        kwargs = self._eval_expr(action['kwargs'], batch=batch)
         return args, kwargs
 
     def _save_output(self, batch, model, output, locations):
@@ -1134,29 +1115,32 @@ class Pipeline:
 
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
-        args, kwargs = self._make_model_args(batch, action, model)
+        args, kwargs = self._make_model_args(batch, action)
         output = model.train(*args, **kwargs)
         self._save_output(batch, model, output, action['save_to'])
 
     def _exec_predict_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
-        args, kwargs = self._make_model_args(batch, action, model)
+        args, kwargs = self._make_model_args(batch, action)
         predictions = model.predict(*args, **kwargs)
         self._save_output(batch, model, predictions, action['save_to'])
 
-    def load_model(self, mode, name=None, model_class=None, *args, **kwargs):
+
+    def load_model(self, name, model_class=None, mode='dynamic', *args, **kwargs):
         """ Load a model at each iteration
 
         Parameters
         ----------
-        mode : str
-            'static' or 'dynamic'
-
         name : str
-            (optional) a model name
+            a name for the model (to refer to it later when training or infering).
 
         model_class : class or named expression
-            (optional) a model class to instantiate a loaded model instance.
+            a model class (might also be specified in the config).
+
+        mode : {'static', 'dynamic'}
+            model creation mode:
+            - static - the model is created right now, during the pipeline definition
+            - dynamic - the model is created at the first iteration when the pipeline is run (default)
 
         args, kwargs
             model-specific parameters (like paths, formats, etc)
@@ -1173,14 +1157,16 @@ class Pipeline:
 
         Parameters
         ----------
-        mode : str
-            'static' or 'dynamic'
-
         name : str
-            (optional) a model name
+            a name for the model (to refer to it later when training or infering).
 
         model_class : class or named expression
-            (optional) a model class to instantiate a loaded model instance.
+            a model class (might also be specified in the config).
+
+        mode : {'static', 'dynamic'}
+            model creation mode:
+            - static - the model is created right now, during the pipeline definition
+            - dynamic - the model is created at the first iteration when the pipeline is run (default)
 
         args, kwargs
             model-specific parameters (like paths, formats, etc)
@@ -1192,22 +1178,24 @@ class Pipeline:
         mode = self._eval_expr(action['mode'], batch=batch)
         name = self._eval_expr(action['model_name'], batch=batch)
         model_class = self._eval_expr(action['model_class'], batch=batch)
-        args, kwargs = self._make_model_args(batch, action, None)
+        args, kwargs = self._make_model_args(batch, action)
         self.models.load_model(mode, name, model_class, *args, **kwargs)
 
-    def load_model_now(self, mode, name=None, model_class=None, *args, batch=None, **kwargs):
+    def load_model_now(self, name, model_class=None, mode='dynamic', *args, batch=None, **kwargs):
         """ Load a model immediately
 
         Parameters
         ----------
-        mode : str
-            'static' or 'dynamic'
-
         name : str
-            (optional) a model name
+            a name for the model (to refer to it later when training or infering).
 
         model_class : class or named expression
-            (optional) a model class to instantiate a loaded model instance.
+            a model class (might also be specified in the config).
+
+        mode : {'static', 'dynamic'}
+            model creation mode:
+            - static - the model is created right now, during the pipeline definition
+            - dynamic - the model is created at the first iteration when the pipeline is run (default)
 
         batch : Batch
             (optional) a batch which might be used to evaluate named expressions in other parameters
@@ -1247,8 +1235,7 @@ class Pipeline:
 
     def _exec_save_model(self, batch, action):
         name = self._eval_expr(action['model_name'], batch=batch)
-        model = self.get_model_by_name(name)
-        args, kwargs = self._make_model_args(batch, action, model)
+        args, kwargs = self._make_model_args(batch, action)
         self.models.save_model(name, *args, **kwargs)
 
     def save_model_now(self, name, *args, batch=None, **kwargs):

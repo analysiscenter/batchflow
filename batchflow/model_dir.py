@@ -107,23 +107,29 @@ class ModelDirectory:
         with self.lock:
             self.models.update({name: model})
 
-    def init_model(self, mode, name=None, model_class=None, *args, config=None):
+    def init_model(self, name=None, model_class=None, mode='dynamic', *args, config=None):
         """ Initialize a static or dynamic model
 
         Parameters
         ----------
-        mode : {'static', 'dynamic'}
         name : str
-            (optional) a name for the model. Default - a model class name.
+            a name for the model (to refer to it later when training or infering).
+
         model_class : class or named expression
-            (optional) a model class (if not specified in the config).
-        config : dict
-            (optional) model configurations parameters, where each key and value could be named expressions
+            a model class (might also be specified in the config).
+
+        mode : {'static', 'dynamic'}
+            model creation mode:
+            - static - the model is created right now, during the pipeline definition
+            - dynamic - the model is created at the first iteration when the pipeline is run (default)
+
+        config : dict or Config
+            model configurations parameters, where each key and value could be named expressions.
         """
         _ = args
         # workaround for a previous arg order
-        if isinstance(name, (type, NamedExpression)):
-            name, model_class = model_class, name
+        if name in ['dynamic', 'static']:
+            raise DeprecationWarning('Arguments order has changed to <model name>, <model class>, <mode>, <config>.')
 
         model_class = model_class if model_class is not None else config.get('model_class')
         if model_class is None:
@@ -135,24 +141,24 @@ class ModelDirectory:
             model = NonInitializedModel(model_class, config)
         self.add_model(name, model)
 
-    def import_model(self, source, pipeline=None, name=None):
+    def import_model(self, name, source):
         """ Import model from another pipeline or a model itself """
         if isinstance(source, BaseModel):
             model = source
         else:
-            model = pipeline.models.get(source)
-            name = name or source
+            # than source is a pipeline (checking for it would cause cyclic import)
+            model = source.m(name)
         self.add_model(name, model)
 
     def save_model(self, name, *args, **kwargs):
         model = self.get_model_by_name(name)
         model.save(*args, **kwargs)
 
-    def load_model(self, mode, name=None, model_class=None, *args, build=None, **kwargs):
+    def load_model(self, name, model_class=None, mode='dynamic', *args, build=None, **kwargs):
         """ Load a model """
         _ = args
         config = {'load': kwargs, 'build': build}
-        self.init_model(mode, name, model_class, config=config)
+        self.init_model(name, model_class, mode, config=config)
 
     def __add__(self, other):
         if not isinstance(other, ModelDirectory):

@@ -41,7 +41,7 @@ Adding a model to a pipeline
 First of all, a model should be initialized::
 
    full_workflow = my_dataset.p
-                             .init_model('static', 'my_model', MyModel, config)
+                             .init_model('my_model', MyModel, 'static', config)
                              ...
 
 In :meth:`~batchflow.Pipeline.init_model()` you state a mode (``static`` or ``dynamic``), an optional short model name (otherwise, a class name will be used) and an optional configuration.
@@ -79,14 +79,14 @@ For flexibilty ``config`` might include so called :doc:`named expressions <named
 
    pipeline
        .init_variable('images_shape', [256, 256])
-       .init_model('static', MyModel, config={'input_shape': V('images_shape')})
+       .init_model('mymodel', MyModel, 'static', config={'input_shape': V('images_shape')})
 
    pipeline
        .init_variable('shape_name', 'images_shape')
-       .init_model('dynamic', MyModel, config={V('shape_name'): B('images_shape')})
+       .init_model('mymodel', MyModel, 'dynamic', config={V('shape_name'): B('images_shape')})
 
    pipeline
-       .init_model('dynamic', MyModel, config={'input_shape': F(lambda batch: batch.images.shape[1:])})
+       .init_model('mymodel', MyModel, 'dynamic', config={'input_shape': F(lambda batch: batch.images.shape[1:])})
 
 
 Training a model
@@ -95,7 +95,7 @@ Training a model
 A train action should be stated after an initialization action::
 
    full_workflow = (my_dataset.p
-       .init_model('static', 'my_model', MyModel, config)
+       .init_model('my_model', MyModel, 'static', config)
        ...
        .train_model('my_model', x=B('images'), y=B('labels'))
    )
@@ -119,8 +119,8 @@ Model independent arguments are:
 ::
 
    full_workflow = (my_dataset.p
-       .init_model('static', 'my_model', MyModel, my_config)
-       .init_model('dynamic', 'another_model', AnotherModel, another_config)
+       .init_model('my_model', MyModel, 'static', my_config)
+       .init_model('another_model', AnotherModel, 'dynamic', another_config)
        .init_variable('current_loss', 0)
        .init_variable('current_accuracy', 0)
        .init_variable('loss_history', init_on_each_run=list)
@@ -134,12 +134,13 @@ Model independent arguments are:
 
 Here, parameters ``output``, ``x`` and ``y`` are specific to ``my_model``, while ``fetches`` and ``feed_dict`` are specific to ``another_model``.
 
-You can also write an action which works with a model directly.::
+You can also write an action which works with a model directly::
 
    class MyBatch(Batch):
        ...
-       @action(model='some_model')
-       def train_linked_model(self, model):
+       @action
+       def train_linked_model(self, model_name):
+           model = self.get_model_by_name(model_name)
            ...
 
        @action
@@ -149,12 +150,12 @@ You can also write an action which works with a model directly.::
 
 
    full_workflow = (my_dataset.p
-       .init_model('static', MyModel, config=my_config)
-       .init_model('dynamic', MyOtherModel, config=some_config)
+       .init_model('model-1', MyModel, 'static', config=my_config)
+       .init_model('model-2', MyOtherModel, dynamic', config=some_config)
        .some_preprocessing()
        .some_augmentation()
-       .train_in_batch('MyModel')
-       .train_linked_model()
+       .train_in_batch('model-1')
+       .train_linked_model('model-2')
    )
 
 
@@ -164,10 +165,10 @@ Predicting with a model
 :meth:`~batchflow.Pipeline.predict_model` is very similar to `train_model <#training-a-model>`_ described above::
 
    full_workflow = (my_dataset.p
-       .init_model('static', MyModel, config=config)
+       .init_model('my-model', 'static', MyModel, config=config)
        .init_variable('predicted_labels', init_on_each_run=list)
        ...
-       .predict_model('MyModel', x=B('images'), save_to=V('predicted_labels'))
+       .predict_model('my-model', x=B('images'), save_to=V('predicted_labels'))
    )
 
 Read a model specfication to find out what it needs for predicting and what its output is.
@@ -180,7 +181,7 @@ Loading a model
 
 A model can be loaded into a pipeline::
 
-   some_pipeline.load_model('dynamic', 'my_model', ResNet18, path='/some/path')
+   some_pipeline.load_model('my_model', ResNet18, 'dynamic', path='/some/path')
 
 The parameters are the same as in :ref:`the model initalization <init_a_model>`.
 
@@ -192,7 +193,7 @@ on the specific circumstances.
 
 To load model only once before the pipeline is executed you might use :ref:`before <after_pipeline>` pipeline::
 
-    some_pipeline.before.load_model('dynamic', 'my_model', ResNet18, path='/some/path')
+    some_pipeline.before.load_model('my_model', ResNet18, 'dynamic', path='/some/path')
 
 There is also and imperative :meth:`~batchflow.Pipeline.load_model_now`, i.e. it loads a model immediately, and not when a pipeline is executed.
 Thus, it cannot be a part of a pipeline's chain of actions. ``load_model_now`` is expected to be called in an action method or before a training
@@ -232,12 +233,12 @@ Models and template pipelines
 A template pipeline is not linked to any dataset and thus it will never run. It might be used as a building block for more complex pipelines.::
 
    template_pipeline = (Pipeline()
-       .init_model('static', MyModel)
-       .init_model('dynamic', MyModel2)
+       .init_model('m1', MyModel, 'static')
+       .init_model('m2', MyModel2, 'dynamic')
        .prepocess()
        .normalize()
-       .train_model('MyModel', ...)
-       .train_model('MyModel2', ...)
+       .train_model('m1', ...)
+       .train_model('m2', ...)
    )
 
 Linking a pipeline to a dataset creates a new pipeline that can be run.::
@@ -261,25 +262,25 @@ pipelines. For instance, when you train a model in one pipeline and later use it
 This can be easily achieved with a model import.::
 
    train_pipeline = (images_dataset.p
-       .init_model('dynamic', Resnet50)
+       .init_model('model', Resnet50, 'dynamic')
        .load(...)
        .random_rotate(angle=(-30, 30))
-       .train_model("Resnet50")
+       .train_model('model')
        .run(BATCH_SIZE, shuffle=True, n_epochs=10)
    )
 
    inference_pipeline_template = (Pipeline()
        .resize(shape=(256, 256))
        .normalize()
-       .import_model("Resnet50", train_pipeline)
-       .predict_model("Resnet50")
+       .import_model('model', train_pipeline)
+       .predict_model('model')
    )
    ...
 
    infer = (inference_pipeline_template << some_dataset).run(INFER_BATCH_SIZE, shuffle=False)
 
-When ``inference_pipeline_template`` is run, the model ``Resnet50`` from ``train_pipeline`` will be imported.
-If you still have questions about import_model, search the answer in :meth:`~batchflow.Pipeline.import_model`.
+When ``inference_pipeline_template`` is run, the model ``model`` from ``train_pipeline`` will be imported.
+If you still have questions about import_model, search the answer in :meth:`~.Pipeline.import_model`.
 
 
 Parallel training
