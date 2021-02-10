@@ -108,6 +108,7 @@ class PascalSegmentation(BasePascal):
                                for name in  [*train_ids, *test_ids]], dtype=object)
             masks = np.array([self._extract_image(archive, self._mask_path(name)) \
                               for name in [*train_ids, *test_ids]], dtype=object)
+            masks = self._process_mask(masks)
             preloaded = images, masks
 
             train_len, test_len = len(train_ids), len(test_ids)
@@ -115,6 +116,11 @@ class PascalSegmentation(BasePascal):
 
             return preloaded, index, train_index, test_index
 
+    def _process_mask(self, mask):
+        """ Background label is 255 and must be transformed to 21 to make labels sequential. """
+        mask = np.squeeze(mask)
+        np.place(mask, mask==255, 21)
+        return mask
 
 class PascalClassification(BasePascal):
     """ Contains 11540 images and corresponding classes
