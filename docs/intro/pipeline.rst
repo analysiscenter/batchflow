@@ -91,7 +91,7 @@ Just add a namespace (e.g. a class, a module) which contains the functions neede
    pipeline = (dataset.pipeline()
                 .add_namespace(numpy, mymodule)    # numpy and mymodule methods are now accessible within the pipeline
                 .init_variable("var")              # Pipeline API
-                .init_model("dynamic", ResNet18)   # Pipeline API
+                .init_model("resnet", ResNet18)    # Pipeline API
                 .resize((128, 128))                # batch class API, namely ImagesBatch
                 .my_func(10, save_to=V("var"))     # call a function from mymodule and store its result into a pipeline variable
                 .print(V("var"))                   # Pipeline API again
@@ -135,7 +135,7 @@ More complicated pipelines include setup and tear down actions. That's exactly w
     pipeline.before
         .add_namespace(mymodule)           # mymodule methods are now accessible within the pipeline
         .init_variable("var")              # Pipeline API
-        .init_model("dynamic", ResNet18)   # Pipeline API
+        .init_model("my-model", ResNet18)   # Pipeline API
         .connect_to_mydb(USER, PASSWORD)   # a method from mymodule
 
     pipeline.after
