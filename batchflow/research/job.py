@@ -3,6 +3,7 @@
 import time
 from collections import OrderedDict
 import random
+import hashlib
 
 from ..named_expr import eval_expr
 from .. import inbatch_parallel
@@ -23,11 +24,16 @@ class Job:
         self.branches = branches
         self.research_path = research_path
         self.worker_config = {}
-        self.ids = [str(random.getrandbits(32)) for _ in self.configs]
+        self.ids = [self._make_random_name(config[0]) for config in self.configs]
 
         self.exceptions = []
         self.stopped = []
         self.last_update_time = None
+
+    def _make_random_name(self, config):
+        name = hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()
+        name += str(random.getrandbits(16))
+        return name
 
     def init(self, worker_config, device_configs, last_update_time):
         """ Create experiments. """

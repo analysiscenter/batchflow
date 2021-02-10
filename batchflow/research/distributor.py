@@ -60,14 +60,7 @@ class Distributor:
 
         n_iters : int or None
 
-        logfile : str (default: 'research.log')
-
-        errorfile : str (default: 'errors.log')
-
         bar : bool or callable
-
-        args, kwargs
-            will be used in worker
         """
         self.jobs_queue = jobs_queue
 
@@ -103,10 +96,7 @@ class Distributor:
         except Exception as exception: #pylint:disable=broad-except
             self.logger.error(exception)
         else:
-            if len(workers) > 1:
-                msg = 'Run {} workers'
-            else:
-                msg = 'Run {} worker'
+            msg = 'Run {} workers' if len(workers) > 1 else 'Run {} worker'
             self.logger.info(msg.format(len(workers)))
             for worker in workers:
                 try:

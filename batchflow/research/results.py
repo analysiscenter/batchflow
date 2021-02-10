@@ -147,17 +147,17 @@ class Results:
             config = dict()
 
         result = {}
-        for task_id, supconfig in self.configs.items():
+        for experiment_id, supconfig in self.configs.items():
             if config is not None:
                 config.update(repetition)
                 _config = supconfig.config()
                 if all(item in _config.items() for item in config.items()):
-                    result[task_id] = supconfig
+                    result[experiment_id] = supconfig
             else:
                 _config = supconfig.alias()
                 alias.update(repetition)
                 if all(item in _config.items() for item in alias.items()):
-                    result[task_id] = supconfig
+                    result[experiment_id] = supconfig
         self.configs = result
 
     def _get_description(self):
@@ -168,9 +168,9 @@ class Results:
               configs=None, aliases=None, use_alias=True, concat_config=False, drop_columns=True, **kwargs):
         self.configs = {}
         for filename in glob.glob(os.path.join(self.path, 'configs', experiment_id or '*')):
-            task_id = os.path.split(filename)[-1]
+            experiment_id = os.path.split(filename)[-1]
             with open(filename, 'rb') as f:
-                self.configs[task_id] = dill.load(f)
+                self.configs[experiment_id] = dill.load(f)
 
         if len(kwargs) > 0:
             if configs is None:
@@ -199,11 +199,11 @@ class Results:
         iterations = self._get_list(iterations)
 
         all_results = []
-        for task_id, config_alias in self.configs.items():
+        for experiment_id, config_alias in self.configs.items():
             alias_str = config_alias.alias(as_string=True)
             _repetition = config_alias.pop_config('repetition')
             _update = config_alias.pop_config('update')
-            path = os.path.join(self.path, 'results', task_id)
+            path = os.path.join(self.path, 'results', experiment_id)
 
             for unit in names:
                 # sample_folders = glob.glob(os.path.join(glob.escape(path), '*'))

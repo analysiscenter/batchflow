@@ -183,8 +183,8 @@ class Executable:
     def set_research_path(self, path):
         self.research_path = path
 
-    def dump_config(self, task_id):
-        with open(os.path.join(self.research_path, 'configs', task_id), 'wb') as file:
+    def dump_config(self, experiment_id):
+        with open(os.path.join(self.research_path, 'configs', experiment_id), 'wb') as file:
             dill.dump(self.config, file)
 
     def next_batch(self):
@@ -270,18 +270,18 @@ class Executable:
                     self.result[variable].append(value)
             self.result['iteration'].append(iteration)
 
-    def dump_result(self, task_id, iteration, filename):
+    def dump_result(self, experiment_id, iteration, filename):
         """ Dump pipeline results """
         if len(self.variables) > 0:
-            self.result['experiment_id'] = [task_id] * len(self.result['iteration'])
+            self.result['experiment_id'] = [experiment_id] * len(self.result['iteration'])
             path = os.path.join(self.research_path, self.experiment_path, filename + '_' + str(iteration))
             with open(path, 'wb') as file:
                 dill.dump(self.result, file)
         self._clear_result()
 
-    def create_folder(self, task_id):
+    def create_folder(self, experiment_id):
         """ Create folder if it doesn't exist """
-        self.experiment_path = os.path.join('results', task_id)
+        self.experiment_path = os.path.join('results', experiment_id)
         try:
             os.makedirs(os.path.join(self.research_path, self.experiment_path))
         except FileExistsError:
