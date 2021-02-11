@@ -2,7 +2,7 @@
 import numpy as np
 import torch.nn as nn
 
-from .resize import Upsample, Combine
+from .resize import Combine
 from .conv_block import ConvBlock
 from .conv import Conv
 from .core import BatchNorm
@@ -92,9 +92,7 @@ class ASPP(nn.Module):
         global_pooling = ConvBlock(inputs=inputs, layout='V>cnab', filters=filters,
                                    kernel_size=1, dim=get_num_dims(inputs),
                                    factor=None, shape=get_shape(inputs)[2:], **kwargs)
-        
         modules.append(global_pooling)
-        
         bottleneck = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=1, **kwargs)
         modules.append(bottleneck)
 
