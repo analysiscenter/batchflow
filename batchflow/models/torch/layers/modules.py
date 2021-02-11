@@ -45,13 +45,9 @@ class PyramidPooling(nn.Module):
                 pool_size = tuple(np.ceil(spatial_shape / level).astype(np.int32).tolist())
                 pool_strides = tuple(np.floor((spatial_shape - 1) / level + 1).astype(np.int32).tolist())
 
-                layer = ConvBlock(inputs=x, layout='p' + layout, filters=filters, kernel_size=kernel_size,
-                                  pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides, **kwargs)
-                x = layer(x)
-
-                upsample_layer = Upsample(inputs=x, factor=None, layout='b',
-                                          shape=tuple(spatial_shape.tolist()), **kwargs)
-                module = nn.Sequential(layer, upsample_layer)
+                module = ConvBlock(inputs=x, layout='pb' + layout, filters=filters, kernel_size=kernel_size,
+                                   pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides,
+                                   factor=None, shape=tuple(spatial_shape.tolist()), **kwargs)
             modules.append(module)
 
         self.blocks = modules
@@ -93,10 +89,12 @@ class ASPP(nn.Module):
         super().__init__()
 
         modules = nn.ModuleList()
-        global_pooling = ConvBlock(inputs=inputs, layout='V>cna', filters=filters, kernel_size=1,
-                                   dim=get_num_dims(inputs))
+        global_pooling = ConvBlock(inputs=inputs, layout='V>cnab', filters=filters,
+                                   kernel_size=1, dim=get_num_dims(inputs),
+                                   factor=None, shape=get_shape(inputs)[2:], **kwargs)
+        
         modules.append(global_pooling)
-
+        
         bottleneck = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=1, **kwargs)
         modules.append(bottleneck)
 
@@ -109,7 +107,6 @@ class ASPP(nn.Module):
             pyramid = pyramid if isinstance(pyramid, (tuple, list)) else [pyramid]
             pyramid_layer = PyramidPooling(inputs=inputs, filters=filters, pyramid=pyramid, **kwargs)
             modules.append(pyramid_layer)
-
 
         self.blocks = modules
         self.combine = Combine(op='concat')
@@ -184,11 +181,9 @@ class KSAC(nn.Module):
             self.pyramid = None
 
         # Global pooling
-        self.global_pooling = ConvBlock(inputs=inputs, layout='V>cna', filters=feature_filters, kernel_size=1,
-                                        dim=self.n)
-        global_info = nn.functional.interpolate(self.global_pooling(inputs), size=inputs.size()[2:],
-                                                mode='bilinear', align_corners=True)
-        tensors.append(global_info)
+        self.global_pooling = ConvBlock(inputs=inputs, layout='V>cnab', filters=feature_filters, kernel_size=1,
+                                        dim=self.n, shape=inputs.size()[2:], align_corners=True)
+        tensors.append(self.global_pooling(inputs))
 
         # Concatenation of features
         self.combine = Combine(op='concat')
@@ -213,8 +208,7 @@ class KSAC(nn.Module):
             tensors.append(self.pyramid(x))
 
         # Global pooling
-        global_info = nn.functional.interpolate(self.global_pooling(x), size=tensor.size()[2:],
-                                                mode='bilinear', align_corners=True)
+        global_info = self.global_pooling(x)
         tensors.append(global_info)
 
         # Concatenate features and apply final postprocessing
