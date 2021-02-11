@@ -42,12 +42,12 @@ class PyramidPooling(nn.Module):
                 module = nn.Identity()
             else:
                 x = inputs
-                pool_size = tuple(np.ceil(spatial_shape / level).astype(np.int32).tolist())
-                pool_strides = tuple(np.floor((spatial_shape - 1) / level + 1).astype(np.int32).tolist())
+                pool_size = tuple(np.ceil(spatial_shape / level).astype(np.int32))
+                pool_strides = tuple(np.floor((spatial_shape - 1) / level + 1).astype(np.int32))
 
-                module = ConvBlock(inputs=x, layout='pb' + layout, filters=filters, kernel_size=kernel_size,
+                module = ConvBlock(inputs=x, layout='p' + layout + 'b', filters=filters, kernel_size=kernel_size,
                                    pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides,
-                                   factor=None, shape=tuple(spatial_shape.tolist()), **kwargs)
+                                   factor=None, shape=tuple(spatial_shape), **kwargs)
             modules.append(module)
 
         self.blocks = modules
@@ -93,6 +93,7 @@ class ASPP(nn.Module):
                                    kernel_size=1, dim=get_num_dims(inputs),
                                    factor=None, shape=get_shape(inputs)[2:], **kwargs)
         modules.append(global_pooling)
+        
         bottleneck = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=1, **kwargs)
         modules.append(bottleneck)
 
