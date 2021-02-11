@@ -93,7 +93,7 @@ class ASPP(nn.Module):
                                    kernel_size=1, dim=get_num_dims(inputs),
                                    factor=None, shape=get_shape(inputs)[2:], **kwargs)
         modules.append(global_pooling)
-        
+
         bottleneck = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=1, **kwargs)
         modules.append(bottleneck)
 
