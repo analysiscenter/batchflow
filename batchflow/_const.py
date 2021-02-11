@@ -15,6 +15,8 @@ UPDATE_ID = '#_update'
 CALL_ID = '#_call'
 PRINT_ID = '#_print'
 CALL_FROM_NS_ID = '#_from_ns'
+ACQUIRE_LOCK_ID = '#_acquire_lock'
+RELEASE_LOCK_ID = '#_release_lock'
 
 ACTIONS = {
     IMPORT_MODEL_ID: '_exec_import_model',
@@ -28,4 +30,6 @@ ACTIONS = {
     CALL_ID: '_exec_call',
     PRINT_ID: '_exec_print',
     CALL_FROM_NS_ID: '_exec_from_ns',
+    ACQUIRE_LOCK_ID: '_exec_acquire_lock',
+    RELEASE_LOCK_ID: '_exec_release_lock',
 }

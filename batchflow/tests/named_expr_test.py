@@ -6,13 +6,12 @@ import pytest
 import numpy as np
 
 sys.path.append('..')
-from batchflow import B, C, D, F, L, V, R, P, I, Dataset, Pipeline, Batch, apply_parallel, inbatch_parallel, action
+from batchflow import B, C, D, F, V, R, P, PP, I, Dataset, Pipeline, Batch, apply_parallel, inbatch_parallel, action
 
 
 #--------------------
 #      COMMON
 #--------------------
-
 @pytest.mark.parametrize('named_expr', [
     C('option'),
     C('not defined', default=10),
@@ -21,8 +20,8 @@ from batchflow import B, C, D, F, L, V, R, P, I, Dataset, Pipeline, Batch, apply
     V('var'),
     R('normal', 0, 1),
     R('normal', 0, 1, size=B.size),
-    F(lambda batch: 0),
-    L(lambda: 0),
+    F(lambda: 0),
+    F(lambda x: x)(0),
 ])
 def test_general_get(named_expr):
     pipeline = (Dataset(10).pipeline({'option': 0})
@@ -62,6 +61,11 @@ class MyBatch(Batch):
 
 ARRAY_INIT = np.arange(BATCH_SIZE).reshape((-1, 1))
 
+P_OPTIONS = [
+    P,
+    PP,
+]
+
 P_NAMED_EXPRS = [
     R('normal', 0, 1),
     R('normal', 0, 1, size=2),
@@ -70,20 +74,21 @@ P_NAMED_EXPRS = [
     C('option'),
 ]
 
+@pytest.mark.parametrize('p_type', P_OPTIONS)
 @pytest.mark.parametrize('named_expr', P_NAMED_EXPRS)
 @pytest.mark.parametrize('src', [
     'images',
     ['images', 'masks'],
     ('images', 'masks'),
 ])
-def test_apply_parallel_p(named_expr, src):
+def test_apply_parallel_p(p_type, named_expr, src):
     """ Check if P() is evalauted properly """
     pipeline = (Dataset(10, MyBatch).pipeline(dict(mean=0., std=1., option=ARRAY_INIT))
         .add_namespace(np)
         .init_variable('var', ARRAY_INIT)
         .update(B.images, ARRAY_INIT)
         .update(B.masks, ARRAY_INIT)
-        .ap_test(src=src, param=P(named_expr))
+        .ap_test(src=src, param=p_type(named_expr))
         .run(BATCH_SIZE, lazy=True)
     )
 
@@ -94,16 +99,16 @@ def test_apply_parallel_p(named_expr, src):
     else:
         assert (b.images == b.masks).all()
 
-
+@pytest.mark.parametrize('p_type', P_OPTIONS)
 @pytest.mark.parametrize('named_expr', P_NAMED_EXPRS)
-def test_inbatch_parallel_p(named_expr):
+def test_inbatch_parallel_p(p_type, named_expr):
     """ Check if P() is evalauted properly """
     pipeline = (Dataset(10, MyBatch).pipeline(dict(mean=0., std=1., option=ARRAY_INIT))
         .add_namespace(np)
         .init_variable('var', ARRAY_INIT)
         .update(B.images, ARRAY_INIT)
         .update(B.masks, ARRAY_INIT)
-        .ip_test(param=P(named_expr))
+        .ip_test(param=p_type(named_expr))
         .run(BATCH_SIZE, lazy=True)
     )
 

@@ -376,7 +376,7 @@ class Pipeline:
         create : bool
             whether to create a variable if it does not exist. Default is `False`.
         args, kwargs
-            parameters for :meth:`.init_variable` if ``create`` is True.
+            parameters for :meth:`~.Pipeline.init_variable` if ``create`` is True.
 
         Returns
         -------
@@ -391,6 +391,63 @@ class Pipeline:
     def v(self, name, *args, **kwargs):
         """ A shorter alias for get_variable() """
         return self.get_variable(name, *args, **kwargs)
+
+    def init_lock(self, name='lock', **kwargs):
+        """ Create a lock as a pipeline variable
+
+        Parameters
+        ----------
+        name : string
+            a lock name
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Examples
+        --------
+        >>> pp = dataset.p
+                    .init_lock("model_update")
+        """
+        self.before.init_lock(name, **kwargs)
+        return self
+
+    def acquire_lock(self, name='lock', **kwargs):
+        """ Acquire lock
+
+        Parameters
+        ----------
+        name : string
+            a lock name
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+        """
+        return self._add_action(ACQUIRE_LOCK_ID, _args=dict(lock_name=name), **kwargs)
+
+    def _exec_acquire_lock(self, batch, action):
+        if not batch.pipeline.has_variable(action['lock_name']):
+            self.init_lock(action['lock_name'])
+        batch.pipeline.v(action['lock_name']).acquire(**action['kwargs'])
+
+    def release_lock(self, name='lock', **kwargs):
+        """ Release lock
+
+        Parameters
+        ----------
+        name : string
+            a lock name
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+        """
+        return self._add_action(RELEASE_LOCK_ID, _args=dict(lock_name=name), **kwargs)
+
+    def _exec_release_lock(self, batch, action):
+        batch.pipeline.v(action['lock_name']).release(**action['kwargs'])
+
 
     def init_variable(self, name, default=None, lock=True, **kwargs):
         """ Create a variable if not exists.
@@ -428,7 +485,7 @@ class Pipeline:
         ----------
         variables : dict or tuple
             if tuple, contains variable names which will have None as default values
-            if dict, then mapping from variable names to values and init params (see :meth:`.init_variable`)
+            if dict, then mapping from variable names to values and init params (see :meth:`~.Pipeline.init_variable`)
 
         Returns
         -------
@@ -514,6 +571,29 @@ class Pipeline:
     def delete_all_variables(self):
         """ Delete all variables """
         self.variables = VariableDirectory()
+
+    def save_to(self, dst, value=None):
+        """ Save a value of a given named expression lazily during pipeline execution
+
+        Parameters
+        ----------
+        dst : NamedExpression or any data container
+            destination
+
+        value
+            an updating value, could be a value of any type or a named expression
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Notes
+        -----
+        This method does not change a value of the variable until the pipeline is run.
+        So it should be used in pipeline definition chains only.
+        :func:`~.save_data_to` is imperative and may be used to change variable value within actions.
+        """
+        return self.update(dst, value)
 
     def update(self, expr, value=None):
         """ Update a value of a given named expression lazily during pipeline execution
@@ -614,7 +694,7 @@ class Pipeline:
 
         Notes
         -----
-        As a function from any namespace (see :meth:`~Pipeline.add_namespace`) can be called within a pipeline,
+        As a function from any namespace (see :meth:`~.Pipeline.add_namespace`) can be called within a pipeline,
         `call` is convenient with lambdas::
 
             pipeline
@@ -940,7 +1020,7 @@ class Pipeline:
         - B('name') - a batch class attribute or component name
         - V('name') - a pipeline variable name
         - C('name') - a pipeline config option
-        - F(name) - a callable which takes (batch, model)
+        - F(name) - a callable
         - R('name') - a random value from a given distribution
 
         These expressions are substituted by their actual values.
@@ -994,7 +1074,7 @@ class Pipeline:
         - B('name') - a batch class attribute or component name
         - V('name') - a pipeline variable name
         - C('name') - a pipeline config option
-        - F(name) - a callable which takes (batch, model)
+        - F(name) - a callable
         - R('name') - a random value from a distribution 'name'
 
         These expressions are substituted by their actual values.
@@ -1050,7 +1130,7 @@ class Pipeline:
         return args, kwargs
 
     def _save_output(self, batch, model, output, locations):
-        save_data_to(output, locations, batch=batch, model=model)
+        save_data_to(data=output, dst=locations, batch=batch, model=model)
 
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
@@ -1274,20 +1354,19 @@ class Pipeline:
         return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn,
                                                         components=components, batch_class=batch_class))
 
-    def _put_batches_into_queue(self, gen_batch, notifier):
+    def _put_batches_into_queue(self, gen_batch):
         while not self._stop_flag:
             self._prefetch_count.put(1, block=True)
             try:
                 batch = next(gen_batch)
-                notifier.update(pipeline=self, batch=batch)
-            except (StopIteration, StopPipeline):
+            except StopIteration:
                 break
             else:
                 future = self._executor.submit(self.execute_for, batch, new_loop=True)
                 self._prefetch_queue.put(future, block=True)
         self._prefetch_queue.put(None, block=True)
 
-    def _run_batches_from_queue(self):
+    def _run_batches_from_queue(self, notifier):
         skip_batch = False
         while not self._stop_flag:
             future = self._prefetch_queue.get(block=True)
@@ -1298,8 +1377,13 @@ class Pipeline:
 
             try:
                 batch = future.result()
+                notifier.update(pipeline=self, batch=batch)
             except SkipBatchException:
                 skip_batch = True
+            except StopPipeline:
+                self._prefetch_queue.task_done()
+                self._batch_queue.put(None)
+                break
             except Exception:   # pylint: disable=broad-except
                 exc = future.exception()
                 print("Exception in a thread:", exc)
@@ -1457,7 +1541,7 @@ class Pipeline:
             If `False`, than the last batch in each epoch could contain repeating indices (which might be a problem)
             and the very last batch could contain fewer than `batch_size` items.
 
-            See :meth:`DatasetIndex.gen_batch` for details.
+            See :meth:`~.DatasetIndex.gen_batch` for details.
 
         notifier : str, dict, or instance of `.Notifier`
             Configuration of displayed progress bar, if any.
@@ -1513,7 +1597,10 @@ class Pipeline:
         target = kwargs.pop('target', 'threads')
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
+        if 'bar' in kwargs:
+            warnings.warn('`bar` argument is deprecated and renamed to `notifier`', DeprecationWarning, stacklevel=2)
         notifier = kwargs.pop('notifier', kwargs.pop('bar', None))
+        total = kwargs.pop('total', None)
 
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
             batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
@@ -1532,9 +1619,9 @@ class Pipeline:
 
         if not isinstance(notifier, Notifier):
             notifier = Notifier(**(notifier if isinstance(notifier, dict) else {'bar': notifier}),
-                                total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                 drop_last=drop_last, length=len(self._dataset.index))
-        else:
+        elif notifier.total is None:
             notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                   drop_last=drop_last, length=len(self._dataset.index))
 
@@ -1557,8 +1644,8 @@ class Pipeline:
             self._prefetch_queue = q.Queue(maxsize=prefetch)
             self._batch_queue = q.Queue(maxsize=1)
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
-            self._service_executor.submit(self._put_batches_into_queue, batch_generator, notifier)
-            self._service_executor.submit(self._run_batches_from_queue)
+            self._service_executor.submit(self._put_batches_into_queue, batch_generator)
+            self._service_executor.submit(self._run_batches_from_queue, notifier)
 
             while not self._stop_flag:
                 batch_res = self._batch_queue.get(block=True)
@@ -1576,7 +1663,7 @@ class Pipeline:
             for batch in batch_generator:
                 try:
                     batch_res = self.execute_for(batch)
-                    notifier.update(pipeline=self, batch=batch)
+                    notifier.update(pipeline=self, batch=batch_res)
                 except SkipBatchException:
                     pass
                 except StopPipeline:
@@ -1609,7 +1696,7 @@ class Pipeline:
 
         See also
         --------
-        :meth:`~Pipeline.gen_batch`
+        :meth:`~.Pipeline.gen_batch`
         """
         start_time = time.time()
         if len(args) == 0 and len(kwargs) == 0:
@@ -1643,7 +1730,7 @@ class Pipeline:
 
         See also
         --------
-        :meth:`~Pipeline.gen_batch`
+        :meth:`~.Pipeline.gen_batch`
         """
         if kwargs.pop('lazy', False):
             self._lazy_run = args, kwargs
