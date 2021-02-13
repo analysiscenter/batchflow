@@ -1,6 +1,6 @@
 """ Contains named expression classes"""
 import operator
-from functools import partial
+from collections import defaultdict
 
 import numpy as np
 
@@ -30,7 +30,10 @@ def eval_expr(expr, **kwargs):
             _expr.append(eval_expr(val, **kwargs))
         expr = type(expr)(_expr)
     elif isinstance(expr, (dict, Config)):
-        _expr = type(expr)()
+        if isinstance(expr, defaultdict):
+            _expr = type(expr)(expr.default_factory)
+        else:
+            _expr = type(expr)()
         for key, val in expr.items():
             key = eval_expr(key, **kwargs)
             val = eval_expr(val, **kwargs)
@@ -76,9 +79,23 @@ UNARY_OPS = {
     '#str': str,
 }
 
-
 OPERATIONS = {**TERNARY_OPS, **BINARY_OPS, **UNARY_OPS}
 
+OPERATIONS_SIGNS = {
+    '__pos__': '+', '__neg__': '-', '__invert__': '~',
+    '__add__': '+', '__radd__': '+',
+    '__sub__': '-', '__rsub__': '-',
+    '__mul__': '*', '__rmul__': '*',
+    '__floordiv__': '/', '__rfloordiv__': '/',
+    '__truediv__': '//', '__rtruediv__': '//',
+    '__mod__': '%', '__rmod__': '%',
+    '__pow__': '**', '__rpow__': '**',
+    '__matmul__': '@', '__rmatmul__': '@',
+    '__lshift__': '>>', '__rshift__': '>>',
+    '__and__': '&', '__or__': ' |', '__xor__': '^',
+    '__lt__': '<', '__le__': '<=', '__gt__': '>', '__ge__': '>=',
+    '__eq__': '==', '__ne__': '!=',
+}
 
 def add_ops(cls):
     """ Add arithmetic operations to a class.
@@ -135,6 +152,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
         self.name = name
         self.mode = mode
         self.params = None
+        self.eval = eval
 
     def __getattr__(self, name):
         return AlgebraicNamedExpression(op='#attr', a=self, b=name)
@@ -163,14 +181,17 @@ class NamedExpression(metaclass=MetaNamedExpression):
         """
         return AlgebraicNamedExpression(op='#format', a=self, b=string)
 
-    def get_params(self, **kwargs):
+    def _get_params(self, **kwargs):
         """ Return parameters needed to evaluate the expression """
         if self.params is not None:
             for arg in self.params.keys() | kwargs.keys():
                 kwargs[arg] = kwargs.get(arg) or self.params.get(arg)
         if kwargs.get('batch') is None:
             kwargs['batch'] = _DummyBatch(kwargs.get('pipeline'))
-        return kwargs
+
+        name = self._get_name(**kwargs)
+
+        return name, kwargs
 
     def set_params(self, **kwargs):
         self.params = kwargs
@@ -180,22 +201,17 @@ class NamedExpression(metaclass=MetaNamedExpression):
             return self.name.get(**kwargs)
         return self.name
 
-    def _get(self, **kwargs):
-        kwargs = self.get_params(**kwargs)
-        name = self._get_name(**kwargs)
-        return name, kwargs
-
     def get(self, **kwargs):
         """ Return a value of a named expression
 
         Notes
         -----
         This method should be overriden in child classes.
-        In the first line it chouls usually call `_get` method::
+        In the first line it should usually call `_get_params` method::
 
-            name, kwargs = self._get(**kwargs)
+            name, kwargs = self._get_params(**kwargs)
         """
-        raise ValueError("Undefined value")
+        raise NotImplementedError('Cannot get a value from an abstract named expression')
 
     def set(self, value, mode=None, eval=True, **kwargs):
         """ Set a value to a named expression
@@ -210,7 +226,8 @@ class NamedExpression(metaclass=MetaNamedExpression):
             (as value might contain other named expressions,
             so it should be processed recursively)
         """
-        kwargs = self.get_params(**kwargs)
+        params = self._get_params(**kwargs)
+        kwargs = params[-1]
         mode = mode or self.mode
 
         if eval:
@@ -226,15 +243,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
 
     def assign(self, value, **kwargs):
         """ Assign a value to a named expression """
-        kwargs = self.get_params(**kwargs)
-        a = eval_expr(self.a, **kwargs)
-        b = eval_expr(self.b, **kwargs)
-        if self.op == '#attr':
-            setattr(a, b, value)
-        elif self.op == '#item':
-            a[b] = value
-        else:
-            raise NotImplementedError("assign should be implemented in child classes")
+        raise NotImplementedError("assign should be implemented in child classes")
 
     def append(self, value, *args, **kwargs):
         """ Append a value to a named expression
@@ -275,11 +284,6 @@ class NamedExpression(metaclass=MetaNamedExpression):
             self.assign(value, *args, **kwargs)
 
     def __repr__(self):
-        if isinstance(self.name, str) and self.name == AN_EXPR:
-            val = "Arithmetic expression " + str(self.op) + " on " + repr(self.a)
-            if self.op in BINARY_OPS:
-                val += " and " + repr(self.b)
-            return val
         return type(self).__name__ + '(' + str(self.name) + ')'
 
     def __setstate__(self, d):
@@ -299,9 +303,8 @@ class AlgebraicNamedExpression(NamedExpression):
 
     def get(self, **kwargs):
         """ Return a value of an algebraic expression """
-        if self.op == "#call" and isinstance(self.a, F):
-            # Do not call F-func, just return a reference to it
-            a = eval_expr(self.a, **kwargs, _call=False)
+        if self.op == '#call':
+            a = eval_expr(self.a, _call=False, **kwargs)
         else:
             a = eval_expr(self.a, **kwargs)
         b = eval_expr(self.b, **kwargs)
@@ -311,6 +314,55 @@ class AlgebraicNamedExpression(NamedExpression):
         if self.op in BINARY_OPS:
             return OPERATIONS[self.op](a, b)
         return OPERATIONS[self.op](a, b, c)
+
+    def assign(self, value, **kwargs):
+        """ Assign a value to a named expression """
+        if self.op not in ['#attr', '#item']:
+            raise ValueError("Assigning a value to an arithmetic expression is not possible", self)
+
+        _, kwargs = self.get_params(**kwargs)
+
+        a = eval_expr(self.a, **kwargs)
+        b = eval_expr(self.b, **kwargs)
+        if self.op == '#attr':
+            setattr(a, b, value)
+        elif self.op == '#item':
+            a[b] = value
+
+    def __repr__(self):
+        if self.op in OPERATIONS_SIGNS:
+            if self.op in UNARY_OPS:
+                return OPERATIONS_SIGNS[self.op] + repr(self.a)
+            if self.op in BINARY_OPS:
+                return repr(self.a) + ' ' + OPERATIONS_SIGNS[self.op] + ' ' + repr(self.b)
+
+        if self.op == '__abs__':
+            return '|' + repr(self.a) + '|'
+        if self.op == '#str':
+            return 'str(' + repr(self.a) + ')'
+        if self.op == '#attr':
+            return repr(self.a) + '.' + repr(self.b)
+        if self.op == '#item':
+            return repr(self.a) + '[' + repr(self.b) +']'
+        if self.op == '#format':
+            a = repr(self.a) if self.a else ''
+            b = repr(self.b) if self.b else ''
+            return 'f' + b + '.' + a
+        if self.op == '#slice':
+            a = repr(self.a) if self.a else ''
+            b = repr(self.b) if self.b else ''
+            c = ':' + repr(self.c) if self.c else ''
+            return a + ':' + b + c
+
+        if self.op == '#call':
+            args = repr(self.b)[1:-1] if self.b else ''
+            if self.b:
+                kwargs = ','.join([repr(k) + '=' + repr(v) for k,v in self.c.items()])
+                args = args + ', ' + kwargs if args else kwargs
+            return repr(self.a) + '(' + args + ')'
+
+        return 'Unknown expression'
+
 
 class B(NamedExpression):
     """ Batch component or attribute name
@@ -333,14 +385,14 @@ class B(NamedExpression):
         super().__init__(name, mode)
         self.copy = copy
 
-    def _get(self, **kwargs):
-        name, kwargs = super()._get(**kwargs)
+    def _get_params(self, **kwargs):
+        name, kwargs = super()._get_params(**kwargs)
         batch = kwargs['batch']
         return name, batch, kwargs
 
     def get(self, **kwargs):
         """ Return a value of a batch component """
-        name, batch, _ = self._get(**kwargs)
+        name, batch, _ = self._get_params(**kwargs)
 
         if isinstance(batch, _DummyBatch):
             raise ValueError("Batch expressions are not allowed in static models: B('%s')" % name)
@@ -350,15 +402,16 @@ class B(NamedExpression):
 
     def assign(self, value, **kwargs):
         """ Assign a value to a batch component """
-        name, batch, _ = self._get(**kwargs)
+        name, batch, _ = self._get_params(**kwargs)
         if name is not None:
             setattr(batch, name, value)
 
 
 class PipelineNamedExpression(NamedExpression):
+    #pylint: disable=abstract-method
     """ Base class for pipeline expressions """
-    def _get(self, **kwargs):
-        name, kwargs = super()._get(**kwargs)
+    def _get_params(self, **kwargs):
+        name, kwargs = super()._get_params(**kwargs)
         batch = kwargs.get('batch')
         pipeline = kwargs.get('pipeline')
         pipeline = batch.pipeline if batch is not None else pipeline
@@ -386,7 +439,7 @@ class C(PipelineNamedExpression):
 
     def get(self, **kwargs):
         """ Return a value of a pipeline config """
-        name, pipeline, _ = self._get(**kwargs)
+        name, pipeline, _ = self._get_params(**kwargs)
         config = pipeline.config or {}
 
         if name is None:
@@ -402,9 +455,8 @@ class C(PipelineNamedExpression):
 
     def assign(self, value, **kwargs):
         """ Assign a value to a pipeline config """
-        name, pipeline, _ = self._get(**kwargs)
-        config = pipeline.config or {}
-        config[name] = value
+        name, pipeline, _ = self._get_params(**kwargs)
+        pipeline.config[name] = value
 
 
 class V(PipelineNamedExpression):
@@ -419,13 +471,13 @@ class V(PipelineNamedExpression):
     """
     def get(self, **kwargs):
         """ Return a value of a pipeline variable """
-        name, pipeline, _ = self._get(**kwargs)
+        name, pipeline, _ = self._get_params(**kwargs)
         value = pipeline.get_variable(name)
         return value
 
     def assign(self, value, **kwargs):
         """ Assign a value to a pipeline variable """
-        name, pipeline, kwargs = self._get(**kwargs)
+        name, pipeline, _ = self._get_params(**kwargs)
         pipeline.assign_variable(name, value)
 
 
@@ -440,7 +492,7 @@ class M(PipelineNamedExpression):
     """
     def get(self, **kwargs):
         """ Return a model from a pipeline """
-        name, pipeline, _ = self._get(**kwargs)
+        name, pipeline, _ = self._get_params(**kwargs)
         value = pipeline.get_model_by_name(name)
         return value
 
@@ -448,6 +500,7 @@ class M(PipelineNamedExpression):
         """ Assign a value to a model """
         _ = value, batch, pipeline
         raise ValueError('Assigning a value to a model is not possible.')
+
 
 class I(PipelineNamedExpression):
     """ Iteration counter
@@ -479,7 +532,7 @@ class I(PipelineNamedExpression):
 
     def get(self, **kwargs):    # pylint:disable=inconsistent-return-statements
         """ Return current or maximum iteration number or their ratio """
-        name, pipeline, _ = self._get(**kwargs)
+        name, pipeline, _ = self._get_params(**kwargs)
 
         if 'current'.startswith(name):
             return pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
@@ -503,56 +556,34 @@ class I(PipelineNamedExpression):
 
 
 class F(NamedExpression):
-    """ A function, method or any other callable that takes a batch or a pipeline and possibly other arguments
+    """ A function, method or any other callable that might take arguments
 
     Examples
     --------
     ::
 
-        F(MyBatch.rotate)(angle=30)
+        F(MyBatch.rotate)(B(), angle=30)
         F(make_data)
-        F(prepare_data)(115, item=10)
+        F(prepare_data)(batch=B(), item=10)
 
-    Notes
-    -----
-    Take into account that the actual calls will look like `current_batch.rotate(angle=30)`,
-    `make_data(current_batch)` and `prepare_data(current_batch, 115, item=10)`.
     """
-    def get(self, _pass=True, _call=True, **kwargs):
+    def get(self, _call=True, **kwargs):
         """ Return a value from a callable
-        _pass : bool
-            Whether to pass the current batch to the function
 
+        Parameters
+        ----------
         _call : bool
             Whether to call name-function while evaluating the expression.
             Sometimes we might not want calling the func, e.g. when evaluating an F-expr within a call-expression
             F(func)(1, arg2=10), since we want to evaluate the whole expression.
         """
-        name, kwargs = self._get(**kwargs)
-
-        if _pass:
-            batch = kwargs['batch']
-            pipeline = batch.pipeline
-
-            if isinstance(batch, _DummyBatch):
-                args = [pipeline]
-            else:
-                args = [batch]
-            name = partial(name, *args)
+        name, _ = self._get_params(**kwargs)
         return name() if _call else name
 
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """
         _ = args, kwargs
         raise NotImplementedError("Assigning a value to a callable is not supported")
-
-
-class L(F):
-    """ A function, method or any other callable """
-    def get(self, **kwargs):
-        """ Return a value from a callable """
-        return super().get(**kwargs, _pass=False)
-
 
 class D(NamedExpression):
     """ Dataset attribute or dataset itself
@@ -565,8 +596,8 @@ class D(NamedExpression):
         D('classes')
         D('organization')
     """
-    def _get(self, **kwargs):
-        name, kwargs = super()._get(**kwargs)
+    def _get_params(self, **kwargs):
+        name, kwargs = super()._get_params(**kwargs)
         batch = kwargs['batch']
         dataset = batch.dataset or kwargs['batch'].pipeline.dataset
         if dataset is None:
@@ -575,7 +606,7 @@ class D(NamedExpression):
 
     def get(self, **kwargs):
         """ Return a value of a dataset attribute """
-        name, dataset, _ = self._get(**kwargs)
+        name, dataset, _ = self._get_params(**kwargs)
 
         if name is None:
             value = dataset
@@ -587,7 +618,7 @@ class D(NamedExpression):
 
     def assign(self, value, **kwargs):
         """ Assign a value to a dataset attribute """
-        name, dataset, _ = self._get(**kwargs)
+        name, dataset, _ = self._get_params(**kwargs)
         if name is None:
             raise ValueError('Assigning a value to D() is not possible.')
         setattr(dataset, name, value)
@@ -647,7 +678,7 @@ class R(NamedExpression):
         if not isinstance(size, (type(None), int, tuple)):
             raise TypeError('size is expected to be int or tuple of int')
 
-        name, kwargs = self._get(**kwargs)
+        name, kwargs = self._get_params(**kwargs)
         args = self.args
 
         if not isinstance(name, str):
@@ -730,12 +761,14 @@ class P(W):
         pipeline
             .rotate(angle=R('normal', 0, 1))
 
+    To put it simply, ``R(...)`` is evaluated as ``R(..., size=batch.size)``.
+
     Generate 3 categorical random samples for each batch item::
 
         pipeline
             .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=3))
 
-    Generate random number of random samples for each batch item::
+    Generate a random number of random samples for each batch item::
 
         pipeline
             .some_action(P(R('normal', 0, 1, size=R('randint', 3, 8))))
@@ -749,7 +782,7 @@ class P(W):
 
     See also
     --------
-    :func:`~batchflow.inbatch_parallel`
+    :func:`~.inbatch_parallel`
     """
     def _get_name(self, **kwargs):
         return self.name
@@ -758,7 +791,7 @@ class P(W):
         """ Calculate and return a value of the expression """
         _ = args
 
-        name, kwargs = self._get(**kwargs)
+        name, kwargs = self._get_params(**kwargs)
         batch = kwargs['batch']
 
         # it's called from the decorator, so values were pre-calculated, just return them
@@ -769,7 +802,7 @@ class P(W):
             return self.name
 
         # pre-calculate values to pass them into decorator which takes them one by one
-        if isinstance(name, R):
+        if isinstance(name, (R, AlgebraicNamedExpression)):
             values = name.get(**kwargs, size=batch.size)
         elif isinstance(name, NamedExpression):
             values = name.get(**kwargs)
@@ -787,3 +820,51 @@ class P(W):
         """ Assign a value """
         _ = kwargs
         self.name = value # pylint: disable=attribute-defined-outside-init
+
+
+class PP(P):
+    """ A wrapper for single-value expressions passed to actions parallelized with @inbatch_parallel
+    `PP(expr)` is essentialy `P([expr for _ in batch.indices])`
+
+    Examples
+    --------
+    Each image in the batch will be rotated at its own angle::
+
+        pipeline
+            .rotate(angle=PP(F(get_single_angle)))
+
+    as ``get_single_angle`` will be called ``batch.size`` times.
+
+    ``R(...)`` will be evaluated only once within ``P(...)``, but many times within ``PP(...)``::
+
+        pipeline
+            .rotate(angle=PP(R('normal', 0, 1)))
+
+    That is why ``P(R(...))`` is much more efficient than ``PP(R(...))``.
+
+    However, ``PP`` is indispensable for shape-specific operations like ``@`` or broadcasting::
+
+        pipeline
+            .rotate(angle=PP(R('normal', R('normal', 50, 15, size=3), 15)))
+
+    Internal ``R`` specifies a 3D angle mean and thus defines the shape.
+    External ``R`` knows nothing about that shape and will throw an exception within ``P``,
+    but it'll work fine within ``PP``.
+
+    See also
+    --------
+    :func:`~.inbatch_parallel`
+    :class:`~.P`
+    """
+
+    def get(self, *_, **kwargs):   # pylint:disable=arguments-differ
+        """ Calculate and return a value of the expression """
+
+        name, kwargs = self._get_params(**kwargs)
+        batch = kwargs['batch']
+
+        # pre-calculate values to pass them into decorator which takes them one by one
+        values = [name.get(**kwargs) if isinstance(name, NamedExpression) else name for _ in batch.indices]
+
+        # return P-expr to be recognized by the decorator
+        return P(values)

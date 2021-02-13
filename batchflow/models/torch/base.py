@@ -100,18 +100,18 @@ class TorchModel(BaseModel, VisualizationMixin):
         If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
         placeholder (usually np.ndarrays with zeros) creation. Default value is 2.
 
-    loss : str, dict, list
+    loss : str, dict
         Loss function, might be defined in multiple formats.
 
         If str, then short ``name``.
         If dict, then ``{'name': name, **kwargs}``.
-        If list, then each item is a dict of format described above.
 
         Name must be one of:
             - short name (e.g. ``'mse'``, ``'ce'``, ``'l1'``, ``'cos'``, ``'hinge'``,
               ``'huber'``, ``'logloss'``, ``'dice'``)
             - a class name from `torch losses <https://pytorch.org/docs/stable/nn.html#loss-functions>`_
               (e.g. ``'PoissonNLL'`` or ``'TripletMargin'``)
+            - an instance of `:class:torch.nn.Module`
             - callable
 
         Examples:
@@ -120,7 +120,6 @@ class TorchModel(BaseModel, VisualizationMixin):
         - ``{'loss': {'name': 'KLDiv', 'reduction': 'none'}}``
         - ``{'loss': {'name': MyCustomLoss, 'epsilon': 1e-6}}``
         - ``{'loss': my_custom_loss_fn}``
-        - ``{'loss': ['dice', 'bce']}``
 
     optimizer : str, dict
         Optimizer, might be defined in multiple formats.
@@ -185,6 +184,9 @@ class TorchModel(BaseModel, VisualizationMixin):
         Whether to collect stats of model training timings.
         If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
 
+    amp : bool
+        Whether to use automated mixed precision during model training and inference. Default is True.
+
     sync_frequency : int
         How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
 
@@ -203,6 +205,9 @@ class TorchModel(BaseModel, VisualizationMixin):
     sam_individual_norm : bool
         If True, then each gradient is scaled according to its own L2 norm.
         If False, then one common gradient norm is computed and used as a scaler for all gradients.
+
+    callbacks : sequence of `:class:callbacks.BaseCallback`
+        Callbacks to call at the end of each training iteration.
 
     order : sequence
         Defines sequence of network blocks in the architecture. Default is initial_block -> body -> head.
@@ -311,12 +316,17 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.decay = None
         self.decay_step = None
 
+        self.amp = True
+        self.scaler = None
+
         self.callbacks = []
 
         # Memory amortization: accumulate gradients to update weights later
         self.sync_frequency = 1
         self.sync_counter = 0
         self.microbatch = None
+
+        # Sharpness-aware minimization
         self.sam_rho = 0.0
         self.sam_individual_norm = True
 
@@ -352,6 +362,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Store some of the config values
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
+        self.amp = self.full_config.get('amp', True)
+
         self.sam_rho = self.full_config.get('sam_rho', 0.0)
         self.sam_individual_norm = self.full_config.get('sam_individual_norm', False)
         self.profile = self.full_config.get('profile', False)
@@ -399,12 +411,13 @@ class TorchModel(BaseModel, VisualizationMixin):
         config['microbatch'] = None
         config['sync_frequency'] = 1
 
-        config['sam_rho'] = 0.0
-        config['sam_individual_norm'] = True
-
         config['loss'] = None
         config['optimizer'] = 'Adam'
         config['decay'] = None
+        config['amp'] = True
+
+        config['sam_rho'] = 0.0
+        config['sam_individual_norm'] = True
 
         config['order'] = ['initial_block', 'body', 'head']
         config['initial_block'] = {}
@@ -470,6 +483,14 @@ class TorchModel(BaseModel, VisualizationMixin):
         if config.get('head/filters') is None:
             config['head/filters'] = self.classes
         return config
+
+    def unpack(self, name):
+        """ Get params from config. """
+        unpacked = unpack_fn_from_config(name, self.full_config)
+        if isinstance(unpacked, list):
+            return {name: unpacked}
+        key, kwargs = unpacked
+        return {name: key, **kwargs}
 
 
     # Prepare to build the model: determine device(s) and shape(s)
@@ -569,8 +590,10 @@ class TorchModel(BaseModel, VisualizationMixin):
         else:
             self.model.to(self.device)
 
-        self.loss = self._make_loss(config)
-        self.optimizer, self.decay, self.decay_step = self._make_optimizer(config)
+        self.make_loss(**self.unpack('loss'))
+        self.make_optimizer(**self.unpack('optimizer'))
+        self.make_decay(**self.unpack('decay'), optimizer=self.optimizer)
+        self.scaler = torch.cuda.amp.GradScaler()
 
 
     def _placeholder_data(self):
@@ -601,45 +624,39 @@ class TorchModel(BaseModel, VisualizationMixin):
 
 
     # Create training procedure(s): loss, optimizer, decay
-    def _make_loss(self, config):
-        res = unpack_fn_from_config('loss', config)
-        res = res if isinstance(res, list) else [res]
-
-        losses = []
-        for loss, args in res:
-            loss_fn = None
-            # Parse `loss` to actual module
-            if isinstance(loss, str):
-                # String like 'ce', 'bdice' or 'CrossEntropy'
-                if hasattr(nn, loss):
-                    loss = getattr(nn, loss)
-                elif hasattr(nn, loss + "Loss"):
-                    loss = getattr(nn, loss + "Loss")
-                else:
-                    loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
-
-            elif isinstance(loss, nn.Module):
-                # Already a valid module
-                loss_fn = loss
-            elif callable(loss):
-                # Callable: just pass other arguments in
-                loss_fn = partial(loss, **args)
-            elif isinstance(loss, type):
-                # Class to make module
-                pass
+    def make_loss(self, loss, **kwargs):
+        """ Set model loss. Changes the `loss` attribute. """
+        loss_fn = None
+        # Parse `loss` to actual module
+        if isinstance(loss, str):
+            # String like 'ce', 'bdice' or 'CrossEntropy'
+            if hasattr(nn, loss):
+                loss = getattr(nn, loss)
+            elif hasattr(nn, loss + "Loss"):
+                loss = getattr(nn, loss + "Loss")
             else:
-                raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
+                loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
 
-            loss_fn = loss_fn or loss(**args)
-            if isinstance(loss_fn, nn.Module):
-                loss_fn.to(device=self.device)
-            losses.append(loss_fn)
+        elif isinstance(loss, nn.Module):
+            # Already a valid module
+            loss_fn = loss
+        elif callable(loss):
+            # Callable: just pass other arguments in
+            loss_fn = partial(loss, **kwargs)
+        elif isinstance(loss, type):
+            # Class to make module
+            pass
+        else:
+            raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
 
-        return losses
+        loss_fn = loss_fn or loss(**kwargs)
+        if isinstance(loss_fn, nn.Module):
+            loss_fn.to(device=self.device)
 
-    def _make_optimizer(self, config):
-        optimizer, optimizer_args = unpack_fn_from_config('optimizer', config)
+        self.loss = loss_fn
 
+    def make_optimizer(self, optimizer, **kwargs):
+        """ Set model optimizer. Changes the `optimizer` attribute. """
         # Choose the optimizer
         if callable(optimizer) or isinstance(optimizer, type):
             pass
@@ -648,50 +665,75 @@ class TorchModel(BaseModel, VisualizationMixin):
         else:
             raise ValueError("Unknown optimizer", optimizer)
 
-        # Create optimizer
-        optimizer = optimizer(self.model.parameters(), **optimizer_args)
+        self.optimizer = optimizer(self.model.parameters(), **kwargs)
 
-        decays, list_kwargs, list_steps = self._make_decay(config)
+    def make_decay(self, decay, optimizer=None, **kwargs):
+        """ Set model decay. Changes the `decay` and `decay_step` attribute. """
+        if isinstance(decay, (tuple, list)):
+            decays = decay
+        else:
+            decays = [(decay, kwargs)] if decay else []
 
-        if decays:
-            decays = [decay(optimizer, **decay_kwargs) for decay, decay_kwargs in zip(decays, list_kwargs)]
-        return optimizer, decays, list_steps
+        self.decay, self.decay_step = [], []
 
-    def _make_decay(self, config):
-        res = unpack_fn_from_config('decay', config)
-        res = res if isinstance(res, list) else [res]
-        decays, list_kwargs, list_steps = [], [], []
+        for decay_, decay_kwargs in decays:
+            if decay_ is None:
+                raise ValueError('Missing `name` key in the decay configuration')
 
-        for decay, decay_args in res:
-            if decay is None:
-                return decays, list_kwargs, list_steps
+            # Parse decay
+            if callable(decay_) or isinstance(decay_, type):
+                pass
+            elif isinstance(decay_, str) and hasattr(torch.optim.lr_scheduler, decay_):
+                decay = getattr(torch.optim.lr_scheduler, decay_)
+            elif decay_ in DECAYS:
+                decay_ = DECAYS.get(decay_)
+            else:
+                raise ValueError('Unknown learning rate decay method', decay_)
 
-            step_meta_keys = ['frequency', 'first_iter', 'last_iter']
-            step_meta_defaults = [None, 0, np.inf]
-            step_meta = {key: decay_args.pop(key, default) for key, default in zip(step_meta_keys, step_meta_defaults)}
-            if step_meta['frequency'] is None:
+            # Parse step parameters
+            step_params = {
+                'first_iter': 0,
+                'last_iter': np.inf,
+                **decay_kwargs
+            }
+            if 'frequency' not in step_params:
                 raise ValueError('Missing `frequency` key in the decay configuration')
 
-            if callable(decay) or isinstance(decay, type):
-                pass
-            elif isinstance(decay, str) and hasattr(torch.optim.lr_scheduler, decay):
-                decay = getattr(torch.optim.lr_scheduler, decay)
-            elif decay in DECAYS:
-                decay = DECAYS.get(decay)
-            else:
-                raise ValueError('Unknown learning rate decay method', decay)
-
-            if decay in DECAYS_DEFAULTS:
-                decay_dict = DECAYS_DEFAULTS.get(decay).copy()
+            # Set defaults for some of the decays
+            if decay_ in DECAYS_DEFAULTS:
+                decay_dict = DECAYS_DEFAULTS.get(decay_).copy()
                 if decay == DECAYS['cos']:
-                    decay_dict.update(T_max=step_meta['frequency'])
-                decay_args = {**decay_dict, **decay_args}
+                    decay_dict.update(T_max=step_params['frequency'])
+                decay_kwargs = {**decay_dict, **decay_kwargs}
 
-            decays.append(decay)
-            list_kwargs.append(decay_args)
-            list_steps.append(step_meta)
-        return decays, list_kwargs, list_steps
+            # Remove unnecessary keys from kwargs
+            for key in ['first_iter', 'last_iter', 'frequency']:
+                decay_kwargs.pop(key, None)
 
+            # Create decay or store parameters for later usage
+            if optimizer:
+                decay_ = decay_(optimizer, **decay_kwargs)
+            else:
+                decay = (decay_, decay_kwargs)
+
+            self.decay.append(decay_)
+            self.decay_step.append(step_params)
+
+
+    # Use an external model
+    def set_model(self, model):
+        """ Set the underlying model to a supplied one and update training infrastructure. """
+        self.model = model
+
+        if len(self.devices) > 1:
+            self.model = nn.DataParallel(self.model, self.devices)
+        else:
+            self.model.to(self.device)
+
+        self.make_loss(**self.unpack('loss'))
+        self.make_optimizer(**self.unpack('optimizer'))
+        self.make_decay(**self.unpack('decay'), optimizer=self.optimizer)
+        self.scaler = torch.cuda.amp.GradScaler()
 
     # Define model structure
     @classmethod
@@ -797,6 +839,18 @@ class TorchModel(BaseModel, VisualizationMixin):
             return None
         raise TypeError('Passed data should either be a `np.ndarray`, `torch.Tensor` or `cupy.ndarray`. ')
 
+    def transfer_from_device(self, data):
+        """ Transfer (possibly nested) structure from device and return the same structure. """
+        if isinstance(data, (tuple, list)):
+            return [self.transfer_from_device(item) for item in data]
+
+        if isinstance(data, (torch.Tensor, torch.autograd.Variable)):
+            return data.detach().cpu().numpy()
+
+        if isinstance(data, (np.ndarray, int, float)):
+            return data
+        raise TypeError('Passed data should either be a `torch.Tensor` or sequence of them. ')
+
     def parse_output(self, fetches, outputs):
         """ Retrieve tensors from device in the same structure, as `fetches`. """
         fetches = fetches if fetches is not None else []
@@ -806,8 +860,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         for name in _fetches:
             if name in outputs:
                 value = outputs[name]
-                if isinstance(value, (torch.Tensor, torch.autograd.Variable)):
-                    value = value.detach().cpu().numpy()
+                value = self.transfer_from_device(value)
                 output.append(value)
             else:
                 raise KeyError('Unknown value to fetch', name)
@@ -868,112 +921,114 @@ class TorchModel(BaseModel, VisualizationMixin):
         # Prepare inputs and targets: convert to Torch Tensors and transfer to device
         *inputs, targets = self.parse_inputs(*args, **{**(feed_dict or {}), **kwargs})
 
-        # Parse arguments
-        if sync_frequency is True:
-            sync_frequency = self.sync_frequency
-        elif sync_frequency is False or sync_frequency is None:
-            sync_frequency = 1
+        # Lock the entire method; release in any case
+        try:
+            if use_lock:
+                self.model_lock.acquire()
 
-        if microbatch:
-            if microbatch is True:
-                microbatch = self.microbatch
+            # Parse arguments
+            if sync_frequency is True:
+                sync_frequency = self.sync_frequency
+            elif sync_frequency is False or sync_frequency is None:
+                sync_frequency = 1
+
+            if microbatch:
+                if microbatch is True:
+                    microbatch = self.microbatch
+                else:
+                    microbatch = microbatch or self.microbatch
+
+            # Split data into microbatches, if needed
+            if microbatch:
+                microbatch = 1 if microbatch is True else microbatch
+                steps = len(targets) // microbatch
+                split_inputs = [[item[i:i + microbatch] for item in inputs] for i in range(0, len(targets), microbatch)]
+                split_targets = [targets[i:i + microbatch] for i in range(0, len(targets), microbatch)]
             else:
-                microbatch = microbatch or self.microbatch
+                steps = 1
+                split_inputs = [inputs]
+                split_targets = [targets]
 
-        # Split data into microbatches, if needed
-        if microbatch:
-            microbatch = 1 if microbatch is True else microbatch
-            steps = len(targets) // microbatch
-            split_inputs = [[item[i:i + microbatch] for item in inputs] for i in range(0, len(targets), microbatch)]
-            split_targets = [targets[i:i + microbatch] for i in range(0, len(targets), microbatch)]
-        else:
-            steps = 1
-            split_inputs = [inputs]
-            split_targets = [targets]
+            # Prepare parameters for SAM
+            if sam_rho is None:
+                sam_rho = self.sam_rho
+            if sam_individual_norm is None:
+                sam_individual_norm = self.sam_individual_norm
 
-        # Prepare parameters for SAM
-        if sam_rho is None:
-            sam_rho = self.sam_rho
-        if sam_individual_norm is None:
-            sam_individual_norm = self.sam_individual_norm
+            # Create Pytorch model if it is yet to be initialized, based on the actual inputs
+            if self.model is None:
+                if isinstance(split_inputs[0], (list, tuple)):
+                    self.input_shapes = [get_shape(item) for item in split_inputs[0]]
+                else:
+                    self.input_shapes = get_shape(split_inputs[0])
 
-        # Create Pytorch model if it is yet to be initialized, based on the actual inputs
-        if self.model is None:
-            self.model_lock.acquire()
-            if isinstance(split_inputs[0], (list, tuple)):
-                self.input_shapes = [get_shape(item) for item in split_inputs[0]]
+                self.target_shape = get_shape(split_targets[0])
+                if self.classes is None:
+                    if len(self.target_shape) > 1: # segmentation
+                        self.classes = self.target_shape[1]
+
+                # Can use the first two items to build model: no need for the whole tensor
+                self.build_config()
+                build_inputs = [item[:2] for item in split_inputs[0]]
+                build_inputs = self.transfer_to_device(build_inputs)
+                self._build(build_inputs)
+
+            self.model.train()
+
+            # Set up the profiling, if needed
+            profile = profile or self.profile
+            if profile:
+                profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
+                profiler.__enter__()
+
+            # Train on each of the microbatches
+            outputs = []
+            for i in range(steps):
+                _inputs = split_inputs[i]
+                _targets = split_targets[i]
+
+                _inputs = self.transfer_to_device(_inputs)
+                _targets = self.transfer_to_device(_targets)
+
+                output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps,
+                                     sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
+                outputs.append(output)
+
+            # Store the average value of loss over the entire batch
+            self.loss_list.append(np.mean(self._loss_list[-steps:]))
+
+            # Parse outputs to a desired structure
+            if fetches:
+                outputs = [outputs] if isinstance(fetches, str) else outputs
+                output = [np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst)
+                          for lst in outputs]
+                output = output[0] if isinstance(fetches, str) else output
             else:
-                self.input_shapes = get_shape(split_inputs[0])
+                output = []
 
-            self.target_shape = get_shape(split_targets[0])
-            if self.classes is None:
-                if len(self.target_shape) > 1: # segmentation
-                    self.classes = self.target_shape[1]
+            # Exit the profiling mode
+            if profile:
+                profiler.__exit__(None, None, None)
+                self.profilers.append(profiler)
 
-            # Can use the first two items to build model: no need for the whole tensor
-            self.build_config()
-            build_inputs = [item[:2] for item in split_inputs[0]]
-            build_inputs = self.transfer_to_device(build_inputs)
-            self._build(build_inputs)
-            self.model_lock.release()
+            # Store info about current iteration
+            self.iter_info.update({
+                'amp': self.amp,
+                'microbatch': microbatch,
+                'sync_frequency': sync_frequency,
+                'steps': steps,
+                'sam': bool(sam_rho), 'sam_rho': sam_rho, 'sam_individual_norm': sam_individual_norm,
+                'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
+                'actual_model_outputs_shape': get_shape(_targets),
+            })
 
-        self.model.train()
+            # Call the callbacks
+            for callback in self.callbacks:
+                callback.on_iter_end()
 
-        # Set up the profiling, if needed
-        profile = profile or self.profile
-        if profile:
-            profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
-            profiler.__enter__()
-
-        if use_lock:
-            self.model_lock.acquire()
-
-        # Train on each of the microbatches
-        outputs = []
-        for i in range(steps):
-            _inputs = split_inputs[i]
-            _targets = split_targets[i]
-
-            _inputs = self.transfer_to_device(_inputs)
-            _targets = self.transfer_to_device(_targets)
-
-            output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps,
-                                 sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
-            outputs.append(output)
-
-        # Store the average value of loss over the entire batch
-        self.loss_list.append(np.mean(self._loss_list[-steps:]))
-
-        if use_lock:
-            self.model_lock.release()
-
-        # Parse outputs to a desired structure
-        if fetches:
-            outputs = [outputs] if isinstance(fetches, str) else outputs
-            output = [np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst)
-                      for lst in outputs]
-            output = output[0] if isinstance(fetches, str) else output
-        else:
-            output = []
-
-        # Exit the profiling mode
-        if profile:
-            profiler.__exit__(None, None, None)
-            self.profilers.append(profiler)
-
-        # Store info about current iteration
-        self.iter_info.update({
-            'microbatch': microbatch,
-            'sync_frequency': sync_frequency,
-            'steps': steps,
-            'sam_rho': sam_rho, 'sam_individual_norm': sam_individual_norm,
-            'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
-            'actual_model_outputs_shape': get_shape(_targets),
-        })
-
-        # Call the callbacks
-        for callback in self.callbacks:
-            callback.on_iter_end()
+        finally:
+            if use_lock:
+                self.model_lock.release()
         return output
 
     def _train(self, *args, fetches=None, sync_frequency=True, sam_rho=0.0, sam_individual_norm=True):
@@ -982,7 +1037,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
 
         # Apply model, compute loss and gradients
-        predictions = self.model(inputs)
+        with torch.cuda.amp.autocast(enabled=self.amp):
+            predictions = self.model(inputs)
 
         # SAM: store grads from previous microbatches
         if self.iteration >= 1 and bool(sam_rho):
@@ -991,8 +1047,10 @@ class TorchModel(BaseModel, VisualizationMixin):
                     self.optimizer.state[p]['previous_grad'] = p.grad.clone().detach()
                     p.grad = None
 
-        loss = sum(loss_fn(predictions, targets) for loss_fn in self.loss) / len(self.loss)
-        loss.backward()
+        with torch.cuda.amp.autocast(enabled=self.amp):
+            loss = self.loss(predictions, targets)
+            loss_ = loss if sync_frequency == 1 else loss / sync_frequency
+        (self.scaler.scale(loss_) if self.amp else loss).backward()
 
         # SAM: use obtained grads to move to the local maxima
         if self.iteration >= 1 and bool(sam_rho):
@@ -1011,12 +1069,17 @@ class TorchModel(BaseModel, VisualizationMixin):
             else:
                 grad_norm = torch.stack([g.detach().norm(2).to(self.device) for g in grads]).norm(2)
                 epsilons = [eps * sam_rho / grad_norm for eps in grads]
+
+            if self.amp:
+                scale = self.scaler.get_scale()
+                epsilons = [eps / scale for eps in epsilons]
             params_with_grads = [p + eps for p, eps in zip(params_with_grads, epsilons)]
 
             # Compute new gradients: direction to move to minimize the local maxima
-            predictions = self.model(inputs)
-            loss_inner = sum(loss_fn(predictions, targets) for loss_fn in self.loss) / len(self.loss)
-            loss_inner.backward()
+            with torch.cuda.amp.autocast(enabled=self.amp):
+                predictions = self.model(inputs)
+                loss_inner = self.loss(predictions, targets)
+            (self.scaler.scale(loss_inner) if self.amp else loss_inner).backward()
 
             # Cancel the previous update to model parameters, add stored gradients from previous microbatches
             params_with_grads = [p - eps for p, eps in zip(params_with_grads, epsilons)]
@@ -1031,19 +1094,20 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Whether to update weights or keep accumulating
         if self.sync_counter == sync_frequency - 1:
-            # Correct accumulated gradients
-            if sync_frequency > 1:
-                for p in self.model.parameters():
-                    if p.grad is not None:
-                        p.grad /= sync_frequency
-
             # Store learning rate: once per sync
             # Note: we do it before decay, so it is actual LR used on this iteration
             self.lr_list.append([group['lr'] for group in self.optimizer.param_groups])
 
             # Update weights and remove grads
-            self.optimizer.step()
-            self.optimizer.zero_grad()
+            if self.amp:
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                self.optimizer.step()
+
+            # Optimization over default `zero_grad`; can be removed after PyTorch >= 1.8
+            for p in self.model.parameters():
+                p.grad = None
             self.iteration += 1
 
             # Apply decay to learning rate, if needed
@@ -1108,30 +1172,32 @@ class TorchModel(BaseModel, VisualizationMixin):
         """
         inputs, targets = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
 
-        self.model.eval()
+        # Acquire lock, release anyway
+        try:
+            if use_lock:
+                self.model_lock.acquire()
 
-        if use_lock:
-            self.model_lock.acquire()
+            self.model.eval()
 
-        with torch.no_grad():
-            output_container = {}
-            inputs = self.transfer_to_device(inputs)
-            predictions = self.model(inputs)
-            output_container['predictions'] = predictions
+            with torch.no_grad(), torch.cuda.amp.autocast(enabled=self.amp):
+                output_container = {}
+                inputs = self.transfer_to_device(inputs)
+                predictions = self.model(inputs)
+                output_container['predictions'] = predictions
 
-            if targets is not None:
-                targets = self.transfer_to_device(targets)
-                loss = sum([loss(predictions, targets) for loss in self.loss]) / len(self.loss)
-                output_container['loss'] = loss
+                if targets is not None:
+                    targets = self.transfer_to_device(targets)
+                    output_container['loss'] = self.loss(predictions, targets)
 
-        if use_lock:
-            self.model_lock.release()
+            config = self.full_config
+            additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
+                                             ops=config['output'])
+            output_container = {**output_container, **additional_outputs}
+            output = self.parse_output(fetches, output_container)
 
-        config = self.full_config
-        additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
-                                         ops=config['output'])
-        output_container = {**output_container, **additional_outputs}
-        output = self.parse_output(fetches, output_container)
+        finally:
+            if use_lock:
+                self.model_lock.release()
         return output
 
     def _make_prediction_inputs(self, *args, targets=None, feed_dict=None, **kwargs):

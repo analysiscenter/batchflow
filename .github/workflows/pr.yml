@@ -11,19 +11,31 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    container:
-      image: analysiscenter1/ds-py3:cpu
-
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
 
     - name: Check if the branch is behind the master
-      run: git rev-list --count HEAD..origin/master | grep -w "0"
+      shell: bash {0}
+      run: |
+        git fetch origin master
+        git rev-list --count HEAD..origin/master | grep -w "0"
+        test $? -eq 0 || echo "Your branch is behind the master. Pull the changes to your branch." && exit 1
 
+  code-cov:
+
+    needs: [pr-check]
+
+    runs-on: ubuntu-latest
+
+    container:
+      image: analysiscenter1/ds-py3
+
+    steps:
     - name: Generate coverage report
       run: |
         pip3 install -U pytest-cov
         pytest -m "not slow" --cov=./ --cov-report=xml
+
     - name: Upload coverage to Codecov
       run: |
         pip3 install -U codecov
