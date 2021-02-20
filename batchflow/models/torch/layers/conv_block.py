@@ -6,12 +6,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
+from .core import Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
 from .resize import IncreaseDim, Reshape, Interpolate, SubPixelConv, Combine
 from .attention import SelfAttention
+from .activation import Activation
 from ..utils import get_shape
 from ...utils import unpack_args
 from .... import Config
