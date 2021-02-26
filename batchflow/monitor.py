@@ -290,7 +290,7 @@ class Monitor(list):
             monitor.stop()
 
 
-    def visualize(self, layout=None, figsize=None, suptitle=''):
+    def visualize(self, layout=None, figsize=None, suptitle='', savepath=None, show=True):
         """ Visualize multiple monitors in a single figure.
 
         Parameters
@@ -324,4 +324,11 @@ class Monitor(list):
 
         if suptitle:
             fig.suptitle(suptitle, fontsize=24)
-        plt.show()
+
+        if savepath:
+            plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
+
+        if show:
+            plt.show()
+        else:
+            plt.close()
