@@ -47,6 +47,10 @@ class DummyBar:
 
 class Notifier:
     """ Progress tracker and a resource monitor tool in one.
+    Allows to dynamically track and display containers (pipeline variables, images, monitor),
+    log them to file in both textual and visual formats.
+
+    Instance can be used to wrap iterators or by calling :meth:`.update` manually.
 
     Parameters
     ----------
@@ -59,31 +63,37 @@ class Notifier:
             - `t` or True for standard text tqdm is used.
             - otherwise, no progress bar will be displayed. Note that iterations,
             as well as everything else (monitors, variables, logs) are still tracked.
-    total, batch_size, n_iters, n_epochs, length : int
+    update_total : bool
+        Whether the total amount of iterations should be computed at initialization.
+    total, batch_size, n_iters, n_epochs, drop_last, length
         Parameters to calculate total amount of iterations.
-    drop_last : bool
-        Whether the last batch of data is dropped from iterations.
-    variables : str, :class:`.NamedExpression` or sequence of them
-        Allows to set trackable entities from the pipeline the Notifier is used in:
-        If str, then stands for name of the variable to get from the pipeline.
-        If any of the named expressions, then evaluated with the pipeline.
-    monitors : str, :class:`.Monitor` or sequence of them
-        Allows to monitor resources. Strings should be registered aliases for monitors like `cpu`, `gpu`, etc.
-    monitor_kwargs : dict
-        Parameters of monitor creation like `frequency`, `pid`, etc.
-    plot : bool
-        If True, then tracked data (usually list of values like memory usage or loss over training process)
-        is dynamically tracked on graphs. Note that rendering takes a lot of time.
+    frequency : int
+        Frequency of notifier updates.
+    monitors : str, :class:`.Monitor`, :class:`.NamedExpression`, dict or sequence of them
+        Set tracked ('monitored') entities: they are displayed in the bar description.
+        Strings are either registered monitor identifiers or names of pipeline variables.
+        Named expressions are evaluated with the pipeline.
+        If dict, then 'source' key should be one of the above to identify container.
+        Other available keys:
+            - 'name' is used to display at bar descriptions and plot titles
+            - 'plot_function' is used to display container data.
+            Can be used to change the default way of displaying graphs.
+    graphs : str, :class:`.Monitor`, :class:`.NamedExpression`, or sequence of them
+        Same semantics, as `monitors`, but tracked entities are displayed in dynamically updated plots.
+    file : str
+        If provided, a textual log is written into the supplied path.
     window : int
         Allows to plot only the last `window` values from every tracked container.
     layout : str
         If `h`, then subplots are drawn horizontally; vertically otherwise.
     figsize : tuple of numbers
         Total size of drawn figure.
+    savepath : str
+        Path to save image, created by tracking entities with `graphs`.
     *args, **kwargs
         Positional and keyword arguments that are used to create underlying progress bar.
     """
-    def __init__(self, bar=None, *args,
+    def __init__(self, bar=None, *args, update_total=True,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  frequency=1, monitors=None, graphs=None, file=None,
                  window=None, layout='h', figsize=None, savepath=None, **kwargs):
@@ -163,8 +173,10 @@ class Notifier:
                 kwargs['ncols'] = min(80 + 10 * len(monitors or []), 120)
 
         self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
-        self.update_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                          drop_last=drop_last, length=length)
+
+        if update_total:
+            self.update_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                              drop_last=drop_last, length=length)
 
         # Prepare plot params
         #pylint: disable=invalid-unary-operand-type
