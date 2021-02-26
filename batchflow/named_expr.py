@@ -148,11 +148,12 @@ class NamedExpression(metaclass=MetaNamedExpression):
     """
     __slots__ = ('__dict__', )
 
-    def __init__(self, name=None, mode='w'):
+    def __init__(self, name=None, mode='w', **kwargs):
         self.name = name
         self.mode = mode
         self.params = None
         self.eval = eval
+        self.set_params(**kwargs)
 
     def __getattr__(self, name):
         return AlgebraicNamedExpression(op='#attr', a=self, b=name)
@@ -183,15 +184,26 @@ class NamedExpression(metaclass=MetaNamedExpression):
 
     def _get_params(self, **kwargs):
         """ Return parameters needed to evaluate the expression """
-        if self.params is not None:
+        if self.params is None:
+            pkwargs = kwargs
+        else:
+            pkwargs = {}
             for arg in self.params.keys() | kwargs.keys():
-                kwargs[arg] = kwargs.get(arg) or self.params.get(arg)
-        if kwargs.get('batch') is None:
-            kwargs['batch'] = _DummyBatch(kwargs.get('pipeline'))
+                if self.params.get(arg) is None:
+                    pkwargs[arg] = kwargs.get(arg)
+                else:
+                    # pre-set parameters should prevail
+                    if isinstance(self.params.get(arg), NamedExpression):
+                        pkwargs[arg] = self.params.get(arg).get(**kwargs)
+                    else:
+                        pkwargs[arg] = self.params.get(arg)
 
-        name = self._get_name(**kwargs)
+        if pkwargs.get('batch') is None:
+            pkwargs['batch'] = _DummyBatch(pkwargs.get('pipeline'))
 
-        return name, kwargs
+        name = self._get_name(**pkwargs)
+
+        return name, pkwargs
 
     def set_params(self, **kwargs):
         self.params = kwargs
@@ -412,9 +424,7 @@ class PipelineNamedExpression(NamedExpression):
     """ Base class for pipeline expressions """
     def _get_params(self, **kwargs):
         name, kwargs = super()._get_params(**kwargs)
-        batch = kwargs.get('batch')
-        pipeline = kwargs.get('pipeline')
-        pipeline = batch.pipeline if batch is not None else pipeline
+        pipeline = kwargs.get('pipeline') if kwargs.get('pipeline') is not None else kwargs.get('batch').pipeline
         return name, pipeline, kwargs
 
 class C(PipelineNamedExpression):
@@ -426,14 +436,21 @@ class C(PipelineNamedExpression):
 
     Examples
     --------
-    ::
+    Get a value from the current pipeline config::
 
         C('model_class', default=ResNet)
         C('GPU')
+
+    Get the whole config from the current pipeline::
+
         C()
+
+    Get a value from another pipeline config::
+
+        C('model_class', pipeline=train_pipeline)
     """
     def __init__(self, name=None, mode='w', **kwargs):
-        super().__init__(name, mode)
+        super().__init__(name, mode, **kwargs)
         self._has_default = 'default' in kwargs
         self.default = kwargs.get('default')
 
@@ -464,10 +481,13 @@ class V(PipelineNamedExpression):
 
     Examples
     --------
-    ::
+    Get a variable value from the current pipeline::
 
         V('model_name')
-        V('loss_history')
+
+    Get a variable value from another pipeline::
+
+        V('loss_history', pipeline=train_pipeline)
     """
     def get(self, **kwargs):
         """ Return a value of a pipeline variable """
@@ -486,9 +506,21 @@ class M(PipelineNamedExpression):
 
     Examples
     --------
-    ::
+    Get a model from the current pipeline::
 
         M('model_name')
+
+    Get a model from a given pipeline::
+
+        M('model_name', pipeline=train_pipeline)
+
+    Get a model from a pipeline specified in the current pipeline config::
+
+        M('model_name', pipeline=C('train_pipeline'))
+
+    Get a model from a pipeline specified in another pipeline config::
+
+        M('model_name', pipeline=C('train_pipeline', pipeline=test_template))
     """
     def get(self, **kwargs):
         """ Return a model from a pipeline """
@@ -527,8 +559,8 @@ class I(PipelineNamedExpression):
         I('max')
         R('normal', loc=0, scale=I('ratio')*100)
     """
-    def __init__(self, name='c'):
-        super().__init__(name, mode=None)
+    def __init__(self, name='c', mode='w', **kwargs):
+        super().__init__(name, mode=None, **kwargs)
 
     def get(self, **kwargs):    # pylint:disable=inconsistent-return-statements
         """ Return current or maximum iteration number or their ratio """
