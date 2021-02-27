@@ -1,6 +1,4 @@
 """ Basic Torch layers. """
-import inspect
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -31,59 +29,6 @@ class Dense(nn.Module):
         if x.dim() > 2:
             x = Flatten()(x)
         return self.linear(x)
-
-
-
-class Activation(nn.Module):
-    """ Proxy activation module.
-
-    Parameters
-    ----------
-    activation : str, nn.Module, callable or None
-        If None, then identity function `f(x) = x`.
-        If str, then name from `torch.nn`
-        Also can be an instance of activation module (e.g. `torch.nn.ReLU()` or `torch.nn.ELU(alpha=2.0)`),
-        or a class of activation module (e.g. `torch.nn.ReLU` or `torch.nn.ELU`),
-        or a callable (e.g. `F.relu` or your custom function).
-    args
-        Positional arguments passed to either class initializer or callable.
-    kwargs
-        Additional named arguments passed to either class initializer or callable.
-    """
-    FUNCTIONS = {f.lower(): f for f in dir(nn)}
-
-    def __init__(self, activation, *args, **kwargs):
-        super().__init__()
-        self.args, self.kwargs = tuple(), {}
-
-        if isinstance(activation, str):
-            name = activation.lower()
-            if name in self.FUNCTIONS:
-                activation = getattr(nn, self.FUNCTIONS[name])
-            else:
-                raise ValueError('Unknown activation', activation)
-
-        if activation is None:
-            self.activation = None
-        elif isinstance(activation, nn.Module):
-            self.activation = activation
-        elif isinstance(activation, type) and issubclass(activation, nn.Module):
-            # check if activation has `in_place` parameter
-            has_inplace = 'inplace' in inspect.getfullargspec(activation).args
-            if has_inplace:
-                kwargs['inplace'] = True
-            self.activation = activation(*args, **kwargs)
-        elif callable(activation):
-            self.activation = activation
-            self.args = args
-            self.kwargs = kwargs
-        else:
-            raise ValueError("Activation can be str, nn.Module or a callable, but given", activation)
-
-    def forward(self, x):
-        if self.activation:
-            return self.activation(x, *self.args, **self.kwargs)
-        return x
 
 
 
