@@ -1704,8 +1704,7 @@ class Pipeline:
                 raise RuntimeError("next_batch without arguments requires a lazy run at the end of the pipeline")
             args, kwargs = self._lazy_run
             batch_res = self.next_batch(*args, **kwargs)
-        elif True or kwargs.get('prefetch', 0) > 0: #pylint: disable=condition-evals-to-constant
-            # TODO: fix or explain this behavior
+        elif True or kwargs.get('prefetch', 0) > 0: # FIXME
             if self._batch_generator is None:
                 self._lazy_run = args, kwargs
                 self._batch_generator = self.gen_batch(*args, **kwargs)
