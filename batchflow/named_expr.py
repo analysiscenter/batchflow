@@ -86,8 +86,8 @@ OPERATIONS_SIGNS = {
     '__add__': '+', '__radd__': '+',
     '__sub__': '-', '__rsub__': '-',
     '__mul__': '*', '__rmul__': '*',
-    '__floordiv__': '/', '__rfloordiv__': '/',
-    '__truediv__': '//', '__rtruediv__': '//',
+    '__floordiv__': '//', '__rfloordiv__': '//',
+    '__truediv__': '/', '__rtruediv__': '/',
     '__mod__': '%', '__rmod__': '%',
     '__pow__': '**', '__rpow__': '**',
     '__matmul__': '@', '__rmatmul__': '@',
@@ -357,18 +357,19 @@ class AlgebraicNamedExpression(NamedExpression):
         if self.op == '#item':
             return repr(self.a) + '[' + repr(self.b) +']'
         if self.op == '#format':
-            a = repr(self.a) if self.a else ''
-            b = repr(self.b) if self.b else ''
+            a = repr(self.a) if self.a is not None else ''
+            b = repr(self.b) if self.b is not None  else ''
             return 'f' + b + '.' + a
         if self.op == '#slice':
-            a = repr(self.a) if self.a else ''
-            b = repr(self.b) if self.b else ''
-            c = ':' + repr(self.c) if self.c else ''
+            a = repr(self.a) if self.a is not None else ''
+            b = repr(self.b) if self.b is not None else ''
+            c = ':' + repr(self.c) if self.c is not None else ''
             return a + ':' + b + c
 
         if self.op == '#call':
-            args = repr(self.b)[1:-1] if self.b else ''
-            if self.b:
+            args = ''
+            if self.b is not None:
+                args = repr(self.b)[1:-1]
                 kwargs = ','.join([repr(k) + '=' + repr(v) for k,v in self.c.items()])
                 args = args + ', ' + kwargs if args else kwargs
             return repr(self.a) + '(' + args + ')'
