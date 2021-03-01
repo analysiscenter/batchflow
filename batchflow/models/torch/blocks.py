@@ -187,7 +187,7 @@ class MBConvBlock(ConvBlock):
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
-    def __init__(self, inputs=None, n_reps=1, expand_ratio=6, strides=1, filters='same', kernel_size=3, layout='wna',
+    def __init__(self, inputs=None, n_reps=1, expand_ratio=6, strides=1, filters='same', kernel_size=3,
                  attention=False, **kwargs):
 
         if isinstance(filters, str):
@@ -215,8 +215,8 @@ class MBConvBlock(ConvBlock):
                 block_params['kernel_size'].append(1)
                 block_params['strides'].append(1)
 
-            block_params['layout'] += layout
-            block_params['filters'].append(inner_filters)
+            block_params['layout'] += 'wna'
+            block_params['filters'].append('dummy')
             block_params['kernel_size'].append(kernel_size)
             block_params['strides'].append(strides)
 
@@ -298,3 +298,97 @@ class DenseBlock(ConvBlock):
     def forward(self, x):
         x = super().forward(x)
         return x if self.skip else x[:, self.input_num_channels:]
+
+
+class ResNeStBlock(ConvBlock):
+    """ ResNeSt Module: apply following operations to a supplied tensor:
+        * First of all, it goes through 1x1 convolution with normalization and activation.
+        * Then Split Attention Convolution is applied:
+            * Here, we split feature maps into `cardinality`*`radix` groups and apply convolution with
+            kernel_size=`kernel_size` with normalization and activation (these operations are controlled by the `layout`)
+            * Then we split the result into `radix` groups.
+            * Then attention takes place:
+                * Here, we summarize feature maps by groups and apply Global Average Pooling.
+                * Then we apply two 1x1 convolutions with groups=`cardinality`. The number of filters in the first
+                convolution is `filters`*`radix` // `reduction_factor`.
+                * Then we use RadixSoftmax, which applies a softmax for feature maps grouped into `radix` groups.
+                * Then, the resulting groups are summed up with feature maps before the attention part.
+        * The last layer of the block is a 1x1 convolution that increases the feature map from `filters` to
+        `filters`*`scaling_factor`.
+        * In the end, skip connection applies to the result of the ResNeStBlock.
+
+    The number of filters inside ResNeSt Attention calculates as following:
+    >>> filters = int(filters // reduction_factor) * cardinality
+
+    The implementation is inspired by the authors' code (`<https://github.com/zhanghang1989/ResNeSt>`_), thus
+    the first 1x1 convolution is not split into groups, the second fully connected block does not contain
+    normalization.
+
+    Parameters
+    ----------
+    inputs : torch.Tensor
+        Example of input tensor to this layer.
+    layout : str
+        A sequence of letters, each letter meaning individual operation.
+        See more in :class:`~.layers.conv_block.BaseConvBlock` documentation.
+        `layout` describes a first convolution in the :class:`~.attention.SplitAttentionConv`.
+        Default is 'cna'.
+    filters : int, str
+        If `str`, then number of filters is calculated by its evaluation. ``'S'`` and ``'same'`` stand for the
+        number of filters in the previous tensor. Note the `eval` usage under the hood.
+        If int, then number of filters in the output tensor. Default value is 'same'.
+    kernel_size : int, list of int
+        Convolution kernel size. Default is 3.
+    radix : int
+        The number of splits within a cardinal group. Default is 2.
+    cardinality : int
+        The number of feature-map groups. Given feature-map is splitted to groups with same size. Default is 1.
+    strides : int, list of int
+        Convolution stride. Default is 1.
+    reduction_factor : int
+        Factor of the filter reduction during :class:`~.attention.SplitAttentionConv`. Default is 1.
+    scaling_factor : int
+        Factor increasing the number of filters after ResNeSt block. Thus, the number of output filters is
+        `filters`*`scaling_factor`. Default 1.
+    op : str or callable
+        Operation for combination shortcut and residual.
+        See more :class:`~.layers.Combine` documentation. Default is '+a'.
+    n_reps : int
+        Number of times to repeat the whole block. Default is 1.
+    kwargs : dict
+        Other named arguments for the first :class:`~.layers.ConvBlock` in an :class:`~.attention.SplitAttentionConv`.
+    """
+    def __init__(self, inputs=None, layout='cna', filters='same', kernel_size=3, radix=2, cardinality=1,
+                 strides=1, reduction_factor=1, scaling_factor=1, op='+a', n_reps=1, **kwargs):
+        if isinstance(filters, str):
+            filters = safe_eval(filters, get_num_channels(inputs))
+
+        # Multiplying by `cardinality` is needed to maintain the possibility of division into groups within
+        # `SplitAttentionConv`.
+        block_filters = int(filters // reduction_factor) * cardinality
+
+        if get_num_channels(inputs) != (filters*scaling_factor):
+            # If main flow changes the number of filters, so must do the side branch.
+            # No activation, because it will be applied after summation with the main flow
+            branch_params = {'layout': 'cn', 'filters': filters*scaling_factor,
+                             'kernel_size': 1, 'strides': strides}
+        else:
+            branch_params = {}
+        layout = 'R' + 'cnaScn' + op
+
+        layer_params = [{'branch': branch_params,
+                         'branch/strides': strides}]
+
+        layer_params += [{}]*(n_reps-1)
+
+        # All given parameters are going directly to attention module due to the lack of other operations in the block.
+        self_attention = {
+            "radix": radix, "cardinality": cardinality,
+            "kernel_size": kernel_size, "filters": block_filters, "strides": strides,
+            "reduction_factor": reduction_factor, "scaling_factor": scaling_factor,
+            **kwargs
+        }
+
+        super().__init__(*layer_params, inputs=inputs, layout=layout, attention='sac',
+                         self_attention=self_attention, kernel_size=1,
+                         filters=[block_filters, filters*scaling_factor])

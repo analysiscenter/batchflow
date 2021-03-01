@@ -14,10 +14,11 @@ There are several types of named expressions:
 * V('name') - a pipeline variable name
 * C('name') - a pipeline config option
 * D('name') - a dataset attribute
-* F(...) - a callable which takes a batch (could be a batch class method or an arbitrary function)
+* F(...) - a callable
 * R(...) - a random value
 * W(...) - a wrapper for a named expression
-* P(...) - a wrapper for parallel actions
+* P(...) - a wrapper for parallel actions that calculates its expression as a batch-sized vector
+* PP(...) - a wrapper for parallel actions that calculate its expression batch-size times in a cycle
 * I(...) - an iteration counter
 
 Named expressions can be defined in two ways:
@@ -181,19 +182,19 @@ For instance, at each iteration dataset items can be rotated at a random angle w
 
 F - callable
 ============
-A function which takes a batch and, possibly, other arguments.
+A function which might take arguments.
 
 The callable can be a lambda function::
 
     pipeline
         .init_model('dynamic', MyModel, 'my_model', config={
-            'inputs/images/shape': F(lambda batch: batch.images.shape[1:])}}
+            'inputs/images/shape': F(lambda image_shape: (-1,) + image_shape)(B.image_shape)}}
         })
 
 or a batch class method::
 
     pipeline
-        .train_model(model_name, make_data=F(MyBatch.pack_to_feed_dict)(task='segmentation'))
+        .train_model(model_name, make_data=F(MyBatch.pack_to_feed_dict)(B(), task='segmentation'))
 
 or an arbitrary function::
 
@@ -204,36 +205,25 @@ or an arbitrary function::
 
     pipeline
         ...
-        .update_variable(var_name, F(get_boxes)(C('image_shape')))
+        .update_variable(var_name, F(get_boxes)(B(), C('image_shape')))
         ...
 
 or any other Python callable.
 
-.. note:: Most of the time the first parameter passed to ``F``-function contains the current batch.
-   However, there are a few exceptions.
-
 As static models are initialized before a pipeline is run (i.e. before any batch is created),
-all ``F``-functions specified in static ``init_model`` get ``pipeline`` as the first parameter::
+all ``F``-functions specified in static ``init_model`` cannot get ``batch``::
 
     pipeline
         .init_model('static', MyModel, 'my_model', config={
-            'inputs/images/shape': F(lambda pipeline: pipeline.some_attr)}}
+            'inputs/images/shape': F(get_shape)(C.input_shape)}}
         })
 
-In ``train_model`` and ``predict_model`` ``F``-functions take the batch as the first parameter and the model
-as the second parameter. So you can adapt the function to specific models.
-
-
-L - callable
-============
-A function which takes arbitrary arguments::
+It can also be an arbitrary function with arbitrary arguments::
 
     pipeline
         ...
-        .init_variable('logfile', L(open)('file.log', 'w'))
+        .init_variable('logfile', F(open)('file.log', 'w'))
     ...
-
-So no batch, pipeline or model will be passed to that function implicitly.
 
 
 R - random value
@@ -287,3 +277,13 @@ Every image in the batch gets a noise of the same intensity (7%), but of a diffe
         .do_something(n=P([1, 2, 3, 4, 5]))
 
 However, more often ``P`` is applied to ``R``-expressions.
+
+
+PP - a parallel wrapper
+=======================
+``PP(expr)`` is essentially ``P([expr for _ in batch.indices])``.
+
+It comes in handy for shape-specific operations (e.g. `@` - matrix multiplication) or external functions which return single values.
+
+As far as ``R`` is concerned, ``P(R(...))`` is more efficient as it evaluates only once (as ``R(..., size=batch.size)``).
+Whereas ``PP(R(...))`` will evaluate ``R`` multiple times (once for each batch item).

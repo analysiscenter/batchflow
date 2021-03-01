@@ -53,7 +53,7 @@ def _make_action_wrapper(action_method, _use_lock=None):
     return _action_wrapper
 
 def action(*args, **kwargs):
-    """ Decorator for action methods in :class:`~dataset.Batch` classes
+    """ Decorator for action methods in :class:`~.Batch` classes
 
     Examples
     --------
@@ -104,8 +104,9 @@ def apply_parallel(*args, **kwargs):
         actually equivalent to simple `@apply_parallel` assuming
         that the defaults are redefined for the class whose methods are being
         transformed.
+
         Note, that if no defaults redefined those from the nearest
-        parent class will be used in :class:`batch.MethodsTransformingMeta`.
+        parent class will be used in :class:`~.batch.MethodsTransformingMeta`.
         """
     def mark(method):
         method.apply_kwargs = kwargs

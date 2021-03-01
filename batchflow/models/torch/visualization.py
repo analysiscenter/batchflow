@@ -146,6 +146,7 @@ class VisualizationMixin:
 
         # Parse inputs to model, run model
         inputs, _ = self._make_prediction_inputs(*args, targets=None, feed_dict=feed_dict, **kwargs)
+        inputs = self.transfer_to_device(inputs)
         self.model.eval()
         with torch.no_grad():
             self.model(inputs)
@@ -248,6 +249,7 @@ class VisualizationMixin:
         """
         extractor = LayerExtractor(layer)
         inputs, targets = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
+        inputs = self.transfer_to_device(inputs)
 
         self.model.eval()
         prediction = self.model(inputs)
@@ -256,7 +258,7 @@ class VisualizationMixin:
             gradient = self._fill_value(gradient_mode)
         elif 'targ' in gradient_mode:
             gradient = targets
-        elif 'oh' in gradient_mode:
+        elif 'onehot' in gradient_mode:
             gradient = torch.zeros_like(prediction)[0:1]
             cam_class = cam_class or np.argmax(prediction.detach().cpu().numpy()[0])
             gradient[0][cam_class] = 1

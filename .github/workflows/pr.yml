@@ -7,31 +7,16 @@ on:
 
 jobs:
 
-  test_requirements:
+  pr-check:
 
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: [3.6, 3.7]
+    runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
 
-    - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
-      uses: actions/setup-python@v1
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install batchflow requirements
+    - name: Check if the branch is behind the master
+      shell: bash {0}
       run: |
-        pip install -r requirements.txt
-        pip install pytest
-
-    - name: Run 'import batchflow' in installed environemnt
-      run: python -c 'import batchflow'
-
-    - name: Run basic tests
-      run: |
-        cd batchflow/tests
-        pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
+        git fetch origin master
+        git rev-list --count HEAD..origin/master | grep -w "0"
+        test $? -eq 0 || echo "Your branch is behind the master. Pull the changes to your branch." && exit 1

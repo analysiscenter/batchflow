@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from batchflow import Pipeline, Dataset, Batch, B, L, V
+from batchflow import Pipeline, Dataset, Batch, B, F, V
 
 
 DATASET_SIZE = 100
@@ -236,7 +236,7 @@ class TestAddComponents:
         images = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
         data = dict(images=images, labels=labels+1000)
 
-        pipeline = Pipeline().add_components('new', L(np.arange)(B.size) + B.indices)
+        pipeline = Pipeline().add_components('new', F(np.arange)(B.size) + B.indices)
         batch = get_batch(data, pipeline, batch_class=MyBatch4, skip=2, dst=dst)
 
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()

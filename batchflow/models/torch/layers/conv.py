@@ -29,6 +29,7 @@ class BaseConv(nn.Module):
         }
 
         padding = calc_padding(inputs, padding=padding, transposed=self.TRANSPOSED, **args)
+
         if isinstance(padding, tuple) and isinstance(padding[0], tuple):
             args['padding'] = 0
             self.padding = sum(padding, ())
