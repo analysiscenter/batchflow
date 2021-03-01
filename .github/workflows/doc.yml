@@ -1,11 +1,6 @@
 name: docs
 
 on:
-  workflow_run:
-    workflows: ["release"]
-    types:
-      - requested
-
   pull_request:
     types: [closed]
     branches:
