@@ -11,18 +11,16 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: analysiscenter1/ds-py3:cpu
+      image: analysiscenter1/ds-py3
 
     steps:
-    - uses: actions/checkout@v1
-
-    - name: Check if the branch is behind the master
-      run: git rev-list --count HEAD..origin/master | grep -w "0"
+    - uses: actions/checkout@v2
 
     - name: Generate coverage report
       run: |
         pip3 install -U pytest-cov
         pytest -m "not slow" --cov=./ --cov-report=xml
+
     - name: Upload coverage to Codecov
       run: |
         pip3 install -U codecov
@@ -30,15 +28,13 @@ jobs:
 
 
   pypi:
-    needs: codecov
-
     runs-on: ubuntu-latest
 
     container:
-      image: analysiscenter1/ds-py3:cpu
+      image: analysiscenter1/ds-py3
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
 
     - name: Install dependencies
       run: pip3 install --upgrade setuptools wheel twine
