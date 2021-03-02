@@ -81,13 +81,122 @@ class Results:
     def __init__(self, path, *args, **kwargs):
         self.path = path
         self.description = self._get_description()
-        self.configs = None
-        self.df = self._load(*args, **kwargs)
+        self.configs = self._load_configs()
+        self.names = list(self.description['executables'].keys())
+        self.variables = [var for unit in self.description['executables'].values() for var in unit['variables']]
 
-    def _get_list(self, value):
-        if not isinstance(value, list):
-            value = [value]
-        return value
+    @property
+    def df(self, *args, **kwargs):
+        return self._load_df()
+
+    def load_df(self, *args, **kwargs):
+        return self._load_df(*args, **kwargs)
+
+    def load_artifactes(self, names=None, iterations=None, repetition=None, experiment_id=None, configs=None,
+                        aliases=None, use_alias=True, concat_config=False, drop_columns=True,
+                        format=None, **kwargs):
+        _configs = self.filter_configs(repetition, experiment_id, configs, aliases, **kwargs)
+        iterations = self._to_list(iterations or '*')
+        names = self._to_list(names or '*')
+
+        all_results = []
+        for id, config_alias in _configs.items():
+            _repetition = config_alias.pop_config('repetition').config()['repetition']
+            _update = config_alias.pop_config('update').config()['update']
+            path = os.path.join(self.path, 'results', id)
+            for name in names:
+                res = {'experiment_id': id}
+                res = self._append_config(res, config_alias, concat_config, use_alias, drop_columns,
+                                          repetition=_repetition, update=_update)
+                if format in ['_{}', '/{}']:
+                    name = name + format
+                elif format in ['{}_', '{}/']:
+                    name = format + name
+                for it in iterations:
+                    filenames = []
+                    for filename in glob.glob(os.path.join(path, name.format(it))):
+                        if not any([os.path.basename(filename).startswith(unit_name) for unit_name in self.names]):
+                            filenames.append(filename)
+                res.update({'paths': filenames})
+                all_results.append(pd.DataFrame(res))
+        return pd.concat(all_results, sort=False).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)
+                
+
+
+    def filter_configs(self, repetition=None, experiment_id=None, configs=None, aliases=None, **kwargs):
+        if len(kwargs) > 0:
+            aliases = kwargs if aliases is None else {**aliases, **kwargs}
+
+        if experiment_id is not None:
+            _configs = {id: config for id, config in self.configs.items() if id in self._to_list(experiment_id)}
+        else:
+            _configs = self.configs
+
+        if configs is not None:
+            _configs = self._filter_configs(_configs, config=configs, repetition=repetition)
+        elif aliases is not None:
+            _configs = self._filter_configs(_configs, alias=aliases, repetition=repetition)
+        elif repetition is not None:
+            _configs = self._filter_configs(_configs, repetition=repetition)
+        return _configs
+
+
+    def _load_df(self, names=None, variables=None, iterations=None, repetition=None, experiment_id=None,
+                 configs=None, aliases=None, use_alias=True, concat_config=False, drop_columns=True, **kwargs):
+        _configs = self.filter_configs(repetition, experiment_id, configs, aliases, **kwargs)
+
+        names = self._to_list(names or self.names)
+        variables = self._to_list(variables or self.variables)
+        iterations = self._to_list(iterations)
+
+        all_results = []
+        for id, config_alias in _configs.items():
+            _repetition = config_alias.pop_config('repetition').config()['repetition']
+            _update = config_alias.pop_config('update').config()['update']
+            path = os.path.join(self.path, 'results', id)
+
+            for unit in names:
+                files = glob.glob(glob.escape(os.path.join(path, unit)) + '_[0-9]*')
+                files = self._sort_files(files, iterations)
+                if len(files) != 0:
+                    res = []
+                    for filename, iterations_to_load in files.items():
+                        with open(filename, 'rb') as file:
+                            res.append(self._slice_file(dill.load(file), iterations_to_load, variables))
+                    res = self._concat(res, variables)
+
+                    config_alias.pop_config('_dummy')
+                    res = self._append_config(res, config_alias, concat_config, use_alias, drop_columns,
+                                              repetition=_repetition, update=_update, name=unit)
+                    all_results.append(pd.DataFrame(res))
+        return pd.concat(all_results, sort=False).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)
+
+    def _append_config(self, res, config_alias, concat_config, use_alias, drop_columns, **kwargs):
+        length = self._fix_length(res)
+        if concat_config:
+            res['config'] = config_alias.alias(as_string=True)
+        if use_alias:
+            if not concat_config or not drop_columns:
+                res.update(config_alias.alias(as_string=False))
+            else:
+                config = config_alias.config()
+                config = {k: [v] * length for k, v in config.items()}
+                res.update(config)
+        res.update(kwargs)
+        return res
+
+
+
+    def _load_configs(self, experiment_id=None):
+        configs = {}
+        for filename in glob.glob(os.path.join(self.path, 'configs', experiment_id or '*')):
+            id = os.path.split(filename)[-1]
+            with open(filename, 'rb') as f:
+                configs[id] = dill.load(f)
+        return configs
+
+    def _to_list(self, value):
+        return value if isinstance(value, list) else [value]
 
     def _sort_files(self, files, iterations):
         files = {file: int(file.split('_')[-1]) for file in files}
@@ -133,7 +242,7 @@ class Results:
                 value.extend([pd.np.nan] * (max_len - len(value)))
         return max_len
 
-    def _filter_configs(self, config=None, alias=None, repetition=None):
+    def _filter_configs(self, _configs, config=None, alias=None, repetition=None):
         result = None
         if config is None and alias is None and repetition is None:
             raise ValueError('At least one of parameters config, alias and repetition must be not None')
@@ -147,7 +256,7 @@ class Results:
             config = dict()
 
         result = {}
-        for experiment_id, supconfig in self.configs.items():
+        for experiment_id, supconfig in _configs.items():
             if config is not None:
                 config.update(repetition)
                 _config = supconfig.config()
@@ -158,82 +267,8 @@ class Results:
                 alias.update(repetition)
                 if all(item in _config.items() for item in alias.items()):
                     result[experiment_id] = supconfig
-        self.configs = result
+        return result
 
     def _get_description(self):
         with open(os.path.join(self.path, 'description', 'research.json'), 'r') as file:
             return json.load(file)
-
-    def _load(self, names=None, variables=None, iterations=None, repetition=None, experiment_id=None,
-              configs=None, aliases=None, use_alias=True, concat_config=False, drop_columns=True, **kwargs):
-        self.configs = {}
-        for filename in glob.glob(os.path.join(self.path, 'configs', experiment_id or '*')):
-            experiment_id = os.path.split(filename)[-1]
-            with open(filename, 'rb') as f:
-                self.configs[experiment_id] = dill.load(f)
-
-        if len(kwargs) > 0:
-            if configs is None:
-                configs = kwargs
-            else:
-                configs.update(kwargs)
-
-        if configs is not None:
-            self._filter_configs(config=configs, repetition=repetition)
-        elif aliases is not None:
-            self._filter_configs(alias=aliases, repetition=repetition)
-        elif repetition is not None:
-            self._filter_configs(repetition=repetition)
-
-        if names is None:
-            names = list(self.description['executables'].keys())
-
-        if variables is None:
-            variables = [variable
-                         for unit in self.description['executables'].values()
-                         for variable in unit['variables']
-                        ]
-
-        names = self._get_list(names)
-        variables = self._get_list(variables)
-        iterations = self._get_list(iterations)
-
-        all_results = []
-        for experiment_id, config_alias in self.configs.items():
-            alias_str = config_alias.alias(as_string=True)
-            _repetition = config_alias.pop_config('repetition')
-            _update = config_alias.pop_config('update')
-            path = os.path.join(self.path, 'results', experiment_id)
-
-            for unit in names:
-                # sample_folders = glob.glob(os.path.join(glob.escape(path), '*'))
-                # for sample_folder in sample_folders:
-                files = glob.glob(glob.escape(os.path.join(path, unit)) + '_[0-9]*')
-                files = self._sort_files(files, iterations)
-                if len(files) != 0:
-                    res = []
-                    for filename, iterations_to_load in files.items():
-                        with open(filename, 'rb') as file:
-                            res.append(self._slice_file(dill.load(file), iterations_to_load, variables))
-                    res = self._concat(res, variables)
-                    length = self._fix_length(res)
-
-                    config_alias.pop_config('_dummy')
-                    if concat_config:
-                        res['config'] = config_alias.alias(as_string=True)
-                    if use_alias:
-                        if not concat_config or not drop_columns:
-                            res.update(config_alias.alias(as_string=False))
-                    else:
-                        config = config_alias.config()
-                        config = {k: [v] * length for k, v in config.items()}
-                        res.update(config)
-                    res.update({'repetition': _repetition.config()['repetition']})
-                    res.update({'update': _update.config()['update']})
-                    all_results.append(
-                        pd.DataFrame({
-                            'name': unit,
-                            **res
-                        })
-                        )
-        return pd.concat(all_results, sort=False).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)
