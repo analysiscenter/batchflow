@@ -5,6 +5,7 @@ from collections import OrderedDict
 import glob
 import json
 import dill
+import numpy as np
 import pandas as pd
 
 class Results:
@@ -86,42 +87,18 @@ class Results:
         self.variables = [var for unit in self.description['executables'].values() for var in unit['variables']]
 
     @property
-    def df(self, *args, **kwargs):
+    def df(self):
         return self._load_df()
+
+    @property
+    def artifacts(self):
+        return self._load_artifactes(*args, **kwargs)
 
     def load_df(self, *args, **kwargs):
         return self._load_df(*args, **kwargs)
 
-    def load_artifactes(self, names=None, iterations=None, repetition=None, experiment_id=None, configs=None,
-                        aliases=None, use_alias=True, concat_config=False, drop_columns=True,
-                        format=None, **kwargs):
-        _configs = self.filter_configs(repetition, experiment_id, configs, aliases, **kwargs)
-        iterations = self._to_list(iterations or '*')
-        names = self._to_list(names or '*')
-
-        all_results = []
-        for id, config_alias in _configs.items():
-            _repetition = config_alias.pop_config('repetition').config()['repetition']
-            _update = config_alias.pop_config('update').config()['update']
-            path = os.path.join(self.path, 'results', id)
-            for name in names:
-                res = {'experiment_id': id}
-                res = self._append_config(res, config_alias, concat_config, use_alias, drop_columns,
-                                          repetition=_repetition, update=_update)
-                if format in ['_{}', '/{}']:
-                    name = name + format
-                elif format in ['{}_', '{}/']:
-                    name = format + name
-                for it in iterations:
-                    filenames = []
-                    for filename in glob.glob(os.path.join(path, name.format(it))):
-                        if not any([os.path.basename(filename).startswith(unit_name) for unit_name in self.names]):
-                            filenames.append(filename)
-                res.update({'paths': filenames})
-                all_results.append(pd.DataFrame(res))
-        return pd.concat(all_results, sort=False).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)
-                
-
+    def load_artifactes(self, *args, **kwargs):
+        return self._load_artifactes(*args, **kwargs)
 
     def filter_configs(self, repetition=None, experiment_id=None, configs=None, aliases=None, **kwargs):
         if len(kwargs) > 0:
@@ -171,6 +148,35 @@ class Results:
                     all_results.append(pd.DataFrame(res))
         return pd.concat(all_results, sort=False).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)
 
+    def _load_artifactes(self, names=None, iterations=None, repetition=None, experiment_id=None, configs=None,
+                         aliases=None, use_alias=True, concat_config=False, drop_columns=True,
+                         format=None, **kwargs):
+        _configs = self.filter_configs(repetition, experiment_id, configs, aliases, **kwargs)
+        iterations = self._to_list(iterations or '*')
+        names = self._to_list(names or '*')
+
+        all_results = []
+        for id, config_alias in _configs.items():
+            _repetition = config_alias.pop_config('repetition').config()['repetition']
+            _update = config_alias.pop_config('update').config()['update']
+            path = os.path.join(self.path, 'results', id)
+            for name in names:
+                res = {'experiment_id': id}
+                if format in ['_{}', '/{}']:
+                    name = name + format
+                elif format in ['{}_', '{}/']:
+                    name = format + name
+                for it in iterations:
+                    filenames = []
+                    for filename in glob.glob(os.path.join(path, name.format(it))):
+                        if not any([os.path.basename(filename).startswith(unit_name) for unit_name in self.names]):
+                            filenames.append(filename)
+                res.update({'artifact_paths': filenames})
+                res = self._append_config(res, config_alias, concat_config, use_alias, drop_columns,
+                                          repetition=_repetition, update=_update)
+                all_results.append(pd.DataFrame(res))
+        return pd.concat(all_results, sort=False).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)
+
     def _append_config(self, res, config_alias, concat_config, use_alias, drop_columns, **kwargs):
         length = self._fix_length(res)
         if concat_config:
@@ -178,14 +184,12 @@ class Results:
         if use_alias:
             if not concat_config or not drop_columns:
                 res.update(config_alias.alias(as_string=False))
-            else:
-                config = config_alias.config()
-                config = {k: [v] * length for k, v in config.items()}
-                res.update(config)
+        else:
+            config = config_alias.config()
+            config = {k: [v] * length for k, v in config.items()}
+            res.update(config)
         res.update(kwargs)
         return res
-
-
 
     def _load_configs(self, experiment_id=None):
         configs = {}
@@ -206,9 +210,9 @@ class Results:
         iterations = [item for item in iterations if item is not None]
         for name, end in files.items():
             if len(iterations) == 0:
-                intersection = pd.np.arange(start, end)
+                intersection = np.arange(start, end)
             else:
-                intersection = pd.np.intersect1d(iterations, pd.np.arange(start, end))
+                intersection = np.intersect1d(iterations, np.arange(start, end))
             if len(intersection) > 0:
                 result.append((name, intersection))
             start = end
@@ -217,11 +221,11 @@ class Results:
     def _slice_file(self, dumped_file, iterations_to_load, variables):
         iterations = dumped_file['iteration']
         if len(iterations) > 0:
-            elements_to_load = pd.np.array([pd.np.isin(it, iterations_to_load) for it in iterations])
+            elements_to_load = np.array([np.isin(it, iterations_to_load) for it in iterations])
             res = OrderedDict()
             for variable in ['iteration', 'experiment_id', *variables]:
                 if variable in dumped_file:
-                    res[variable] = pd.np.array(dumped_file[variable])[elements_to_load]
+                    res[variable] = np.array(dumped_file[variable])[elements_to_load]
         else:
             res = None
         return res
@@ -236,10 +240,11 @@ class Results:
         return res
 
     def _fix_length(self, chunk):
-        max_len = max([len(value) for value in chunk.values()])
+        """ Pad arrays in the dict with nans to the same length. """
+        max_len = max([len(value) if isinstance(value, (list, tuple, pd.Series)) else 1 for value in chunk.values()])
         for value in chunk.values():
             if len(value) < max_len:
-                value.extend([pd.np.nan] * (max_len - len(value)))
+                value.extend([np.nan] * (max_len - len(value)))
         return max_len
 
     def _filter_configs(self, _configs, config=None, alias=None, repetition=None):

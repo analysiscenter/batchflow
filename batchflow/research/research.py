@@ -1,6 +1,7 @@
 """ Classes Research and auxiliary classes for multiple experiments. """
 
 import os
+import re
 from copy import copy
 from collections import OrderedDict
 import itertools
@@ -12,6 +13,7 @@ import dill
 import numpy as np
 import pandas as pd
 import multiprocess as mp
+import subprocess
 
 from .results import Results
 from .distributor import Distributor
@@ -403,6 +405,23 @@ class Research:
         distr.run(jobs_queue, bar=self.bar)
 
         return self
+
+    def attach_git_meta(self, **kwargs):
+        commands = {
+            'commit': "git log --name-status HEAD^..HEAD",
+            'diff': 'git diff',
+            'status': 'git status',
+            **kwargs
+        }
+
+        for filename, command in commands.items():
+            process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+            output, error = process.communicate()
+            result = re.sub('"image/png": ".*?"', '"image/png": "..."', output.decode('utf'))
+            if not os.path.exists(os.path.join(self.name, 'git')):
+                os.makedirs(os.path.join(self.name, 'git'))
+            with open(os.path.join(self.name, 'git', filename + '.txt'), 'w') as fp:
+                print(result, file=fp)
 
     def __getstate__(self):
         return self.__dict__
