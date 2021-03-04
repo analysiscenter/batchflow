@@ -22,4 +22,4 @@ from .utils import save_data_to, read_data_from
 from .utils_notebook import in_notebook, get_notebook_path, get_notebook_name, pylint_notebook
 
 
-__version__ = '0.3.0'
+__version__ = '0.5.0beta'
