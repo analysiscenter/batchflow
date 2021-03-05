@@ -126,6 +126,7 @@ def model_and_config(request):
 
 
 
+@pytest.mark.skip(reason="Test is outdated")
 @pytest.mark.parametrize('model_and_config',
                          ['single_config', 'multi_config',],
                          indirect=['model_and_config'])
