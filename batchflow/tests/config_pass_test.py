@@ -14,9 +14,9 @@ LOCATIONS = set(['initial_block', 'body', 'block', 'head'])
 @pytest.fixture()
 def single_config():
     """ Fixture that returns the simplest config for single-input model. """
-    from batchflow.models.tf import TFModel
+    from batchflow.models.torch import TorchModel
 
-    class SingleModel(TFModel):
+    class SingleModel(TorchModel):
         model_args = Config()
 
         @classmethod
@@ -66,14 +66,14 @@ def single_config():
 @pytest.fixture()
 def multi_config():
     """ Fixture that returns the simplest config for multi-input model. """
-    from batchflow.models.tf import TFModel
+    from batchflow.models.torch import TorchModel
 
-    class MultiModel(TFModel):
+    class MultiModel(TorchModel):
         model_args = Config()
 
         @classmethod
         def default_config(cls):
-            config = TFModel.default_config()
+            config = TorchModel.default_config()
             config['body/block'] = {}
             return config
 
