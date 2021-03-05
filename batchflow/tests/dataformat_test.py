@@ -3,16 +3,16 @@
 # pylint: disable=redefined-outer-name
 import pytest
 
-from tensorflow.test import is_gpu_available
+from torch import cuda
 
 from batchflow import Pipeline
 from batchflow import B, V, C
-from batchflow.models.tf import VGG7, ResNet18, Inception_v1, MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small
+from batchflow.models.torch import VGG7, ResNet18, UNet, VNet
 
 
-MODELS = [VGG7, ResNet18, Inception_v1, MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small]
+MODELS = [VGG7, ResNet18, UNet, VNet]
 LOCATIONS = set(['initial_block', 'body', 'block', 'head'])
-NO_GPU = pytest.mark.skipif(not is_gpu_available(), reason='No GPU')
+NO_GPU = pytest.mark.skipif(not cuda.is_available(), reason='No GPU')
 
 
 @pytest.fixture()
@@ -23,7 +23,7 @@ def pipeline():
     -----
     Pipeline can be executed only if its config contains the following parameters:
 
-    model_class : TFModel
+    model_class : TorchModel
         Architecture of model. List of available models is defined at 'AVAILABLE_MODELS'.
 
     model_config : Config
