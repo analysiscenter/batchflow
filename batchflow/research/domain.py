@@ -198,6 +198,9 @@ class ConfigAlias:
             return ConfigAlias(res)
         return None
 
+    def __getitem__(self, key):
+        return self.config()[key]
+
     def __repr__(self):
         return 'ConfigAlias(' + str(self.alias()) + ')'
 
@@ -216,7 +219,7 @@ class Domain:
 
     Parameters
     ----------
-    domain : Option, Domain or list of lists of Options
+    domain : Option, Domain, dict or list of lists of Options
 
 
     **Operations with Domains**

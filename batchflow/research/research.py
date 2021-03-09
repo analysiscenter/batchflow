@@ -491,6 +491,7 @@ class Research:
         with open(os.path.join(self.name, 'description', 'alias.json'), 'w') as file:
             # contains representation of the initial domain
             file.write(json.dumps(str(self.domain), default=self._set_default_json))
+        self.attach_git_meta()
 
     def _set_default_json(self, obj):
         try:
