@@ -340,7 +340,7 @@ class ClassificationMetrics(Metrics):
     def f1_score(self, *args, **kwargs):
         recall = self.recall(*args, when_zero=(0, np.inf), **kwargs)
         precision = self.precision(*args, when_zero=(0, np.inf), **kwargs)
-        return 2 * (recall * precision) / (recall + precision)
+        return np.nan_to_num(2 * (recall * precision) / (recall + precision))
 
     def jaccard(self, *args, **kwargs):
         d = self.dice(*args, **kwargs)
