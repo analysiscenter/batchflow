@@ -291,9 +291,9 @@ class TestResult:
                                'npv' : np.array([0.75, 0.87, 0.75, 0.88]),
                                'plr' : np.array([3.00, 10.00, 2.25, 5.00]),
                                'nlr' : np.array([0.42, 0.18, 0.64, 0.20]),
-                               'dor' : np.array([6.00, np.inf, np.inf, np.inf]), #????????
-                               'f1s' : np.array([0.50, 0.75, 0.50, 0.75]), #????????
-                               'jac' : np.array([0.33, 0.60, 0.33, 0.60])}), #????????
+                               'dor' : np.array([6.00, np.inf, np.inf, np.inf]),
+                               'f1s' : np.array([0.50, 0.75, 0.50, 0.75]),
+                               'jac' : np.array([0.33, 0.60, 0.33, 0.60])}),
 
               (None, 'macro', {'tpr' : np.array([0.66, 0.83, 0.5, 0.83]),
                                'fpr' : np.array([0.22, 0.08, 0.22, 0.16]),
