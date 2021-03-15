@@ -63,7 +63,7 @@ class ClassificationMetrics(Metrics):
       - `fmt` should contain format of `predictions`.
 
     - When `axis` is specified, `predictions` should be a one-hot array with class information provided
-      in the given axis (class probabilities or logits). In this case `targets` can contain labels (sew above)
+      in the given axis (class probabilities or logits). In this case `targets` can contain labels (see above)
       or probabilities / logits in the very same axis.
 
     - If `fmt` is 'labels', `num_classes` should be specified. Due to randomness any given batch may not

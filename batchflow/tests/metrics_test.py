@@ -271,8 +271,8 @@ class TestResult:
                                'plr' : np.array([2.00, 4.00]),
                                'nlr' : np.array([0.33, 0.16]),
                                'dor' : np.array([0.00, np.inf]),
-                               'f1s' : np.array([0.66, 0.74]),
-                               'jac' : np.array([0.50, 0.58])}),
+                               'f1s' : np.array([0.58, 0.71]),
+                               'jac' : np.array([0.4, 0.55])}),
 
               ('mean', None, {'tpr' : np.array([0.75, 1.00, 0.50]),
                               'fpr' : np.array([0.16, 0.16, 0.12]),
@@ -316,8 +316,8 @@ class TestResult:
                                  'plr' : np.array([3.00]),
                                  'nlr' : np.array([0.25]),
                                  'dor' : np.array([0.00]),
-                                 'f1s' : np.array([0.70]),
-                                 'jac' : np.array([0.54])})]
+                                 'f1s' : np.array([0.64]),
+                                 'jac' : np.array([0.48])})]
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     @pytest.mark.parametrize('batch_agg, multi_agg, exp_dict', params)
     def test_result(self, predictions, fmt, axis, batch_agg, multi_agg, exp_dict):
