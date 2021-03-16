@@ -9,6 +9,7 @@ class ResNeSt(Encoder):
     """ Base ResNeSt architecture. """
     @classmethod
     def default_config(cls):
+        """ Define model's defaults: general architecture. """
         config = super().default_config()
 
         config['initial_block'] += dict(layout='cna'*3 + 'p', filters=[32, 32, 64], kernel_size=3, bias=False,

@@ -10,6 +10,7 @@ class VGG(Encoder):
     """ Base VGG architecture. """
     @classmethod
     def default_config(cls):
+        """ Define model's defaults: general architecture. """
         config = super().default_config()
         config['common/conv/bias'] = False
 
