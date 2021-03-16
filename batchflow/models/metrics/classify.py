@@ -335,9 +335,11 @@ class ClassificationMetrics(Metrics):
         return self._calc_agg(self.false_negative_rate, self.true_negative_rate, *args, when_zero=when_zero, **kwargs)
 
     def diagnostics_odds_ratio(self, *args, when_zero=(np.inf, 0), **kwargs):
-        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio, *args, when_zero=when_zero, **kwargs)
+        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio,
+                              *args, when_zero=when_zero, **kwargs)
 
     def f1_score(self, *args, **kwargs):
+        """ Compute f1-score """
         recall = self.recall(*args, when_zero=(0, np.inf), **kwargs)
         precision = self.precision(*args, when_zero=(0, np.inf), **kwargs)
         mask = np.isinf(recall) & np.isinf(precision)
