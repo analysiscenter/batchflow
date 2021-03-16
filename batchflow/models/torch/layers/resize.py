@@ -188,6 +188,7 @@ class Combine(nn.Module):
         return output
 
     def extra_repr(self):
+        """ Report shapes before and after combination to a repr. """
         if isinstance(self.name, str):
             res = 'op={}'.format(self.name)
         else:
@@ -252,6 +253,7 @@ class Interpolate(nn.Module):
                              align_corners=self.align_corners, **self.kwargs)
 
     def extra_repr(self):
+        """ Report interpolation mode and factor for a repr. """
         if self.scale_factor is not None:
             info = 'scale_factor=' + str(self.scale_factor)
         else:
@@ -262,8 +264,6 @@ class Interpolate(nn.Module):
 
 class PixelShuffle(nn.PixelShuffle):
     """ Resize input tensor with depth to space operation. """
-    def __init__(self, upscale_factor=None):
-        super().__init__(upscale_factor)
 
 class SubPixelConv(PixelShuffle):
     """ An alias for PixelShuffle. """
