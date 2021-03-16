@@ -66,6 +66,7 @@ class UNet(EncoderDecoder):
     """
     @classmethod
     def default_config(cls):
+        """ Define model's defaults: general architecture. """
         config = super().default_config()
 
         config['body/encoder/num_stages'] = 4
@@ -188,6 +189,7 @@ class UNetPP(UNet):
 
     @classmethod
     def decoder(cls, inputs, name='decoder', **kwargs):
+        """ Create individual decoder for each of the saved skips, with connections between them. """
         decoder_filters = kwargs['upsample']['filters']
 
         num_stages = kwargs.pop('num_stages') or len(inputs)-2

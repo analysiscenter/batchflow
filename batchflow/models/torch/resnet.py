@@ -72,6 +72,7 @@ class ResNet(Encoder):
     """
     @classmethod
     def default_config(cls):
+        """ Define model's defaults: general architecture. """
         config = super().default_config()
 
         config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
