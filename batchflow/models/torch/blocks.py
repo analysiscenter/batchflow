@@ -305,7 +305,7 @@ class ResNeStBlock(ConvBlock):
         * First of all, it goes through 1x1 convolution with normalization and activation.
         * Then Split Attention Convolution is applied:
             * Here, we split feature maps into `cardinality`*`radix` groups and apply convolution with
-            kernel_size=`kernel_size` with normalization and activation (these operations are controlled by the `layout`)
+            kernel_size=`kernel_size` with normalization and activation (operations are controlled by the `layout`)
             * Then we split the result into `radix` groups.
             * Then attention takes place:
                 * Here, we summarize feature maps by groups and apply Global Average Pooling.

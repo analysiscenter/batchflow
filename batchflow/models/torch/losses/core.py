@@ -34,6 +34,7 @@ class CrossEntropyLoss(nn.Module):
         self.dynamic = isinstance(weight, str) or callable(weight)
 
     def forward(self, prediction, target):
+        # pylint: disable=not-callable
         kwargs = dict(self.kwargs)
         target = target.to(dtype=torch.long)
 
@@ -55,7 +56,7 @@ class CrossEntropyLoss(nn.Module):
                     weight = self.weight(support)
                 weights.append(weight)
 
-            weights = torch.tensor(weights).to(prediction.device)
+            weights = torch.tensor(weights, device=prediction.device)
             weights = weights / weights.sum()
             kwargs['weight'] = weights
 

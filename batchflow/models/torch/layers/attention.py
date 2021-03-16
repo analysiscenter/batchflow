@@ -118,6 +118,7 @@ class SelfAttention(nn.Module):
         return self.op(inputs)
 
     def extra_repr(self):
+        """ Report used attention in a repr. """
         if isinstance(self.attention, (str, bool)):
             return 'op={}'.format(self.attention)
         return 'op=callable {}'.format(self.attention.__name__)
