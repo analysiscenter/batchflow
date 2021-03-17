@@ -61,9 +61,13 @@ class VisualizationMixin:
 
     def short_repr(self):
         """ Show simplified model layout. """
+        print(self._short_repr())
+
+    def _short_repr(self):
         self.model.apply(lambda module: setattr(module, 'short_repr', True))
-        print(self.model)
+        msg = repr(self.model)
         self.model.apply(lambda module: setattr(module, 'short_repr', False))
+        return msg
 
     # Graphs to describe model
     def save_graph(self, log_dir=None, **kwargs):
