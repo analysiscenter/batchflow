@@ -315,6 +315,7 @@ class Research:
         """ Load results of research as pandas.DataFrame or dict (see :meth:`~.Results.load`). """
         return Results(self.name, *args, **kwargs)
 
+
     def run(self, n_iters=None, workers=1, branches=1, name=None,
             bar=False, devices=None, worker_class=None, timeout=None, trials=2):
         """ Run research.
@@ -516,6 +517,10 @@ class Research:
             research = dill.load(file)
             research.loaded = True
             return research
+
+    def get_config(self, experiment_id=None):
+        """ Get configs by experiment_id. """
+        return self.load_results().get_config(experiment_id)
 
 class DynamicQueue:
     """ Queue of tasks that can be changed depending on previous results. """

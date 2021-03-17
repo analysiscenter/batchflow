@@ -92,7 +92,7 @@ class Results:
 
     @property
     def artifacts(self):
-        return self._load_artifactes(*args, **kwargs)
+        return self._load_artifactes()
 
     def load_df(self, *args, **kwargs):
         return self._load_df(*args, **kwargs)
@@ -171,7 +171,8 @@ class Results:
                     for filename in glob.glob(os.path.join(path, name.format(it))):
                         if not any([os.path.basename(filename).startswith(unit_name) for unit_name in self.names]):
                             filenames.append(filename)
-                res.update({'artifact_paths': filenames})
+                res.update({'artifact_path': filenames})
+                res.update({'filename': [os.path.basename(item) for item in filenames]})
                 res = self._append_config(res, config_alias, concat_config, use_alias, drop_columns,
                                           repetition=_repetition, update=_update)
                 all_results.append(pd.DataFrame(res))
@@ -277,3 +278,13 @@ class Results:
     def _get_description(self):
         with open(os.path.join(self.path, 'description', 'research.json'), 'r') as file:
             return json.load(file)
+
+    def get_config(self, experiment_id=None):
+        """ Get configs by experiment_id. """
+        res = {}
+        for path in glob.glob(os.path.join(self.path, 'configs', experiment_id or '*')):
+            with open(path, 'rb') as f:
+                res[os.path.basename(path)] = dill.load(f)
+        if experiment_id:
+            res = res[experiment_id]
+        return res
