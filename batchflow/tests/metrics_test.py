@@ -420,41 +420,49 @@ class TestResult:
         res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
         assert np.allclose(res, exp, atol=1e-02, rtol=0), 'failed on metric {}'.format('accuracy')
 
-# class TestSubsampling:
-#     """Check the correctness of confusion matrix subsampling functions result
-#     for SegmentationMetricsByInstances class (e.g. true_positive subsample,
-#     total_population subsample). Test functions here act as an equivalent of
-#     TestResult functions for SegmentationMetricsByInstances class, since it
-#     differs from SegmentationMetricsByPixels in redefined subsampling functions
-#     (and confusion matrix assembly process, which is checked in TestAssembly).
-#     """
+class TestSubsampling:
+    """Check the correctness of confusion matrix subsampling functions result
+    for SegmentationMetricsByInstances class (e.g. true_positive subsample,
+    total_population subsample). Test functions here act as an equivalent of
+    TestResult functions for SegmentationMetricsByInstances class, since it
+    differs from SegmentationMetricsByPixels in redefined subsampling functions
+    (and confusion matrix assembly process, which is checked in TestAssembly).
+    """
 
-#     params = [('true_positive', np.array([[1, 0],
-#                                           [1, 0]])),
-#               ('condition_positive', np.array([[1, 1],
-#                                                [1, 0]])),
-#               ('prediction_positive', np.array([[2, 0],
-#                                                 [1, 1]])),
-#               ('total_population', np.array([[2, 1],
-#                                              [1, 1]]))]
-#     @pytest.mark.parametrize('subsample_name, exp_subsample', params)
-#     def test_subsampling(self, subsample_name, exp_subsample):
-#         """Compare expected subsample with actual one.
+    params = [('true_positive', np.array([[1, 0],
+                                          [1, 0],
+                                          [1, 0],
+                                          [1, 0]])),
+              ('condition_positive', np.array([[1, 1],
+                                               [1, 0],
+                                               [1, 1],
+                                               [1, 0]])),
+              ('prediction_positive', np.array([[2, 0],
+                                                [1, 1],
+                                                [1, 1],
+                                                [1, 0]])),
+              ('total_population', np.array([[2, 1],
+                                             [1, 1],
+                                             [1, 2],
+                                             [1, 0]]))]
+    @pytest.mark.parametrize('subsample_name, exp_subsample', params)
+    def test_subsampling(self, subsample_name, exp_subsample):
+        """Compare expected subsample with actual one.
 
-#         Parameters
-#         ----------
-#         subsample_name: string
-#             Name of confusion matrix subsample
+        Parameters
+        ----------
+        subsample_name: string
+            Name of confusion matrix subsample
 
-#         exp_subsample: np.array
-#             Expected subsample of confusion matrix
-#         """
-#         metric = SegmentationMetricsByInstances(TARGETS, LABELS, 'labels', NUM_CLASSES)
-#         res_subsample = getattr(metric, subsample_name)()
-#         assert np.array_equal(res_subsample, exp_subsample)
+        exp_subsample: np.array
+            Expected subsample of confusion matrix
+        """
+        metric = SegmentationMetricsByInstances(TARGETS, LABELS, 'labels', NUM_CLASSES)
+        res_subsample = getattr(metric, subsample_name)()
+        assert np.array_equal(res_subsample, exp_subsample)
 
-#     def test_subsampling_true_negative(self):
-#         """Check if subsampling true negative raises ValueError."""
-#         metric = SegmentationMetricsByInstances(TARGETS, LABELS, 'labels', NUM_CLASSES)
-#         with pytest.raises(ValueError):
-#             getattr(metric, 'true_negative')()
+    def test_subsampling_true_negative(self):
+        """Check if subsampling true negative raises ValueError."""
+        metric = SegmentationMetricsByInstances(TARGETS, LABELS, 'labels', NUM_CLASSES)
+        with pytest.raises(ValueError):
+            getattr(metric, 'true_negative')()
