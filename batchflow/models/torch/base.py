@@ -1359,7 +1359,11 @@ class TorchModel(BaseModel, VisualizationMixin):
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
-        torch.save({item: getattr(self, item) for item in self.PRESERVE}, path, pickle_module=dill, **kwargs)
+
+        if kwargs.get('pickle_module') is None:
+            kwargs['pickle_module'] = dill
+
+        torch.save({item: getattr(self, item) for item in self.PRESERVE}, path, **kwargs)
 
     def load(self, path, *args, eval=False, **kwargs):
         """ Load a torch model from files.
@@ -1389,10 +1393,13 @@ class TorchModel(BaseModel, VisualizationMixin):
         _ = args
         self._get_devices()
 
+        if kwargs.get('pickle_module') is None:
+            kwargs['pickle_module'] = dill
+
         if self.device:
-            checkpoint = torch.load(path, map_location=self.device, pickle_module=dill, **kwargs)
+            checkpoint = torch.load(path, map_location=self.device, **kwargs)
         else:
-            checkpoint = torch.load(path, pickle_module=dill, **kwargs)
+            checkpoint = torch.load(path, **kwargs)
 
         for item in self.PRESERVE:
             setattr(self, item, checkpoint.get(item))

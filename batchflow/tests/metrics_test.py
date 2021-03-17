@@ -21,7 +21,7 @@ from batchflow.models.metrics import SegmentationMetricsByPixels, SegmentationMe
 # and therefore is being tested individually.
 METRICS_LIST = ['tpr', 'fpr', 'fnr', 'tnr', 'prv', 'ppv', 'fdr', 'for', 'npv', 'plr', 'nlr', 'dor', 'f1s', 'jac']
 
-BATCH_SIZE = 2
+BATCH_SIZE = 4
 IMAGE_SIZE = 2
 NUM_CLASSES = 3
 
@@ -30,13 +30,27 @@ TARGETS = np.array([[[0, 1],
                      [2, 2]],
 
                     [[0, 0],
-                     [1, 1]]])
+                     [1, 1]],
+
+                    [[0, 1],
+                     [0, 2]],
+
+                    [[0, 0],
+                     [1, 1]]
+                     ])
 # Set predictions as 'labels'.
 LABELS = np.array([[[0, 1],
                     [1, 0]],
 
                    [[2, 0],
-                    [1, 1]]])
+                    [1, 1]],
+
+                    [[0, 1],
+                     [2, 1]],
+
+                    [[0, 0],
+                     [0, 1]]
+                     ])
 
 # Onehots are basically like probas, just with all 0 and a single 1.
 PROBA = np.eye(NUM_CLASSES)[LABELS]
@@ -89,7 +103,16 @@ class TestAssembly:
 
                                                       [[1, 0, 0],
                                                        [0, 2, 0],
-                                                       [1, 0, 0]]])),
+                                                       [1, 0, 0]],
+
+                                                      [[1, 0, 0],
+                                                       [0, 1, 1],
+                                                       [1, 0, 0]],
+
+                                                      [[2, 1, 0],
+                                                       [0, 1, 0],
+                                                       [0, 0, 0]]]),
+                                                       ),
 
               (SegmentationMetricsByInstances, np.array([[[[0, 0],
                                                            [1, 1]],
@@ -102,7 +125,20 @@ class TestAssembly:
                                                            [0, 1]],
 
                                                           [[0, 0],
-                                                           [1, 0]]]]))]
+                                                           [1, 0]]],
+
+                                                         [[[0, 0],
+                                                           [0, 1]],
+
+                                                          [[0, 1],
+                                                           [1, 0]]],
+
+                                                          [[[0, 0],
+                                                           [0, 1]],
+
+                                                          [[0, 0],
+                                                           [0, 0]]],
+                                                           ]))]
     @pytest.mark.parametrize('SegmentationMetrics, exp_matrix', params)
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     def test_confusion_matrix(self, SegmentationMetrics, exp_matrix, predictions, fmt, axis):
@@ -229,65 +265,69 @@ class TestResult:
 
     # First param stands for batch aggregation type, second — for multiclass one,
     # third represents manually pre-calculated expected output contents for each type of metrics.
-    params = [(None, None, {'tpr' : np.array([1.00, 1.00, 0.00, 0.50, 1.00, 1.00]),
-                            'fpr' : np.array([0.33, 0.33, 0.00, 0.00, 0.00, 0.25]),
-                            'tnr' : np.array([0.66, 0.66, 1.00, 1.00, 1.00, 0.75]),
-                            'fnr' : np.array([0.00, 0.00, 1.00, 0.50, 0.00, 0.00]),
-                            'prv' : np.array([0.25, 0.25, 0.50, 0.50, 0.50, 0.00]),
-                            'ppv' : np.array([0.50, 0.50, 1.00, 1.00, 1.00, 0.00]),
-                            'fdr' : np.array([0.50, 0.50, 0.00, 0.00, 0.00, 1.00]),
-                            'for' : np.array([0.00, 0.00, 0.50, 0.33, 0.00, 0.00]),
-                            'npv' : np.array([1.00, 1.00, 0.50, 0.66, 1.00, 1.00]),
-                            'plr' : np.array([3.00, 3.00, 0.00, np.inf, np.inf, 4.00]),
-                            'nlr' : np.array([0.00, 0.00, 1.00, 0.50, 0.00, 0.00]),
-                            'dor' : np.array([np.inf, np.inf, 0.00, np.inf, np.inf, np.inf]),
-                            'f1s' : np.array([0.66, 0.66, 0.00, 0.66, 1.00, 0.00]),
-                            'jac' : np.array([0.49, 0.49, 0.00, 0.49, 1.00, 0.00])}),
+    params = [(None, None, {'tpr' : np.array([1.00, 1.00, 0.00, 0.50, 1.00, 1.00, 0.50, 1.00, 0.00, 1.00, 0.50, 1.00]),
+                            'fpr' : np.array([0.33, 0.33, 0.00, 0.00, 0.00, 0.25, 0.00, 0.33, 0.33, 0.50, 0.00, 0.00]),
+                            'tnr' : np.array([0.66, 0.66, 1.00, 1.00, 1.00, 0.75, 1.00, 0.66, 0.66, 0.50, 1.00, 1.00]),
+                            'fnr' : np.array([0.00, 0.00, 1.00, 0.50, 0.00, 0.00, 0.50, 0.00, 1.00, 0.00, 0.50, 0.00]),
+                            'prv' : np.array([0.25, 0.25, 0.50, 0.50, 0.50, 0.00, 0.50, 0.25, 0.25, 0.50, 0.50, 0.00]),
+                            'ppv' : np.array([0.50, 0.50, 1.00, 1.00, 1.00, 0.00, 1.00, 0.50, 0.00, 0.66, 1.00, 1.00]),
+                            'fdr' : np.array([0.50, 0.50, 0.00, 0.00, 0.00, 1.00, 0.00, 0.50, 1.00, 0.33, 0.00, 0.00]),
+                            'for' : np.array([0.00, 0.00, 0.50, 0.33, 0.00, 0.00, 0.33, 0.00, 0.33, 0.00, 0.33, 0.00]),
+                            'npv' : np.array([1.00, 1.00, 0.50, 0.66, 1.00, 1.00, 0.66, 1.00, 0.66, 1.00, 0.66, 1.00]),
+                            'plr' : np.array([3.00, 3.00, 0.00, np.inf, np.inf, 4.00,
+                                              np.inf, 3.00, 0.00, 2.00, np.inf, np.inf]),
+                            'nlr' : np.array([0.00, 0.00, 1.00, 0.50, 0.00, 0.00, 0.50, 0.00, 1.50, 0.00, 0.50, 0.00]),
+                            'dor' : np.array([np.inf, np.inf, 0.00, np.inf, np.inf, np.inf,
+                                              np.inf, np.inf, 0, np.inf, np.inf, np.inf]),
+                            'f1s' : np.array([0.66, 0.66, 0.00, 0.66, 1.00, 0.00,
+                                              0.66, 0.66, 0.00, 0.80, 0.66, np.inf]),
+                            'jac' : np.array([0.50, 0.50, 0.00, 0.50, 1.00, 0.00,
+                                              0.50, 0.50, 0.00, 0.66, 0.50, np.inf])}),
 
-              (None, 'micro', {'tpr' : np.array([0.50, 0.75]),
-                               'fpr' : np.array([0.25, 0.12]),
-                               'tnr' : np.array([0.75, 0.87]),
-                               'fnr' : np.array([0.50, 0.25]),
-                               'prv' : np.array([0.33, 0.33]),
-                               'ppv' : np.array([0.50, 0.75]),
-                               'fdr' : np.array([0.50, 0.25]),
-                               'for' : np.array([0.25, 0.12]),
-                               'npv' : np.array([0.75, 0.87]),
-                               'plr' : np.array([3.00, 10.00]),
-                               'nlr' : np.array([0.42, 0.18]),
-                               'dor' : np.array([6.00, np.inf]),
-                               'f1s' : np.array([0.50, 0.75]),
-                               'jac' : np.array([0.33, 0.60])}),
+              (None, 'micro', {'tpr' : np.array([0.50, 0.75, 0.50, 0.75]),
+                               'fpr' : np.array([0.25, 0.12, 0.25, 0.12]),
+                               'tnr' : np.array([0.75, 0.87, 0.75, 0.88]),
+                               'fnr' : np.array([0.50, 0.25, 0.50, 0.25]),
+                               'prv' : np.array([0.33, 0.33, 0.33, 0.33]),
+                               'ppv' : np.array([0.50, 0.75, 0.50, 0.75]),
+                               'fdr' : np.array([0.50, 0.25, 0.50, 0.25]),
+                               'for' : np.array([0.25, 0.12, 0.25, 0.12]),
+                               'npv' : np.array([0.75, 0.87, 0.75, 0.88]),
+                               'plr' : np.array([3.00, 10.00, 2.25, 5.00]),
+                               'nlr' : np.array([0.42, 0.18, 0.64, 0.20]),
+                               'dor' : np.array([6.00, np.inf, np.inf, np.inf]),
+                               'f1s' : np.array([0.50, 0.75, 0.50, 0.75]),
+                               'jac' : np.array([0.33, 0.60, 0.33, 0.60])}),
 
-              (None, 'macro', {'tpr' : np.array([0.66, 0.83]),
-                               'fpr' : np.array([0.22, 0.08]),
-                               'tnr' : np.array([0.77, 0.91]),
-                               'fnr' : np.array([0.33, 0.16]),
-                               'prv' : np.array([0.33, 0.33]),
-                               'ppv' : np.array([0.66, 0.66]),
-                               'fdr' : np.array([0.33, 0.33]),
-                               'for' : np.array([0.16, 0.11]),
-                               'npv' : np.array([0.83, 0.88]),
-                               'plr' : np.array([2.00, 4.00]),
-                               'nlr' : np.array([0.33, 0.16]),
-                               'dor' : np.array([0.00, np.inf]),
-                               'f1s' : np.array([0.66, 0.74]),
-                               'jac' : np.array([0.50, 0.58])}),
+              (None, 'macro', {'tpr' : np.array([0.66, 0.83, 0.5, 0.83]),
+                               'fpr' : np.array([0.22, 0.08, 0.22, 0.16]),
+                               'tnr' : np.array([0.77, 0.91, 0.78, 0.84]),
+                               'fnr' : np.array([0.33, 0.16, 0.50, 0.17]),
+                               'prv' : np.array([0.33, 0.33, 0.33, 0.33]),
+                               'ppv' : np.array([0.66, 0.66, 0.50, 0.88]),
+                               'fdr' : np.array([0.33, 0.33, 0.50, 0.11]),
+                               'for' : np.array([0.16, 0.11, 0.22, 0.11]),
+                               'npv' : np.array([0.83, 0.88, 0.77, 0.88]),
+                               'plr' : np.array([2.00, 4.00, 1.50, 2.00]),
+                               'nlr' : np.array([0.33, 0.16, 0.66, 0.16]),
+                               'dor' : np.array([0.00, np.inf, 0.00, np.inf]),
+                               'f1s' : np.array([0.58, 0.71, 0.50, 0.79]),
+                               'jac' : np.array([0.4, 0.55, 0.33, 0.65])}),
 
-              ('mean', None, {'tpr' : np.array([0.75, 1.00, 0.50]),
-                              'fpr' : np.array([0.16, 0.16, 0.12]),
-                              'tnr' : np.array([0.83, 0.83, 0.87]),
-                              'fnr' : np.array([0.25, 0.00, 0.50]),
-                              'prv' : np.array([0.37, 0.37, 0.25]),
-                              'ppv' : np.array([0.75, 0.75, 0.50]),
-                              'fdr' : np.array([0.25, 0.25, 0.50]),
-                              'for' : np.array([0.16, 0.00, 0.25]),
-                              'npv' : np.array([0.83, 1.00, 0.75]),
-                              'plr' : np.array([3.00, 3.00, 2.00]),
-                              'nlr' : np.array([0.25, 0.00, 0.50]),
+              ('mean', None, {'tpr' : np.array([0.75, 0.87, 0.50]),
+                              'fpr' : np.array([0.21, 0.16, 0.14]),
+                              'tnr' : np.array([0.79, 0.83, 0.85]),
+                              'fnr' : np.array([0.25, 0.12, 0.50]),
+                              'prv' : np.array([0.43, 0.37, 0.18]),
+                              'ppv' : np.array([0.79, 0.75, 0.50]),
+                              'fdr' : np.array([0.20, 0.25, 0.50]),
+                              'for' : np.array([0.16, 0.08, 0.20]),
+                              'npv' : np.array([0.83, 0.91, 0.79]),
+                              'plr' : np.array([2.50, 3.00, 1.33]),
+                              'nlr' : np.array([0.25, 0.12, 0.62]),
                               'dor' : np.array([np.inf, np.inf, 0.00]),
-                              'f1s' : np.array([0.66, 0.83, 0.00]),
-                              'jac' : np.array([0.50, 0.75, 0.00])}),
+                              'f1s' : np.array([0.70, 0.74, 0.00]),
+                              'jac' : np.array([0.54, 0.625, 0.00])}),
 
               ('mean', 'micro', {'tpr' : np.array([0.62]),
                                  'fpr' : np.array([0.18]),
@@ -298,26 +338,27 @@ class TestResult:
                                  'fdr' : np.array([0.37]),
                                  'for' : np.array([0.18]),
                                  'npv' : np.array([0.81]),
-                                 'plr' : np.array([6.50]),
-                                 'nlr' : np.array([0.30]),
+                                 'plr' : np.array([5.06]),
+                                 'nlr' : np.array([0.36]),
                                  'dor' : np.array([6.00]),
                                  'f1s' : np.array([0.62]),
                                  'jac' : np.array([0.46])}),
 
-              ('mean', 'macro', {'tpr' : np.array([0.75]),
-                                 'fpr' : np.array([0.15]),
-                                 'tnr' : np.array([0.84]),
-                                 'fnr' : np.array([0.25]),
+              ('mean', 'macro', {'tpr' : np.array([0.70]),
+                                 'fpr' : np.array([0.17]),
+                                 'tnr' : np.array([0.82]),
+                                 'fnr' : np.array([0.29]),
                                  'prv' : np.array([0.33]),
-                                 'ppv' : np.array([0.66]),
-                                 'fdr' : np.array([0.33]),
-                                 'for' : np.array([0.13]),
-                                 'npv' : np.array([0.86]),
-                                 'plr' : np.array([3.00]),
-                                 'nlr' : np.array([0.25]),
+                                 'ppv' : np.array([0.68]),
+                                 'fdr' : np.array([0.31]),
+                                 'for' : np.array([0.15]),
+                                 'npv' : np.array([0.84]),
+                                 'plr' : np.array([2.37]),
+                                 'nlr' : np.array([0.33]),
                                  'dor' : np.array([0.00]),
-                                 'f1s' : np.array([0.70]),
-                                 'jac' : np.array([0.54])})]
+                                 'f1s' : np.array([0.64]),
+                                 'jac' : np.array([0.48])})
+            ]
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     @pytest.mark.parametrize('batch_agg, multi_agg, exp_dict', params)
     def test_result(self, predictions, fmt, axis, batch_agg, multi_agg, exp_dict):
@@ -352,7 +393,7 @@ class TestResult:
             assert np.allclose(res, exp, atol=1e-02, rtol=0), 'failed on metric {}'.format(metric_name)
 
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
-    @pytest.mark.parametrize('batch_agg, exp', [(None, np.array([0.50, 0.75])), ('mean', np.array([0.62]))])
+    @pytest.mark.parametrize('batch_agg, exp', [(None, np.array([0.50, 0.75, 0.50, 0.75])), ('mean', np.array([0.62]))])
     def test_result_accuracy(self, predictions, fmt, axis, batch_agg, exp):
         """Compare expected evaluated metrics return value actual one
         with given params for `accuracy` metrics.
@@ -389,13 +430,21 @@ class TestSubsampling:
     """
 
     params = [('true_positive', np.array([[1, 0],
+                                          [1, 0],
+                                          [1, 0],
                                           [1, 0]])),
               ('condition_positive', np.array([[1, 1],
+                                               [1, 0],
+                                               [1, 1],
                                                [1, 0]])),
               ('prediction_positive', np.array([[2, 0],
-                                                [1, 1]])),
+                                                [1, 1],
+                                                [1, 1],
+                                                [1, 0]])),
               ('total_population', np.array([[2, 1],
-                                             [1, 1]]))]
+                                             [1, 1],
+                                             [1, 2],
+                                             [1, 0]]))]
     @pytest.mark.parametrize('subsample_name, exp_subsample', params)
     def test_subsampling(self, subsample_name, exp_subsample):
         """Compare expected subsample with actual one.

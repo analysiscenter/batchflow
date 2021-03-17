@@ -253,7 +253,7 @@ class Domain:
         elif isinstance(domain, dict):
             self.cubes = self._dict_to_domain(domain)
             self.weights = [np.nan]
-        elif isinstance(domain, list) and all([isinstance(item, list) for item in domain]):
+        elif isinstance(domain, list) and all(isinstance(item, list) for item in domain):
             self.cubes = domain
             self.weights = [np.nan] * len(domain)
         elif domain is None:
@@ -281,7 +281,7 @@ class Domain:
 
         self.brute_force = []
         for cube in self.cubes:
-            self.brute_force.append(not all([isinstance(option.values, Sampler) for option in cube]))
+            self.brute_force.append(not all(isinstance(option.values, Sampler) for option in cube))
 
     def update_func(self, *args, **kwargs): # pylint: disable=method-hidden
         """ Function for domain update. If returns None, Domain will not be updated. """
@@ -488,7 +488,7 @@ class Domain:
             samplers = [option for option in cube if isinstance(option.values, Sampler)]
             if len(samplers) > 0:
                 return False
-            if any([len(item.values) != 1 for item in cube]):
+            if any(len(item.values) != 1 for item in cube):
                 return False
         return True
 

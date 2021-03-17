@@ -72,6 +72,7 @@ class ResNet(Encoder):
     """
     @classmethod
     def default_config(cls):
+        """ Define model's defaults: general architecture. """
         config = super().default_config()
 
         config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
@@ -183,7 +184,7 @@ class SEResNet18(ResNet18):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/se'] = True
+        config['body/encoder/blocks/attention'] = 'se'
         config['body/encoder/blocks/ratio'] = 16
         return config
 
@@ -192,7 +193,7 @@ class SEResNet34(ResNet34):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/se'] = True
+        config['body/encoder/blocks/attention'] = 'se'
         config['body/encoder/blocks/ratio'] = 16
         return config
 
@@ -201,7 +202,7 @@ class SEResNet50(ResNet50):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/se'] = True
+        config['body/encoder/blocks/attention'] = 'se'
         config['body/encoder/blocks/ratio'] = 16
         return config
 
@@ -210,7 +211,7 @@ class SEResNet101(ResNet101):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/se'] = True
+        config['body/encoder/blocks/attention'] = 'se'
         config['body/encoder/blocks/ratio'] = 16
         return config
 
@@ -219,7 +220,7 @@ class SEResNet152(ResNet152):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/se'] = True
+        config['body/encoder/blocks/attention'] = 'se'
         config['body/encoder/blocks/ratio'] = 16
         return config
 
@@ -230,7 +231,7 @@ class SEResNeXt18(ResNeXt18):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/se'] = True
+        config['body/encoder/blocks/attention'] = 'se'
         config['body/encoder/blocks/ratio'] = 16
         return config
 
@@ -239,7 +240,7 @@ class SEResNeXt34(ResNeXt34):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/se'] = True
+        config['body/encoder/blocks/attention'] = 'se'
         config['body/encoder/blocks/ratio'] = 16
         return config
 
@@ -248,7 +249,7 @@ class SEResNeXt50(ResNeXt50):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/se'] = True
+        config['body/encoder/blocks/attention'] = 'se'
         config['body/encoder/blocks/ratio'] = 16
         return config
 
@@ -257,7 +258,7 @@ class SEResNeXt101(ResNeXt101):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/se'] = True
+        config['body/encoder/blocks/attention'] = 'se'
         config['body/encoder/blocks/ratio'] = 16
         return config
 
@@ -266,6 +267,6 @@ class SEResNeXt152(ResNeXt152):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/se'] = True
+        config['body/encoder/blocks/attention'] = 'se'
         config['body/encoder/blocks/ratio'] = 16
         return config

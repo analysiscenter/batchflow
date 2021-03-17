@@ -262,7 +262,7 @@ class BaseDropout(Layer):
                 if isinstance(self.multisample, (tuple, list)):
                     if all([isinstance(item, int) for item in self.multisample]):
                         sizes = self.multisample
-                    elif all([isinstance(item, float) for item in self.multisample]):
+                    elif all(isinstance(item, float) for item in self.multisample):
                         batch_size = tf.cast(tf.shape(inputs)[0], dtype=tf.float32)
                         sizes = tf.convert_to_tensor([batch_size*item for item in self.multisample[:-1]])
                         sizes = tf.cast(tf.math.round(sizes), dtype=tf.int32)

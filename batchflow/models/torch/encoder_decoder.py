@@ -191,6 +191,7 @@ class Encoder(TorchModel):
     """
     @classmethod
     def default_config(cls):
+        """ Encoder's defaults: use max pooling after each `cna` stage. """
         config = super().default_config()
 
         config['body/encoder'] = dict(num_stages=None,
@@ -201,6 +202,7 @@ class Encoder(TorchModel):
 
     @classmethod
     def body(cls, inputs, return_all=False, **kwargs):
+        """ Make a sequential list of encoder modules. """
         kwargs = cls.get_defaults('body', kwargs)
         encoder = kwargs.pop('encoder')
         layers = [('encoder', EncoderModule(inputs=inputs, return_all=return_all, **{**kwargs, **encoder}))]
@@ -255,6 +257,7 @@ class Decoder(TorchModel):
     """
     @classmethod
     def default_config(cls):
+        """ Decoder's defaults: use deconvolution, followed by a `cna` stage. """
         config = super().default_config()
 
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None,
@@ -267,6 +270,7 @@ class Decoder(TorchModel):
 
     @classmethod
     def body(cls, inputs, **kwargs):
+        """ Make a sequential list of decoder modules. """
         kwargs = cls.get_defaults('body', kwargs)
         decoder = kwargs.pop('decoder')
         layers = [('decoder', DecoderModule(inputs=inputs, **{**kwargs, **decoder}))]
@@ -274,6 +278,7 @@ class Decoder(TorchModel):
 
     @classmethod
     def head(cls, inputs, target_shape, classes, **kwargs):
+        """ Make network's head. If needed, apply 1x1 convolution to obtain correct output shape. """
         kwargs = cls.get_defaults('head', kwargs)
         layers = []
         layer = super().head(inputs, target_shape, classes, **kwargs)
@@ -404,6 +409,7 @@ class EncoderDecoder(Decoder):
     """
     @classmethod
     def default_config(cls):
+        """ Encoder, followed by a decoder, with skips between stages. """
         config = super().default_config()
 
         config['body/encoder'] = dict(num_stages=None,
@@ -423,6 +429,7 @@ class EncoderDecoder(Decoder):
 
     @classmethod
     def body(cls, inputs, **kwargs):
+        """ Sequence of encoder, embedding and decoder. """
         kwargs = cls.get_defaults('body', kwargs)
         encoder = kwargs.pop('encoder')
         embedding = kwargs.pop('embedding')

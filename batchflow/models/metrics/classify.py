@@ -63,7 +63,7 @@ class ClassificationMetrics(Metrics):
       - `fmt` should contain format of `predictions`.
 
     - When `axis` is specified, `predictions` should be a one-hot array with class information provided
-      in the given axis (class probabilities or logits). In this case `targets` can contain labels (sew above)
+      in the given axis (class probabilities or logits). In this case `targets` can contain labels (see above)
       or probabilities / logits in the very same axis.
 
     - If `fmt` is 'labels', `num_classes` should be specified. Due to randomness any given batch may not
@@ -291,57 +291,62 @@ class ClassificationMetrics(Metrics):
 
         return value
 
-    def true_positive_rate(self, *args, **kwargs):
-        return self._calc_agg(self.true_positive, self.condition_positive, *args, **kwargs, when_zero=(0, 1))
+    def true_positive_rate(self, *args, when_zero=(0, 1), **kwargs):
+        return self._calc_agg(self.true_positive, self.condition_positive, *args, when_zero=when_zero, **kwargs)
 
-    def false_positive_rate(self, *args, **kwargs):
-        return self._calc_agg(self.false_positive, self.condition_negative, *args, **kwargs, when_zero=(1, 0))
+    def false_positive_rate(self, *args, when_zero=(1, 0), **kwargs):
+        return self._calc_agg(self.false_positive, self.condition_negative, *args, when_zero=when_zero, **kwargs)
 
-    def false_negative_rate(self, *args, **kwargs):
-        return self._calc_agg(self.false_negative, self.condition_positive, *args, **kwargs, when_zero=(1, 0))
+    def false_negative_rate(self, *args, when_zero=(1, 0), **kwargs):
+        return self._calc_agg(self.false_negative, self.condition_positive, *args, when_zero=when_zero, **kwargs)
 
-    def true_negative_rate(self, *args, **kwargs):
-        return self._calc_agg(self.true_negative, self.condition_negative, *args, **kwargs, when_zero=(0, 1))
+    def true_negative_rate(self, *args, when_zero=(0, 1), **kwargs):
+        return self._calc_agg(self.true_negative, self.condition_negative, *args, when_zero=when_zero, **kwargs)
 
-    def prevalence(self, *args, **kwargs):
+    def prevalence(self, *args, when_zero=(0, 0), **kwargs):
         """
         Notes
         -----
         Parameter when_zero doesn't really matter in this case,
         since total_population is never zero, when targets are not empty.
         """
-        return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs, when_zero=(0, 0))
+        return self._calc_agg(self.condition_positive, self.total_population, *args, when_zero=when_zero, **kwargs)
 
     def accuracy(self):
         """ An accuracy of detecting all the classes combined """
         return np.sum([self.true_positive(l) for l in self._all_labels()], axis=0) / self.total_population()
 
-    def positive_predictive_value(self, *args, **kwargs):
-        return self._calc_agg(self.true_positive, self.prediction_positive, *args, **kwargs, when_zero=(0, 1))
+    def positive_predictive_value(self, *args, when_zero=(0, 1), **kwargs):
+        return self._calc_agg(self.true_positive, self.prediction_positive, *args, when_zero=when_zero, **kwargs)
 
-    def false_discovery_rate(self, *args, **kwargs):
-        return self._calc_agg(self.false_positive, self.prediction_positive, *args, **kwargs, when_zero=(1, 0))
+    def false_discovery_rate(self, *args, when_zero=(1, 0), **kwargs):
+        return self._calc_agg(self.false_positive, self.prediction_positive, *args, when_zero=when_zero, **kwargs)
 
-    def false_omission_rate(self, *args, **kwargs):
-        return self._calc_agg(self.false_negative, self.prediction_negative, *args, **kwargs, when_zero=(1, 0))
+    def false_omission_rate(self, *args, when_zero=(1, 0), **kwargs):
+        return self._calc_agg(self.false_negative, self.prediction_negative, *args, when_zero=when_zero, **kwargs)
 
-    def negative_predictive_value(self, *args, **kwargs):
-        return self._calc_agg(self.true_negative, self.prediction_negative, *args, **kwargs, when_zero=(0, 1))
+    def negative_predictive_value(self, *args, when_zero=(0, 1), **kwargs):
+        return self._calc_agg(self.true_negative, self.prediction_negative, *args, when_zero=when_zero, **kwargs)
 
-    def positive_likelihood_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.true_positive_rate, self.false_positive_rate, *args, **kwargs, when_zero=(np.inf, 0))
+    def positive_likelihood_ratio(self, *args, when_zero=(np.inf, 0), **kwargs):
+        return self._calc_agg(self.true_positive_rate, self.false_positive_rate, *args, when_zero=when_zero, **kwargs)
 
-    def negative_likelihood_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.false_negative_rate, self.true_negative_rate, *args, **kwargs, when_zero=(np.inf, 0))
+    def negative_likelihood_ratio(self, *args, when_zero=(np.inf, 0), **kwargs):
+        return self._calc_agg(self.false_negative_rate, self.true_negative_rate, *args, when_zero=when_zero, **kwargs)
 
-    def diagnostics_odds_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio, *args, **kwargs,
-                              when_zero=(np.inf, 0))
+    def diagnostics_odds_ratio(self, *args, when_zero=(np.inf, 0), **kwargs):
+        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio,
+                              *args, when_zero=when_zero, **kwargs)
 
     def f1_score(self, *args, **kwargs):
-        recall, precision = self.recall(*args, **kwargs), self.precision(*args, **kwargs)
-        return 2 * (recall * precision) / (recall + precision)
+        """ Compute f1-score """
+        recall = self.recall(*args, when_zero=(0, np.inf), **kwargs)
+        precision = self.precision(*args, when_zero=(0, np.inf), **kwargs)
+        mask = np.isinf(recall) & np.isinf(precision)
+        value = np.nan_to_num(2 * (recall * precision) / (recall + precision))
+        value[mask] = np.inf
+        return value
 
     def jaccard(self, *args, **kwargs):
         d = self.dice(*args, **kwargs)
-        return d / (2 - d)
+        return np.nan_to_num(d / (2 - d), nan=np.inf)

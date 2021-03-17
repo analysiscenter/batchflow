@@ -84,6 +84,7 @@ class VNet(EncoderDecoder):
         return config
 
     def build_config(self):
+        """ Update architecture configuration, if needed. """
         config = super().build_config()
 
         if config.get('auto_build'):

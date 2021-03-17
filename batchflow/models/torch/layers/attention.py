@@ -5,10 +5,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .core import Activation
 from .conv import Conv
 from .resize import Combine
 from .pooling import GlobalPool, ChannelPool
+from .activation import RadixSoftmax, Activation
 from ..utils import get_shape, get_num_dims, get_num_channels, safe_eval
 
 
@@ -43,6 +43,10 @@ class SelfAttention(nn.Module):
             If `fpa`, then feature pyramid attention.
             Hanchao Li, Pengfei Xiong, Jie An, Lingxue Wang.
             Pyramid Attention Network for Semantic Segmentation <https://arxiv.org/abs/1805.10180>'_"
+
+            If `sac`, then split attention.
+            Hang Zhang et al. "`ResNeSt: Split-Attention Networks
+            <https://arxiv.org/abs/2004.08955>`_"
     """
     @staticmethod
     def identity(inputs, **kwargs):
@@ -80,6 +84,11 @@ class SelfAttention(nn.Module):
         """ Feature Pyramid Attention. """
         return FPA(inputs=inputs, pyramid_kernel_size=pyramid_kernel_size, bottleneck=bottleneck, **kwargs)
 
+    @staticmethod
+    def sac(inputs, radix=2, cardinality=1, **kwargs):
+        """ Split-Attention Block. """
+        return SplitAttentionConv(inputs=inputs, radix=radix, cardinality=cardinality, **kwargs)
+
     ATTENTIONS = {
         squeeze_and_excitation: ['se', 'squeeze_and_excitation', 'SE', True],
         scse: ['scse', 'SCSE'],
@@ -88,6 +97,7 @@ class SelfAttention(nn.Module):
         cbam: ['cbam', 'CBAM'],
         fpa: ['fpa', 'FPA'],
         identity: ['identity', None, False],
+        sac: ['sac', 'SAC']
     }
     ATTENTIONS = {alias: getattr(method, '__func__') for method, aliases in ATTENTIONS.items() for alias in aliases}
 
@@ -108,6 +118,7 @@ class SelfAttention(nn.Module):
         return self.op(inputs)
 
     def extra_repr(self):
+        """ Report used attention in a repr. """
         if isinstance(self.attention, (str, bool)):
             return 'op={}'.format(self.attention)
         return 'op=callable {}'.format(self.attention.__name__)
@@ -546,4 +557,109 @@ class SelectiveKernelConv(nn.Module):
             return super().__repr__()
         layer_desc = ('{class}({in_filters}, {out_filters}, '
                       'kernel_sizes={kernel_sizes}, dilations={dilations})').format(**self.desc_kwargs)
+        return layer_desc
+
+
+class SplitAttentionConv(nn.Module):
+    """ Split Attention.
+
+    Hang Zhang et al. "`ResNeSt: Split-Attention Networks
+    <https://arxiv.org/abs/2004.08955>`_"
+
+    This block contains the following operations:
+    * First of all, we split feature maps into `cardinality`*`radix` groups and apply convolution with
+      kernel_size=`kernel_size` with normalization and activation (these operations are controlled by the `layout`)
+    * Then we split the result into `cardinality` groups.
+    * Then attention takes place:
+        * Here, we summarize feature maps by groups and apply Global Average Pooling.
+        * Then we apply two 1x1 convolutions with groups=`cardinality`. The number of filters in the first
+            convolution is `filters`*`radix` // `reduction_factor`.
+        * Then we use RadixSoftmax, which applies a softmax for feature maps grouped into `cardinality` groups.
+        * Then, the resulting groups are summed up with feature maps before the attention part.
+
+    Parameters
+    ----------
+    radix : int
+        The number of splits within a cardinal group. Default is 2.
+    cardinality : int
+        The number of feature-map groups. Given feature-map is splitted to groups with same size. Default is 1.
+    reduction_factor : int
+        Factor of the filter reduction during :class:`~.attention.SplitAttentionConv`. Default is 1.
+    scaling_factor : int
+        Factor increasing the number of filters after ResNeSt block. Thus, the number of output filters is
+        `filters`*`scaling_factor`. Default 1.
+    kwargs : dict
+        Other named arguments only for the first :class:`~.layers.ConvBlock`.
+    """
+    def __init__(self, inputs, filters, layout='cna', radix=1, cardinality=1, reduction_factor=1, scaling_factor=1,
+                 strides=1, padding='same', **kwargs):
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        super().__init__()
+        self.radix = radix
+        self.cardinality = cardinality
+        self.channels = filters * self.radix
+
+        self.inner_filters = self.channels // reduction_factor
+        channel_dim = inputs.dim() - 2
+        self.desc_kwargs = {
+            'class': self.__class__.__name__,
+            'in_filters': get_num_channels(inputs),
+            'out_filters': filters*scaling_factor,
+            'radix': self.radix,
+            'cardinality': self.cardinality,
+            'reduction_factor': reduction_factor,
+            'scaling_factor': scaling_factor
+        }
+
+        self.inner_radix_conv = ConvBlock(inputs=inputs, layout=layout, filters=self.channels,
+                                          groups=self.cardinality*self.radix, strides=strides, padding=padding,
+                                          **kwargs)
+        inputs = self.inner_radix_conv(inputs)
+        x = inputs
+
+        rchannel = inputs.shape[1]
+        if self.radix > 1:
+            splitted = torch.split(inputs, rchannel//self.radix, dim=1)
+            inputs = sum(splitted)
+
+        inner_conv1d_layout = 'V>' + 'cnac'
+        self.avgpool_conv1d = ConvBlock(inputs=inputs, layout=inner_conv1d_layout,
+                                        filters=[self.inner_filters, self.channels],
+                                        kernel_size=1, groups=self.cardinality, dim=channel_dim,
+                                        bias=True)
+        inputs = self.avgpool_conv1d(inputs)
+
+        self.rsoftmax = RadixSoftmax(self.radix, self.cardinality)
+        inputs = self.rsoftmax(inputs)
+
+        if self.radix > 1:
+            inputs = torch.split(inputs, rchannel//self.radix, dim=1)
+            inputs = sum([inp*split for (inp, split) in zip(inputs, splitted)])
+        else:
+            inputs = inputs * x
+
+    def forward(self, x):
+        x = self.inner_radix_conv(x)
+        rchannel = x.shape[1]
+        if self.radix > 1:
+            splitted = torch.split(x, rchannel//self.radix, dim=1)
+            concatted = sum(splitted)
+        else:
+            concatted = x
+        att = self.avgpool_conv1d(concatted)
+        att = self.rsoftmax(att)
+        if self.radix > 1:
+            attens = torch.split(att, rchannel//self.radix, dim=1)
+            result = sum([att*split for (att, split) in zip(attens, splitted)])
+        else:
+            result = att * x
+        return result
+
+    def __repr__(self):
+        if getattr(self, 'debug', False):
+            return super().__repr__()
+        layer_desc = ('{class}({in_filters}, {out_filters}, '
+                      'radix={radix}, cardinality={cardinality}, '
+                      'reduction_factor={reduction_factor}, '
+                      'scaling_factor={scaling_factor})').format(**self.desc_kwargs)
         return layer_desc

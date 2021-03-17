@@ -49,7 +49,7 @@ def pipeline():
     return test_pipeline
 
 
-
+@pytest.mark.skip(reason="Test is outdated")
 @pytest.mark.parametrize('model_and_config',
                          ['single_config', 'multi_config',],
                          indirect=['model_and_config'])

@@ -1,7 +1,10 @@
 """ Test for model saving and loading """
 # pylint: disable=import-error, no-name-in-module
 
+import pickle
+
 import pytest
+import dill
 
 import numpy as np
 
@@ -156,10 +159,20 @@ class TestModelSaveLoad:
 
         assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
 
-    def test_bare_model(self, save_path, model_class):
+    @pytest.mark.parametrize('pickle_module', [None, dill, pickle])
+    def test_bare_model(self, save_path, model_class, pickle_module):
         """
         Test model saving and loading without pipeline
         """
+
+        if issubclass(model_class, TFModel):
+            if pickle_module is not None:
+                pytest.skip("'pickle_module' parameter not applicable to TF models")
+            else:
+                pickle_args = {}
+        else:
+            pickle_args = {'pickle_module': pickle_module}
+
         num_classes = 10
         dataset_size = 10
 
@@ -185,10 +198,10 @@ class TestModelSaveLoad:
             kwargs = dict(fetches='predictions')
 
         saved_predictions = model_save.predict(*args, **kwargs)
-        model_save.save(path=save_path)
+        model_save.save(path=save_path, **pickle_args)
 
         model_load = model_class(config=model_config)
-        model_load.load(path=save_path)
+        model_load.load(path=save_path, **pickle_args)
         loaded_predictions = model_load.predict(*args, **kwargs)
 
         assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
