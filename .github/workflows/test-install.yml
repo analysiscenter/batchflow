@@ -32,9 +32,9 @@ jobs:
       run: |
         pip install --user -U pip
         pip install --user -r requirements.txt
-    
+
     - name: Run 'import batchflow'
-      run: python -c 'import batchflow' 
+      run: python -c 'import batchflow'
 
     - name: Run basic tests
       run: |
@@ -64,12 +64,12 @@ jobs:
 
     - name: Install batchflow with pip
       run: |
-        pip install --user -U pip 
+        pip install --user -U pip
         pip install wheel
         pip install --user git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}#egg=batchflow
-    
+
     - name: Run 'import batchflow'
-      run: python -c 'import batchflow' 
+      run: python -c 'import batchflow'
 
     - uses: actions/checkout@v2
     - name: Run basic tests
@@ -100,13 +100,13 @@ jobs:
 
     - name: Install batchflow with pipenv
       run: |
-        pip install --user -U pip 
+        pip install --user -U pip
         pip install wheel pipenv
         pipenv --python ${{ matrix.python-version }}
         pipenv install git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}#egg=batchflow
-    
+
     - name: Run 'import batchflow' in installed environment
-      run: pipenv run python -c 'import batchflow' 
+      run: pipenv run python -c 'import batchflow'
 
     - uses: actions/checkout@v2
 
