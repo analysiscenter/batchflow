@@ -1342,15 +1342,18 @@ class Pipeline:
                                                         components=components, batch_class=batch_class))
 
     def _put_batches_into_queue(self, gen_batch):
+        iteration = 1
         while not self._stop_flag:
             self._prefetch_count.put(1, block=True)
             try:
                 batch = next(gen_batch)
+                batch.iteration = iteration
             except StopIteration:
                 break
             else:
                 future = self._executor.submit(self.execute_for, batch, new_loop=True)
                 self._prefetch_queue.put(future, block=True)
+                iteration = iteration + 1
         self._prefetch_queue.put(None, block=True)
 
     def _run_batches_from_queue(self, notifier):
