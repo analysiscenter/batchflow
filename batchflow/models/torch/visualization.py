@@ -259,7 +259,7 @@ class VisualizationMixin:
         prediction = self.model(inputs)
 
         if isinstance(gradient_mode, np.ndarray):
-            gradient = self._fill_value(gradient_mode)
+            gradient = self.transfer_to_device(gradient_mode)
         elif 'targ' in gradient_mode:
             gradient = targets
         elif 'onehot' in gradient_mode:
