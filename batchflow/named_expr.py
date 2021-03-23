@@ -543,7 +543,7 @@ class I(PipelineNamedExpression):
     name : str
         Determines returned value. One of:
             - 'current' or its substring - current iteration number, default.
-            - 'maximum' or its substring - total number of iterations to be performed.
+            - 'maximum' or 'total' or their substring - total number of iterations to be performed.
               If total number is not defined, raises an error.
             - 'ratio' or its substring - current iteration divided by a total number of iterations.
 
@@ -552,32 +552,36 @@ class I(PipelineNamedExpression):
     ValueError
     If `name` is not valid.
     If `name` is 'm' or 'r' and total number of iterations is not defined.
+
     Examples
     --------
     ::
 
         I('current')
         I('max')
+        I('max')
         R('normal', loc=0, scale=I('ratio')*100)
     """
     def __init__(self, name='c', mode='w', **kwargs):
         super().__init__(name, mode=None, **kwargs)
 
-    def get(self, **kwargs):    # pylint:disable=inconsistent-return-statements
+    def get(self, **kwargs):    # pylint:disable=inconsistent-return-statements, protected-access
         """ Return current or maximum iteration number or their ratio """
-        name, pipeline, _ = self._get_params(**kwargs)
+        name, pipeline, kwargs = self._get_params(**kwargs)
+
+        current_iter = kwargs['batch'].iteration or pipeline._iter_params.get('_n_iters')
+        total = pipeline._iter_params.get('_total')
 
         if 'current'.startswith(name):
-            return pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
+            return current_iter
 
-        total = pipeline._iter_params.get('_total')    # pylint:disable=protected-access
-
-        if 'maximum'.startswith(name):
+        if 'maximum'.startswith(name) or 'total'.startswith(name):
             return total
+
         if 'ratio'.startswith(name):
             if total is None:
                 raise ValueError('Total number of iterations is not defined!')
-            ratio = pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
+            ratio = current_iter / total
             return ratio
 
         raise ValueError('Unknown key for named expresssion I: %s' % name)

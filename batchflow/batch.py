@@ -95,11 +95,12 @@ class Batch(metaclass=MethodsTransformingMeta):
         self._preloaded_lock = threading.Lock()
         self._preloaded = preloaded
         self._copy = copy
-        self._local = None
+        self._local = threading.local()
         self._data_named = None
         self._data = None
         self._dataset = dataset
-        self._pipeline = pipeline
+        self.pipeline = pipeline
+        self.iteration = None
         self._attrs = None
         self.create_attrs(**kwargs)
 
@@ -141,29 +142,17 @@ class Batch(metaclass=MethodsTransformingMeta):
     @property
     def pipeline(self):
         """: Pipeline - a pipeline the batch is being used in """
-        if self._local is not None and hasattr(self._local, 'pipeline'):
-            return self._local.pipeline
-        return self._pipeline
+        return self._local.pipeline
 
     @pipeline.setter
-    def pipeline(self, val):
+    def pipeline(self, value):
         """ Store pipeline in a thread-local storage """
-        if val is None:
-            self._local = None
-        else:
-            if self._local is None:
-                self._local = threading.local()
-            self._local.pipeline = val
-        self._pipeline = val
+        self._local.pipeline = value
 
     def __copy__(self):
-        pipeline = self.pipeline
-        self.pipeline = None
         dump_batch = dill.dumps(self)
-        self.pipeline = pipeline
 
         restored_batch = dill.loads(dump_batch)
-        restored_batch.pipeline = pipeline
         return restored_batch
 
     def deepcopy(self):
