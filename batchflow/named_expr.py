@@ -565,7 +565,8 @@ class I(PipelineNamedExpression):
     def __init__(self, name='c', mode='w', **kwargs):
         super().__init__(name, mode=None, **kwargs)
 
-    def get(self, **kwargs):    # pylint:disable=inconsistent-return-statements, protected-access
+    def get(self, **kwargs):
+        # pylint:disable=protected-access
         """ Return current or maximum iteration number or their ratio """
         name, pipeline, kwargs = self._get_params(**kwargs)
 
