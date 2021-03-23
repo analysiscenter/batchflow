@@ -1183,6 +1183,12 @@ class TorchModel(BaseModel, VisualizationMixin):
                 output_container = {}
                 inputs = self.transfer_to_device(inputs)
                 predictions = self.model(inputs)
+
+                if self.amp:
+                    if isinstance(predictions, (tuple, list)):
+                        predictions = [p.float() for p in predictions]
+                    else:
+                        predictions = predictions.float()
                 output_container['predictions'] = predictions
 
                 if targets is not None:
