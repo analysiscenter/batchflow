@@ -9,11 +9,12 @@ from functools import lru_cache
 import json
 import pprint
 import warnings
+import subprocess
+
 import dill
 import numpy as np
 import pandas as pd
 import multiprocess as mp
-import subprocess
 
 from .results import Results
 from .distributor import Distributor
@@ -408,6 +409,7 @@ class Research:
         return self
 
     def attach_git_meta(self, **kwargs):
+        """ Save the information about the current state of project repository. """
         commands = {
             'commit': "git log --name-status HEAD^..HEAD",
             'diff': 'git diff',
@@ -417,12 +419,12 @@ class Research:
 
         for filename, command in commands.items():
             process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
-            output, error = process.communicate()
+            output, _ = process.communicate()
             result = re.sub('"image/png": ".*?"', '"image/png": "..."', output.decode('utf'))
             if not os.path.exists(os.path.join(self.name, 'git')):
                 os.makedirs(os.path.join(self.name, 'git'))
-            with open(os.path.join(self.name, 'git', filename + '.txt'), 'w') as fp:
-                print(result, file=fp)
+            with open(os.path.join(self.name, 'git', filename + '.txt'), 'w') as file:
+                print(result, file=file)
 
     def __getstate__(self):
         return self.__dict__

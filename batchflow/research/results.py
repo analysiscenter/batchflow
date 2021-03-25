@@ -15,35 +15,6 @@ class Results:
     ----------
     path : str
         path to root folder of research
-    names : str, list or None
-        names of units (pipleines and functions) to load
-    variables : str, list or None
-        names of variables to load
-    iterations : int, list or None
-        iterations to load
-    repetition : int
-        index of repetition to load
-    configs, aliases : dict, Config, Option, Domain or None
-        configs to load
-    use_alias : bool
-        if True, use alias for model name, else use its full name.
-        Defaults to True
-    concat_config : bool
-        if True, concatenate all config options into one string and store
-        it in 'config' column, else use separate column for each option.
-        Defaults to False
-    drop_columns : bool
-        used only if `concat_config=True`. Drop or not columns with options and
-        leave only concatenated config.
-    kwargs : dict
-        kwargs will be interpreted as config paramter
-
-    Returns
-    -------
-    pandas.DataFrame or dict
-        will have columns: iteration, name (of pipeline/function)
-        and column for config. Also it will have column for each variable of pipeline
-        and output of the function that was saved as a result of the research.
 
     **How to perform slicing**
         Method `load` with default parameters will create pandas.DataFrame with all dumped
@@ -79,7 +50,7 @@ class Results:
                             (results.name == 'test_accuracy') & results.layout.isin(['cna', 'can'])]
         ```
     """
-    def __init__(self, path, *args, **kwargs):
+    def __init__(self, path):
         self.path = path
         self.description = self._get_description()
         self.configs = self._load_configs()
@@ -95,12 +66,101 @@ class Results:
         return self._load_artifactes()
 
     def load_df(self, *args, **kwargs):
+        """ Load dataframe with results.
+
+        Parameters
+        ----------
+        names : list, optional
+            names of units (pipleines and functions) to load results, by default None
+        variables : list, optional
+            variables to load, by default None
+        iterations : int or list, optional
+            iterations to load, by default None
+        repetition : int, optional
+            repetition to load, by default None
+        experiment_id : str, optional
+            experiment id to load, by default None
+        configs : dict, optional
+            specify keys and corresponding values to load results, by default None
+        aliases : dict, optional
+            the same as `configs` but specify aliases of parameters, by default None
+        use_alias : bool, optional
+            use aliases for parameter values, by default True
+        concat_config : bool, optional
+            concatenate all config options into one string and store it in 'config' column, by default False
+        drop_columns : bool, optional
+            remove parameters columns if `concat_config=True`, by default True
+        kwargs : dict
+            kwargs will be interpreted as config paramter
+
+        Returns
+        -------
+        pandas.DataFrame or dict
+            dataframe columns: iteration, name (of pipeline/function), repetition, update
+            (is used if domain was dynamically updated), and column(-s) for config.
+            Also it will have column for each variable of pipeline
+            and output of the function that was saved as a result of the research.
+        """
         return self._load_df(*args, **kwargs)
 
     def load_artifactes(self, *args, **kwargs):
+        """ Load paths to artifactes for experiments.
+
+        Parameters
+        ----------
+        name : str, optional
+            name of artifact to load, by default None. Can be used with iteration as prefix/postfix
+            (see `format` parameter)
+        iterations : int or list, optional
+            iterations to load, by default None
+        repetition : int, optional
+            repetition to load, by default None
+        experiment_id : str, optional
+            experiment id to load, by default None
+        configs : dict, optional
+            specify keys and corresponding values to load paths, by default None
+        aliases : dict, optional
+            the same as `configs` but specify aliases of parameters, by default None
+        use_alias : bool, optional
+            use aliases for parameter values, by default True
+        concat_config : bool, optional
+            concatenate all config options into one string and store it in 'config' column, by default False
+        drop_columns : bool, optional
+            remove parameters columns if `concat_config=True`, by default True
+        format : str, optional
+            one of '_{}', '/{}' (iteration as postfix for name), '{}_', '{}/' (iteration as prefix for name),
+            by default None
+        kwargs : dict
+            kwargs will be interpreted as config paramter
+
+        Returns
+        -------
+        pandas.DataFrame or dict
+            dataframe columns: iteration, name (of pipeline/function), repetition, update
+            (is used if domain was dynamically updated), column for config, artifact_path (full path to artefact
+            including file name), filename.
+        """
         return self._load_artifactes(*args, **kwargs)
 
     def filter_configs(self, repetition=None, experiment_id=None, configs=None, aliases=None, **kwargs):
+        """ Filter configs.
+
+        Parameters
+        ----------
+        repetition : int, optional
+            index of the repetition to load, by default None
+        experiment_id : str, optional
+            experiment id to load, by default None
+        configs : dict, optional
+            specify keys and corresponding values to load results, by default None
+        aliases : dict, optional
+            the same as `configs` but specify aliases of parameters, by default None
+
+        Returns
+        -------
+        list
+            filtered list on configs
+        """
         if len(kwargs) > 0:
             aliases = kwargs if aliases is None else {**aliases, **kwargs}
 
@@ -127,10 +187,10 @@ class Results:
         iterations = self._to_list(iterations)
 
         all_results = []
-        for id, config_alias in _configs.items():
+        for _experiment_id, config_alias in _configs.items():
             _repetition = config_alias.pop_config('repetition').config()['repetition']
             _update = config_alias.pop_config('update').config()['update']
-            path = os.path.join(self.path, 'results', id)
+            path = os.path.join(self.path, 'results', _experiment_id)
 
             for unit in names:
                 files = glob.glob(glob.escape(os.path.join(path, unit)) + '_[0-9]*')
@@ -156,19 +216,19 @@ class Results:
         names = self._to_list(names or '*')
 
         all_results = []
-        for id, config_alias in _configs.items():
+        for _experiment_id, config_alias in _configs.items():
             _repetition = config_alias.pop_config('repetition').config()['repetition']
             _update = config_alias.pop_config('update').config()['update']
-            path = os.path.join(self.path, 'results', id)
+            path = os.path.join(self.path, 'results', _experiment_id)
             for name in names:
-                res = {'experiment_id': id}
+                res = {'experiment_id': _experiment_id}
                 if format in ['_{}', '/{}']:
                     name = name + format
                 elif format in ['{}_', '{}/']:
                     name = format + name
-                for it in iterations:
+                for i in iterations:
                     filenames = []
-                    for filename in glob.glob(os.path.join(path, name.format(it))):
+                    for filename in glob.glob(os.path.join(path, name.format(i))):
                         if not any([os.path.basename(filename).startswith(unit_name) for unit_name in self.names]):
                             filenames.append(filename)
                 res.update({'artifact_path': filenames})
@@ -195,9 +255,9 @@ class Results:
     def _load_configs(self, experiment_id=None):
         configs = {}
         for filename in glob.glob(os.path.join(self.path, 'configs', experiment_id or '*')):
-            id = os.path.split(filename)[-1]
+            _experiment_id = os.path.split(filename)[-1]
             with open(filename, 'rb') as f:
-                configs[id] = dill.load(f)
+                configs[_experiment_id] = dill.load(f)
         return configs
 
     def _to_list(self, value):

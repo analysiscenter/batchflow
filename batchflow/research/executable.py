@@ -63,6 +63,7 @@ class Executable:
         self.additional_config = None
         self.action = None
         self.dataset = None
+        self.experiment_path = None
 
         self.last_update_time = None
 

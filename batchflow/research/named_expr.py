@@ -110,11 +110,10 @@ class REP(ResearchNamedExpression): # ResearchExperimentPath
         return kwargs['job'], kwargs['experiment'], kwargs['path']
 
     def get(self, **kwargs):
-        job, experiment, path = self._get(**kwargs)
+        _, experiment, path = self._get(**kwargs)
         # unit to get attributes (each unit will have the same so we take the first)
         unit = next(iter(experiment.values()))
         experiment_path = unit.experiment_path # path to folder with current experiment
-        index = unit.index # index of the branch corresponding to the current experiment
         if self.relative:
             return experiment_path
         return os.path.join(path, experiment_path)
