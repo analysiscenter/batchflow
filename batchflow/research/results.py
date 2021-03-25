@@ -115,7 +115,7 @@ class Results:
             iterations to load, by default None
         repetition : int, optional
             repetition to load, by default None
-        experiment_id : str, optional
+        experiment_id : str or list, optional
             experiment id to load, by default None
         configs : dict, optional
             specify keys and corresponding values to load paths, by default None
@@ -149,7 +149,7 @@ class Results:
         ----------
         repetition : int, optional
             index of the repetition to load, by default None
-        experiment_id : str, optional
+        experiment_id : str or list, optional
             experiment id to load, by default None
         configs : dict, optional
             specify keys and corresponding values to load results, by default None
@@ -221,7 +221,7 @@ class Results:
             _update = config_alias.pop_config('update').config()['update']
             path = os.path.join(self.path, 'results', _experiment_id)
             for name in names:
-                res = {'experiment_id': _experiment_id}
+                res = {}
                 if format in ['_{}', '/{}']:
                     name = name + format
                 elif format in ['{}_', '{}/']:
@@ -233,6 +233,7 @@ class Results:
                             filenames.append(filename)
                 res.update({'artifact_path': filenames})
                 res.update({'filename': [os.path.basename(item) for item in filenames]})
+                res.update({'experiment_id': [_experiment_id] * len(filenames)})
                 res = self._append_config(res, config_alias, concat_config, use_alias, drop_columns,
                                           repetition=_repetition, update=_update)
                 all_results.append(pd.DataFrame(res))
