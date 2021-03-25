@@ -1,5 +1,7 @@
 """ Auxilary functions """
-
+import os
+import glob
+import shutil
 
 def get_metrics(pipeline, metrics_var, metrics_name, *args, agg='mean', **kwargs):
     """ Function to evaluate metrics """
@@ -9,3 +11,23 @@ def get_metrics(pipeline, metrics_var, metrics_name, *args, agg='mean', **kwargs
     if len(values) == 1:
         return values[0]
     return values
+
+def transform_research_results(research_name):
+    """ Transform old research format (with additional nesting level) to the new. """
+    configs = {}
+    for config in glob.glob(f'{research_name}/configs/*'):
+        for experiment_folder in glob.glob(f'{research_name}/results/{os.path.basename(config)}/*'):
+            exp_id = os.path.basename(experiment_folder)
+            configs[exp_id] = config
+    for exp_id, path in configs.items():
+        dst = os.path.join(os.path.dirname(path), exp_id)
+        shutil.move(path, dst)
+
+    initial_results = glob.glob(f'{research_name}/results/*')
+    for exp_path in initial_results:
+        for path in os.listdir(exp_path):
+            src = os.path.join(exp_path, path)
+            dst = os.path.join(os.path.dirname(exp_path), path)
+            shutil.move(src, dst)
+    for path in initial_results:
+        shutil.rmtree(path)
