@@ -1053,9 +1053,7 @@ class Pipeline:
         Would call a `resnet` model `train` method with a `feed_dict` argument:
         ``resnet.train(feed_dict={'x': batch.images})``
         """
-        return self._add_action(TRAIN_MODEL_ID, *args,
-                                _args=dict(model_name=name, make_data=make_data, save_to=save_to),
-                                **kwargs)
+        return self._add_action(TRAIN_MODEL_ID, *args, _args=dict(model_name=name, save_to=save_to), **kwargs)
 
     def predict_model(self, name, *args, save_to=None, **kwargs):
         """ Predict using a model
@@ -1101,9 +1099,7 @@ class Pipeline:
         ``predictions = tf_unet.train(fetches='predictions', feed_dict={'x': batch.images})``
         Predictions for each batch will be stored in a pipeline variable `inferred_masks`.
         """
-        return self._add_action(PREDICT_MODEL_ID, *args,
-                                _args=dict(model_name=name, make_data=make_data, save_to=save_to),
-                                **kwargs)
+        return self._add_action(PREDICT_MODEL_ID, *args, _args=dict(model_name=name, save_to=save_to), **kwargs)
 
     def _make_model_args(self, batch, action):
         args = self._eval_expr(action['args'], batch=batch)
@@ -1148,8 +1144,7 @@ class Pipeline:
         if mode == 'static':
             self.models.load_model(mode, name, model_class, *args, **kwargs)
             return self
-        return self._add_action(LOAD_MODEL_ID, *args,
-                                _args=dict(mode=mode, model_class=model_class, model_name=name),
+        return self._add_action(LOAD_MODEL_ID, *args, _args=dict(mode=mode, model_class=model_class, model_name=name),
                                 **kwargs)
 
     def load_model_once(self, mode, name=None, model_class=None, *args, **kwargs):
