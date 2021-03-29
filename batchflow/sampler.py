@@ -605,6 +605,35 @@ class HistoSampler(Sampler):
         histo_update = np.histogramdd(sample=points, bins=self.edges)
         self.bins += histo_update[0]
 
+class MCMCSampler(Sampler):
+    def __init__(self, log_prob, initial_state, backend='tfp', kernel='random_walk', **kwargs):
+        super().__init__( **kwargs)
+        self.backend = backend
+        if backend == 'tfp':
+            import tensorflow as tf
+            import tensorflow_probability as tfp
+
+            kernel_dict = {'random_walk': 'RandomWalkMetropolis',
+                        'hamiltonian': 'HamiltonianMonteCarlo'}
+            kernel_name = kernel_dict[kernel] if kernel in kernel_dict else kernel
+            self.state = initial_state
+            self.kernel = getattr(tfp.mcmc, kernel_name)(target_log_prob_fn=log_prob, **kwargs)
+
+            def run_chain(initial_state, kernel=self.kernel, num_results=1000, num_burnin_steps=500):
+                return tfp.mcmc.sample_chain(num_results=num_results,
+                                            num_burnin_steps=num_burnin_steps,
+                                            current_state=initial_state,
+                                            kernel=kernel,
+                                            trace_fn=lambda current_state, kernel_results: kernel_results)        
+            self.chain = tf.function(run_chain)
+        else:
+            pass
+
+    def sample(self, size):
+        if self.backend == 'tfp':
+            return np.array(self.chain(initial_state=self.state, num_results=size)[0])
+        else:
+            pass
 
 def cart_prod(*arrs):
     """ Get array of cartesian tuples from arbitrary number of arrays.
