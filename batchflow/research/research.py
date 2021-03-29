@@ -55,8 +55,10 @@ class Research:
 
     def add_pipeline(self, root, branch=None, dataset=None, variables=None,
                      name=None, execute=1, dump='last', run=False, logging=False, **kwargs):
-        """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
-        will prepare batch that can be used by different branches with different configs.
+        """ Add new pipeline to research. Pipeline will be initialized with config from domain and then
+        will be executed. Pipeline can be divided into two parts: root pipeline and branch pipeline.
+        In that case root pipeline is a nonvariative part of pipeline (don't use values from domain) and
+        prepare batches that can be used by different branches with different configs.
 
         Parameters
         ----------
@@ -159,14 +161,15 @@ class Research:
         Experiment is an `OrderedDict` of all pipelines and functions that were added to Research
         and are running in current Job. Key is a name of `Executable`, value is `Executable`.
         """
-
-        name = name or function.__name__
-
         if name in self.executables:
             raise ValueError('Executable unit with name {} already exists'.format(name))
+        if name is None:
+            name = function.__name__
+            if name in self.executables:
+                name += str(len([item for item in self.executables if item.startswith(function.__name__)]))
 
         if on_root and returns is not None:
-            raise ValueError("If function on root, then it mustn't have returns")
+            raise ValueError("If function is on root, then it mustn't have returns")
 
         unit = Executable()
         unit.add_callable(function, *args, name=name, execute=execute, dump=dump, returns=returns,
@@ -206,6 +209,7 @@ class Research:
             include execution information to log file or not
         """
         name = pipeline + '_' + metrics_var
+        name += str(len([item for item in self.executables if item.startswith(name)]))
         returns = returns or metrics_name
         self.add_callable(get_metrics, *args, name=name, execute=execute, dump=dump, returns=returns,
                           on_root=False, logging=logging, pipeline=RP(pipeline),
