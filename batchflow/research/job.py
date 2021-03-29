@@ -44,11 +44,25 @@ class Job:
                 branch_config = self.branches[index]
             else:
                 branch_config = dict()
+
+            # Create instances of controllers for each branch initialized with kwargs from config.
+            controllers = OrderedDict()
+            for name, unit in self.executable_units.items():
+                if unit.controller:
+                    controller = unit.get_copy()
+                    kwargs_config = eval_expr(controller.kwargs, job=self, experiment=units)
+                    controllers[name] = controller.set_config(
+                        config, additional_config,
+                        {**branch_config, **device_configs[index]},
+                        worker_config, kwargs_config
+                    )
+
             units = OrderedDict()
             for name, unit in self.executable_units.items():
                 unit = unit.get_copy()
                 unit.set_shared_value(last_update_time)
                 unit.reset('iter')
+                unit.get_attributes_of_controllers(controllers)
                 if unit.pipeline is not None:
                     kwargs_config = eval_expr(unit.kwargs, job=self, experiment=units)
                     unit.set_dataset()

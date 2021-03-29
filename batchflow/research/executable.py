@@ -67,8 +67,6 @@ class Executable:
 
         self.last_update_time = None
 
-        self._function = None
-
     def add_callable(self, function, *args, name='callable', execute=1, dump='last', returns=None,
                      on_root=False, logging=False, **kwargs):
         """ Add function as an Executable Unit. """
@@ -79,7 +77,6 @@ class Executable:
 
         self.name = name
         self.function = function
-        self._function = function
         self.execute = execute
         self.dump = dump
         self.variables = returns
@@ -137,6 +134,17 @@ class Executable:
         self._clear_result()
         self._process_iterations()
 
+    def add_controller(self, conroller, name, logging=False, **kwargs):
+        self.name = name
+        self.controller = controller
+        self.kwargs = kwargs
+        self.logging = logging
+
+        self.action = {
+            'type': 'controller',
+            'name': name
+        }
+
     def _process_iterations(self):
         if not isinstance(self.execute, list):
             self.execute = [self.execute]
@@ -160,6 +168,13 @@ class Executable:
             else:
                 self.pipeline = self.pipeline << self.dataset
 
+    def get_attributes_of_controllers(self, controllers):
+        for attr in ['pipeline', 'root_pipeline', 'function']:
+            src = getattr(self, attr)
+            if isinstance(src, str):
+                controller_name, attr_name = src.split('.')
+                setattr(self, attr, getattr(controllers[controller_name], attr_name))
+
     def reset(self, what='iter'):
         """ Reset iterators in pipelines """
         if self.pipeline is not None:
@@ -178,8 +193,11 @@ class Executable:
 
         self.config = config_from_grid + config_from_func
         self.additional_config = Config(worker_config) + Config(branch_config) + Config(import_config)
+        self.full_config = self.config.config() + self.additional_config
         if self.pipeline is not None:
-            self.pipeline.set_config(self.config.config() + self.additional_config)
+            self.pipeline.set_config(self.full_config)
+        if self.controller:
+            return self.controller(**self.full_config)
 
     def set_research_path(self, path):
         self.research_path = path
