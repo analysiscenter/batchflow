@@ -605,7 +605,18 @@ class HistoSampler(Sampler):
         histo_update = np.histogramdd(sample=points, bins=self.edges)
         self.bins += histo_update[0]
 
+
 class MCMCSampler(Sampler):
+    """ Markov chain Monte Carlo - sampler. Currently supports only tensorflow_probability backend.
+    Pyro (package based on torch) is to be incorporated.
+
+    Parameters
+    ----------
+    log_prob : callable
+        function representing logarithm of the proposal function for the sampler.
+    initial_state : np.ndarray
+        array representing initial state of the sampler.
+    """
     def __init__(self, log_prob, initial_state, backend='tfp', kernel='random_walk', **kwargs):
         super().__init__( **kwargs)
         self.backend = backend
