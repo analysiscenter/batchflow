@@ -56,7 +56,7 @@ class Job:
                                              **device_configs[index], **worker_config, **kwargs)
 
             for name, unit in self.executable_units.items():
-                unit.get_attributes_of_controllers(namespaces)
+                unit.get_attributes(namespaces)
                 unit = unit.get_copy()
                 unit.set_shared_value(last_update_time)
                 unit.reset('iter')

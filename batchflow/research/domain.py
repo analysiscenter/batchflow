@@ -451,9 +451,11 @@ class Domain:
         return None
 
     def __len__(self):
-        return np.sum(
-            np.prod([len(op.values) for op in cube if isinstance(op.values, list)], dtype='int') for cube in self.cubes
-        )
+        cube_sizes = [
+            np.prod([len(op.values) for op in cube if isinstance(op.values, list)], dtype='int')
+            for cube in self.cubes
+        ]
+        return max(0, sum(cube_sizes))
 
 
     def iterator(self):

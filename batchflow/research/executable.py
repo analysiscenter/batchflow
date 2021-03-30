@@ -12,11 +12,19 @@ class PipelineStopIteration(StopIteration):
     pass
 
 class Namespace:
-    def __init__(self, namespace, name, logging=False, **kwargs):
+    """ Namespace to use in each experiment in research. Will be initialized at the start of the experiment.
+
+    Parameters
+    ----------
+    namespace : class
+        class which represents namespace.
+    name : str
+        name of the namespace to use in research.
+    """
+    def __init__(self, namespace, name, **kwargs):
         self.name = name
         self.namespace = namespace
         self.kwargs = kwargs
-        self.logging = logging
 
     def __call__(self, **kwargs):
         return self.namespace(**kwargs)
@@ -55,7 +63,6 @@ class Executable:
     def __init__(self):
         self.function = None
         self.pipeline = None
-        self.controller = None
         self.name = None
         self.result = None
         self.execute = None
@@ -168,7 +175,8 @@ class Executable:
             else:
                 self.pipeline = self.pipeline << self.dataset
 
-    def get_attributes_of_controllers(self, namespaces):
+    def get_attributes(self, namespaces):
+        """ Transform string to callables and pipelines from namespace. """
         for attr in ['pipeline', 'root_pipeline', 'function']:
             src = getattr(self, attr)
             if isinstance(src, str):
@@ -193,11 +201,8 @@ class Executable:
 
         self.config = config_from_grid + config_from_func
         self.additional_config = Config(worker_config) + Config(branch_config) + Config(import_config)
-        self.full_config = self.config.config() + self.additional_config
         if self.pipeline is not None:
-            self.pipeline.set_config(self.full_config)
-        if self.controller:
-            return self.controller(**self.full_config)
+            self.pipeline.set_config(self.config.config() + self.additional_config)
 
     def set_research_path(self, path):
         self.research_path = path

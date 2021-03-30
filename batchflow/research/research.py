@@ -63,10 +63,11 @@ class Research:
 
         Parameters
         ----------
-        root : Pipeline
+        root : Pipeline or str.
             a pipeline to execute when the research is run. It must contain `run` action with `lazy=True` or
             `run_later`. Only if `branch` is None, `root` may contain parameters that can be defined by domain.
-        branch : Pipeline or None
+            If str, defines namespace and attribute which is a pipeline, e.g. 'my_namespace.train_ppl'.
+        branch : Pipeline, str or None
             a parallelized pipeline to execute within the research.
             Several copies of branch pipeline will be executed in parallel per each batch
             received from the root pipeline. May contain parameters that can be defined by domain,
@@ -126,8 +127,9 @@ class Research:
 
         Parameters
         ----------
-        function : callable
-            callable object with parameters: `*args, **kwargs`
+        function : callable or str
+            callable object with parameters: `*args, **kwargs`. If str, defines namespace and attribute which
+            is a callable, e.g. 'my_namespace.train_model'.
         returns : str, list of str or None
             names for function returns to save into results
             if None, `function` will be executed without any saving results and dumping
@@ -179,15 +181,24 @@ class Research:
 
         return self
 
-    def add_namespace(self, controller, name, **kwargs):
+    def add_namespace(self, namespace, name, **kwargs):
+        """ Add namespace to research. Its attributes can be used as callbles and pipelines.
+
+        Parameters
+        ----------
+        namespace : class
+            class which represents namespace.
+        name : str
+            name of the namespace to use in research.
+        """
         if name in self.namespaces:
             raise ValueError('Namespace with name {} already exists'.format(name))
         if name is None:
-            name = controller.__name__
+            name = namespace.__name__
             if name in self.executables:
-                name += str(len([item for item in self.executables if item.startswith(controller.__name__)]))
+                name += str(len([item for item in self.executables if item.startswith(namespace.__name__)]))
 
-        self.namespaces[name] = Namespace(controller, name, logging=False, **kwargs)
+        self.namespaces[name] = Namespace(namespace, name, **kwargs)
         return self
 
     def get_metrics(self, pipeline, metrics_var, metrics_name, *args,
