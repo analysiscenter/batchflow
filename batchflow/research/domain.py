@@ -450,7 +450,12 @@ class Domain:
             return self.n_reps * self.n_iters
         return None
 
-    @property
+    def __len__(self):
+        return np.sum(
+            np.prod([len(op.values) for op in cube if isinstance(op.values, list)], dtype='int') for cube in self.cubes
+        )
+
+
     def iterator(self):
         """ Get domain iterator. """
         if self._iterator is None:
