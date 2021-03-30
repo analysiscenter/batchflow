@@ -616,6 +616,16 @@ class MCMCSampler(Sampler):
         function representing logarithm of the proposal function for the sampler.
     initial_state : np.ndarray
         array representing initial state of the sampler.
+    backend : str
+        backend to use: for now only 'tensorflow_probability' ('tfp') is supported.
+    kernel : str
+        can be either 'RandomWalkMetropolis' ('random_walk'), 'HamiltonianMonteCarlo' ('hamiltonian')
+        or 'NoUTurnSampler' ('nouturn').
+    kwargs : dict
+        step_size : float
+            needed for 'HamiltonianMonteCarlo' and 'NoUTurnSampler'
+        num_leapfrog_steps : int
+            needed for 'HamiltonianMonteCarlo'. The larger the number, the slower the generation of points.
     """
     def __init__(self, log_prob, initial_state, backend='tfp', kernel='random_walk', **kwargs):
         super().__init__( **kwargs)
@@ -625,17 +635,18 @@ class MCMCSampler(Sampler):
             import tensorflow_probability as tfp
 
             kernel_dict = {'random_walk': 'RandomWalkMetropolis',
-                        'hamiltonian': 'HamiltonianMonteCarlo'}
+                           'hamiltonian': 'HamiltonianMonteCarlo',
+                           'nouturn': 'NoUTurnSampler'}
             kernel_name = kernel_dict[kernel] if kernel in kernel_dict else kernel
             self.state = initial_state
             self.kernel = getattr(tfp.mcmc, kernel_name)(target_log_prob_fn=log_prob, **kwargs)
 
             def run_chain(initial_state, kernel=self.kernel, num_results=1000, num_burnin_steps=500):
                 return tfp.mcmc.sample_chain(num_results=num_results,
-                                            num_burnin_steps=num_burnin_steps,
-                                            current_state=initial_state,
-                                            kernel=kernel,
-                                            trace_fn=lambda current_state, kernel_results: kernel_results)        
+                                             num_burnin_steps=num_burnin_steps,
+                                             current_state=initial_state,
+                                             kernel=kernel,
+                                             trace_fn=lambda current_state, kernel_results: kernel_results)        
             self.chain = tf.function(run_chain)
         else:
             pass
