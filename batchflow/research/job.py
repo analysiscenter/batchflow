@@ -10,7 +10,7 @@ from .. import inbatch_parallel
 
 class Job:
     """ Contains one job. """
-    def __init__(self, executable_units, n_iters, configs, branches, research_path):
+    def __init__(self, executable_units, namespaces, n_iters, configs, branches, research_path):
         """
         Parameters
         ----------
@@ -19,6 +19,7 @@ class Job:
         """
         self.experiments = []
         self.executable_units = executable_units
+        self.namespaces = namespaces
         self.n_iters = n_iters
         self.configs = configs
         self.branches = branches
@@ -46,30 +47,26 @@ class Job:
                 branch_config = dict()
 
             # Create instances of controllers for each branch initialized with kwargs from config.
-            controllers = OrderedDict()
-            for name, unit in self.executable_units.items():
-                if unit.controller:
-                    controller = unit.get_copy()
-                    kwargs_config = eval_expr(controller.kwargs, job=self, experiment=units)
-                    controllers[name] = controller.set_config(
-                        config, additional_config,
-                        {**branch_config, **device_configs[index]},
-                        worker_config, kwargs_config
-                    )
-
+            namespaces = OrderedDict()
             units = OrderedDict()
+
+            for name, namespace in self.namespaces.items():
+                kwargs = eval_expr(namespace.kwargs, job=self, experiment=units)
+                namespaces[name] = namespace(**config, **additional_config, **branch_config,
+                                             **device_configs[index], **worker_config, **kwargs)
+
             for name, unit in self.executable_units.items():
+                unit.get_attributes_of_controllers(namespaces)
                 unit = unit.get_copy()
                 unit.set_shared_value(last_update_time)
                 unit.reset('iter')
-                unit.get_attributes_of_controllers(controllers)
                 if unit.pipeline is not None:
-                    kwargs_config = eval_expr(unit.kwargs, job=self, experiment=units)
+                    kwargs = eval_expr(unit.kwargs, job=self, experiment=units)
                     unit.set_dataset()
                 else:
-                    kwargs_config = dict()
+                    kwargs = dict()
                 unit.set_config(config, additional_config,
-                                {**branch_config, **device_configs[index]}, worker_config, kwargs_config)
+                                {**branch_config, **device_configs[index]}, worker_config, kwargs)
                 unit.set_research_path(self.research_path)
                 unit.index = index
                 unit.create_folder(self.ids[index])

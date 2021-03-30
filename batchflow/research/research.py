@@ -23,13 +23,14 @@ from .domain import Domain, Option, ConfigAlias
 from .job import Job
 from .logger import BaseLogger, FileLogger, PrintLogger, TelegramLogger
 from .utils import get_metrics
-from .executable import Executable
+from .executable import Executable, Namespace
 from .named_expr import RP
 
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
     def __init__(self):
         self.executables = OrderedDict()
+        self.namespaces = OrderedDict()
         self.loaded = False # TODO: Think about it. Do we need load?
         self.branches = 1
         self.trials = 2
@@ -176,6 +177,17 @@ class Research:
                           on_root=on_root, logging=logging, **kwargs)
         self.executables[name] = unit
 
+        return self
+
+    def add_namespace(self, controller, name, **kwargs):
+        if name in self.namespaces:
+            raise ValueError('Namespace with name {} already exists'.format(name))
+        if name is None:
+            name = controller.__name__
+            if name in self.executables:
+                name += str(len([item for item in self.executables if item.startswith(controller.__name__)]))
+
+        self.namespaces[name] = Namespace(controller, name, logging=False, **kwargs)
         return self
 
     def get_metrics(self, pipeline, metrics_var, metrics_name, *args,
@@ -403,7 +415,7 @@ class Research:
 
         print("Research {} is starting...".format(self.name))
 
-        jobs_queue = DynamicQueue(self.branches, self.domain, self.n_iters, self.executables,
+        jobs_queue = DynamicQueue(self.branches, self.domain, self.n_iters, self.executables, self.namespaces,
                                   self.name, self._update_config, self._update_domain, self.n_updates)
         self.logger.eval_kwargs(path=self.name)
         distr = Distributor(self.n_iters, self.workers, self.devices, self.worker_class, self.timeout,
@@ -530,11 +542,13 @@ class Research:
 
 class DynamicQueue:
     """ Queue of tasks that can be changed depending on previous results. """
-    def __init__(self, branches, domain, n_iters, executables, research_path, update_config, update_domain, n_updates):
+    def __init__(self, branches, domain, n_iters, executables, namespaces,
+                 research_path, update_config, update_domain, n_updates):
         self.branches = branches
         self.domain = domain
         self.n_iters = n_iters
         self.executables = executables
+        self.namespaces = namespaces
         self.research_path = research_path
 
         if update_config is not None and update_config['cache'] > 0:
@@ -620,7 +634,7 @@ class DynamicQueue:
                 break
         for i, config in enumerate(configs):
             self.put((self.generated_jobs + i,
-                      Job(self.executables, self.n_iters, config, self.branches, self.research_path)))
+                      Job(self.executables, self.namespaces, self.n_iters, config, self.branches, self.research_path)))
 
         n_tasks = len(configs)
         self.generated_jobs += n_tasks

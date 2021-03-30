@@ -209,6 +209,9 @@ class ConfigAlias:
         config._config = deepcopy(self._config) + deepcopy(other._config)
         return config
 
+    def keys(self):
+        return self.config().keys()
+
 class Domain:
     """ Class for domain of parameters which produce ConfigAlias objects. `Domain` is a result
     of algebraic operations on options. The inner structure of `Domain` is a list of list of Options.

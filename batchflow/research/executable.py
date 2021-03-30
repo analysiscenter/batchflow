@@ -11,6 +11,16 @@ class PipelineStopIteration(StopIteration):
     """ Special pipeline StopIteration exception """
     pass
 
+class Namespace:
+    def __init__(self, namespace, name, logging=False, **kwargs):
+        self.name = name
+        self.namespace = namespace
+        self.kwargs = kwargs
+        self.logging = logging
+
+    def __call__(self, **kwargs):
+        return self.namespace(**kwargs)
+
 class Executable:
     """ Function or pipeline
 
@@ -45,6 +55,7 @@ class Executable:
     def __init__(self):
         self.function = None
         self.pipeline = None
+        self.controller = None
         self.name = None
         self.result = None
         self.execute = None
@@ -134,17 +145,6 @@ class Executable:
         self._clear_result()
         self._process_iterations()
 
-    def add_controller(self, conroller, name, logging=False, **kwargs):
-        self.name = name
-        self.controller = controller
-        self.kwargs = kwargs
-        self.logging = logging
-
-        self.action = {
-            'type': 'controller',
-            'name': name
-        }
-
     def _process_iterations(self):
         if not isinstance(self.execute, list):
             self.execute = [self.execute]
@@ -168,12 +168,12 @@ class Executable:
             else:
                 self.pipeline = self.pipeline << self.dataset
 
-    def get_attributes_of_controllers(self, controllers):
+    def get_attributes_of_controllers(self, namespaces):
         for attr in ['pipeline', 'root_pipeline', 'function']:
             src = getattr(self, attr)
             if isinstance(src, str):
-                controller_name, attr_name = src.split('.')
-                setattr(self, attr, getattr(controllers[controller_name], attr_name))
+                namespace_name, attr_name = src.split('.')
+                setattr(self, attr, getattr(namespaces[namespace_name], attr_name))
 
     def reset(self, what='iter'):
         """ Reset iterators in pipelines """
