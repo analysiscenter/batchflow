@@ -171,14 +171,30 @@ class Results:
         else:
             _configs = self.configs
 
-        if configs is not None:
-            _configs = self._filter_configs(_configs, config=configs, repetition=repetition)
-        elif aliases is not None:
-            _configs = self._filter_configs(_configs, alias=aliases, repetition=repetition)
-        elif repetition is not None:
-            _configs = self._filter_configs(_configs, repetition=repetition)
-        return _configs
+        if configs is None and aliases is None and repetition is None:
+            return _configs
 
+        if repetition is not None:
+            repetition = {'repetition': repetition}
+        else:
+            repetition = dict()
+
+        if configs is None and aliases is None:
+            configs = dict()
+
+        result = {}
+        for experiment_id, supconfig in _configs.items():
+            if configs is not None:
+                configs.update(repetition)
+                _config = supconfig.config()
+                if all(item in _config.items() for item in configs.items()):
+                    result[experiment_id] = supconfig
+            else:
+                _config = supconfig.alias()
+                aliases.update(repetition)
+                if all(item in _config.items() for item in aliases.items()):
+                    result[experiment_id] = supconfig
+        return result
 
     def _load_df(self, names=None, variables=None, iterations=None, repetition=None, experiment_id=None,
                  configs=None, aliases=None, use_alias=True, concat_config=False, drop_columns=True, **kwargs):
@@ -307,33 +323,6 @@ class Results:
             if len(value) < max_len:
                 value.extend([np.nan] * (max_len - len(value)))
         return max_len
-
-    def _filter_configs(self, _configs, config=None, alias=None, repetition=None):
-        result = None
-        if config is None and alias is None and repetition is None:
-            raise ValueError('At least one of parameters config, alias and repetition must be not None')
-
-        if repetition is not None:
-            repetition = {'repetition': repetition}
-        else:
-            repetition = dict()
-
-        if config is None and alias is None:
-            config = dict()
-
-        result = {}
-        for experiment_id, supconfig in _configs.items():
-            if config is not None:
-                config.update(repetition)
-                _config = supconfig.config()
-                if all(item in _config.items() for item in config.items()):
-                    result[experiment_id] = supconfig
-            else:
-                _config = supconfig.alias()
-                alias.update(repetition)
-                if all(item in _config.items() for item in alias.items()):
-                    result[experiment_id] = supconfig
-        return result
 
     def _get_description(self):
         with open(os.path.join(self.path, 'description', 'research.json'), 'r') as file:
