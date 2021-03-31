@@ -3,6 +3,13 @@ import os
 import glob
 import shutil
 
+
+def to_list(value):
+    return value if isinstance(value, list) else [value]
+
+def count_startswith(seq, name):
+    return sum(1 for item in seq if item.startswith(name))
+
 def get_metrics(pipeline, metrics_var, metrics_name, *args, agg='mean', **kwargs):
     """ Function to evaluate metrics """
     metrics_name = metrics_name if isinstance(metrics_name, list) else [metrics_name]

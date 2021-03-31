@@ -22,7 +22,7 @@ from .workers import PipelineWorker
 from .domain import Domain, Option, ConfigAlias
 from .job import Job
 from .logger import BaseLogger, FileLogger, PrintLogger, TelegramLogger
-from .utils import get_metrics
+from .utils import get_metrics, count_startswith
 from .executable import Executable, Namespace
 from .named_expr import RP
 
@@ -111,7 +111,9 @@ class Research:
         All parameters in `root` or `branch` that are defined in domain should be defined
         as `C('parameter_name')`. Corresponding parameter in domain must have the same `'parameter_name'`.
         """
-        name = name or 'pipeline_' + str(len(self.executables) + 1)
+        name = name or 'pipeline'
+        if name in self.executables:
+            name = f'{name}_{count_startswith(self.executables, name)}'
 
         if name in self.executables:
             raise ValueError('Executable unit with name {} already exists'.format(name))
@@ -167,9 +169,9 @@ class Research:
         if name in self.executables:
             raise ValueError('Executable unit with name {} already exists'.format(name))
         if name is None:
-            name = function.__name__
+            name = function if isinstance(function, str) else function.__name__
             if name in self.executables:
-                name += str(len([item for item in self.executables if item.startswith(function.__name__)]))
+                name = f'{name}_{count_startswith(self.executables, name)}'
 
         if on_root and returns is not None:
             raise ValueError("If function is on root, then it mustn't have returns")
@@ -195,8 +197,8 @@ class Research:
             raise ValueError('Namespace with name {} already exists'.format(name))
         if name is None:
             name = namespace.__name__
-            if name in self.executables:
-                name += str(len([item for item in self.executables if item.startswith(namespace.__name__)]))
+            if name in self.namespaces:
+                name = f'{name}_{count_startswith(self.namespaces, name)}'
 
         self.namespaces[name] = Namespace(namespace, name, **kwargs)
         return self
@@ -435,8 +437,14 @@ class Research:
 
         return self
 
-    def attach_git_meta(self, **kwargs):
-        """ Save the information about the current state of project repository. """
+    def attach_env_meta(self, **kwargs):
+        """ Save the information about the current state of project repository.
+
+        Parameters
+        ----------
+        kwargs : dict
+            dict where values are bash commands and keys are names of files to save output of the command.
+        """
         commands = {
             'commit': "git log --name-status HEAD^..HEAD",
             'diff': 'git diff',
@@ -448,9 +456,9 @@ class Research:
             process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
             output, _ = process.communicate()
             result = re.sub('"image/png": ".*?"', '"image/png": "..."', output.decode('utf'))
-            if not os.path.exists(os.path.join(self.name, 'git')):
-                os.makedirs(os.path.join(self.name, 'git'))
-            with open(os.path.join(self.name, 'git', filename + '.txt'), 'w') as file:
+            if not os.path.exists(os.path.join(self.name, 'env')):
+                os.makedirs(os.path.join(self.name, 'env'))
+            with open(os.path.join(self.name, 'env', filename + '.txt'), 'w') as file:
                 print(result, file=file)
 
     def __getstate__(self):
@@ -521,7 +529,7 @@ class Research:
         with open(os.path.join(self.name, 'description', 'alias.json'), 'w') as file:
             # contains representation of the initial domain
             file.write(json.dumps(str(self.domain), default=self._set_default_json))
-        self.attach_git_meta()
+        self.attach_env_meta()
 
     def _set_default_json(self, obj):
         try:

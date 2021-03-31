@@ -8,6 +8,8 @@ import dill
 import numpy as np
 import pandas as pd
 
+from .utils import to_list
+
 class Results:
     """ Class for dealing with results of research
 
@@ -165,7 +167,7 @@ class Results:
             aliases = kwargs if aliases is None else {**aliases, **kwargs}
 
         if experiment_id is not None:
-            _configs = {id: config for id, config in self.configs.items() if id in self._to_list(experiment_id)}
+            _configs = {id: config for id, config in self.configs.items() if id in to_list(experiment_id)}
         else:
             _configs = self.configs
 
@@ -182,9 +184,9 @@ class Results:
                  configs=None, aliases=None, use_alias=True, concat_config=False, drop_columns=True, **kwargs):
         _configs = self.filter_configs(repetition, experiment_id, configs, aliases, **kwargs)
 
-        names = self._to_list(names or self.names)
-        variables = self._to_list(variables or self.variables)
-        iterations = self._to_list(iterations)
+        names = to_list(names or self.names)
+        variables = to_list(variables or self.variables)
+        iterations = to_list(iterations)
 
         all_results = []
         for _experiment_id, config_alias in _configs.items():
@@ -212,8 +214,8 @@ class Results:
                          aliases=None, use_alias=True, concat_config=False, drop_columns=True,
                          format=None, **kwargs):
         _configs = self.filter_configs(repetition, experiment_id, configs, aliases, **kwargs)
-        iterations = self._to_list(iterations or '*')
-        names = self._to_list(names or '*')
+        iterations = to_list(iterations or '*')
+        names = to_list(names or '*')
 
         all_results = []
         for _experiment_id, config_alias in _configs.items():
@@ -260,9 +262,6 @@ class Results:
             with open(filename, 'rb') as f:
                 configs[_experiment_id] = dill.load(f)
         return configs
-
-    def _to_list(self, value):
-        return value if isinstance(value, list) else [value]
 
     def _sort_files(self, files, iterations):
         files = {file: int(file.split('_')[-1]) for file in files}
