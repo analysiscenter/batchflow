@@ -183,17 +183,17 @@ class Results:
             configs = dict()
 
         result = {}
-        for experiment_id, supconfig in _configs.items():
+        for _experiment_id, supconfig in _configs.items():
             if configs is not None:
                 configs.update(repetition)
                 _config = supconfig.config()
                 if all(item in _config.items() for item in configs.items()):
-                    result[experiment_id] = supconfig
+                    result[_experiment_id] = supconfig
             else:
                 _config = supconfig.alias()
                 aliases.update(repetition)
                 if all(item in _config.items() for item in aliases.items()):
-                    result[experiment_id] = supconfig
+                    result[_experiment_id] = supconfig
         return result
 
     def _load_df(self, names=None, variables=None, iterations=None, repetition=None, experiment_id=None,
