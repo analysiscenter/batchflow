@@ -269,11 +269,11 @@ class Executable:
             args = eval_expr(self.args, job=job, iteration=iteration, experiment=experiment, path=self.research_path)
             kwargs = eval_expr(self.kwargs, job=job, iteration=iteration, experiment=experiment,
                                path=self.research_path)
-            result = function(*args, **kwargs)
+            self.output = function(*args, **kwargs)
         else:
-            result = function
-        self.put_result(iteration, result)
-        return result
+            self.output = function
+        self.put_result(iteration, self.output)
+        return self.output
 
     def __call__(self, job, iteration, experiment):
         if self.pipeline is not None:
