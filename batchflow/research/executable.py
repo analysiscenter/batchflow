@@ -82,6 +82,7 @@ class Executable:
         self.action = None
         self.dataset = None
         self.experiment_path = None
+        self.output = None
 
         self.last_update_time = None
 

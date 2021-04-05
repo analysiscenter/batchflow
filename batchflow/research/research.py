@@ -28,7 +28,24 @@ from .named_expr import RP
 
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
-    def __init__(self):
+    def __init__(self, domain=None, n_configs=None, n_reps=1, repeat_each=100):
+        """ Add domain of pipeline parameters. Configs from that domain will be generated
+        and then substitute into pipelines.
+
+        Parameters
+        ----------
+        domain : Domain or Option
+        """
+        if isinstance(domain, Option):
+            self.domain = Domain(domain)
+        elif domain is None:
+            self.domain = Domain(Option('_dummy', [None]))
+        else:
+            self.domain = domain
+        self.n_configs = n_configs
+        self.n_reps = n_reps
+        self.repeat_each = repeat_each
+
         self.executables = OrderedDict()
         self.namespaces = OrderedDict()
         self.loaded = False # TODO: Think about it. Do we need load?
@@ -39,13 +56,8 @@ class Research:
         self.name = 'research'
         self.worker_class = PipelineWorker
         self.devices = None
-        self.domain = None
         self.n_iters = None
         self.timeout = None
-        self.n_configs = None
-        self.n_reps = None
-        self.n_configs = None
-        self.repeat_each = None
         self.logger = FileLogger()
 
         # update parameters for config. None or dict with keys (function, params, cache)
@@ -183,7 +195,7 @@ class Research:
 
         return self
 
-    def add_namespace(self, namespace, name, **kwargs):
+    def init_instance(self, namespace, name, **kwargs):
         """ Add namespace to research. Its attributes can be used as callbles and pipelines.
 
         Parameters
@@ -239,26 +251,6 @@ class Research:
         self.add_callable(get_metrics, *args, name=name, execute=execute, dump=dump, returns=returns,
                           on_root=False, logging=logging, pipeline=RP(pipeline),
                           metrics_var=metrics_var, metrics_name=metrics_name, agg=agg, **kwargs)
-        return self
-
-    def init_domain(self, domain=None, n_configs=None, n_reps=1, repeat_each=100):
-        """ Add domain of pipeline parameters. Configs from that domain will be generated
-        and then substitute into pipelines.
-
-        Parameters
-        ----------
-        domain : Domain or Option
-        """
-        if isinstance(domain, Option):
-            self.domain = Domain(domain)
-        elif domain is None:
-            self.domain = Domain(Option('_dummy', [None]))
-        else:
-            self.domain = domain
-        self.n_configs = n_configs
-        self.n_reps = n_reps
-        self.n_configs = n_configs
-        self.repeat_each = repeat_each
         return self
 
     def update_domain(self, function=None, each='last', n_updates=1, **kwargs):
