@@ -570,8 +570,8 @@ class I(PipelineNamedExpression):
         """ Return current or maximum iteration number or their ratio """
         name, pipeline, kwargs = self._get_params(**kwargs)
 
-        current_iter = kwargs['batch'].iteration or pipeline._iter_params.get('_n_iters')
-        total = pipeline._iter_params.get('_total')
+        current_iter = kwargs['batch'].iteration or pipeline.iter_params.get('_n_iters')
+        total = pipeline.iter_params.get('_total')
 
         if 'current'.startswith(name):
             return current_iter

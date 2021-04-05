@@ -3,15 +3,12 @@
 import sys
 import time
 from functools import partial
-import traceback
 import threading
-import concurrent.futures as cf
 import asyncio
 import logging
-import warnings
-from cProfile import Profile
 from pstats import Stats
-import queue as q
+from cProfile import Profile
+
 import numpy as np
 try:
     import pandas as pd
@@ -22,7 +19,7 @@ from .base import Baseset
 from .config import Config
 from .batch import Batch
 from .decorators import deprecated
-from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
+from .exceptions import SkipBatchException, StopPipeline
 from .named_expr import NamedExpression, V, eval_expr
 from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
@@ -32,7 +29,7 @@ from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
 
 from ._const import *       # pylint:disable=wildcard-import
 from .utils import save_data_to
-from .notifier import Notifier
+from .pipeline_executor import PipelineExecutor
 
 
 METRICS = dict(
@@ -98,23 +95,21 @@ class Pipeline:
 
         self._dataset = None
         self.config = Config(self.config)
-        self._stop_flag = False
-        self._executor = None
-        self._service_executor = None
-        self._prefetch_count = None
-        self._prefetch_queue = None
-        self._batch_queue = None
-        self._batch_generator = None
-        self._rest_batch = None
-        self._iter_params = None
-        self._not_init_vars = True
 
-        self.notifier = None
-        self._profile = None
+        self.iter_params = None
+        self._rest_batch = None
+        self.variables_initialised = False
+
         self._profiler = None
         self.profile_info = None
-        self.elapsed_time = 0.0
         self._profile_info_lock = threading.Lock()
+        self.reset('iter')
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['_profile_info_lock'] = None
+        state['_profiler'] = None
+        return state
 
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
@@ -228,6 +223,27 @@ class Pipeline:
         return name if add_index is False else '{} #{}'.format(name, idx)
 
     def add_namespace(self, *namespaces):
+        """ Add namespace to call pipeline actions from
+
+        Parameters
+        ----------
+        namespace : str or module
+            a module name as a string or a module reference
+
+        Examples
+        --------
+
+        Add a standard time module and numpy::
+
+            dataset.p.add_namespace('time', numpy)
+
+        Notes
+        -----
+        The current module and dataset module are included by default.
+
+        Passing a namespace as a string is necessary for multiprocess executions,
+        e.g. when running a pipeline with prefetch and mpc target.
+        """
         self._namespaces.extend(namespaces)
         return self
 
@@ -239,7 +255,11 @@ class Pipeline:
                 common_namespaces.append(self._dataset)
         else:
             common_namespaces.append(self.dataset)
-        return common_namespaces + self._namespaces
+
+        namespaces = [sys.modules[namespace] if isinstance(namespace, str) else namespace \
+                      for namespace in self._namespaces]
+
+        return common_namespaces + namespaces
 
     def is_method_from_ns(self, name):
         return any(hasattr(namespace, name) for namespace in self._all_namespaces)
@@ -698,14 +718,14 @@ class Pipeline:
         `call` is convenient with lambdas::
 
             pipeline
-                .call(lambda batch: [image.shape[1] for image in batch.images], save_to=V('image_widths'))
+                .call(lambda : (image.shape[1] for image in batch.images), save_to=V('image_widths'))
         """
         return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to), **kwargs)
 
     def _exec_call(self, batch, action):
         fn = self._eval_expr(action['fn'], batch)
         if callable(fn):
-            output = fn(batch, *action['args'], **action['kwargs'])
+            output = fn(*action['args'], **action['kwargs'])
         else:
             raise TypeError("Callable is expected, but got {}".format(type(fn)))
         if action['save_to'] is not None:
@@ -741,14 +761,14 @@ class Pipeline:
             raise AttributeError("Method '%s' has not been found in the %s class" % (name, type(batch).__name__))
         return action_method, action_spec
 
-    def _exec_one_action(self, batch, action, args, kwargs):
+    def _exec_one_action(self, batch, action, args, kwargs, iteration=None):
         if self._needs_exec(batch, action):
             repeat = self._eval_expr(action['repeat'], batch=batch) or 1
             for _ in range(repeat):
-                batch.pipeline = self
                 action_method, _ = self._get_action_method(batch, action['name'])
                 batch = action_method(*args, **kwargs)
                 batch.pipeline = self
+                batch.iteration = iteration
         return batch
 
     def _exec_nested_pipeline(self, batch, action):
@@ -760,7 +780,7 @@ class Pipeline:
 
     def _add_profile_info(self, batch, action, exec_time, **kwargs):
         name = self.get_action_name(action, add_index=True)
-        iter_no = self._iter_params['_n_iters']
+        iter_no = batch.iteration
 
         start_time = time.time()
         stats = Stats(self._profiler)
@@ -777,7 +797,6 @@ class Pipeline:
                     'batch_id': id(batch), **kwargs
                 }
                 values.append(row_dict)
-
 
         multiindex = pd.MultiIndex.from_tuples(indices, names=['action', 'id'])
         df = pd.DataFrame(values, index=multiindex,
@@ -847,12 +866,15 @@ class Pipeline:
         return result
 
 
-    def _exec_all_actions(self, batch, actions=None):
+    def _exec_all_actions(self, batch, actions=None, iteration=None):
         join_batches = None
         actions = actions or self._actions
 
+        batch.pipeline = self
+        batch.iteration = iteration
+
         for action in actions:
-            if self._profile:
+            if self._profiler:
                 start_time = time.time()
                 self._profiler.enable()
 
@@ -862,7 +884,7 @@ class Pipeline:
             if 'kwargs' in action:
                 _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch)
 
-            if self._profile:
+            if self._profiler:
                 eval_expr_time = time.time() - start_time
 
             if _action.get('#dont_run', False):
@@ -896,14 +918,13 @@ class Pipeline:
                     _action_args = tuple([tuple(join_batches), *_action['args']])
                     join_batches = None
 
-                batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
+                batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'], iteration=iteration)
 
-            if self._profile:
+            if self._profiler:
                 self._profiler.disable()
                 exec_time = time.time() - start_time
                 self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time,
                                        eval_expr_time=eval_expr_time)
-
 
         return batch
 
@@ -913,13 +934,20 @@ class Pipeline:
         proba = self._eval_expr(action['proba'], batch=batch)
         return np.random.binomial(1, proba) == 1
 
-    def execute_for(self, batch, new_loop=False):
+    def execute_for(self, batch, notifier=None, iteration=None, new_loop=False):
         """ Run a pipeline for one batch
 
         Parameters
         ----------
         batch
             an input batch
+
+        notifier
+            a notifier instance
+
+        iteration : int
+            a pipeline iteration this batch is used at
+
         new_loop : bool
             whether to create a new :class:`async loop <asyncio.BaseEventLoop>`.
 
@@ -929,9 +957,9 @@ class Pipeline:
         """
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
-        batch.pipeline = self
-        batch_res = self._exec_all_actions(batch)
-        batch_res.pipeline = self
+        batch_res = self._exec_all_actions(batch, iteration=iteration)
+        if notifier:
+            notifier.update(pipeline=self, batch=batch_res)
         return batch_res
 
     def _eval_expr(self, expr, batch=None):
@@ -1329,67 +1357,14 @@ class Pipeline:
         return self._add_action(MERGE_ID, _args=dict(pipelines=pipelines, mode='n', fn=fn,
                                                      components=components, batch_class=batch_class))
 
-    def rebatch(self, batch_size, fn=None, components=None, batch_class=None):
+    def rebatch(self, batch_size, merge=None, components=None, batch_class=None):
         """ Set the output batch size """
         # pylint:disable=protected-access
         new_p = type(self)(self.dataset)
-        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn,
+        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, merge=merge,
                                                         components=components, batch_class=batch_class))
 
-    def _put_batches_into_queue(self, gen_batch):
-        iteration = 1
-        while not self._stop_flag:
-            self._prefetch_count.put(1, block=True)
-            try:
-                batch = next(gen_batch)
-                batch.iteration = iteration
-            except StopIteration:
-                break
-            else:
-                future = self._executor.submit(self.execute_for, batch, new_loop=True)
-                self._prefetch_queue.put(future, block=True)
-                iteration = iteration + 1
-        self._prefetch_queue.put(None, block=True)
-
-    def _run_batches_from_queue(self, notifier):
-        skip_batch = False
-        while not self._stop_flag:
-            future = self._prefetch_queue.get(block=True)
-            if future is None:
-                self._prefetch_queue.task_done()
-                self._batch_queue.put(None)
-                break
-
-            try:
-                batch = future.result()
-                notifier.update(pipeline=self, batch=batch)
-            except SkipBatchException:
-                skip_batch = True
-            except StopPipeline:
-                self._prefetch_queue.task_done()
-                self._batch_queue.put(None)
-                break
-            except Exception:   # pylint: disable=broad-except
-                exc = future.exception()
-                print("Exception in a thread:", exc)
-                traceback.print_tb(exc.__traceback__)
-            finally:
-                if not skip_batch:
-                    self._batch_queue.put(batch, block=True)
-                    skip_batch = False
-                self._prefetch_queue.task_done()
-
-    def _clear_queue(self, queue):
-        if queue is not None:
-            while not queue.empty():
-                queue.get(block=True)
-                queue.task_done()
-
-    def _stop_executor(self, executor):
-        if executor is not None:
-            executor.shutdown()
-
-    def reset(self, *args):
+    def reset(self, *args, profile=False):
         """ Clear all iteration metadata in order to start iterating from scratch
 
         Parameters
@@ -1426,29 +1401,17 @@ class Pipeline:
             what = [what]
 
         if 'iter' in what:
-            self._stop_flag = True
+            self.iter_params = Baseset.get_default_iter_params()
 
-            self._clear_queue(self._prefetch_queue)
-            self._clear_queue(self._batch_queue)
-            self._clear_queue(self._prefetch_count)
-
-            self._stop_executor(self._executor)
-            self._stop_executor(self._service_executor)
-
-            self._executor = None
-            self._service_executor = None
-            self._prefetch_count = None
-            self._prefetch_queue = None
-            self._batch_queue = None
-            self._rest_batch = None
-            self._batch_generator = None
-            self._iter_params = Baseset.get_default_iter_params()
-
-        if 'vars' in what or 'variables' in what:
+        if 'vars' in what or 'variables' in what or self.variables_initialised:
+            # initialise all variables before the very first run of this pipeline
             self._init_all_variables()
+            self.variables_initialised = True
 
         if 'models' in what:
             self.models.reset()
+
+        self._profiler = Profile() if profile else None
 
 
     def gen_rebatch(self, *args, **kwargs):
@@ -1479,21 +1442,22 @@ class Pipeline:
                 else:
                     batches.append(new_batch)
                     cur_len += len(new_batch)
+
             if len(batches) == 0:
                 break
 
-            if _action['fn'] is None:
+            if _action['merge'] is None:
                 batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'],
                                                            components=_action['components'],
                                                            batch_class=_action['batch_class'])
             else:
-                batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'],
-                                                        components=_action['components'],
-                                                        batch_class=_action['batch_class'])
+                batch, self._rest_batch = _action['merge'](batches, batch_size=_action['batch_size'],
+                                                           components=_action['components'],
+                                                           batch_class=_action['batch_class'])
             yield batch
 
 
-    def gen_batch(self, *args, iter_params=None, reset='iter', profile=False, **kwargs):
+    def gen_batch(self, *args, **kwargs):
         """ Generate batches
 
         Parameters
@@ -1565,109 +1529,8 @@ class Pipeline:
             args, kwargs = self._lazy_run
 
         self._dataset = self._eval_expr(self.dataset)
-        args_value = self._eval_expr(args)
-        kwargs_value = self._eval_expr(kwargs)
-        self.reset(reset)
-        self._iter_params = iter_params or self._iter_params or Baseset.get_default_iter_params()
-        self._profile = profile
-        if profile:
-            self._profiler = Profile()
 
-        return self._gen_batch(*args_value, iter_params=self._iter_params, **kwargs_value)
-
-
-    def _gen_batch(self, *args, **kwargs):
-        """ Generate batches """
-        start_time = time.time()
-        target = kwargs.pop('target', 'threads')
-        prefetch = kwargs.pop('prefetch', 0)
-        on_iter = kwargs.pop('on_iter', None)
-        if 'bar' in kwargs:
-            warnings.warn('`bar` argument is deprecated and renamed to `notifier`', DeprecationWarning, stacklevel=2)
-        notifier = kwargs.pop('notifier', kwargs.pop('bar', None))
-        total = kwargs.pop('total', None)
-
-        if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
-            batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
-            prefetch = 0
-        else:
-            batch_generator = self._dataset.gen_batch(*args, **kwargs)
-
-        if self._not_init_vars:
-            self._init_all_variables()
-            self._not_init_vars = False
-
-        batch_size = args[0] if len(args) != 0 else kwargs.get('batch_size')
-        n_iters = kwargs.get('n_iters')
-        n_epochs = kwargs.get('n_epochs')
-        drop_last = kwargs.get('drop_last')
-
-        if not isinstance(notifier, Notifier):
-            notifier = Notifier(**(notifier if isinstance(notifier, dict) else {'bar': notifier}),
-                                total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                                drop_last=drop_last, length=len(self._dataset.index))
-        elif notifier.total is None:
-            notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                                  drop_last=drop_last, length=len(self._dataset.index))
-
-        if self.before:
-            self.before.run()
-
-        if prefetch > 0:
-            # pool cannot have more than 63 workers
-            prefetch = min(prefetch, 62)
-
-            if target in ['threads', 't']:
-                self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
-            elif target in ['mpc', 'm']:
-                self._executor = cf.ProcessPoolExecutor(max_workers=prefetch + 1)
-            else:
-                raise ValueError("target should be one of ['threads', 'mpc']")
-
-            self._stop_flag = False
-            self._prefetch_count = q.Queue(maxsize=prefetch + 1)
-            self._prefetch_queue = q.Queue(maxsize=prefetch)
-            self._batch_queue = q.Queue(maxsize=1)
-            self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
-            self._service_executor.submit(self._put_batches_into_queue, batch_generator)
-            self._service_executor.submit(self._run_batches_from_queue, notifier)
-
-            while not self._stop_flag:
-                batch_res = self._batch_queue.get(block=True)
-                self._batch_queue.task_done()
-                if batch_res is not None:
-                    yield batch_res
-                    self._prefetch_count.get(block=True)
-                    self._prefetch_count.task_done()
-                    if callable(on_iter):
-                        on_iter(batch_res)
-                else:
-                    self._stop_flag = True
-        else:
-            is_empty = True
-            for batch in batch_generator:
-                try:
-                    batch_res = self.execute_for(batch)
-                    notifier.update(pipeline=self, batch=batch_res)
-                except SkipBatchException:
-                    pass
-                except StopPipeline:
-                    break
-                else:
-                    is_empty = False
-                    yield batch_res
-                    if callable(on_iter):
-                        on_iter(batch_res)
-            if is_empty:
-                warnings.warn("Batch generator is empty. Use pipeline.reset('iter') to restart iteration.",
-                              EmptyBatchSequence, stacklevel=3)
-
-        notifier.close()
-        self.notifier = notifier
-
-        if self.after:
-            self.after.run()
-        self.elapsed_time += time.time() - start_time
+        return PipelineExecutor(self).gen_batch(*args, dataset=self._dataset, **kwargs)
 
 
     def create_batch(self, batch_index, *args, **kwargs):
@@ -1683,7 +1546,6 @@ class Pipeline:
         --------
         :meth:`~.Pipeline.gen_batch`
         """
-        start_time = time.time()
         if len(args) == 0 and len(kwargs) == 0:
             if self._lazy_run is None:
                 raise RuntimeError("next_batch without arguments requires a lazy run at the end of the pipeline")
@@ -1707,7 +1569,7 @@ class Pipeline:
                     batch_res = self.create_batch(batch_index, **_kwargs)
                 except SkipBatchException:
                     pass
-        self.elapsed_time += time.time() - start_time
+
         return batch_res
 
     def run(self, *args, **kwargs):
@@ -1718,23 +1580,18 @@ class Pipeline:
         :meth:`~.Pipeline.gen_batch`
         """
         if kwargs.pop('lazy', False):
+            # if lazy is passed, then store params for later execution
             self._lazy_run = args, kwargs
-        else:
-            if self._lazy_run:
-                _args, _kwargs = self._lazy_run
-                args = _args if len(args) == 0 else args
-                kwargs = {**_kwargs, **kwargs}
-            if 'n_epochs' not in kwargs and 'n_iters' not in kwargs:
-                kwargs['n_epochs'] = 1
-            if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
-                warnings.warn('Pipeline will never stop as n_epochs=None')
+            return self
 
-            self._batch_generator = self.gen_batch(*args, **kwargs)
-            for _ in self._batch_generator:
-                pass
-            self._batch_generator = None
+        if self._lazy_run:
+            # if lazy args were set, then use them now
+            _args, _kwargs = self._lazy_run
+            # but update args (usually batch_size)
+            args = _args if len(args) == 0 else args
+            kwargs = {**_kwargs, **kwargs}
 
-        return self
+        return PipelineExecutor(self).run(*args, **kwargs)
 
     def run_now(self, *args, **kwargs):
         """ Execute pipeline immediately """

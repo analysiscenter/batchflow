@@ -146,41 +146,25 @@ class Batch(metaclass=MethodsTransformingMeta):
 
     @pipeline.setter
     def pipeline(self, value):
-        """ Store pipeline in a thread-local storage """
+        """ Store the pipeline in a thread-local storage """
         self._local.pipeline = value
 
     def __copy__(self):
         dump_batch = dill.dumps(self)
-
         restored_batch = dill.loads(dump_batch)
         return restored_batch
 
     def deepcopy(self):
-        """ Return a deep copy of the batch.
-
-        Constructs a new ``Batch`` instance and then recursively copies all
-        the objects found in the original batch, except the ``pipeline``,
-        which remains unchanged.
-
-        Returns
-        -------
-        Batch
-        """
-        return self.copy()
+        """ Return a deep copy of the batch. """
+        return self.__copy__()
 
     @classmethod
-    def from_data(cls, index, data):
+    def from_data(cls, index=None, data=None):
         """ Create a batch from data given """
         # this is roughly equivalent to self.data = data
         if index is None:
             index = np.arange(len(data))
         return cls(index, preloaded=data)
-
-    @classmethod
-    def from_batch(cls, batch):
-        """ Create batch from another batch """
-        return cls(batch.index, dataset=batch.dataset, pipeline=batch.pipeline, preloaded=batch.data,
-                   **batch.get_attrs())
 
     @classmethod
     def merge(cls, batches, batch_size=None, components=None, batch_class=None):
@@ -390,14 +374,13 @@ class Batch(metaclass=MethodsTransformingMeta):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state.pop('_data_named')
         state['_local'] = state['_local'] is not None
         state['_preloaded_lock'] = True
         return state
 
     def __setstate__(self, state):
         state['_preloaded_lock'] = threading.Lock() if state['_preloaded_lock'] else None
-        state['_local'] = threading.Lock() if state['_local'] else None
+        state['_local'] = threading.local() if state['_local'] else None
 
         for k, v in state.items():
             # this warrants that all hidden objects are reconstructed upon unpickling
@@ -440,10 +423,6 @@ class Batch(metaclass=MethodsTransformingMeta):
         """
         _ = self.data, args, kwargs
         return [[]]
-
-    def get_model_by_name(self, model_name):
-        """ Return a model specification given its name """
-        return self.pipeline.get_model_by_name(model_name, batch=self)
 
     def get_errors(self, all_res):
         """ Return a list of errors from a parallel action """
