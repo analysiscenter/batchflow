@@ -6,7 +6,6 @@ import queue as q
 
 from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
 from .notifier import Notifier
-from ._const import *       # pylint:disable=wildcard-import
 
 warnings.filterwarnings("always", category=RuntimeWarning, module=__name__)
 warnings.filterwarnings("always", category=EmptyBatchSequence)
