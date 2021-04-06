@@ -17,6 +17,7 @@ PRINT_ID = '#_print'
 CALL_FROM_NS_ID = '#_from_ns'
 ACQUIRE_LOCK_ID = '#_acquire_lock'
 RELEASE_LOCK_ID = '#_release_lock'
+DISCARD_BATCH_ID = '#_discard_batch'
 
 ACTIONS = {
     IMPORT_MODEL_ID: '_exec_import_model',

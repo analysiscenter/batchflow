@@ -10,6 +10,7 @@ from .notifier import Notifier
 warnings.filterwarnings("always", category=RuntimeWarning, module=__name__)
 warnings.filterwarnings("always", category=EmptyBatchSequence)
 
+END_PIPELINE = -1
 
 class PipelineExecutor:
     """ Pipeline executor"""
@@ -72,7 +73,7 @@ class PipelineExecutor:
             future = self._prefetch_queue.get(block=True)
             if future is None:
                 self._prefetch_queue.task_done()
-                self._batch_queue.put(None)
+                self._batch_queue.put(END_PIPELINE)
                 break
 
             try:
@@ -80,7 +81,7 @@ class PipelineExecutor:
             except SkipBatchException:
                 pass
             except StopPipeline:
-                self._batch_queue.put(None)
+                self._batch_queue.put(END_PIPELINE)
                 break
             except Exception:   # pylint: disable=broad-except
                 exc = future.exception()
@@ -229,11 +230,12 @@ class PipelineExecutor:
             while not self._stop_flag:
                 batch_res = self._batch_queue.get(block=True)
                 self._batch_queue.task_done()
-                if batch_res is None:
+                if batch_res == END_PIPELINE:
                     self._stop_flag = True
                 else:
                     # the batch has been created in another thread, so we need to set pipeline
-                    batch_res.pipeline = self.pipeline
+                    if batch_res is not None:
+                        batch_res.pipeline = self.pipeline
                     notifier.update(pipeline=self, batch=batch_res)
                     yield batch_res
                     self._prefetch_count.get(block=True)
