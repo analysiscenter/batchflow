@@ -1,4 +1,5 @@
 """ Contains pipeline executor class """
+import os
 import warnings
 import traceback
 import concurrent.futures as cf
@@ -68,7 +69,7 @@ class PipelineExecutor:
                 iteration = iteration + 1
         self._prefetch_queue.put(END_PIPELINE, block=True)
 
-    def _run_batches_from_queue(self):
+    def _run_batches_from_queue(self, ignore_exceptions):
         while not self._stop_flag:
             future = self._prefetch_queue.get(block=True)
 
@@ -87,13 +88,17 @@ class PipelineExecutor:
                 exc = future.exception()
                 print("Exception:", exc)
                 traceback.print_tb(exc.__traceback__)
-                batch = None
+                if ignore_exceptions:
+                    batch = None
+                else:
+                    batch = END_PIPELINE
             finally:
                 self._prefetch_queue.task_done()
                 self._batch_queue.put(batch, block=True)
 
 
-    def gen_batch(self, *args, dataset=None, rebatch=False, reset='iter', profile=False, **kwargs):
+    def gen_batch(self, *args, dataset=None, rebatch=False, reset='iter', profile=False,
+                  ignore_exceptions=False, **kwargs):
         """ Generate batches
 
         Parameters
@@ -132,8 +137,9 @@ class PipelineExecutor:
             Configuration of displayed progress notifiers (like bar, etc), if any.
             If str or dict, then parameters of :class:`~.Notifier` initialization.
 
-        prefetch : int
+        prefetch : int or bool
             a number of batches to process in advance (default=0)
+            when True, `os.cpu_count() * 4` is used
 
         target : 'threads' or 'mpc'
             batch parallelization engine used for prefetching (default='threads').
@@ -145,6 +151,11 @@ class PipelineExecutor:
             - 'iter' - restart the batch iterator
             - 'variables' - re-initialize all pipeline variables
             - 'models' - reset all models
+
+        ignore_exceptions : bool
+            whether to continue the pipeline when an exception for any batch is caught (default=True).
+            When exceptions are not ignored while prefetching, the pipeline is stopped when the first one is caught,
+            however, all prefeteched batches will still be processed in the background.
 
         dataset
             a dataset to get batches from
@@ -171,6 +182,8 @@ class PipelineExecutor:
             kwargs.setdefault('n_epochs', 1)
         target = kwargs.pop('target', 'threads')
         prefetch = kwargs.pop('prefetch', 0)
+        if prefetch is True:
+            prefetch = os.cpu_count() * 4
 
         if 'bar' in kwargs:
             warnings.warn('`bar` argument is deprecated and renamed to `notifier`', DeprecationWarning, stacklevel=2)
@@ -222,7 +235,7 @@ class PipelineExecutor:
             # this thread submits batches (waits for count queue and puts into prefetch queue)
             self._service_executor.submit(self._put_batches_into_queue, batch_generator)
             # this thread gets processed batches (waits for futures to be complete and puts into batch queue)
-            self._service_executor.submit(self._run_batches_from_queue)
+            self._service_executor.submit(self._run_batches_from_queue, ignore_exceptions)
 
             # main thread gets ready batches and yield them one by one (releasing count queue after each one)
             while not self._stop_flag:
@@ -249,6 +262,12 @@ class PipelineExecutor:
                     pass
                 except StopPipeline:
                     break
+                except Exception as exc:  # pylint:disable=broad-except
+                    if ignore_exceptions:
+                        print("Exception:", exc)
+                        traceback.print_tb(exc.__traceback__)
+                    else:
+                        raise
                 else:
                     is_empty = False
                     yield batch_res
