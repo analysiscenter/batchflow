@@ -9,7 +9,7 @@ from .notifier import Notifier
 from ._const import *       # pylint:disable=wildcard-import
 
 warnings.filterwarnings("always", category=RuntimeWarning, module=__name__)
-warnings.filterwarnings("always", category=EmptyBatchSequence, module=__name__)
+warnings.filterwarnings("always", category=EmptyBatchSequence)
 
 
 class PipelineExecutor:
@@ -60,6 +60,7 @@ class PipelineExecutor:
     def _put_batches_into_queue(self, gen_batch):
         iteration = 1
         while not self._stop_flag:
+            # this will block if there are too many batches are prefetched
             self._prefetch_count.put(1, block=True)
             try:
                 batch = next(gen_batch)
@@ -207,12 +208,17 @@ class PipelineExecutor:
                 raise ValueError("target should be one of ['threads', 'mpc']")
 
             self._stop_flag = False
-            # count queue warrant that exactly prefetch+1 num batches will be submitted to executor
+            # count queue warrants that exactly prefetch+1 num batches will be submitted to executor
+            # it serves as a gate
             self._prefetch_count = q.Queue(maxsize=prefetch+1)
             # prefetch queue holds futures of batches being processed now
-            self._prefetch_queue = q.Queue(maxsize=prefetch+1)
+            # most of the time exactly prefetch+1 items will be in the queue
+            self._prefetch_queue = q.Queue()
             # batch queue holds batches ready to be yielded
-            self._batch_queue = q.Queue(maxsize=prefetch+1)
+            self._batch_queue = q.Queue()
+            # due to count queue both prefetch and batch queue cannot contain more than prefetch+1 items
+
+            # service executor runs batch generation and batch processing threads
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
             # this thread submits batches (waits for count queue and puts into prefetch queue)
             self._service_executor.submit(self._put_batches_into_queue, batch_generator)
@@ -223,12 +229,14 @@ class PipelineExecutor:
             while not self._stop_flag:
                 batch_res = self._batch_queue.get(block=True)
                 self._batch_queue.task_done()
-                if batch_res is not None:
+                if batch_res is None:
+                    self._stop_flag = True
+                else:
+                    # the batch has been created in another thread, so we need to set pipeline
+                    batch_res.pipeline = self.pipeline
                     yield batch_res
                     self._prefetch_count.get(block=True)
                     self._prefetch_count.task_done()
-                else:
-                    self._stop_flag = True
 
         else:
             is_empty = True
