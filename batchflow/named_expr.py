@@ -571,17 +571,18 @@ class I(PipelineNamedExpression):
         name, pipeline, kwargs = self._get_params(**kwargs)
 
         current_iter = kwargs['batch'].iteration or pipeline.iter_params.get('_n_iters')
-        total = pipeline.iter_params.get('_total')
 
         if 'current'.startswith(name):
             return current_iter
+
+        total = pipeline.iter_params.get('_total') # if pipeline.iter_params else None
+        if total is None:
+            raise ValueError('Total number of iterations is not defined!')
 
         if 'maximum'.startswith(name) or 'total'.startswith(name):
             return total
 
         if 'ratio'.startswith(name):
-            if total is None:
-                raise ValueError('Total number of iterations is not defined!')
             ratio = current_iter / total
             return ratio
 
