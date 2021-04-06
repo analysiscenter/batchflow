@@ -19,7 +19,7 @@ from .base import Baseset
 from .config import Config
 from .batch import Batch
 from .decorators import deprecated
-from .exceptions import SkipBatchException, StopPipeline
+from .exceptions import StopPipeline
 from .named_expr import NamedExpression, V, eval_expr
 from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
@@ -96,6 +96,7 @@ class Pipeline:
         self._dataset = None
         self.config = Config(self.config)
 
+        self._batch_generator = None
         self.iter_params = None
         self._rest_batch = None
         self.variables_initialised = False
@@ -103,7 +104,6 @@ class Pipeline:
         self._profiler = None
         self.profile_info = None
         self._profile_info_lock = threading.Lock()
-        self.reset('iter')
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -1394,6 +1394,7 @@ class Pipeline:
             if what[0] is None or what[0] is False:
                 what = []
             elif what[0] is True:
+                # reset(True) is reset('iter')
                 what = 'iter'
             elif what[0] == 'all':
                 what = ['iter', 'variables', 'models']
@@ -1402,6 +1403,7 @@ class Pipeline:
 
         if 'iter' in what:
             self.iter_params = Baseset.get_default_iter_params()
+            self._batch_generator = None
 
         if 'vars' in what or 'variables' in what or self.variables_initialised:
             # initialise all variables before the very first run of this pipeline
@@ -1529,8 +1531,10 @@ class Pipeline:
             args, kwargs = self._lazy_run
 
         self._dataset = self._eval_expr(self.dataset)
+        args_value = self._eval_expr(args)
+        kwargs_value = self._eval_expr(kwargs)
 
-        return PipelineExecutor(self).gen_batch(*args, dataset=self._dataset, **kwargs)
+        return PipelineExecutor(self).gen_batch(*args_value, dataset=self._dataset, **kwargs_value)
 
 
     def create_batch(self, batch_index, *args, **kwargs):
@@ -1550,27 +1554,13 @@ class Pipeline:
             if self._lazy_run is None:
                 raise RuntimeError("next_batch without arguments requires a lazy run at the end of the pipeline")
             args, kwargs = self._lazy_run
-            batch_res = self.next_batch(*args, **kwargs)
-        elif True or kwargs.get('prefetch', 0) > 0: # FIXME
-            if self._batch_generator is None:
-                self._lazy_run = args, kwargs
-                self._batch_generator = self.gen_batch(*args, **kwargs)
-            batch_res = next(self._batch_generator)
+            batch = self.next_batch(*args, **kwargs)
         else:
-            _kwargs = kwargs.copy()
-            # target is not used here, but people tend to forget removing it when set prefetch to 0
-            _kwargs.pop('target')
-            # prefetch could be 0
-            _kwargs.pop('prefetch')
-            batch_res = None
-            while batch_res is None:
-                batch_index = self.index.next_batch(*args, **_kwargs)
-                try:
-                    batch_res = self.create_batch(batch_index, **_kwargs)
-                except SkipBatchException:
-                    pass
+            if self._batch_generator is None:
+                self._batch_generator = self.gen_batch(*args, reset=None, **kwargs)
+            batch = next(self._batch_generator)
 
-        return batch_res
+        return batch
 
     def run(self, *args, **kwargs):
         """ Execute all lazy actions for each batch in the dataset
