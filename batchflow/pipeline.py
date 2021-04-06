@@ -109,7 +109,13 @@ class Pipeline:
         state = self.__dict__.copy()
         state['_profile_info_lock'] = None
         state['_profiler'] = None
+        state['_batch_generator'] = None
         return state
+
+    def __setstate__(self, state):
+        state['_profile_info_lock'] = threading.Lock()
+        for k, v in state.items():
+            setattr(self, k, v)
 
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
@@ -1458,6 +1464,25 @@ class Pipeline:
             yield batch
 
 
+    def _eval_run_args(self, args, kwargs):
+        if len(args) == 0 and len(kwargs) == 0:
+            if self._lazy_run is None:
+                raise RuntimeError("a pipeline run without arguments requires a lazy run at the end of the pipeline")
+            args, kwargs = self._lazy_run
+
+        if self._lazy_run:
+            # if lazy args were set, then use them now
+            _args, _kwargs = self._lazy_run
+            # but update args (usually batch_size)
+            args = _args if len(args) == 0 else args
+            kwargs = {**_kwargs, **kwargs}
+
+        self._dataset = self._eval_expr(self.dataset)
+        args_value = self._eval_expr(args)
+        kwargs_value = self._eval_expr(kwargs)
+
+        return args_value, kwargs_value
+
     def gen_batch(self, *args, **kwargs):
         """ Generate batches
 
@@ -1524,15 +1549,7 @@ class Pipeline:
             for batch in pipeline.gen_batch(C('batch_size'), shuffle=True, n_epochs=2, drop_last=True):
                 # do whatever you want
         """
-        if len(args) == 0 and len(kwargs) == 0:
-            if self._lazy_run is None:
-                raise RuntimeError("gen_batch without arguments requires a lazy run at the end of the pipeline")
-            args, kwargs = self._lazy_run
-
-        self._dataset = self._eval_expr(self.dataset)
-        args_value = self._eval_expr(args)
-        kwargs_value = self._eval_expr(kwargs)
-
+        args_value, kwargs_value = self._eval_run_args(args, kwargs)
         rebatch = len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID
 
         return PipelineExecutor(self).gen_batch(*args_value, dataset=self._dataset, rebatch=rebatch, **kwargs_value)
@@ -1575,14 +1592,9 @@ class Pipeline:
             self._lazy_run = args, kwargs
             return self
 
-        if self._lazy_run:
-            # if lazy args were set, then use them now
-            _args, _kwargs = self._lazy_run
-            # but update args (usually batch_size)
-            args = _args if len(args) == 0 else args
-            kwargs = {**_kwargs, **kwargs}
+        args_value, kwargs_value = self._eval_run_args(args, kwargs)
 
-        return PipelineExecutor(self).run(*args, **kwargs)
+        return PipelineExecutor(self).run(*args_value, **kwargs_value)
 
     def run_now(self, *args, **kwargs):
         """ Execute pipeline immediately """
