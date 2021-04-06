@@ -474,6 +474,15 @@ class Pipeline:
     def _exec_release_lock(self, batch, action):
         batch.pipeline.v(action['lock_name']).release(**action['kwargs'])
 
+    def discard_batch(self):
+        """ Discard the batch
+        (helpful in multiprocessing prefetching to prevent passing the batch back)
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+        """
+        return self._add_action(DISCARD_BATCH_ID)
 
     def init_variable(self, name, default=None, lock=True, **kwargs):
         """ Create a variable if not exists.
@@ -773,8 +782,9 @@ class Pipeline:
             for _ in range(repeat):
                 action_method, _ = self._get_action_method(batch, action['name'])
                 batch = action_method(*args, **kwargs)
-                batch.pipeline = self
-                batch.iteration = iteration
+                if batch is not None:
+                    batch.pipeline = self
+                    batch.iteration = iteration
         return batch
 
     def _exec_nested_pipeline(self, batch, action):
@@ -914,6 +924,8 @@ class Pipeline:
                 pass
             elif _action['name'] == PIPELINE_ID:
                 batch = self._exec_nested_pipeline(batch, _action)
+            elif _action['name'] == DISCARD_BATCH_ID:
+                batch = None
             elif _action['name'] in ACTIONS:
                 action_fn = getattr(self, ACTIONS[_action['name']])
                 action_fn(batch, _action)
