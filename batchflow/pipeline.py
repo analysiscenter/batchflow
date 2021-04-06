@@ -97,7 +97,7 @@ class Pipeline:
         self.config = Config(self.config)
 
         self._batch_generator = None
-        self.iter_params = None
+        self.iter_params = Baseset.get_default_iter_params()
         self._rest_batch = None
         self.variables_initialised = False
 
