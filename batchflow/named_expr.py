@@ -576,11 +576,12 @@ class I(PipelineNamedExpression):
             return current_iter
 
         total = pipeline.iter_params.get('_total') # if pipeline.iter_params else None
-        if total is None:
-            raise ValueError('Total number of iterations is not defined!')
 
         if 'maximum'.startswith(name) or 'total'.startswith(name):
             return total
+
+        if total is None:
+            raise ValueError('Total number of iterations is not defined!')
 
         if 'ratio'.startswith(name):
             ratio = current_iter / total
