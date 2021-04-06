@@ -67,7 +67,7 @@ class PipelineExecutor:
                 iteration = iteration + 1
         self._prefetch_queue.put(None, block=True)
 
-    def _run_batches_from_queue(self, notifier):
+    def _run_batches_from_queue(self):
         while not self._stop_flag:
             future = self._prefetch_queue.get(block=True)
             if future is None:
@@ -89,7 +89,6 @@ class PipelineExecutor:
                 self._prefetch_count.get(block=True)
                 self._prefetch_count.task_done()
             else:
-                notifier.update(pipeline=self, batch=batch)
                 self._batch_queue.put(batch, block=True)
             finally:
                 self._prefetch_queue.task_done()
@@ -224,7 +223,7 @@ class PipelineExecutor:
             # this thread submits batches (waits for count queue and puts into prefetch queue)
             self._service_executor.submit(self._put_batches_into_queue, batch_generator)
             # this thread gets processed batches (waits for futures to be complete and puts into batch queue)
-            self._service_executor.submit(self._run_batches_from_queue, notifier)
+            self._service_executor.submit(self._run_batches_from_queue)
 
             # main thread gets ready batches and yield them one by one (releasing count queue after each one)
             while not self._stop_flag:
@@ -235,6 +234,7 @@ class PipelineExecutor:
                 else:
                     # the batch has been created in another thread, so we need to set pipeline
                     batch_res.pipeline = self.pipeline
+                    notifier.update(pipeline=self, batch=batch_res)
                     yield batch_res
                     self._prefetch_count.get(block=True)
                     self._prefetch_count.task_done()
