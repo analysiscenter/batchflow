@@ -15,8 +15,7 @@ class PipelineExecutor:
     """ Pipeline executor"""
     def __init__(self, pipeline):
         self.pipeline = pipeline
-        self._dataset = None
-        self._lazy_run = None
+        self.notifier = None
 
         self._stop_flag = False
         self._executor = None
@@ -24,9 +23,6 @@ class PipelineExecutor:
         self._prefetch_count = None
         self._prefetch_queue = None
         self._batch_queue = None
-        self._batch_generator = None
-
-        self.notifier = None
 
     def _clear_queue(self, queue):
         if queue is not None:
@@ -54,7 +50,7 @@ class PipelineExecutor:
         self._prefetch_count = None
         self._prefetch_queue = None
         self._batch_queue = None
-        self._batch_generator = None
+
 
     def _put_batches_into_queue(self, gen_batch):
         iteration = 1
