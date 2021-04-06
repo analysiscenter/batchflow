@@ -100,7 +100,7 @@ class PipelineExecutor:
                 self._prefetch_queue.task_done()
 
 
-    def gen_batch(self, *args, dataset=None, reset='iter', profile=False, **kwargs):
+    def gen_batch(self, *args, dataset=None, rebatch=False, reset='iter', profile=False, **kwargs):
         """ Generate batches
 
         Parameters
@@ -153,6 +153,12 @@ class PipelineExecutor:
             - 'variables' - re-initialize all pipeline variables
             - 'models' - reset all models
 
+        dataset
+            a dataset to get batches from
+
+        rebatch : bool
+            if rebatching is needed
+
         Yields
         ------
         an instance of the batch class returned by the last action
@@ -177,11 +183,11 @@ class PipelineExecutor:
             warnings.warn('`bar` argument is deprecated and renamed to `notifier`', DeprecationWarning, stacklevel=2)
         notifier = kwargs.pop('notifier', kwargs.pop('bar', None))
 
-        # if len(self.pipeline._actions) > 0 and self.pipeline._actions[0]['name'] == REBATCH_ID:
-        #     batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
-        #     prefetch = 0
-        # else:
-        batch_generator = dataset.gen_batch(*args,  iter_params=self.pipeline.iter_params, **kwargs)
+        if rebatch:
+            batch_generator = self.pipeline.gen_rebatch(*args, prefetch=prefetch, **kwargs)
+            prefetch = 0
+        else:
+            batch_generator = dataset.gen_batch(*args, iter_params=self.pipeline.iter_params, **kwargs)
 
         batch_size = args[0] if len(args) != 0 else kwargs.get('batch_size')
         n_iters = kwargs.get('n_iters')
