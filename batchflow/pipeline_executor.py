@@ -56,7 +56,7 @@ class PipelineExecutor:
     def _put_batches_into_queue(self, gen_batch):
         iteration = 1
         while not self._stop_flag:
-            # this will block if there are too many batches are prefetched
+            # this will block if there are too many batches prefetched
             self._prefetch_count.put(1, block=True)
             try:
                 batch = next(gen_batch)
@@ -66,33 +66,31 @@ class PipelineExecutor:
                 future = self._executor.submit(self.pipeline.execute_for, batch, iteration=iteration, new_loop=True)
                 self._prefetch_queue.put(future, block=True)
                 iteration = iteration + 1
-        self._prefetch_queue.put(None, block=True)
+        self._prefetch_queue.put(END_PIPELINE, block=True)
 
     def _run_batches_from_queue(self):
         while not self._stop_flag:
             future = self._prefetch_queue.get(block=True)
-            if future is None:
-                self._prefetch_queue.task_done()
-                self._batch_queue.put(END_PIPELINE)
-                break
 
             try:
+                if future == END_PIPELINE:
+                    batch = END_PIPELINE
+                    break
                 batch = future.result()
+
             except SkipBatchException:
                 pass
             except StopPipeline:
-                self._batch_queue.put(END_PIPELINE)
+                batch = END_PIPELINE
                 break
             except Exception:   # pylint: disable=broad-except
                 exc = future.exception()
-                print("Exception in a thread:", exc)
+                print("Exception:", exc)
                 traceback.print_tb(exc.__traceback__)
-                self._prefetch_count.get(block=True)
-                self._prefetch_count.task_done()
-            else:
-                self._batch_queue.put(batch, block=True)
+                batch = None
             finally:
                 self._prefetch_queue.task_done()
+                self._batch_queue.put(batch, block=True)
 
 
     def gen_batch(self, *args, dataset=None, rebatch=False, reset='iter', profile=False, **kwargs):
