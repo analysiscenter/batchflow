@@ -1425,8 +1425,6 @@ class Pipeline:
         else:
             pipeline = self.from_pipeline(_action['pipeline'])
 
-        kwargs.setdefault('iter_params', None)
-
         self._rest_batch = None
         while True:
             if self._rest_batch is None:
@@ -1436,6 +1434,7 @@ class Pipeline:
                 cur_len = len(self._rest_batch)
                 batches = [self._rest_batch]
                 self._rest_batch = None
+
             while cur_len < _action['batch_size']:
                 try:
                     new_batch = pipeline.next_batch(*args, **kwargs)
@@ -1534,7 +1533,9 @@ class Pipeline:
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
 
-        return PipelineExecutor(self).gen_batch(*args_value, dataset=self._dataset, **kwargs_value)
+        rebatch = len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID
+
+        return PipelineExecutor(self).gen_batch(*args_value, dataset=self._dataset, rebatch=rebatch, **kwargs_value)
 
 
     def create_batch(self, batch_index, *args, **kwargs):
