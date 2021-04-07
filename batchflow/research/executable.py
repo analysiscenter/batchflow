@@ -212,8 +212,9 @@ class Executable:
         if self.pipeline is not None:
             self.pipeline.set_config(self.config.config() + self.additional_config)
 
-    def set_research_path(self, path):
-        self.research_path = path
+    def set_paths(self, research_path, experiment_path):
+        self.research_path = research_path
+        self.experiment_path = experiment_path
 
     def dump_config(self, experiment_id):
         with open(os.path.join(self.research_path, 'configs', experiment_id), 'wb') as file:

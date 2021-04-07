@@ -75,7 +75,7 @@ class Job:
                 unit.set_shared_value(last_update_time)
                 unit.set_config(config, additional_config,
                                 {**branch_config, **device_configs[index]}, worker_config, kwargs)
-                unit.set_research_path(self.research_path)
+                unit.set_paths(self.research_path, self.experiment_paths[index])
                 unit.index = index
                 unit.dump_config(self.ids[index])
                 units[name] = unit

@@ -112,7 +112,7 @@ class REP(ResearchNamedExpression): # ResearchExperimentPath
     def get(self, **kwargs):
         _, experiment, research_path, experiment_path = self._get(**kwargs)
         # unit to get attributes (each unit will have the same so we take the first)
-        if not experiment_path:
+        if experiment_path is None:
             unit = next(iter(experiment.values()))
             experiment_path = unit.experiment_path # path to folder with current experiment
         if self.relative:
