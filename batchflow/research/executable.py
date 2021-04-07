@@ -162,7 +162,7 @@ class Executable:
     def get_copy(self):
         """ Create copy of unit """
         new_unit = copy(self)
-        if self.pipeline is not None:
+        if isinstance(self.pipeline, Pipeline):
             new_unit.pipeline += Pipeline()
         new_unit.result = deepcopy(new_unit.result)
         new_unit.variables = copy(new_unit.variables)
@@ -184,7 +184,14 @@ class Executable:
                 namespace_name, attr_name = src.split('.')
                 setattr(self, attr, getattr(namespaces[namespace_name], attr_name))
 
-    def reset(self, what='iter'):
+    def create_pipelines(self, **kwargs):
+        """ If pipeline is a callable, create pipeline as output of callable. """
+        if callable(self.pipeline):
+            self.pipeline = self.pipeline(**kwargs)
+        if callable(self.root_pipeline):
+            self.root_pipeline = self.root_pipeline(**kwargs)
+
+    def reset_pipelines(self, what='iter'):
         """ Reset iterators in pipelines """
         if self.pipeline is not None:
             self.pipeline.reset(what)
@@ -330,7 +337,7 @@ class Executable:
     def set_shared_value(self, last_update_time):
         """ Set last update time """
         self.last_update_time = last_update_time
-        if self.pipeline is not None:
+        if isinstance(self.pipeline, Pipeline):
             self.pipeline += (Pipeline()
                               .init_variable('_time', default=last_update_time)
                               .update(V('_time'), F(time.time))

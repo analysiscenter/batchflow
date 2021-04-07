@@ -1,5 +1,6 @@
 """ Classes Job and Experiment. """
 
+import os
 import time
 from collections import OrderedDict
 import random
@@ -50,26 +51,32 @@ class Job:
             namespaces = OrderedDict()
             units = OrderedDict()
 
+            self.create_folders()
+
             for name, namespace in self.namespaces.items():
-                kwargs = eval_expr(namespace.kwargs, job=self, experiment=units)
+                kwargs = eval_expr(namespace.kwargs, job=self, experiment=units,
+                                   path=self.research_path, experiment_path=self.experiment_paths[index])
                 namespaces[name] = namespace(**config, **additional_config, **branch_config,
                                              **device_configs[index], **worker_config, **kwargs)
 
             for name, unit in self.executable_units.items():
                 unit.get_attributes(namespaces)
                 unit = unit.get_copy()
-                unit.set_shared_value(last_update_time)
-                unit.reset('iter')
                 if unit.pipeline is not None:
-                    kwargs = eval_expr(unit.kwargs, job=self, experiment=units)
+                    kwargs = eval_expr(unit.kwargs, job=self, experiment=units, path=self.research_path)
+                    if callable(unit.pipeline):
+                        unit.pipeline = unit.pipeline(**kwargs)
+                    if callable(unit.root_pipeline):
+                        unit.root_pipeline = unit.root_pipeline(**kwargs)
                     unit.set_dataset()
                 else:
                     kwargs = dict()
+                unit.reset_pipelines('iter')
+                unit.set_shared_value(last_update_time)
                 unit.set_config(config, additional_config,
                                 {**branch_config, **device_configs[index]}, worker_config, kwargs)
                 unit.set_research_path(self.research_path)
                 unit.index = index
-                unit.create_folder(self.ids[index])
                 unit.dump_config(self.ids[index])
                 units[name] = unit
 
@@ -77,6 +84,15 @@ class Job:
             self.experiments.append(units)
             self.exceptions.append(None)
         self.clear_stopped_list()
+
+    def create_folders(self):
+        """ Create folder if it doesn't exist """
+        self.experiment_paths = [os.path.join('results', experiment_id) for experiment_id in self.ids]
+        for path in self.experiment_paths:
+            try:
+                os.makedirs(os.path.join(self.research_path, path))
+            except FileExistsError:
+                pass
 
     def clear_stopped_list(self):
         """ Clear list of stopped experiments for the current iteration """

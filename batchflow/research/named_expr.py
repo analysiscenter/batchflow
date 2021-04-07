@@ -107,16 +107,17 @@ class REP(ResearchNamedExpression): # ResearchExperimentPath
 
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
-        return kwargs['job'], kwargs['experiment'], kwargs['path']
+        return kwargs['job'], kwargs['experiment'], kwargs['path'], kwargs.get('experiment_path')
 
     def get(self, **kwargs):
-        _, experiment, path = self._get(**kwargs)
+        _, experiment, research_path, experiment_path = self._get(**kwargs)
         # unit to get attributes (each unit will have the same so we take the first)
-        unit = next(iter(experiment.values()))
-        experiment_path = unit.experiment_path # path to folder with current experiment
+        if not experiment_path:
+            unit = next(iter(experiment.values()))
+            experiment_path = unit.experiment_path # path to folder with current experiment
         if self.relative:
             return experiment_path
-        return os.path.join(path, experiment_path)
+        return os.path.join(research_path, experiment_path)
 
 class RR(ResearchNamedExpression): # ResearchResults
     """ NamedExpression for Results of the Research """
