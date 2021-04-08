@@ -82,12 +82,15 @@ class RID(ResearchNamedExpression): # ResearchExperimentID
     """ NamedExpression for id (experiment_id) for the current experiment """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
-        return kwargs['job'], kwargs['experiment']
+        return kwargs['job'], kwargs['experiment'], kwargs.get('index')
 
     def get(self, **kwargs):
-        job, experiment = self._get(**kwargs)
-        unit = list(experiment.values())[0]
-        return job.ids[unit.index]
+        job, experiment, index = self._get(**kwargs)
+        if index is None:
+            unit = list(experiment.values())[0]
+            return job.ids[unit.index]
+        else:
+            return job.ids[index]
 
 class REP(ResearchNamedExpression): # ResearchExperimentPath
     """ NamedExpression for path to folder corresponding to the current config """

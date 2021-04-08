@@ -54,8 +54,7 @@ class Job:
             self.create_folders()
 
             for name, namespace in self.namespaces.items():
-                kwargs = eval_expr(namespace.kwargs, job=self, experiment=units,
-                                   path=self.research_path, experiment_path=self.experiment_paths[index])
+                kwargs = eval_expr(namespace.kwargs, job=self, index=index, path=self.research_path, experiment_path=self.experiment_paths[index])
                 namespaces[name] = namespace(**config, **additional_config, **branch_config,
                                              **device_configs[index], **worker_config, **kwargs)
 
