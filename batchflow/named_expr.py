@@ -2,9 +2,8 @@
 import operator
 from collections import defaultdict
 
-import numpy as np
-
 from .config import Config
+from .utils_random import make_rng
 
 
 class _DummyBatch:
@@ -667,6 +666,15 @@ class D(NamedExpression):
 class R(NamedExpression):
     """ A random value
 
+    Parameters
+    ----------
+    name : str
+        a distribution name
+
+    seed : int, SeedSequence, Generator, BitGenerator, RandomState
+        a random state (see :func:`~.make_rng`)
+
+
     Notes
     -----
     If `size` is needed, it should be specified as a named, not a positional argument.
@@ -679,14 +687,11 @@ class R(NamedExpression):
         R('poisson', lam=5.5, seed=42, size=3)
         R(['metro', 'taxi', 'bike'], p=[.6, .1, .3], size=10)
     """
-    def __init__(self, name, *args, state=None, seed=None, size=None, **kwargs):
+    def __init__(self, name, *args, seed=None, size=None, **kwargs):
         super().__init__(name)
-        if isinstance(state, np.random.RandomState):
-            self.random_state = state
-        else:
-            self.random_state = np.random.RandomState(seed)
         self.args = args
         self.kwargs = kwargs
+        self.random_state = make_rng(seed)
 
         if not isinstance(size, (type(None), NamedExpression, int, tuple)):
             raise TypeError('size is expected to be int or tuple of int or a named expression')
@@ -727,7 +732,8 @@ class R(NamedExpression):
         if isinstance(name, str) and hasattr(self.random_state, name):
             name = getattr(self.random_state, name)
         else:
-            raise TypeError('An expression should be an int, an iterable or a numpy distribution name')
+            raise TypeError('An expression should be an int, an iterable or a numpy distribution name',
+                            name, self.random_state)
 
         args = eval_expr(args, **kwargs)
 
