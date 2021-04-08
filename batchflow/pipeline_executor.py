@@ -34,7 +34,7 @@ class PipelineExecutor:
 
     def _stop_executor(self, executor):
         if executor is not None:
-            executor.shutdown()
+            executor.shutdown(wait=False, cancel_futures=True)
 
     def reset(self):
         """ Clear all iteration metadata in order to start iterating from scratch """
@@ -84,8 +84,7 @@ class PipelineExecutor:
             except StopPipeline:
                 batch = END_PIPELINE
                 break
-            except Exception:   # pylint: disable=broad-except
-                exc = future.exception()
+            except Exception as exc:   # pylint: disable=broad-except
                 print("Exception:", exc)
                 traceback.print_tb(exc.__traceback__)
                 if ignore_exceptions:
