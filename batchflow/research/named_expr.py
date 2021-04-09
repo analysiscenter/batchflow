@@ -82,7 +82,7 @@ class RID(ResearchNamedExpression): # ResearchExperimentID
     """ NamedExpression for id (experiment_id) for the current experiment """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
-        return kwargs['job'], kwargs['experiment'], kwargs.get('index')
+        return kwargs['job'], kwargs.get('experiment'), kwargs.get('index')
 
     def get(self, **kwargs):
         job, experiment, index = self._get(**kwargs)
