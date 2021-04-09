@@ -14,6 +14,7 @@ class OncePipeline:
     """ Pipeline that runs only once before or after the main pipeline """
     def __init__(self, pipeline=None, *namespaces):
         self.pipeline = pipeline
+        self.main = self.pipeline
         self._namespaces = list(namespaces)
         self._actions = []
 
