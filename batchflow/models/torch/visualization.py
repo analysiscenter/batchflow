@@ -287,6 +287,58 @@ class VisualizationMixin:
         camera = np.uint8(camera * 255)
         return camera
 
+    # Visualize signal propagation: activations statistics
+    def get_signal_propagation(self, model, image_shape, batch_size=3):
+        """ Compute signal propagation statistics of all layers in the network.
+
+        Under the hood, forward hooks are registered to capture outputs of all layers,
+        and they are removed after extraction of all the activations.
+        
+        ## Link and params"""
+        statistics = {
+            'Average Channel Squared Mean': [], 
+            'Average Channel Variance': []
+        }
+        modules_instances = []
+        
+        if len(image_shape) != 3:
+            raise ValueError("Parameter image_shape must be a sequence of 3 elements (C, H, W)")
+        image_shape = (batch_size, *image_shape)
+
+        try:
+            hooks_controller = ModelForwardExtractor(model)
+            _ = model(torch.randn(image_shape))
+        finally:
+            hooks_controller.close()
+
+        modules_instances = hooks_controller.modules_instances        
+        for tensor in hooks_controller.signals:
+            avg_ch_squared_mean = torch.mean(torch.mean(tensor, axis=1) ** 2).item()
+            avg_ch_var =  torch.mean(torch.var(tensor, axis=1)).item()
+            
+            statistics['Average Channel Squared Mean'].append(avg_ch_squared_mean)
+            statistics['Average Channel Variance'].append(avg_ch_var)
+
+        return statistics, instances
+    
+    def show_signal_propagation_plot(self, statistics=None, model=None, image_shape=None, batch_size=3):
+        """ Visualize signal propagation plot. """
+
+        if (statistics is None) and ((model is None) or (image_shape is None)):
+            raise ValueError("You should define statistics or model and image_shape")
+        else:
+            statistics, _ = get_signal_propagation(self, model=model, image_shape=image_shape, batch_size=batch_size)
+
+        fig, axes = plt.subplots(1, len(statistics), figsize=(15, 5))
+        for (ax, (title, data)) in zip(axes, statistics.items()):
+            x = range(len(data))
+            ax.plot(x, data)
+            ax.set_title(title + " over network units", fontsize=14)
+            ax.set_xlabel("Number of network unit", fontsize=12)
+            ax.set_ylabel(title, fontsize=12)
+        fig.show()
+
+
 
 
 class LayerExtractor:
@@ -316,5 +368,36 @@ class LayerExtractor:
         self.forward_handle.remove()
         self.backward_handle.remove()
 
+    def __del__(self):
+        self.close()
+
+class ModelForwardExtractor:
+    """ Create hooks to get layers activations and instances of all network units. """
+    def __init__(self, model):    
+        self.registered_hooks = []
+        self.register_hooks(model)
+        self.signals = []
+        self.modules_instances = []
+        
+    def register_hooks(self, module):
+        """ Traverse modules in network. """
+        # Check is it the lowest level
+        submodules_amount =  sum(1 for _ in module.modules())
+        if submodules_amount == 1: 
+            self.registered_hooks.append(module.register_forward_hook(self.forward_hook))
+
+        # Go deeper in network
+        for child in module.children():
+            self.register_hooks(child)
+        
+    def forward_hook(self, module, input, output):
+        """ Save signal tensor and module instance. """
+        self.signals.append(output)
+        self.modules_instances.append(module.__class__.__name__)
+    
+    def close(self):
+        for hook in self.registered_hooks:
+            hook.remove()
+            
     def __del__(self):
         self.close()
