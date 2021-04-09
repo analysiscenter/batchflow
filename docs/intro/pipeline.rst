@@ -133,10 +133,10 @@ More complicated pipelines include setup and tear down actions. That's exactly w
 ::
 
     pipeline.before
-        .add_namespace(mymodule)           # mymodule methods are now accessible within the pipeline
-        .init_variable("var")              # Pipeline API
-        .init_model("my-model", ResNet18)   # Pipeline API
-        .connect_to_mydb(USER, PASSWORD)   # a method from mymodule
+            .add_namespace(mymodule)           # mymodule methods are now accessible within the pipeline
+            .init_variable("var")              # Pipeline API
+            .init_model("my-model", ResNet18)   # Pipeline API
+            .connect_to_mydb(USER, PASSWORD)   # a method from mymodule
 
     pipeline.after
         .add_namespace(mymodule)           # mymodule methods are now accessible within the pipeline
@@ -169,6 +169,26 @@ If you break the iteration process (e.g. when early stopping is occurred or when
 you should explicitly call `pipeline.after.run()`.
 
 See :doc:`API <../api/batchflow.once_pipeline>` for methods available in `before` and `after` pipelines.
+
+The whole pipeline can be chained in a single instruction::
+
+    pipeline
+        .before
+            .add_namespace(mymodule)           # mymodule methods are now accessible within the pipeline
+            .init_variable("var")              # Pipeline API
+            .init_model("my-model", ResNet18)   # Pipeline API
+            .connect_to_mydb(USER, PASSWORD)   # a method from mymodule
+
+        .main
+            load(dst='features')
+            train_model('my-model', B.features)
+
+        .after
+            .add_namespace(mymodule)           # mymodule methods are now accessible within the pipeline
+            .save_model("ResNet18", path='/some/path')     #Pipeline API
+            .disconnect_from_mydb()            # a method from mymodule
+
+    pipeline.run(BATCH_SIZE)
 
 
 Algebra of pipelines
