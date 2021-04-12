@@ -9,7 +9,6 @@ import logging
 from pstats import Stats
 from cProfile import Profile
 
-import numpy as np
 try:
     import pandas as pd
 except ImportError:
@@ -29,6 +28,7 @@ from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
 
 from ._const import *       # pylint:disable=wildcard-import
 from .utils import save_data_to
+from .utils_random import make_rng
 from .pipeline_executor import PipelineExecutor
 
 
@@ -100,6 +100,8 @@ class Pipeline:
         self.iter_params = Baseset.get_default_iter_params()
         self._rest_batch = None
         self.variables_initialised = False
+        self._local = threading.local()
+        self.random = None
 
         self._profiler = None
         self.profile_info = None
@@ -107,13 +109,16 @@ class Pipeline:
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state['_profile_info_lock'] = None
+        state['random'] = getattr(self._local, 'random', None)
+        state.pop('_local')
+        state.pop('_profile_info_lock')
         state['_profiler'] = None
         state['_batch_generator'] = None
         return state
 
     def __setstate__(self, state):
-        state['_profile_info_lock'] = threading.Lock()
+        self._profile_info_lock = threading.Lock()
+        self._local = threading.local()
         for k, v in state.items():
             setattr(self, k, v)
 
@@ -123,6 +128,14 @@ class Pipeline:
 
     def __exit__(self, exc_type, exc_value, trback):
         pass
+
+    @property
+    def random(self):
+        return self._local.random if self._local else None
+
+    @random.setter
+    def random(self, value):
+        self._local.random = value
 
     @classmethod
     def from_pipeline(cls, pipeline, actions=None, proba=None, repeat=None):
@@ -950,9 +963,9 @@ class Pipeline:
         if action['proba'] is None:
             return True
         proba = self._eval_expr(action['proba'], batch=batch)
-        return np.random.binomial(1, proba) == 1
+        return self.random.binomial(1, proba) == 1
 
-    def execute_for(self, batch, notifier=None, iteration=None, new_loop=False):
+    def execute_for(self, batch, notifier=None, iteration=None, seed=None, new_loop=False):
         """ Run a pipeline for one batch
 
         Parameters
@@ -966,6 +979,9 @@ class Pipeline:
         iteration : int
             a pipeline iteration this batch is used at
 
+        seed : SeedSequence
+            a numpy SeedSequence to use when executing
+
         new_loop : bool
             whether to create a new :class:`async loop <asyncio.BaseEventLoop>`.
 
@@ -975,6 +991,8 @@ class Pipeline:
         """
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
+        if seed:
+            self.random = make_rng(seed)
         batch_res = self._exec_all_actions(batch, iteration=iteration)
         if notifier:
             notifier.update(pipeline=self, batch=batch_res)
@@ -1382,7 +1400,7 @@ class Pipeline:
         return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, merge=merge,
                                                         components=components, batch_class=batch_class))
 
-    def reset(self, *args, profile=False):
+    def reset(self, *args, profile=False, random=None):
         """ Clear all iteration metadata in order to start iterating from scratch
 
         Parameters
@@ -1393,6 +1411,12 @@ class Pipeline:
             - 'iter' - restart the batch iterator
             - 'variables' - re-initialize all pipeline variables
             - 'models' - reset all models
+
+        profile : bool
+            whether to use profiler
+
+        random
+            a random state (see :fun:`~.make_rng`)
 
         Examples
         --------
@@ -1430,6 +1454,9 @@ class Pipeline:
 
         if 'models' in what:
             self.models.reset()
+
+        if self.random is not None:
+            self.random = make_rng(random)
 
         self._profiler = Profile() if profile else None
 
@@ -1503,8 +1530,17 @@ class Pipeline:
         batch_size : int
             desired number of items in the batch (the actual batch could contain fewer items)
 
-        shuffle : bool or seed
-            specifies the order of items (see :func:`~.make_rng`)
+        shuffle : bool or int
+            specifies the randomization and the order of items (default=False):
+
+            - `False`, items go sequentionally, one after another as they appear in the index;
+              a random number generator is created with a random entropy
+
+            - `True`, items are shuffled randomly before each epoch;
+              a random number generator is created with a random entropy
+
+            - int - a seed number for a random shuffle;
+              a random number generator is created with the given seed.
 
         n_iters : int
             Number of iterations to make (only one of `n_iters` and `n_epochs` should be specified).

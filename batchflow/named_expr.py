@@ -594,6 +594,124 @@ class I(PipelineNamedExpression):
         raise NotImplementedError("Assigning a value to an iteration number is not supported")
 
 
+class R(PipelineNamedExpression):
+    """ A random value
+
+    Parameters
+    ----------
+    name : str
+        a distribution name
+
+    seed : int, SeedSequence, Generator, BitGenerator, RandomState
+        a random state (see :func:`~.make_rng`)
+
+
+    Notes
+    -----
+    If `size` is needed, it should be specified as a named, not a positional argument.
+
+    Examples
+    --------
+    ::
+
+        R('normal', 0, 1)
+        R('poisson', lam=5.5, seed=42, size=3)
+        R(['metro', 'taxi', 'bike'], p=[.6, .1, .3], size=10)
+    """
+    def __init__(self, name, *args, seed=None, size=None, **kwargs):
+        super().__init__(name)
+        self.args = args
+        self.kwargs = kwargs
+        self.random = make_rng(seed)
+        self.default_random = seed is None
+
+        if not isinstance(size, (type(None), NamedExpression, int, tuple)):
+            raise TypeError('size is expected to be int or tuple of int or a named expression')
+        self.size = size
+
+    def _get_params(self, **kwargs):
+        name, pipeline, kwargs = super()._get_params(**kwargs)
+
+        # if seed was explicitly set in R(...), use it
+        # otherwise use the RNG from the pipeline if it exists
+        if self.default_random and pipeline is not None and pipeline.random is not None:
+            random = pipeline.random
+        else:
+            random = self.random
+
+        return name, random, kwargs
+
+    def get(self, size=None, **kwargs):
+        """ Return a value of a random variable
+
+        Parameters
+        ----------
+        size : int, tuple of int
+            Output shape. If the given shape is (m, n, k), then m * n * k samples are drawn
+            and returned as m x n x k array.
+            If size was also specified at instance creation, then output shape is extended from the beginning.
+            So `size` is treated like a batch size, while size specified at instantiation is an item size.
+
+        Examples
+        --------
+        ::
+
+            ne = R('normal', 0, 1, size=(10, 20)))
+            value = ne.get(batch)
+            # value.shape will be (10, 20)
+
+            value = ne.get(batch, size=30)
+            # value.shape will be (30, 10, 20)
+            # so size is treated like a batch size
+        """
+        if not isinstance(size, (type(None), int, tuple)):
+            raise TypeError('size is expected to be int or tuple of int')
+
+        name, random, kwargs = self._get_params(**kwargs)
+        args = self.args
+
+        if not isinstance(name, str):
+            args = (name,) + args
+            name = 'choice'
+        if isinstance(name, str) and hasattr(random, name):
+            name = getattr(random, name)
+        else:
+            raise TypeError('An expression should be an int, an iterable or a numpy distribution name',
+                            name, random)
+
+        args = eval_expr(args, **kwargs)
+
+        size, kwsize = eval_expr((self.size, size), **kwargs)
+        if kwsize is not None:
+            if size is None:
+                size = kwsize
+            else:
+                if isinstance(size, int):
+                    size = (size,)
+                if isinstance(kwsize, int):
+                    kwsize = (kwsize,)
+                size = kwsize + size
+
+        kwargs = {**self.kwargs, 'size': size}
+        kwargs = eval_expr(kwargs)
+
+        return name(*args, **kwargs)
+
+    def assign(self, *args, **kwargs):
+        """ Assign a value """
+        _ = args, kwargs
+        raise NotImplementedError("Assigning a value to a random variable is not supported")
+
+    def __repr__(self):
+        repr_str = 'R(' + str(self.name)
+        if self.args:
+            repr_str += ', ' + ', '.join(str(a) for a in self.args)
+        if self.kwargs:
+            repr_str += ', ' + str(self.kwargs)
+        return repr_str + (', size=' + str(self.size) + ')' if self.size else ')')
+
+
+
 class F(NamedExpression):
     """ A function, method or any other callable that might take arguments
 
@@ -623,6 +741,7 @@ class F(NamedExpression):
         """ Assign a value by calling a callable """
         _ = args, kwargs
         raise NotImplementedError("Assigning a value to a callable is not supported")
+
 
 class D(NamedExpression):
     """ Dataset attribute or dataset itself
@@ -661,110 +780,6 @@ class D(NamedExpression):
         if name is None:
             raise ValueError('Assigning a value to D() is not possible.')
         setattr(dataset, name, value)
-
-
-class R(NamedExpression):
-    """ A random value
-
-    Parameters
-    ----------
-    name : str
-        a distribution name
-
-    seed : int, SeedSequence, Generator, BitGenerator, RandomState
-        a random state (see :func:`~.make_rng`)
-
-
-    Notes
-    -----
-    If `size` is needed, it should be specified as a named, not a positional argument.
-
-    Examples
-    --------
-    ::
-
-        R('normal', 0, 1)
-        R('poisson', lam=5.5, seed=42, size=3)
-        R(['metro', 'taxi', 'bike'], p=[.6, .1, .3], size=10)
-    """
-    def __init__(self, name, *args, seed=None, size=None, **kwargs):
-        super().__init__(name)
-        self.args = args
-        self.kwargs = kwargs
-        self.random_state = make_rng(seed)
-
-        if not isinstance(size, (type(None), NamedExpression, int, tuple)):
-            raise TypeError('size is expected to be int or tuple of int or a named expression')
-        self.size = size
-
-    def get(self, size=None, **kwargs):
-        """ Return a value of a random variable
-
-        Parameters
-        ----------
-        size : int, tuple of int
-            Output shape. If the given shape is (m, n, k), then m * n * k samples are drawn
-            and returned as m x n x k array.
-            If size was also specified at instance creation, then output shape is extended from the beginning.
-            So `size` is treated like a batch size, while size specified at instantiation is an item size.
-
-        Examples
-        --------
-        ::
-
-            ne = R('normal', 0, 1, size=(10, 20)))
-            value = ne.get(batch)
-            # value.shape will be (10, 20)
-
-            value = ne.get(batch, size=30)
-            # value.shape will be (30, 10, 20)
-            # so size is treated like a batch size
-        """
-        if not isinstance(size, (type(None), int, tuple)):
-            raise TypeError('size is expected to be int or tuple of int')
-
-        name, kwargs = self._get_params(**kwargs)
-        args = self.args
-
-        if not isinstance(name, str):
-            args = (name,) + args
-            name = 'choice'
-        if isinstance(name, str) and hasattr(self.random_state, name):
-            name = getattr(self.random_state, name)
-        else:
-            raise TypeError('An expression should be an int, an iterable or a numpy distribution name',
-                            name, self.random_state)
-
-        args = eval_expr(args, **kwargs)
-
-        size, kwsize = eval_expr((self.size, size), **kwargs)
-        if kwsize is not None:
-            if size is None:
-                size = kwsize
-            else:
-                if isinstance(size, int):
-                    size = (size,)
-                if isinstance(kwsize, int):
-                    kwsize = (kwsize,)
-                size = kwsize + size
-
-        kwargs = {**self.kwargs, 'size': size}
-        kwargs = eval_expr(kwargs)
-
-        return name(*args, **kwargs)
-
-    def assign(self, *args, **kwargs):
-        """ Assign a value """
-        _ = args, kwargs
-        raise NotImplementedError("Assigning a value to a random variable is not supported")
-
-    def __repr__(self):
-        repr_str = 'R(' + str(self.name)
-        if self.args:
-            repr_str += ', ' + ', '.join(str(a) for a in self.args)
-        if self.kwargs:
-            repr_str += ', ' + str(self.kwargs)
-        return repr_str + (', size=' + str(self.size) + ')' if self.size else ')')
 
 
 class W(NamedExpression):

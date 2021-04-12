@@ -5,6 +5,8 @@ import traceback
 import concurrent.futures as cf
 import queue as q
 
+import numpy as np
+
 from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
 from .notifier import Notifier
 
@@ -54,7 +56,7 @@ class PipelineExecutor:
         self._batch_queue = None
 
 
-    def _put_batches_into_queue(self, gen_batch):
+    def _put_batches_into_queue(self, gen_batch, seed):
         iteration = 1
         while not self._stop_flag:
             # this will block if there are too many batches prefetched
@@ -64,7 +66,9 @@ class PipelineExecutor:
             except StopIteration:
                 break
             else:
-                future = self._executor.submit(self.pipeline.execute_for, batch, iteration=iteration, new_loop=True)
+                future = self._executor.submit(self.pipeline.execute_for, batch,
+                                               iteration=iteration, seed=seed.spawn(1)[0],
+                                               new_loop=True)
                 self._prefetch_queue.put(future, block=True)
                 iteration = iteration + 1
         self._prefetch_queue.put(END_PIPELINE, block=True)
@@ -105,18 +109,17 @@ class PipelineExecutor:
         batch_size : int
             desired number of items in the batch (the actual batch could contain fewer items)
 
-        shuffle : bool, int, class:`numpy.random.RandomState` or callable
-            specifies the order of items, could be:
+        shuffle : bool or int
+            specifies the randomization and the order of items (default=False):
 
-            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
-                if `True`, items are shuffled randomly before each epoch.
+            - `False`, items go sequentionally, one after another as they appear in the index;
+              a random number generator is created with a random entropy
 
-            - int - a seed number for a random shuffle.
+            - `True`, items are shuffled randomly before each epoch;
+              a random number generator is created with a random entropy
 
-            - :class:`numpy.random.RandomState` instance.
-
-            - callable - a function which takes an array of item indices in the initial order
-                (as they appear in the index) and returns the order of items.
+            - int - a seed number for a random shuffle;
+              a random number generator is created with the given seed.
 
         n_iters : int
             Number of iterations to make (only one of `n_iters` and `n_epochs` should be specified).
@@ -174,8 +177,36 @@ class PipelineExecutor:
             for batch in pipeline.gen_batch(C('batch_size'), shuffle=True, n_epochs=2, drop_last=True):
                 # do whatever you want
         """
+
+        # create SeedSequence hierarchy
+        # - seed
+        # ---- dataset seed (might be skipped)
+        # ---- pipeline seed (to use in before and after pipeline and initalization actions)
+        # ---- execution seed (to use in batch execution, thus saving a seed for each batch)
+        shuffle = kwargs.pop('shuffle', False)
+        if shuffle is False:
+            seed = np.random.SeedSequence()
+            _ = seed.spawn(1)[0]  # skip a dataset seed
+            shuffle = False
+        elif shuffle is True:
+            seed = np.random.SeedSequence()
+            shuffle = seed.spawn(1)[0]
+        elif isinstance(shuffle, int):
+            if shuffle >= 0:
+                seed = np.random.SeedSequence(shuffle)
+                shuffle = seed.spawn(1)[0]
+            else:
+                # if shuffle is negative, do not shuffle dataset, but use the seed for randomization
+                seed = np.random.SeedSequence(-shuffle)
+                _ = seed.spawn(1)[0]  # skip a dataset seed
+                shuffle = False
+        else:
+            raise TypeError('shuffle can be bool or int', shuffle)
+        pipeline_seed = seed.spawn(1)[0]
+        execution_seed = seed.spawn(1)[0]
+
         self.reset()
-        self.pipeline.reset(reset, profile=profile)
+        self.pipeline.reset(reset, profile=profile, random=pipeline_seed)
 
         if 'n_iters' not in kwargs and 'n_epochs' not in kwargs:
             kwargs.setdefault('n_epochs', 1)
@@ -188,11 +219,13 @@ class PipelineExecutor:
             warnings.warn('`bar` argument is deprecated and renamed to `notifier`', DeprecationWarning, stacklevel=2)
         notifier = kwargs.pop('notifier', kwargs.pop('bar', None))
 
+
         if rebatch:
-            batch_generator = self.pipeline.gen_rebatch(*args, prefetch=prefetch, **kwargs)
+            batch_generator = self.pipeline.gen_rebatch(*args, prefetch=prefetch, shuffle=shuffle, **kwargs)
             prefetch = 0
         else:
-            batch_generator = dataset.gen_batch(*args, iter_params=self.pipeline.iter_params, **kwargs)
+            batch_generator = dataset.gen_batch(*args, iter_params=self.pipeline.iter_params, shuffle=shuffle,
+                                                **kwargs)
 
         batch_size = args[0] if len(args) != 0 else kwargs.get('batch_size')
         n_iters = kwargs.get('n_iters')
@@ -211,6 +244,7 @@ class PipelineExecutor:
             self.pipeline.before.run()
 
         if prefetch > 0:
+
             if target in ['threads', 't']:
                 self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
             elif target in ['mpc', 'm']:
@@ -232,7 +266,7 @@ class PipelineExecutor:
             # service executor runs batch generation and batch processing threads
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
             # this thread submits batches (waits for count queue and puts into prefetch queue)
-            self._service_executor.submit(self._put_batches_into_queue, batch_generator)
+            self._service_executor.submit(self._put_batches_into_queue, batch_generator, seed=execution_seed)
             # this thread gets processed batches (waits for futures to be complete and puts into batch queue)
             self._service_executor.submit(self._run_batches_from_queue, ignore_exceptions)
 
@@ -256,7 +290,8 @@ class PipelineExecutor:
             iteration = 1
             for batch in batch_generator:
                 try:
-                    batch_res = self.pipeline.execute_for(batch, notifier, iteration)
+                    batch_res = self.pipeline.execute_for(batch, notifier, iteration=iteration,
+                                                          seed=execution_seed.spawn(1)[0])
                 except SkipBatchException:
                     pass
                 except StopPipeline:
