@@ -31,6 +31,7 @@ from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, any_action_failed, apply_parallel as apply_parallel_
 from .components import create_item_class, BaseComponents
 from .named_expr import P, R
+from .utils_random import make_rng
 
 
 class MethodsTransformingMeta(type):
@@ -101,6 +102,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         self._dataset = dataset
         self.pipeline = pipeline
         self.iteration = None
+        self._random = None
         self._attrs = None
         self.create_attrs(**kwargs)
 
@@ -148,6 +150,25 @@ class Batch(metaclass=MethodsTransformingMeta):
     def pipeline(self, value):
         """ Store the pipeline in a thread-local storage """
         self._local.pipeline = value
+
+    @property
+    def random(self):
+        """ A random number generator :class:`numpy.random.Generator`.
+        Use it instead of `np.random` for reproducibility.
+
+        Examples
+        --------
+
+        ::
+
+            self.random.normal(0, 1)
+        """
+        if self._random is not None:
+            return self._random
+        if self.pipeline is not None and self.pipeline.random is not None:
+            return self.pipeline.random
+        self._random = make_rng()
+        return self._random
 
     def __copy__(self):
         dump_batch = dill.dumps(self)
