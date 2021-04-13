@@ -287,58 +287,99 @@ class VisualizationMixin:
         camera = np.uint8(camera * 255)
         return camera
 
-    # Visualize signal propagation: activations statistics
-    def get_signal_propagation(self, model, image_shape, batch_size=3):
+    # Visualize signal propagation statistics
+    def get_signal_propagation(self, model=None, input_shape=None, batch_size=3, input_tensor=None):
         """ Compute signal propagation statistics of all layers in the network.
+        Brock A. et al "`Characterizing signal propagation to close the performance gap in unnormalized ResNets
+        <https://arxiv.org/pdf/2101.08692.pdf>`_"
 
         Under the hood, forward hooks are registered to capture outputs of all layers,
         and they are removed after extraction of all the activations.
-        
-        ## Link and params"""
+
+        Parameters
+        ----------
+        model : nn.Module
+            Model to base visualizations on.
+        input_shape : sequence
+            Shape of the image to generate.
+        batch_size : int
+            Number of images in one batch.
+        input : Tensor
+            Input tensor for signal propagation.
+        """
+        if model is None:
+            try:
+                model = self.model
+            except:
+                raise ValueError("You should provide TorchModel or nn.Module.")
+
+        if input_tensor is None:
+            if input_shape is None:
+                raise ValueError("You should provide `input_tensor` or `input_shape` argument.")
+            if len(input_shape) != 3:
+                raise ValueError("Parameter `input_shape` must be a sequence of 3 elements (C, H, W).")
+            input_shape = (batch_size, *input_shape)
+            input_tensor = torch.randn(input_shape)
+
         statistics = {
-            'Average Channel Squared Mean': [], 
-            'Average Channel Variance': []
+            'Average Channel Squared Mean': [],
+            'Average Channel Variance': [],
+            'Modules instances': []
         }
-        modules_instances = []
-        
-        if len(image_shape) != 3:
-            raise ValueError("Parameter image_shape must be a sequence of 3 elements (C, H, W)")
-        image_shape = (batch_size, *image_shape)
+        extractors = []
+        signals = []
+        def register_hooks(module):
+            """ Traverse modules in network. """
+            submodules_amount = sum(1 for _ in module.modules())
+            if submodules_amount == 1:
+                statistics['Modules instances'].append(module.__class__.__name__)
+                extractors.append(LayerExtractor(module))
+
+            for child in module.children():
+                register_hooks(child)
 
         try:
-            hooks_controller = ModelForwardExtractor(model)
-            _ = model(torch.randn(image_shape))
+            register_hooks(model)
+            _ = model(input_tensor)
         finally:
-            hooks_controller.close()
+            for extractor in extractors:
+                signals.append(extractor.activation)
+                extractor.close()
 
-        modules_instances = hooks_controller.modules_instances        
-        for tensor in hooks_controller.signals:
+        for tensor in signals:
             avg_ch_squared_mean = torch.mean(torch.mean(tensor, axis=1) ** 2).item()
             avg_ch_var =  torch.mean(torch.var(tensor, axis=1)).item()
-            
+
             statistics['Average Channel Squared Mean'].append(avg_ch_squared_mean)
             statistics['Average Channel Variance'].append(avg_ch_var)
+        return statistics
 
-        return statistics, instances
-    
-    def show_signal_propagation_plot(self, statistics=None, model=None, image_shape=None, batch_size=3):
-        """ Visualize signal propagation plot. """
+    def show_signal_propagation_plot(self, **kwargs):
+        """ Visualize signal propagation plot.
 
-        if (statistics is None) and ((model is None) or (image_shape is None)):
-            raise ValueError("You should define statistics or model and image_shape")
-        else:
-            statistics, _ = get_signal_propagation(self, model=model, image_shape=image_shape, batch_size=batch_size)
+        Parameters
+        ----------
+        kwargs : dict
+            Named arguments directly passed to `get_signal_propagation` method.
+            `statistics` or `model` and `input_shape` must be provided.
+        """
+        statistics = kwargs.get('statistics')
+        model = kwargs.get('model')
+        input_shape = kwargs.get('input_shape')
+        batch_size = kwargs.get('batch_size', 3)
+        input_tensor = kwargs.get('input_tensor')
 
-        fig, axes = plt.subplots(1, len(statistics), figsize=(15, 5))
+        if statistics is None:
+            statistics = self.get_signal_propagation(model=model, input_shape=input_shape,
+                                                     batch_size=batch_size, input_tensor=input_tensor)
+
+        fig, axes = plt.subplots(1, len(statistics)-1, figsize=(15, 5))
         for (ax, (title, data)) in zip(axes, statistics.items()):
-            x = range(len(data))
-            ax.plot(x, data)
+            ax.plot(data)
             ax.set_title(title + " over network units", fontsize=14)
-            ax.set_xlabel("Number of network unit", fontsize=12)
+            ax.set_xlabel("Network depth", fontsize=12)
             ax.set_ylabel(title, fontsize=12)
         fig.show()
-
-
 
 
 class LayerExtractor:
@@ -368,36 +409,5 @@ class LayerExtractor:
         self.forward_handle.remove()
         self.backward_handle.remove()
 
-    def __del__(self):
-        self.close()
-
-class ModelForwardExtractor:
-    """ Create hooks to get layers activations and instances of all network units. """
-    def __init__(self, model):    
-        self.registered_hooks = []
-        self.register_hooks(model)
-        self.signals = []
-        self.modules_instances = []
-        
-    def register_hooks(self, module):
-        """ Traverse modules in network. """
-        # Check is it the lowest level
-        submodules_amount =  sum(1 for _ in module.modules())
-        if submodules_amount == 1: 
-            self.registered_hooks.append(module.register_forward_hook(self.forward_hook))
-
-        # Go deeper in network
-        for child in module.children():
-            self.register_hooks(child)
-        
-    def forward_hook(self, module, input, output):
-        """ Save signal tensor and module instance. """
-        self.signals.append(output)
-        self.modules_instances.append(module.__class__.__name__)
-    
-    def close(self):
-        for hook in self.registered_hooks:
-            hook.remove()
-            
     def __del__(self):
         self.close()
