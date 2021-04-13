@@ -1416,16 +1416,18 @@ class Pipeline:
             whether to use profiler
 
         random
-            a random state (see :fun:`~.make_rng`)
+            a random state (see :fun:`~.make_rng`).
+            If not specified, RNG will be created with a random entropy.
 
         Examples
         --------
         ::
+
             pipeline.reset('iter')
 
-            pipeline.reset('vars', 'models')
+            pipeline.reset('vars', 'models', profile=True)
 
-            pipeline.reset(['iter', 'vars'])
+            pipeline.reset(['iter', 'vars'], random=42)
 
         """
         if len(args) == 1 and isinstance(args[0], (list, tuple)):
@@ -1455,8 +1457,7 @@ class Pipeline:
         if 'models' in what:
             self.models.reset()
 
-        if self.random is not None:
-            self.random = make_rng(random)
+        self.random = make_rng(random)
 
         self._profiler = Profile() if profile else None
 

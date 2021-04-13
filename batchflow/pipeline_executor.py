@@ -179,14 +179,14 @@ class PipelineExecutor:
         """
 
         # create SeedSequence hierarchy
-        # - seed
-        # ---- dataset seed (might be skipped)
-        # ---- pipeline seed (to use in before and after pipeline and initalization actions)
-        # ---- execution seed (to use in batch execution, thus saving a seed for each batch)
+        # - seed (with a random or a given entropy)
+        # ---- dataset seed (might be skipped, to keep pipeline and execution seeds)
+        # ---- pipeline seed (to use in `before` and `after` pipelines and initalization actions)
+        # ---- execution seed (to use in batch execution, thus keeping a seed for each batch)
         shuffle = kwargs.pop('shuffle', False)
         if shuffle is False:
             seed = np.random.SeedSequence()
-            _ = seed.spawn(1)[0]  # skip a dataset seed
+            _ = seed.spawn(1)[0]  # skip the dataset seed
             shuffle = False
         elif shuffle is True:
             seed = np.random.SeedSequence()
@@ -196,9 +196,9 @@ class PipelineExecutor:
                 seed = np.random.SeedSequence(shuffle)
                 shuffle = seed.spawn(1)[0]
             else:
-                # if shuffle is negative, do not shuffle dataset, but use the seed for randomization
+                # if shuffle is negative, do not shuffle the dataset, but use the seed for randomization
                 seed = np.random.SeedSequence(-shuffle)
-                _ = seed.spawn(1)[0]  # skip a dataset seed
+                _ = seed.spawn(1)[0]  # skip the dataset seed
                 shuffle = False
         else:
             raise TypeError('shuffle can be bool or int', shuffle)
