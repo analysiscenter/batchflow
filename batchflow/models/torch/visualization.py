@@ -328,18 +328,15 @@ class VisualizationMixin:
         }
         extractors = []
         signals = []
-        def register_hooks(module):
-            """ Traverse modules in network. """
-            submodules_amount = sum(1 for _ in module.modules())
-            if submodules_amount == 1:
-                statistics['Modules instances'].append(module.__class__.__name__)
-                extractors.append(LayerExtractor(module))
-
-            for child in module.children():
-                register_hooks(child)
 
         try:
-            register_hooks(model)
+            for module in model.modules():
+                submodules_amount = sum(1 for _ in module.modules())
+                if submodules_amount == 1:
+                    module_instance = module.__class__.__name__
+                    if module_instance != 'Identity':
+                        statistics['Modules instances'].append(module_instance)
+                        extractors.append(LayerExtractor(module))
             _ = model(input_tensor)
         finally:
             for extractor in extractors:
