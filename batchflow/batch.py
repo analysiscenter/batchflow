@@ -102,7 +102,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         self._dataset = dataset
         self.pipeline = pipeline
         self.iteration = None
-        self._random = None
+        self.random = None
         self._attrs = None
         self.create_attrs(**kwargs)
 
@@ -163,12 +163,19 @@ class Batch(metaclass=MethodsTransformingMeta):
 
             self.random.normal(0, 1)
         """
-        if self._random is not None:
-            return self._random
+        # if RNG set for the batch (e.g. in @inbatch_parallel), use it
+        if getattr(self._local, 'random', None) is not None:
+            return self._local.random
+        # otherwise use RNG from the pipeline
         if self.pipeline is not None and self.pipeline.random is not None:
             return self.pipeline.random
-        self._random = make_rng()
-        return self._random
+        # if there is none (e.g. when the batch is created manually), make a random one
+        self._local.random = make_rng()
+        return self._local.random
+
+    @random.setter
+    def random(self, value):
+        self._local.random = value
 
     def __copy__(self):
         dump_batch = dill.dumps(self)
