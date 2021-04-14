@@ -4,7 +4,7 @@ import warnings
 import numpy as np
 
 
-def make_rng(seed):
+def make_rng(seed=None):
     """ Create a random number generator
 
     Parameters
