@@ -9,11 +9,14 @@ import numpy as np
 
 from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
 from .notifier import Notifier
+from .utils_random import make_seed_sequence
+
 
 warnings.filterwarnings("always", category=RuntimeWarning, module=__name__)
 warnings.filterwarnings("always", category=EmptyBatchSequence)
 
 END_PIPELINE = -1
+
 
 class PipelineExecutor:
     """ Pipeline executor"""
@@ -184,22 +187,12 @@ class PipelineExecutor:
         # ---- pipeline seed (to use in `before` and `after` pipelines and initalization actions)
         # ---- execution seed (to use in batch execution, thus keeping a seed for each batch)
         shuffle = kwargs.pop('shuffle', False)
-        if shuffle is False:
-            seed = np.random.SeedSequence()
+        seed = make_seed_sequence(shuffle)
+        if shuffle is False or isinstance(shuffle, int) and shuffle < 0:
             _ = seed.spawn(1)[0]  # skip the dataset seed
             shuffle = False
-        elif shuffle is True:
-            seed = np.random.SeedSequence()
+        elif shuffle is True or isinstance(shuffle, int) and shuffle >= 0:
             shuffle = seed.spawn(1)[0]
-        elif isinstance(shuffle, int):
-            if shuffle >= 0:
-                seed = np.random.SeedSequence(shuffle)
-                shuffle = seed.spawn(1)[0]
-            else:
-                # if shuffle is negative, do not shuffle the dataset, but use the seed for randomization
-                seed = np.random.SeedSequence(-shuffle)
-                _ = seed.spawn(1)[0]  # skip the dataset seed
-                shuffle = False
         else:
             raise TypeError('shuffle can be bool or int', shuffle)
         pipeline_seed = seed.spawn(1)[0]
