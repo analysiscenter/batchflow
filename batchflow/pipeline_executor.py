@@ -5,8 +5,6 @@ import traceback
 import concurrent.futures as cf
 import queue as q
 
-import numpy as np
-
 from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
 from .notifier import Notifier
 from .utils_random import make_seed_sequence
