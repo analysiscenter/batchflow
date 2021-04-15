@@ -48,12 +48,13 @@ def make_rng(seed=None):
 
     return random_state
 
+
 def make_seed_sequence(shuffle=False):
-    """ Create a random number generator
+    """ Create a seed sequence for random number generation
 
     Parameters
     ----------
-    shuffle : bool or int
+    shuffle : bool or int or numpy.random.Generator
         a random state
 
         - False or True - creates a new seed sequence with random entropy

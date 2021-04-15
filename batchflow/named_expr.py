@@ -605,6 +605,8 @@ class R(PipelineNamedExpression):
     seed : int, SeedSequence, Generator, BitGenerator, RandomState
         a random state (see :func:`~.make_rng`)
 
+    args, kwargs
+        distribution parameters
 
     Notes
     -----
