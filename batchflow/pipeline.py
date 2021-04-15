@@ -1534,10 +1534,10 @@ class Pipeline:
         shuffle : bool or int
             specifies the randomization and the order of items (default=False):
 
-            - `False`, items go sequentionally, one after another as they appear in the index;
+            - `False` - items go sequentially, one after another as they appear in the index;
               a random number generator is created with a random entropy
 
-            - `True`, items are shuffled randomly before each epoch;
+            - `True` - items are shuffled randomly before each epoch;
               a random number generator is created with a random entropy
 
             - int - a seed number for a random shuffle;
