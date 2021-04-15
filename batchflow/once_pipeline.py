@@ -185,9 +185,18 @@ class OncePipeline:
 
         Examples
         --------
-        >>> pipeline.before.import_model('my-model', custom_resnet_model)
 
-        >>> pipeline.before.import_model('my-model', train_pipeline.m('resnet'))
+        Import a given model instance::
+
+            pipeline.before.import_model('my-model', custom_resnet_model)
+
+        Import `my-model` from the pipeline::
+
+            pipeline.before.import_model('my-model', train_pipeline)
+
+        Import `resnet` model from `train_pipeline` and give it a name `my-model`::
+
+            pipeline.before.import_model('my-model', train_pipeline.m('resnet'))
         """
         return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, model_name=name))
 
