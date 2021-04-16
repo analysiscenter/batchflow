@@ -187,7 +187,7 @@ class PipelineExecutor:
         shuffle = kwargs.pop('shuffle', False)
         seed = make_seed_sequence(shuffle)
         if shuffle is False or isinstance(shuffle, int) and shuffle < 0:
-            _ = seed.spawn(1)[0]  # skip the dataset seed
+            _ = seed.spawn(1)[0]  # do not shuffle the dataset, so skip its seed
             shuffle = False
         elif shuffle is True or isinstance(shuffle, int) and shuffle >= 0:
             shuffle = seed.spawn(1)[0]
@@ -197,7 +197,7 @@ class PipelineExecutor:
         execution_seed = seed.spawn(1)[0]
 
         self.reset()
-        self.pipeline.reset(reset, profile=profile, random=pipeline_seed)
+        self.pipeline.reset(reset, profile=profile, seed=pipeline_seed)
 
         if 'n_iters' not in kwargs and 'n_epochs' not in kwargs:
             kwargs.setdefault('n_epochs', 1)
@@ -277,6 +277,9 @@ class PipelineExecutor:
                     self._prefetch_count.task_done()
 
         else:
+            # save RNG
+            random = self.pipeline.random
+
             is_empty = True
             iteration = 1
             for batch in batch_generator:
@@ -300,6 +303,10 @@ class PipelineExecutor:
             if is_empty:
                 warnings.warn("Batch generator is empty. Use pipeline.reset('iter') to restart iteration.",
                               EmptyBatchSequence, stacklevel=3)
+
+            # restore RNG for after-pipeline
+            self.pipeline.random = random
+            self.pipeline.random_seed = pipeline_seed
 
         notifier.close()
         self.notifier = notifier

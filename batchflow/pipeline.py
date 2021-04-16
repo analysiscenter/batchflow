@@ -102,6 +102,7 @@ class Pipeline:
         self.variables_initialised = False
         self._local = threading.local()
         self.random = None
+        self.random_seed = None
 
         self._profiler = None
         self.profile_info = None
@@ -131,11 +132,20 @@ class Pipeline:
 
     @property
     def random(self):
-        return self._local.random if self._local else None
+        return self._local.random if hasattr(self._local, 'random') else None
 
     @random.setter
     def random(self, value):
         self._local.random = value
+
+    @property
+    def random_seed(self):
+        return self._local.random_seed if hasattr(self._local, 'random_seed') else None
+
+    @random_seed.setter
+    def random_seed(self, value):
+        self._local.random_seed = value
+        self.random = make_rng(value)
 
     @classmethod
     def from_pipeline(cls, pipeline, actions=None, proba=None, repeat=None):
@@ -992,7 +1002,7 @@ class Pipeline:
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
         if seed:
-            self.random = make_rng(seed)
+            self.random_seed = seed
         batch_res = self._exec_all_actions(batch, iteration=iteration)
         if notifier:
             notifier.update(pipeline=self, batch=batch_res)
@@ -1400,7 +1410,7 @@ class Pipeline:
         return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, merge=merge,
                                                         components=components, batch_class=batch_class))
 
-    def reset(self, *args, profile=False, random=None):
+    def reset(self, *args, profile=False, seed=None):
         """ Clear all iteration metadata in order to start iterating from scratch
 
         Parameters
@@ -1457,7 +1467,7 @@ class Pipeline:
         if 'models' in what:
             self.models.reset()
 
-        self.random = make_rng(random)
+        self.random_seed = seed
 
         self._profiler = Profile() if profile else None
 
