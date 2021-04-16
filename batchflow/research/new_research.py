@@ -1,5 +1,7 @@
 from collections import OrderedDict
 from copy import copy, deepcopy
+import itertools
+import traceback
 
 from .. import Config, inbatch_parallel, Pipeline
 from ..named_expr import NamedExpression, eval_expr
@@ -127,8 +129,8 @@ class ExecutableUnit:
         if isinstance(src, (tuple, list)):
             setattr(self, attr, getattr(self.experiment.instances[src[0]], src[1]))
 
-    def __call__(self, iteration, n_iters):
-        if self.must_execute(iteration, n_iters):
+    def __call__(self, iteration, n_iters, last=False):
+        if self.must_execute(iteration, n_iters, last):
             self.get_method()
             self.iteration = iteration
             args = eval_expr(self.args, experiment=self.experiment)
@@ -141,8 +143,11 @@ class ExecutableUnit:
                 self._output = next(self._iterator)
             return self._output
 
-    def must_execute(self, iteration, n_iters=None):
+    def must_execute(self, iteration, n_iters=None, last=False):
         # TODO
+        if last and 'last' in self.iterations_to_execute:
+            return True
+
         frequencies = (item for item in self.iterations_to_execute if isinstance(item, int) and item > 0)
         iterations = (int(item[1:]) for item in self.iterations_to_execute if isinstance(item, str) and item != 'last')
 
@@ -185,11 +190,12 @@ class Experiment:
         else:
             self.actions = actions
 
-        self.state = ['is_alive', 'exception_raised', 'iteration']
+        self.state = ['_is_alive', '_exception_raised', 'iteration']
 
         self.experiment_meta = research_meta
         self._is_alive = True
         self._exception_raised = False
+        self.last = False
         self.outputs = dict()
         self.results = OrderedDict()
 
@@ -199,7 +205,7 @@ class Experiment:
 
     @is_alive.setter
     def is_alive(self, value):
-        return self._is_alive and value
+        self._is_alive = self._is_alive and value
 
     @property
     def exception_raised(self):
@@ -207,7 +213,7 @@ class Experiment:
 
     @exception_raised.setter
     def exception_raised(self, value):
-        return self._exception_raised or value
+        self._exception_raised = self._exception_raised or value
 
     def add_namespace(self, name, namespace, root=False, **kwargs):
         self.namespaces[name] = Namespace(name, namespace, root, **kwargs)
@@ -215,7 +221,6 @@ class Experiment:
             if not isinstance(experiments, list):
                 experiments = [experiments]
             instance = experiments[0].namespaces[item_name](experiments[0])
-            print(experiments)
             for e in experiments:
                 e.instances[item_name] = instance
         self.add_callable(f'init_{name}', _create_instance, experiments=E(all=root),
@@ -312,13 +317,6 @@ class Experiment:
 
         root_experiment = executor.experiments[0] if len(executor.experiments) > 0 else None
 
-        # for name, namespace in self.namespaces.items():
-        #     if namespace.root and root_experiment is not None:
-        #         self.namespaces[name] = root_experiment.namespaces[name]
-        #         self.namespaces[name].experiment = self
-        #     else:
-        #         self.namespaces[name] = namespace(experiment=self)
-
         for name in self.actions:
             if self.actions[name].root and root_experiment is not None:
                 self.actions[name] = root_experiment.actions[name]
@@ -326,21 +324,25 @@ class Experiment:
                 self.actions[name].set_unit(config=config, experiment=self)
 
     def call(self, name, iteration, n_iters=None):
-        self.iteration = iteration
-        try:
-            self.outputs[name] = self.actions[name](iteration, n_iters)
-        except Exception as e:
-            self.exception_raised = True
-            self.process_exception(e)
-        if self.exception_raised and (list(self.actions.keys())[-1] == name):
-            self.is_alive = False
+        if self.is_alive:
+            self.last = self.last or (iteration + 1 == n_iters)
+            self.iteration = iteration
+            try:
+                self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
+            except Exception as e:
+                self.exception_raised = True
+                self.last = True
+                self.process_exception(e)
+            if self.exception_raised and (list(self.actions.keys())[-1] == name):
+                self.is_alive = False
 
     def process_exception(self, exception):
-        # TODO
-        raise exception
+        self.exception = exception
+        ex_traceback = exception.__traceback__
+        self.traceback = ''.join(traceback.format_exception(exception.__class__, exception, ex_traceback))
 
 class Executor:
-    def __init__(self, experiment, meta, configs=None, executor_config=None, branches_configs=None, target='threads', params=None):
+    def __init__(self, experiment, meta, configs=None, executor_config=None, branches_configs=None, target='threads', n_iters=None):
         if configs is None:
             if branches_configs is None:
                 self.n_branches = 1
@@ -356,12 +358,11 @@ class Executor:
         self.executor_config = Config(executor_config or dict())
         self.branches_configs = branches_configs or [Config() for _ in range(self.n_branches)]
         self.branches_configs = [Config(config) for config in self.branches_configs]
-        self.params = params
+        self.n_iters = n_iters
         self.meta = meta
         self.experiment_template = experiment
 
         self.create_experiments()
-        self.alive_experiments = [True] * self.n_branches
 
         self.parallel_call = inbatch_parallel(init=self._parallel_init_call, target=target, _use_self=False)(self._parallel_call)
 
@@ -374,30 +375,26 @@ class Executor:
             self.experiments.append(experiment)
 
     def run(self):
-        n_iters = self.params['n_iters']
-        iterations = range(n_iters) if n_iters else itertools.count()
-        try:
-            for iteration in iterations:
-                for unit_name, unit in self.experiment_template.actions.items():
-                    if unit.root:
-                        self.call_root(iteration, unit_name)
-                    else:
-                        self.parallel_call(iteration, unit_name)
+        iterations = range(self.n_iters) if self.n_iters else itertools.count()
+        for iteration in iterations:
+            for unit_name, unit in self.experiment_template.actions.items():
+                if unit.root:
+                    self.call_root(iteration, unit_name)
+                else:
+                    self.parallel_call(iteration, unit_name)
+            if not any([experiment.is_alive for experiment in self.experiments]):
+                break
 
-        except StopIteration:
-            pass
-
-    def _parallel_call(self, experiment, is_alive, iteration, unit_name):
+    def _parallel_call(self, experiment, iteration, unit_name):
         """ Parallel call of the unit 'name' """
-        if is_alive:
-            experiment.call(unit_name, iteration, self.params['n_iters'])
+        experiment.call(unit_name, iteration, self.n_iters)
 
     def _parallel_init_call(self, iteration, unit_name):
         _ = iteration, unit_name
-        return [[experiment, is_alive] for experiment, is_alive in zip(self.experiments, self.alive_experiments)]
+        return self.experiments
 
     def call_root(self, iteration, unit_name):
-        self.experiments[0].call(unit_name, iteration, self.params['n_iters'])
+        self.experiments[0].call(unit_name, iteration, self.n_iters)
         for experiment in self.experiments[1:]:
             experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
             experiment.copy_state(self.experiments[0])

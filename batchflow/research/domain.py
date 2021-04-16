@@ -271,8 +271,8 @@ class Domain:
         if weights is not None:
             self.weights = weights
 
-        self.weights = np.array(self.weights)
-        self.update_each = None
+        self.weights = np.array(self.weights) # weights for each cube to sample values from it
+        self.update_each = None # how often call updating function
         self.update_kwargs = None
         self.n_updates = 1
         self.update_idx = 0
