@@ -11,3 +11,5 @@ from .named_expr import ResearchNamedExpression, REU, RP, RI, RC, RR, RD, REP, R
 from .research import Research
 from .results import Results
 from .utils import transform_research_results
+
+from .new_research import *
