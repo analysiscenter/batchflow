@@ -250,6 +250,13 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
 
             return margs, mkwargs
 
+        def call_method(self, args, kwargs, seed=None):
+            """ Call a method with given args """
+            if use_self:
+                self.random_seed = seed
+                return method(*args, **kwargs)
+            return method(*args, **kwargs)
+
         def wrap_with_threads(self, args, kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
@@ -261,7 +268,8 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 full_kwargs = {**dec_kwargs, **kwargs}
                 for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                     margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                    one_ft = executor.submit(method, *margs, **mkwargs)
+                    seed = self.random_seed.spawn(1)[0] if use_self else None
+                    one_ft = executor.submit(call_method, self, margs, mkwargs, seed=seed)
                     futures.append(one_ft)
 
                 timeout = kwargs.get('timeout', None)
@@ -276,12 +284,12 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             n_workers = kwargs.pop('n_workers', _workers_count())
             with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
-                mpc_func = method(self, *args, **kwargs)
                 args, kwargs, params = _prepare_args(self, args, kwargs)
                 full_kwargs = {**dec_kwargs, **kwargs}
                 for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                     margs, mkwargs = _make_args(None, iteration, arg, args, kwargs, params)
-                    one_ft = executor.submit(mpc_func, *margs, **mkwargs)
+                    seed = self.random_seed.spawn(1)[0] if use_self else None
+                    one_ft = executor.submit(call_method, self, margs, mkwargs, seed=seed)
                     futures.append(one_ft)
 
                 timeout = kwargs.pop('timeout', None)
@@ -318,9 +326,11 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             futures = []
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
+            random_seed = self.random_seed
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                futures.append(asyncio.ensure_future(method(*margs, **mkwargs), loop=loop))
+                seed = random_seed.spawn(1)[0] if use_self else None
+                futures.append(asyncio.ensure_future(call_method(self, margs, mkwargs, seed=seed), loop=loop))
 
             if thread is not None:
                 thread.submit(loop.run_until_complete, wait_for_all(futures, loop)).result()
@@ -336,10 +346,13 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             futures = []
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
+            random_seed = self.random_seed
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
+
+                seed = random_seed.spawn(1)[0] if use_self else None
                 try:
-                    one_ft = method(*margs, **mkwargs)
+                    one_ft = call_method(self, margs, mkwargs, seed=seed)
                 except Exception as e:   # pylint: disable=broad-except
                     one_ft = e
                 futures.append(one_ft)

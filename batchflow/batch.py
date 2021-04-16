@@ -102,7 +102,6 @@ class Batch(metaclass=MethodsTransformingMeta):
         self._dataset = dataset
         self.pipeline = pipeline
         self.iteration = None
-        self.random = None
         self._attrs = None
         self.create_attrs(**kwargs)
 
@@ -161,21 +160,38 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         ::
 
-            self.random.normal(0, 1)
+            x = self.random.normal(0, 1)
         """
-        # if RNG set for the batch (e.g. in @inbatch_parallel), use it
-        if getattr(self._local, 'random', None) is not None:
+        # if RNG is set for the batch (e.g. in @inbatch_parallel), use it
+        if hasattr(self._local, 'random'):
             return self._local.random
         # otherwise use RNG from the pipeline
         if self.pipeline is not None and self.pipeline.random is not None:
             return self.pipeline.random
+
         # if there is none (e.g. when the batch is created manually), make a random one
-        self._local.random = make_rng()
+        self._local.random = make_rng(self.random_seed)
         return self._local.random
 
-    @random.setter
-    def random(self, value):
-        self._local.random = value
+    @property
+    def random_seed(self):
+        """ : SeedSequence for random number generation """
+        # if RNG is set for the batch (e.g. in @inbatch_parallel), use it
+        if hasattr(self._local, 'random_seed'):
+            return self._local.random_seed
+
+        if self.pipeline is not None and self.pipeline.random_seed is not None:
+            return self.pipeline.random_seed
+
+        # if there is none (e.g. when the batch is created manually), make a random seed
+        self._local.random_seed = np.random.SeedSequence()
+        return self._local.random_seed
+
+    @random_seed.setter
+    def random_seed(self, value):
+        """ : SeedSequence for random number generation """
+        self._local.random_seed = value
+        self._local.random = make_rng(value)
 
     def __copy__(self):
         dump_batch = dill.dumps(self)
@@ -375,9 +391,9 @@ class Batch(metaclass=MethodsTransformingMeta):
 
     def __getattr__(self, name):
         if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
-            attr = getattr(self.data, name, None)
-            return attr
-        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+            return getattr(self.data, name, None)
+        if name not in dir(self):
+            raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def __setattr__(self, name, value):
         if self.components is not None:

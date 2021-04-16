@@ -29,24 +29,24 @@ def make_rng(seed=None):
     numpy.random.Generator
     """
     if seed is False:
-        random_state = None
+        rng = None
     elif seed is None or seed is True:
-        random_state = np.random.default_rng(np.random.SFC64())
+        rng = np.random.default_rng(np.random.SFC64())
     elif isinstance(seed, np.random.SeedSequence):
-        random_state = np.random.default_rng(np.random.SFC64(seed))
+        rng = np.random.default_rng(np.random.SFC64(seed))
     elif isinstance(seed, int):
-        random_state = np.random.default_rng(np.random.SFC64(seed))
+        rng = np.random.default_rng(np.random.SFC64(seed))
     elif isinstance(seed, np.random.Generator):
-        random_state = seed
+        rng = seed
     elif isinstance(seed, np.random.BitGenerator):
-        random_state = np.random.default_rng(seed)
+        rng = np.random.default_rng(seed)
     elif isinstance(seed, np.random.RandomState):
-        random_state = seed
+        rng = seed
     else:
         warnings.warn("Unknown seed type: %s" %  seed)
-        random_state = None
+        rng = None
 
-    return random_state
+    return rng
 
 
 def make_seed_sequence(shuffle=False):
@@ -54,7 +54,7 @@ def make_seed_sequence(shuffle=False):
 
     Parameters
     ----------
-    shuffle : bool or int or numpy.random.Generator
+    shuffle : bool or int
         a random state
 
         - False or True - creates a new seed sequence with random entropy
