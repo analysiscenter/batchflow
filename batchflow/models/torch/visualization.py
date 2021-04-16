@@ -288,7 +288,7 @@ class VisualizationMixin:
         return camera
 
     # Visualize signal propagation statistics
-    def get_signal_propagation(self, model=None, input_shape=None, batch_size=3, input_tensor=None):
+    def get_signal_propagation(self, model=None, input_tensor=None):
         """ Compute signal propagation statistics of all layers in the network.
         Brock A. et al "`Characterizing signal propagation to close the performance gap in unnormalized ResNets
         <https://arxiv.org/pdf/2101.08692.pdf>`_"
@@ -300,25 +300,13 @@ class VisualizationMixin:
         ----------
         model : nn.Module
             Model to base visualizations on.
-        input_shape : sequence
-            Shape of the image to generate.
-        batch_size : int
-            Number of images in one batch.
-        input : Tensor
+        input_tensor : Tensor
             Input tensor for signal propagation.
         """
-        if model is None:
-            try:
-                model = self.model
-            except:
-                raise ValueError("You should provide TorchModel or nn.Module.")
+        model = model or self.model
 
         if input_tensor is None:
-            if input_shape is None:
-                raise ValueError("You should provide `input_tensor` or `input_shape` argument.")
-            if len(input_shape) != 3:
-                raise ValueError("Parameter `input_shape` must be a sequence of 3 elements (C, H, W).")
-            input_shape = (batch_size, *input_shape)
+            input_shape = self.input_shapes[-1]
             input_tensor = torch.randn(input_shape)
 
         statistics = {
@@ -332,11 +320,10 @@ class VisualizationMixin:
         try:
             for module in model.modules():
                 submodules_amount = sum(1 for _ in module.modules())
-                if submodules_amount == 1:
-                    module_instance = module.__class__.__name__
-                    if module_instance != 'Identity':
-                        statistics['Modules instances'].append(module_instance)
-                        extractors.append(LayerExtractor(module))
+                module_instance = module.__class__.__name__
+                if (submodules_amount == 1) and (module_instance != 'Identity'):
+                    extractors.append(LayerExtractor(module))
+                    statistics['Modules instances'].append(module_instance)
             _ = model(input_tensor)
         finally:
             for extractor in extractors:
@@ -351,24 +338,20 @@ class VisualizationMixin:
             statistics['Average Channel Variance'].append(avg_ch_var)
         return statistics
 
-    def show_signal_propagation_plot(self, **kwargs):
+    def get_signal_propagation_plot(self, model=None, input_tensor=None, statistics=None):
         """ Visualize signal propagation plot.
 
         Parameters
         ----------
-        kwargs : dict
-            Named arguments directly passed to `get_signal_propagation` method.
-            `statistics` or `model` and `input_shape` must be provided.
+        model : nn.Module
+            Model to base visualizations on.
+        input_tensor : Tensor
+            Input tensor for signal propagation.
+        statistics : dict
+            Dict with signal propagation statistics.
         """
-        statistics = kwargs.get('statistics')
-        model = kwargs.get('model')
-        input_shape = kwargs.get('input_shape')
-        batch_size = kwargs.get('batch_size', 3)
-        input_tensor = kwargs.get('input_tensor')
-
         if statistics is None:
-            statistics = self.get_signal_propagation(model=model, input_shape=input_shape,
-                                                     batch_size=batch_size, input_tensor=input_tensor)
+            statistics = self.get_signal_propagation(model=model, input_tensor=input_tensor)
 
         fig, axes = plt.subplots(1, len(statistics)-1, figsize=(15, 5))
         for (ax, (title, data)) in zip(axes, statistics.items()):
@@ -376,6 +359,7 @@ class VisualizationMixin:
             ax.set_title(title + " over network units", fontsize=14)
             ax.set_xlabel("Network depth", fontsize=12)
             ax.set_ylabel(title, fontsize=12)
+            ax.grid(True)
         fig.show()
 
 
