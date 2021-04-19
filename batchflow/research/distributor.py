@@ -26,7 +26,7 @@ class _DummyBar:
     def __exit__(self, *args, **kwargs):
         pass
 
-class Distributor:
+class _Distributor:
     """ Distributor of jobs between workers. """
     def __init__(self, n_iters, workers, devices, worker_class=None, timeout=None, trials=2, logger=None):
         """
@@ -106,7 +106,7 @@ class Distributor:
             previous_domain_jobs = 0
             n_updates = 0
             finished_iterations = dict()
-            with bar(total=None) as progress:
+            with tqdm(total=None, disable=(not bar)) as progress:
                 while True:
                     n_jobs = self.jobs_queue.next_jobs(len(workers)+1)
                     jobs_in_queue = n_jobs
@@ -169,3 +169,76 @@ class Signal:
 
     def __repr__(self):
         return str(self.__dict__)
+
+class Worker:
+    def __init__(self, index, worker_config, tasks, states, research):
+        self.index = index
+        self.worker_config = worker_config
+        self.tasks = tasks
+        self.research = research
+
+    def __call__(self):
+        executor_class = self.research.executor_class
+        n_iters = self.research.n_iters
+        task = self.tasks.get()
+        while task is not None:
+            task_idx, executor_configs = task
+            name = f"Task {task_idx}"
+            executor = executor_class(self.research.experiment, research=self.research, target=self.research.executor_target,
+                                      configs=executor_configs, n_iters=n_iters, task_name=name)
+            if self.research.parallel:
+                process = mp.Process(target=executor.run)
+                process.start()
+                process.join()
+            else:
+                executor.run()
+            if self.research.parallel:
+                self.tasks.task_done()
+                task = self.tasks.get()
+            else:
+                break
+        self.tasks.task_done()
+                    
+class Distributor:
+    """ Distributor of jobs between workers. """
+    def __init__(self, tasks, research):
+        """
+        Parameters
+        ----------
+        workers : int or list of Worker configs
+
+        worker_class : Worker subclass or None
+        """
+        self.tasks = tasks
+        self.research = research
+        self.states = mp.JoinableQueue()
+
+    def run(self, bar=False):
+        """ Run disributor and workers.
+
+        Parameters
+        ----------
+        jobs_queue : DynamicQueue of tasks
+
+        n_iters : int or None
+
+        bar : bool or callable
+        """
+        workers = []
+        for i, worker_config in enumerate(self.research.workers):
+            workers += [Worker(i, worker_config, self.tasks, self.states, self.research)]
+        
+        n_tasks = self.tasks.next_tasks(len(workers)+1)
+        if self.research.parallel:
+            for worker in workers:
+                mp.Process(target=worker).start()
+            while n_tasks > 0:
+                self.tasks.join()
+                n_tasks = self.tasks.next_tasks(1)
+            self.tasks.stop_workers(len(workers))
+            self.tasks.join()
+        else:
+            while n_tasks > 0:
+                workers[0]()
+                n_tasks = self.tasks.next_tasks(1)
+            workers[0]()

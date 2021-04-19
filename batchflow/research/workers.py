@@ -10,7 +10,7 @@ import psutil
 from .distributor import Signal
 from .executable import PipelineStopIteration
 
-class Worker:
+class _Worker:
     """ Worker that creates subprocess to execute job.
     Worker get queue of jobs, pop one job and execute it in subprocess. That subprocess
     call init, main and post class methods.

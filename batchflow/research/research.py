@@ -18,9 +18,9 @@ import multiprocess as mp
 
 from .results import Results
 from .distributor import Distributor
-from .workers import PipelineWorker
+# from .workers import PipelineWorker
 from .domain import Domain, Option, ConfigAlias
-from .job import Job
+# from .job import Job
 from .logger import BaseLogger, FileLogger, PrintLogger, TelegramLogger
 from .utils import get_metrics, count_startswith
 from .executable import Executable, Namespace
@@ -618,7 +618,7 @@ class DynamicQueue:
 
     def update(self):
         """ Update domain. """
-        if self.n_updates is None or self.update_idx < self.n_updates:
+        if self.domain.n_updates is None or self.domain.update_idx < self.domain.n_updates:
             new_domain = self.domain.update_domain(self.research_path)
             self.update_idx += 1
             if new_domain is not None:

@@ -1,9 +1,13 @@
+import os
 from collections import OrderedDict
 from copy import copy, deepcopy
 import itertools
 import traceback
+import multiprocess as mp
 
 from .. import Config, inbatch_parallel, Pipeline
+from .domain import Domain
+from .distributor import Distributor
 from ..named_expr import NamedExpression, eval_expr
 
 class E(NamedExpression):
@@ -307,8 +311,7 @@ class Experiment:
         # make dir using path from self.meta
         pass
 
-    def create_instances(self, config, meta, executor=None):
-        self.meta = meta
+    def create_instances(self, config, executor=None):
         self.config = config
         self.executor = executor
         self.generate_id()
@@ -342,7 +345,8 @@ class Experiment:
         self.traceback = ''.join(traceback.format_exception(exception.__class__, exception, ex_traceback))
 
 class Executor:
-    def __init__(self, experiment, meta, configs=None, executor_config=None, branches_configs=None, target='threads', n_iters=None):
+    def __init__(self, experiment, research=None, configs=None, executor_config=None, branches_configs=None,
+                 target='threads', n_iters=None, task_name=None):
         if configs is None:
             if branches_configs is None:
                 self.n_branches = 1
@@ -359,8 +363,9 @@ class Executor:
         self.branches_configs = branches_configs or [Config() for _ in range(self.n_branches)]
         self.branches_configs = [Config(config) for config in self.branches_configs]
         self.n_iters = n_iters
-        self.meta = meta
+        self.research = research
         self.experiment_template = experiment
+        self.task_name = task_name or 'Task'
 
         self.create_experiments()
 
@@ -369,9 +374,9 @@ class Executor:
     def create_experiments(self):
         self.experiments = []
         for config, branch_config in zip(self.configs, self.branches_configs):
-            config = config + branch_config + self.executor_config
+            config = config.config() + branch_config + self.executor_config
             experiment = self.experiment_template.copy()
-            experiment.create_instances(config, self.meta, self)
+            experiment.create_instances(config, self)
             self.experiments.append(experiment)
 
     def run(self):
@@ -398,3 +403,266 @@ class Executor:
         for experiment in self.experiments[1:]:
             experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
             experiment.copy_state(self.experiments[0])
+
+class NewResearch:
+    def __init__(self, name=None, domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=100):
+        self.domain = Domain(domain)
+        self.n_configs = n_configs
+        self.n_reps = n_reps
+        self.repeat_each = repeat_each
+        self.experiment = experiment or Experiment()
+        self.name = name or 'research'
+
+    def init_instance(self, *args, **kwargs):
+        self.experiment.add_namespace(*args, **kwargs)
+        return self
+
+    def add_callable(self, *args, **kwargs):
+        self.experiment.add_callable(*args, **kwargs)
+        return self
+
+    def add_generator(self, *args, **kwargs):
+        self.experiment.add_generator(*args, **kwargs)
+        return self
+
+    def add_pipeline(self, *args, **kwargs):
+        self.experiment.add_pipeline(*args, **kwargs)
+        return self
+
+    def update_domain(self, **kwargs):
+        """ Add domain update functions or update parameters.
+
+        Parameters
+        ----------
+        function : callable or None
+
+        each : int or 'last'
+            when update method will be called. If 'last', domain will be updated
+            when iterator will be finished. If int, domain will be updated with
+            that period.
+        n_updates : int
+            the total number of updates.
+        *args, **kwargs :
+            update function parameters.
+        """
+        self.domain.set_update(function, each, n_updates, **kwargs)
+        return self
+
+    def load_results(self, *args, **kwargs):
+        """ Load results of research as pandas.DataFrame or dict (see :meth:`~.Results.load`). """
+        return Results(self.name, *args, **kwargs)
+
+    def attach_env_meta(self, **kwargs):
+        """ Save the information about the current state of project repository.
+
+        Parameters
+        ----------
+        kwargs : dict
+            dict where values are bash commands and keys are names of files to save output of the command.
+        """
+        commands = {
+            'commit': "git log --name-status HEAD^..HEAD",
+            'diff': 'git diff',
+            'status': 'git status',
+            **kwargs
+        }
+
+        for filename, command in commands.items():
+            process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+            output, _ = process.communicate()
+            result = re.sub('"image/png": ".*?"', '"image/png": "..."', output.decode('utf'))
+            if not os.path.exists(os.path.join(self.name, 'env')):
+                os.makedirs(os.path.join(self.name, 'env'))
+            with open(os.path.join(self.name, 'env', filename + '.txt'), 'w') as file:
+                print(result, file=file)
+
+    def _get_devices(self, devices):
+        n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
+        n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
+        total_n_branches = n_workers * n_branches
+        if devices is None:
+            devices = [[[None]] * n_branches] * n_workers
+        if isinstance(devices, (int, str)):
+            devices = [devices]
+        if isinstance(devices[0], (int, str)):
+            if total_n_branches > len(devices):
+                _devices = list(itertools.chain.from_iterable(
+                    zip(*itertools.repeat(devices, total_n_branches // len(devices)))
+                ))
+                devices = _devices + devices[:total_n_branches % len(devices)]
+            else:
+                devices = devices + devices[:-len(devices) % (total_n_branches)]
+            if total_n_branches % len(devices) == 0:
+                branches_per_device = total_n_branches // len(devices)
+                devices = list(itertools.chain.from_iterable(itertools.repeat(x, branches_per_device) for x in devices))
+            if len(devices) % total_n_branches == 0:
+                devices_per_branch = len(devices) // total_n_branches
+                devices = [
+                    [
+                        [
+                            devices[n_branches * devices_per_branch * i + devices_per_branch * j + k]
+                            for k in range(devices_per_branch)
+                        ] for j in range(n_branches)
+                    ] for i in range(n_workers)
+                ]
+        if isinstance(devices[0], list):
+            def _transform_item(x):
+                values = [str(item) if isinstance(item, int) else item for item in x]
+                return dict(device=values) if x is not None else dict()
+
+            devices = [[_transform_item(branch_config) for branch_config in worker_config] for worker_config in devices]
+        return devices
+
+    def create_research_folder(self):
+        if not os.path.exists(self.name):
+            os.makedirs(self.name)
+            for subfolder in ['configs', 'description', 'env', 'results']:
+                config_path = os.path.join(self.name, subfolder)
+                if not os.path.exists(config_path):
+                    os.makedirs(config_path)
+        else:
+            raise ValueError(
+                "Research with name '{}' already exists".format(self.name)
+            )
+
+    def run(self, workers=1, branches=1, name=None, n_iters=None, bar=False, devices=None, executor_class=None,
+            dump_results=True, parallel=True, executor_target='threads'):
+        """ Run research.
+
+        Parameters
+        ----------
+        n_iters: int or None
+            number of iterations for each configuration. If None, wait StopIteration exception for at least
+            one executable unit.
+        workers : int or list of dicts (Configs)
+            If int - number of workers to run pipelines or workers that will run them, `worker_class` will be used.
+
+            If list of dicts (Configs) - list of additional configs which will be appended to configs from tasks.
+
+            Each element corresponds to one worker.
+        branches: int or list of dicts (Configs)
+            Number of different branches with different configs with the same root. Each branch will use the same batch
+            from `root`. Pipelines will be executed in different threads.
+
+            If int - number of pipelines with different configs that will use the same prepared batch
+            from `root`.
+
+            If list of dicts (Configs) - list of dicts with additional configs to each pipeline.
+        name : str or None
+            name folder to save research. By default is 'research'.
+        bar : bool or callable
+            Whether to show a progress bar.
+            If callable, it must have the same signature as `tqdm`.
+        devices : str, list or None
+            all devices will be distributed between workwers and branches.
+            If you want to use different devices in branches, use expression `C('device')`.
+
+            For example, for :class:`~.TFModel` add `device=C('device')` to model config.
+            If None, default gpu configuration will be used
+        worker_class : type
+            worker class. `PipelineWorker` by default.
+        timeout : int
+            each job will be killed if it doesn't answer more then that time in minutes
+        trials : int
+            trials to execute job
+
+        **How does it work**
+
+        At each iteration all pipelines and functions will be executed in the order in which were added.
+        If `update_config` callable is defined, each config will be updated by that function and then
+        will be passed into each `ExecutableUnit`.
+        If `update_domain` callable is defined, domain will be updated with the corresponding function
+        accordingly to `each` parameter of `update_domain`.
+        """
+        self.n_iters = n_iters
+        self.workers = workers
+        self.branches = branches
+        self.devices = self._get_devices(devices)
+        self.executor_class = Executor
+        self.dump_results = dump_results
+        self.parallel = parallel
+        self.executor_target = executor_target
+
+        if self.dump_results:
+            self.create_research_folder()
+
+        if isinstance(workers, int):
+            self.workers = [Config() for _ in range(workers)]
+        if isinstance(branches, int):
+            self.branches = [Config() for _ in range(branches)]
+
+        self.domain.set_iter(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each)
+
+        if self.domain.size is None and (self.domain.update_func is None or self.domain.update_each == 'last'):
+            warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
+                          stacklevel=2)
+
+        print("Research {} is starting...".format(self.name))
+
+        n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
+        tasks = DynamicQueue(self.domain, self, n_branches)
+        distributor = Distributor(tasks, self)
+        distributor.run(bar)
+
+        return self
+
+class DynamicQueue:
+    """ Queue of tasks that can be changed depending on previous results. """
+    def __init__(self, domain, research, n_branches):
+        self.domain = domain
+        self.research = research
+        self.n_branches = n_branches
+
+        self.queue = mp.JoinableQueue()
+        self.withdrawn_tasks = 0
+
+    @property
+    def total(self):
+        """ Total estimated size of queue before the following domain update. """
+        if self.domain.size is not None:
+            return self.domain.size / self.n_branches
+        return None
+
+    def update(self):
+        """ Update domain. """
+        new_domain = self.domain.update(self.research) #TODO: put research instead of path
+        if new_domain is not None:
+            self.domain = new_domain
+            return True
+        return False
+
+    def next_tasks(self, n_tasks=1):
+        """ Get next `n_tasks` elements of queue. """
+        configs = []
+        for i in range(n_tasks):
+            branch_tasks = [] # TODO: rename it
+            try:
+                for _ in range(self.n_branches):
+                    branch_tasks.append(next(self.domain))
+                configs.append(branch_tasks)
+            except StopIteration:
+                if len(branch_tasks) > 0:
+                    configs.append(branch_tasks)
+                break
+        for i, executor_configs in enumerate(configs):
+            self.put((self.withdrawn_tasks + i, executor_configs))
+        n_tasks = len(configs)
+        self.withdrawn_tasks += n_tasks
+        return n_tasks
+
+    def stop_workers(self, n_workers):
+        """ Stop all workers by putting `None` task into queue. """
+        for _ in range(n_workers):
+            self.put(None)
+
+    def join(self):
+        self.queue.join()
+
+    def get(self):
+        return self.queue.get()
+
+    def put(self, value):
+        self.queue.put(value)
+
+    def task_done(self):
+        self.queue.task_done()

@@ -8,19 +8,19 @@ import numpy as np
 from .. import Config, Sampler
 from ..named_expr import eval_expr
 
-class KV:
-    """ Class for value and alias. Is used to create short and clear alias for some Python object
-    that can be used as an element of research `Domain`.
+class Alias:
+    """ Class for value and its alias. Is used to create short and clear alias for some Python object
+    that can be used as an element of `Domain`.
 
     Parameters
     ----------
     value : hashable
 
     alias : object
-        if None alias will be equal to `value`.
+        if None, alias will be equal to `value.__name__` or to `str(value)`.
     """
     def __init__(self, value, alias=None):
-        if isinstance(value, KV):
+        if isinstance(value, Alias):
             self.value = value.value
             self.alias = value.alias
         else:
@@ -31,7 +31,7 @@ class KV:
                 self.alias = alias
 
     def __repr__(self):
-        return 'KV(' + str(self.alias) + ': ' + str(self.value) + ')'
+        return 'Alias(' + str(self.alias) + ': ' + str(self.value) + ')'
 
     def _get_name(self, value):
         if hasattr(value, '__name__'):
@@ -46,18 +46,19 @@ class Option:
 
     Parameters
     ----------
-    parameter : KV or object
-
-    values : list, tuple of KV or objects, np.ndarray or Sampler.
+    parameter : Alias or str
+        parameter name
+    values : list, tuple, numpy.ndarray or Sampler
+        parameter values. Elements of list or tuple can be Aliases.
     """
     def __init__(self, parameter, values):
-        self.parameter = KV(parameter)
+        self.parameter = Alias(parameter)
         if isinstance(values, (list, tuple, np.ndarray)):
-            self.values = [KV(value) for value in values]
+            self.values = [Alias(value) for value in values]
         elif isinstance(values, Sampler):
             self.values = values
         else:
-            raise TypeError('values must be array-like object or Sampler but {} were given'.format(type(values)))
+            raise TypeError('`values` must be array-like object or Sampler but {} were given'.format(type(values)))
 
     def __matmul__(self, other):
         return Domain(self) @ Domain(other)
@@ -79,7 +80,7 @@ class Option:
         return 'Option({}, {})'.format(self.parameter.alias, self.values)
 
     def sample(self, size=None):
-        """ Return ConfigAlias objects created on the base of Sampler-option.
+        """ Return `ConfigAlias` objects created on the base of Sampler-option.
 
         Parameters
         ----------
@@ -88,30 +89,29 @@ class Option:
 
         Returns
         -------
-            ConfigAlias if size is None, list of ConfigAlias objects else.
+            ConfigAlias (if size is None) or list of ConfigAlias objects (otherwise).
         """
 
         if not isinstance(self.values, Sampler):
-            raise TypeError('values must be Sampler but {} was given'.format(type(self.values)))
-        _size = size or 1
-        res = [ConfigAlias([[self.parameter, self.values.sample(1)[0, 0]]]) for _ in range(_size)]
+            raise TypeError('`values` must be Sampler but {} was given'.format(type(self.values)))
+        res = [ConfigAlias([[self.parameter, self.values.sample(1)[0, 0]]]) for _ in range(size or 1)]
         if size is None:
             res = res[0]
         return res
 
     def items(self):
-        """ Return all possible ConfigAliases which can be created from the option.
+        """ Return all possible `ConfigAlias` instances which can be created from the option.
 
         Returns
         -------
-            list of ConfigAlias objects.
+            list of `ConfigAlias` objects.
         """
         if not isinstance(self.values, (list, tuple, np.ndarray)):
-            raise TypeError('values must be array-like object but {} were given'.format(type(self.values)))
+            raise TypeError('`values` must be array-like object but {} were given'.format(type(self.values)))
         return [ConfigAlias([[self.parameter, value]]) for value in self.values]
 
     def iterator(self):
-        """ Produce ConfigAlias from the option.
+        """ Produce `ConfigAlias` from the option.
 
         Returns
         -------
@@ -126,24 +126,24 @@ class Option:
 
 
 class ConfigAlias:
-    """ Class for config and alias which is represenation of config where all keys are str.
+    """ Class for config and its aliased version where all keys and values are `str`.
 
     Parameters
     ----------
     config : list of (key, value)
-        keys are KV or hashable, value is KV or object.
+        each key is `Alias` or str, value is `Alias` or object.
     """
     def __init__(self, config=None):
         _config = []
         if config is not None:
             for key, value in config:
-                _key = key if isinstance(key, KV) else KV(key)
-                _value = value if isinstance(value, KV) else KV(value)
+                _key = key if isinstance(key, Alias) else Alias(key)
+                _value = value if isinstance(value, Alias) else Alias(value)
                 _config.append((_key, _value))
         self._config = _config
 
     def alias(self, as_string=False, delim='-'):
-        """ Returns alias.
+        """ Returns config alias.
 
         Parameters
         ----------
@@ -274,22 +274,18 @@ class Domain:
         self.weights = np.array(self.weights) # weights for each cube to sample values from it
         self.update_each = None # how often call updating function
         self.update_kwargs = None
-        self.n_updates = 1
+        self.n_updates = 0
         self.update_idx = 0
 
         self._iterator = None
-        self.n_iters = None
+        self.n_items = None
         self.n_reps = 1
         self.repeat_each = 100
+        self.update_func = None
 
         self.brute_force = []
         for cube in self.cubes:
             self.brute_force.append(not all(isinstance(option.values, Sampler) for option in cube))
-
-    def update_func(self, *args, **kwargs): # pylint: disable=method-hidden
-        """ Function for domain update. If returns None, Domain will not be updated. """
-        _ = args, kwargs
-        return None
 
     def _dict_to_domain(self, domain):
         _domain = []
@@ -370,24 +366,24 @@ class Domain:
 
     def __next__(self):
         if self._iterator is None:
-            self.set_iter(self.n_iters, self.n_reps, self.repeat_each)
-            self._reset_iter(self.n_iters, self.n_reps, self.repeat_each)
+            self.set_iter(self.n_items, self.n_reps, self.repeat_each)
+            self._reset_iter(self.n_items, self.n_reps, self.repeat_each)
         return next(self._iterator)
 
     def reset_iter(self):
         self._iterator = None
 
-    def set_iter(self, n_iters=None, n_reps=1, repeat_each=100):
+    def set_iter(self, n_items=None, n_reps=1, repeat_each=100):
         """ Set parameters for iterator.
 
         Parameters
         ----------
-        n_iters : int or None
+        n_items : int or None
             the number of configs that will be generated from domain. If the size
-            of domain is less then `n_iters`, elements will be repeated. If `n_iters`
+            of domain is less then `n_items`, elements will be repeated. If `n_items`
             is `None` and there is not a cube that consists only of sampler-options
-            then `n_iters` will be setted to the number of configs that can be produced
-            from that domain. If `n_iters` is None and there is a cube that consists
+            then `n_items` will be setted to the number of configs that can be produced
+            from that domain. If `n_items` is None and there is a cube that consists
             only of sampler-option then domain will produce infinite number of configs.
         n_reps : int
             each element will be repeated n_reps times.
@@ -398,17 +394,17 @@ class Domain:
             from domain.
         """
         size = self._options_size()
-        self.n_iters = n_iters or size
+        self.n_items = n_items or size
         self.n_reps = n_reps
         self.repeat_each = repeat_each
 
         self._iterator = None
 
-    def _reset_iter(self, n_iters=None, n_reps=1, repeat_each=100):
+    def _reset_iter(self, n_items=None, n_reps=1, repeat_each=100):
         blocks = self._get_sampling_blocks()
         size = self._options_size()
-        if n_iters is not None:
-            repeat_each = n_iters
+        if n_items is not None:
+            repeat_each = n_items
         elif size is not None:
             repeat_each = size
         def _iterator():
@@ -430,12 +426,12 @@ class Domain:
             iterator = _iterator()
             if n_reps == 1:
                 i = 0
-                while n_iters is None or i < n_iters:
+                while n_items is None or i < n_items:
                     yield next(iterator) + ConfigAlias([('repetition', 0)]) # pylint: disable=stop-iteration-return
                     i += 1
             else:
                 i = 0
-                while n_iters is None or i < n_iters:
+                while n_items is None or i < n_items:
                     samples = list(islice(iterator, int(repeat_each)))
                     for repetition in range(n_reps):
                         for sample in samples:
@@ -446,8 +442,8 @@ class Domain:
     @property
     def size(self):
         """ The number of configs that will be produces from domain. """
-        if self.n_iters is not None:
-            return self.n_reps * self.n_iters
+        if self.n_items is not None:
+            return self.n_reps * self.n_items
         return None
 
     def __len__(self):
@@ -457,29 +453,28 @@ class Domain:
         ]
         return max(0, sum(cube_sizes))
 
-
     def iterator(self):
         """ Get domain iterator. """
         if self._iterator is None:
-            self.set_iter(self.n_iters, self.n_reps, self.repeat_each)
-            self._reset_iter(self.n_iters, self.n_reps, self.repeat_each)
+            self.set_iter(self.n_items, self.n_reps, self.repeat_each)
+            self._reset_iter(self.n_items, self.n_reps, self.repeat_each)
         return self._iterator
 
-    def set_update(self, function, each, kwargs):
+    def set_update(self, function, each, n_updates, **kwargs):
         """ Set domain update parameters. """
         self.update_kwargs = kwargs
         self.update_each = each
-        if function is not None:
-            self.update_func = function
+        self.n_updates = n_updates #TODO: must be >= 0
+        self.update_func = function
 
-    def update_domain(self, path):
+    def update(self, path):
         """ Update domain by `update_func`. If returns None, domain will not be updated. """
-        kwargs = eval_expr(self.update_kwargs, path=path)
-        return self.update_func(**kwargs)
-
-    def update_config(self, *args, **kwargs):
-        """ Compute and update config item. """
-        _ = args, kwargs
+        if self.n_updates is None or self.update_idx < self.n_updates:
+            kwargs = eval_expr(self.update_kwargs, path=path)
+            new_domain = self.update_func(**kwargs)
+            new_domain.update_idx += 1
+            new_domain.set_update(**self.update_domain)
+            return new_domain
         return None
 
     def _is_array_option(self):
