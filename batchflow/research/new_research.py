@@ -4,9 +4,12 @@ from copy import copy, deepcopy
 import itertools
 import traceback
 import multiprocess as mp
+import hashlib
+import random
+import dill
 
 from .. import Config, inbatch_parallel, Pipeline
-from .domain import Domain
+from .domain import Domain, ConfigAlias
 from .distributor import Distributor
 from ..named_expr import NamedExpression, eval_expr
 
@@ -184,7 +187,7 @@ class ExecutableUnit:
         return src[key]
 
 class Experiment:
-    def __init__(self, namespaces=None, actions=None, research_meta=None):
+    def __init__(self, namespaces=None, actions=None):
         if namespaces is not None:
              self.namespaces = OrderedDict(namespaces)
         else:
@@ -194,14 +197,14 @@ class Experiment:
         else:
             self.actions = actions
 
-        self.state = ['_is_alive', '_exception_raised', 'iteration']
+        self.state = ['_is_alive', '_exception_raised', 'iteration'] # TODO: explain what is it
 
-        self.experiment_meta = research_meta
         self._is_alive = True
         self._exception_raised = False
         self.last = False
         self.outputs = dict()
         self.results = OrderedDict()
+        self.dump_results = False
 
     @property
     def is_alive(self):
@@ -259,14 +262,31 @@ class Experiment:
         return self
 
     def save(self, value, save_to, iterations_to_execute=None, copy=False):
-        def _save_results(value, save_to, experiment, copy=copy):
+        def _save_results(value, save_to, experiment, copy): #TODO: test does copy work
             previous_values = experiment.results.get(save_to, OrderedDict())
             previous_values[experiment.iteration] = deepcopy(value) if copy else value
             experiment.results[save_to] = previous_values
         name = self.add_postfix('save_results')
         self.add_callable(name, _save_results,
                           iterations_to_execute=iterations_to_execute,
-                          value=value, save_to=save_to, experiment=E())
+                          value=value, save_to=save_to, experiment=E(), copy=copy)
+        return self
+
+    def dump(self, variable=None, iterations_to_execute=None):
+        self.dump_results = True
+        def _dump_results(variable, experiment):
+            values = experiment.results[variable] if variable is not None else experiment.results
+            variable = variable or 'all_results'
+            iteration = experiment.iteration
+            variable_path = os.path.join(experiment.full_path, variable)
+            if not os.path.exists(variable_path):
+                os.makedirs(variable_path)
+            with open(os.path.join(variable_path, str(iteration)), 'wb') as file:
+                dill.dump(values, file)
+        name = self.add_postfix('dump_results')
+        self.add_callable(name, _dump_results,
+                          iterations_to_execute=iterations_to_execute,
+                          variable=variable, experiment=E())
         return self
 
     def add_postfix(self, name):
@@ -288,6 +308,7 @@ class Experiment:
         namespaces = copy(self.namespaces)
         actions = OrderedDict([(name, copy(unit)) for name, unit in self.actions.items()])
         new_experiment = Experiment(namespaces=namespaces, actions=actions)
+        new_experiment.dump_results = self.dump_results
         return new_experiment
 
     def copy_state(self, src):
@@ -304,17 +325,22 @@ class Experiment:
         _ = memo
         return self.copy()
 
-    def generate_id(self):
-        self.id = None
+    def generate_id(self, alias):
+        self.id = hashlib.md5(alias.encode('utf-8')).hexdigest() + str(random.getrandbits(16))
 
     def create_folder(self):
         # make dir using path from self.meta
-        pass
+        if self.dump_results:
+            self.experiment_path = os.path.join('results', self.id)
+            self.full_path = os.path.join(self.executor.folder, self.experiment_path)
+            if not os.path.exists(self.full_path):
+                os.makedirs(self.full_path)
 
     def create_instances(self, config, executor=None):
-        self.config = config
+        self.config = config.config()
         self.executor = executor
-        self.generate_id()
+        self.research = executor.research
+        self.generate_id(config.alias(as_string=True))
         self.create_folder()
         self.instances = OrderedDict()
 
@@ -331,22 +357,31 @@ class Experiment:
             self.last = self.last or (iteration + 1 == n_iters)
             self.iteration = iteration
             try:
+                self.info(name, 'call')
                 self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
             except Exception as e:
                 self.exception_raised = True
                 self.last = True
-                self.process_exception(e)
+                if isinstance(e, StopIteration):
+                    self.info(name, 'was stopped by StopIteration')
+                else:
+                    self.process_exception(name, e)
             if self.exception_raised and (list(self.actions.keys())[-1] == name):
                 self.is_alive = False
 
-    def process_exception(self, exception):
+    def process_exception(self, name, exception):
         self.exception = exception
         ex_traceback = exception.__traceback__
         self.traceback = ''.join(traceback.format_exception(exception.__class__, exception, ex_traceback))
+        print(f'Experiment: {self.id}, it: {self.iteration}, name: {name} :: error')
+        print(self.traceback)
+
+    def info(self, name, msg):
+        print(f'Experiment: {self.id}, it: {self.iteration}, name: {name} :: {msg}')
 
 class Executor:
     def __init__(self, experiment, research=None, configs=None, executor_config=None, branches_configs=None,
-                 target='threads', n_iters=None, task_name=None):
+                 target='threads', n_iters=None, task_name=None, dump_results=False, folder=None):
         if configs is None:
             if branches_configs is None:
                 self.n_branches = 1
@@ -367,6 +402,8 @@ class Executor:
         self.experiment_template = experiment
         self.task_name = task_name or 'Task'
 
+        self.folder = self.research.name if self.research is not None else (folder or '.')
+
         self.create_experiments()
 
         self.parallel_call = inbatch_parallel(init=self._parallel_init_call, target=target, _use_self=False)(self._parallel_call)
@@ -374,7 +411,7 @@ class Executor:
     def create_experiments(self):
         self.experiments = []
         for config, branch_config in zip(self.configs, self.branches_configs):
-            config = config.config() + branch_config + self.executor_config
+            config = ConfigAlias(config) + ConfigAlias(branch_config) + ConfigAlias(self.executor_config)
             experiment = self.experiment_template.copy()
             experiment.create_instances(config, self)
             self.experiments.append(experiment)
