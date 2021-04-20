@@ -134,16 +134,17 @@ class ConfigAlias:
         each key is `Alias` or str, value is `Alias` or object.
     """
     def __init__(self, config=None):
-        _config = []
-        if config is not None:
-            if isinstance(config, ConfigAlias):
-                self._config = config
-            elif isinstance(config, (dict, Config)):
+        if isinstance(config, ConfigAlias):
+            _config = config._config
+        else:
+            _config = []
+            if isinstance(config, (dict, Config)):
                 config = config.items()
-            for key, value in config:
-                _key = key if isinstance(key, Alias) else Alias(key)
-                _value = value if isinstance(value, Alias) else Alias(value)
-                _config.append((_key, _value))
+            if config is not None:
+                for key, value in config:
+                    _key = key if isinstance(key, Alias) else Alias(key)
+                    _value = value if isinstance(value, Alias) else Alias(value)
+                    _config.append((_key, _value))
         self._config = _config
 
     def alias(self, as_string=False, delim='-'):

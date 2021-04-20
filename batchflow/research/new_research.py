@@ -10,7 +10,7 @@ import dill
 
 from .. import Config, inbatch_parallel, Pipeline
 from .domain import Domain, ConfigAlias
-from .distributor import Distributor
+from .distributor import Distributor, ResearchMonitor, ResearchResults
 from ..named_expr import NamedExpression, eval_expr
 
 class E(NamedExpression):
@@ -276,15 +276,20 @@ class Experiment:
 
     def dump(self, variable=None, iterations_to_execute=None):
         self.dump_results = True
+
         def _dump_results(variable, experiment):
             values = experiment.results[variable] if variable is not None else experiment.results
-            variable = variable or 'all_results'
             iteration = experiment.iteration
-            variable_path = os.path.join(experiment.full_path, variable)
+            variable_path = os.path.join(experiment.full_path, variable or 'all_results')
             if not os.path.exists(variable_path):
                 os.makedirs(variable_path)
             with open(os.path.join(variable_path, str(iteration)), 'wb') as file:
                 dill.dump(values, file)
+            if variable is None:
+                experiment.results = OrderedDict() # TODO: does it removed?
+            else:
+                del experiment.results[variable]
+
         name = self.add_postfix('dump_results')
         self.add_callable(name, _dump_results,
                           iterations_to_execute=iterations_to_execute,
@@ -358,25 +363,23 @@ class Experiment:
         if self.is_alive:
             self.last = self.last or (iteration + 1 == n_iters)
             self.iteration = iteration
+            # self.research.monitor.start_execution(name, self)
             try:
-                self.info(name, 'call')
+                # self.info(name, 'call')
                 self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
             except Exception as e:
                 self.exception_raised = True
                 self.last = True
                 if isinstance(e, StopIteration):
-                    self.info(name, 'was stopped by StopIteration')
+                    # self.info(name, 'was stopped by StopIteration')
+                    self.research.monitor.stop_iteration(name, self)
                 else:
-                    self.process_exception(name, e)
+                    self.exception = e
+                    self.research.monitor.fail_execution(name, self)
+            else:
+                self.research.monitor.finish_execution(name, self)
             if self.exception_raised and (list(self.actions.keys())[-1] == name):
                 self.is_alive = False
-
-    def process_exception(self, name, exception):
-        self.exception = exception
-        ex_traceback = exception.__traceback__
-        self.traceback = ''.join(traceback.format_exception(exception.__class__, exception, ex_traceback))
-        print(f'Experiment: {self.id}, it: {self.iteration}, name: {name} :: error')
-        print(self.traceback)
 
     def info(self, name, msg):
         print(f'Experiment: {self.id}, it: {self.iteration}, name: {name} :: {msg}')
@@ -418,7 +421,10 @@ class Executor:
             experiment.create_instances(config, self)
             self.experiments.append(experiment)
 
-    def run(self):
+    def run(self, worker):
+        self.worker = worker
+        self.pid = os.getpid()
+
         iterations = range(self.n_iters) if self.n_iters else itertools.count()
         for iteration in iterations:
             for unit_name, unit in self.experiment_template.actions.items():
@@ -428,6 +434,7 @@ class Executor:
                     self.parallel_call(iteration, unit_name)
             if not any([experiment.is_alive for experiment in self.experiments]):
                 break
+        self.send_results()
 
     def _parallel_call(self, experiment, iteration, unit_name):
         """ Parallel call of the unit 'name' """
@@ -443,6 +450,11 @@ class Executor:
             experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
             experiment.copy_state(self.experiments[0])
 
+    def send_results(self):
+        if self.research is not None:
+            for experiment in self.experiments:
+                self.research.results.put(experiment.id, experiment.results)
+
 class NewResearch:
     def __init__(self, name=None, domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=100):
         self.domain = Domain(domain)
@@ -451,6 +463,9 @@ class NewResearch:
         self.repeat_each = repeat_each
         self.experiment = experiment or Experiment()
         self.name = name or 'research'
+
+        self.results = ResearchResults()
+        self.monitor = ResearchMonitor(self.name)
 
     def init_instance(self, *args, **kwargs):
         self.experiment.add_namespace(*args, **kwargs)
@@ -639,9 +654,13 @@ class NewResearch:
         print("Research {} is starting...".format(self.name))
 
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
+
         tasks = DynamicQueue(self.domain, self, n_branches)
         distributor = Distributor(tasks, self)
+
+        self.monitor.start()
         distributor.run(bar)
+        self.monitor.stop()
 
         return self
 

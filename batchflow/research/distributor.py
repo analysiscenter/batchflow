@@ -1,9 +1,13 @@
 """ Classes for multiprocess job running. """
 
 import os
+import csv
 import logging
 import multiprocess as mp
 from tqdm import tqdm
+from collections import OrderedDict
+import datetime
+
 
 class _DummyBar:
     def __init__(self, *args, **kwargs):
@@ -171,13 +175,14 @@ class Signal:
         return str(self.__dict__)
 
 class Worker:
-    def __init__(self, index, worker_config, tasks, states, research):
+    def __init__(self, index, worker_config, tasks, research):
         self.index = index
         self.worker_config = worker_config
         self.tasks = tasks
         self.research = research
 
     def __call__(self):
+        self.pid = os.getpid()
         executor_class = self.research.executor_class
         n_iters = self.research.n_iters
         task = self.tasks.get()
@@ -187,18 +192,18 @@ class Worker:
             executor = executor_class(self.research.experiment, research=self.research, target=self.research.executor_target,
                                       configs=executor_configs, n_iters=n_iters, task_name=name)
             if self.research.parallel:
-                process = mp.Process(target=executor.run)
+                process = mp.Process(target=executor.run, args=(self, ))
                 process.start()
                 process.join()
             else:
-                executor.run()
+                executor.run(self)
             if self.research.parallel:
                 self.tasks.task_done()
                 task = self.tasks.get()
             else:
                 break
         self.tasks.task_done()
-                    
+
 class Distributor:
     """ Distributor of jobs between workers. """
     def __init__(self, tasks, research):
@@ -211,7 +216,6 @@ class Distributor:
         """
         self.tasks = tasks
         self.research = research
-        self.states = mp.JoinableQueue()
 
     def run(self, bar=False):
         """ Run disributor and workers.
@@ -226,19 +230,82 @@ class Distributor:
         """
         workers = []
         for i, worker_config in enumerate(self.research.workers):
-            workers += [Worker(i, worker_config, self.tasks, self.states, self.research)]
-        
+            workers += [Worker(i, worker_config, self.tasks, self.research)]
+
         n_tasks = self.tasks.next_tasks(len(workers)+1)
         if self.research.parallel:
             for worker in workers:
                 mp.Process(target=worker).start()
             while n_tasks > 0:
                 self.tasks.join()
+                self.research.results.get()
                 n_tasks = self.tasks.next_tasks(1)
             self.tasks.stop_workers(len(workers))
             self.tasks.join()
         else:
             while n_tasks > 0:
                 workers[0]()
+                self.get_results()
                 n_tasks = self.tasks.next_tasks(1)
             workers[0]()
+
+class ResearchMonitor:
+    COLUMNS = ['time', 'id', 'it', 'status', 'exception', 'worker', 'pid', 'worker_pid']
+    def __init__(self, path):
+        self.queue = mp.JoinableQueue()
+        self.path = path
+
+    def send(self, experiment, **kwargs):
+        self.queue.put({
+            'time': str(datetime.datetime.now()),
+            'id': experiment.id,
+            'pid': experiment.executor.pid,
+            'worker': experiment.executor.worker.index,
+            'worker_pid': experiment.executor.worker.pid,
+            **kwargs
+        })
+
+    # def start_execution(self, name, experiment):
+    #     self.send(experiment, name=name, it=experiment.iteration, status='start')
+
+    def finish_execution(self, name, experiment):
+        self.send(experiment, name=name, it=experiment.iteration, status='success')
+
+    def fail_execution(self, name, experiment):
+        self.send(experiment, name=name, it=experiment.iteration, status='error', exception=experiment.exception.__class__)
+
+    def stop_iteration(self, name, experiment):
+        self.send(experiment, name=name, it=experiment.iteration, status='stop_iteration')
+
+    def listener(self): #TODO: rename
+        filename = os.path.join(self.path, 'monitor.csv')
+        if not os.path.exists(filename):
+            with open(filename, 'w') as f:
+                writer = csv.writer(f)
+                writer.writerow(self.COLUMNS)
+
+        signal = self.queue.get()
+        while signal is not None:
+            for column in self.COLUMNS:
+                with open(filename, 'a') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([str(signal.get(column, '')) for column in self.COLUMNS])
+            signal = self.queue.get()
+
+    def start(self):
+        mp.Process(target=self.listener).start()
+
+    def stop(self):
+        self.queue.put(None)
+
+class ResearchResults:
+    def __init__(self):
+        self.queue = mp.JoinableQueue()
+        self.results = OrderedDict()
+
+    def put(self, id, results):
+        self.queue.put((id, results))
+
+    def get(self):
+        id, results = self.queue.get()
+        self.results[id] = results
