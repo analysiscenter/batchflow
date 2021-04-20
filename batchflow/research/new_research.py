@@ -234,12 +234,14 @@ class Experiment:
                           root=root, item_name=name, iterations_to_execute="%0")
         return self
 
-    def add_executable_unit(self, name, src=None, mode='func', args=None, **kwargs):
+    def add_executable_unit(self, name, src=None, mode='func', args=None, iterations_to_execute=None, save_to=None, **kwargs):
         if src is None:
             kwargs[mode] = self.parse_name(name)
         else:
             kwargs[mode] = src
-        self.actions[name] = ExecutableUnit(name=name, args=args, **kwargs)
+        self.actions[name] = ExecutableUnit(name=name, args=args, iterations_to_execute=iterations_to_execute, **kwargs)
+        if save_to is not None:
+            self.save(src=O(name), dst=save_to, iterations_to_execute=iterations_to_execute, copy=False)
         return self
 
     def add_callable(self, name, func=None, args=None, **kwargs):
@@ -261,15 +263,15 @@ class Experiment:
             self.add_callable(f'{name}_branch', func=branch_pipeline, config=EC(), batch=O(f'{name}_root'), **kwargs)
         return self
 
-    def save(self, value, save_to, iterations_to_execute=None, copy=False):
-        def _save_results(value, save_to, experiment, copy): #TODO: test does copy work
-            previous_values = experiment.results.get(save_to, OrderedDict())
-            previous_values[experiment.iteration] = deepcopy(value) if copy else value
-            experiment.results[save_to] = previous_values
+    def save(self, src, dst, iterations_to_execute=None, copy=False):
+        def _save_results(_src, _dst, experiment, copy): #TODO: test does copy work
+            previous_values = experiment.results.get(_dst, OrderedDict())
+            previous_values[experiment.iteration] = deepcopy(_src) if copy else _src
+            experiment.results[_dst] = previous_values
         name = self.add_postfix('save_results')
         self.add_callable(name, _save_results,
                           iterations_to_execute=iterations_to_execute,
-                          value=value, save_to=save_to, experiment=E(), copy=copy)
+                          _src=src, _dst=dst, experiment=E(), copy=copy)
         return self
 
     def dump(self, variable=None, iterations_to_execute=None):
