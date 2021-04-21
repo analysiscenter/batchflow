@@ -201,7 +201,6 @@ class Worker:
                 executor.run(self)
             self.research.monitor.send(worker=self, status='finish task', task_idx=task_idx)
             self.tasks.task_done()
-            print('Worker finish task')
             task = self.tasks.get()
         self.tasks.task_done()
         self.research.monitor.send(worker=self, status='stop')
@@ -240,16 +239,14 @@ class Distributor:
                 mp.Process(target=worker).start()
             while n_tasks > 0:
                 self.tasks.join()
-                self.research.results.get()
                 n_tasks = self.tasks.next_tasks(1)
             self.tasks.stop_workers(len(workers))
             self.tasks.join()
         else:
             while n_tasks > 0:
+                self.tasks.stop_workers(1)
                 workers[0]()
-                self.research.results.get()
                 n_tasks = self.tasks.next_tasks(1)
-            workers[0]()
 
 class ResearchMonitor:
     COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid']
@@ -308,12 +305,8 @@ class ResearchMonitor:
 
 class ResearchResults:
     def __init__(self):
-        self.queue = mp.JoinableQueue()
-        self.results = OrderedDict()
+        self.results = mp.Manager().dict()
 
     def put(self, id, results):
-        self.queue.put((id, results))
-
-    def get(self):
-        id, results = self.queue.get()
         self.results[id] = results
+

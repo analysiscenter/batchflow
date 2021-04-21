@@ -274,7 +274,7 @@ class Experiment:
                           _src=src, _dst=dst, experiment=E(), copy=copy)
         return self
 
-    def dump(self, variable=None, iterations_to_execute=None):
+    def dump(self, variable=None, iterations_to_execute=['last']):
         self.dump_results = True
 
         def _dump_results(variable, experiment):
@@ -316,7 +316,6 @@ class Experiment:
         actions = OrderedDict([(name, copy(unit)) for name, unit in self.actions.items()])
         new_experiment = Experiment(namespaces=namespaces, actions=actions)
         new_experiment.dump_results = self.dump_results
-        print('copy', id(self), id(new_experiment))
         return new_experiment
 
     def copy_state(self, src):
@@ -629,6 +628,11 @@ class NewResearch:
         If `update_domain` callable is defined, domain will be updated with the corresponding function
         accordingly to `each` parameter of `update_domain`.
         """
+        if parallel:
+            if isinstance(workers, int):
+                workers = 1
+            else:
+                workers = [workers[0]]
         self.n_iters = n_iters
         self.workers = workers
         self.branches = branches
