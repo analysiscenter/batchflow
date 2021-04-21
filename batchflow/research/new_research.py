@@ -316,6 +316,7 @@ class Experiment:
         actions = OrderedDict([(name, copy(unit)) for name, unit in self.actions.items()])
         new_experiment = Experiment(namespaces=namespaces, actions=actions)
         new_experiment.dump_results = self.dump_results
+        print('copy', id(self), id(new_experiment))
         return new_experiment
 
     def copy_state(self, src):

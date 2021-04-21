@@ -185,9 +185,11 @@ class Worker:
         self.pid = os.getpid()
         executor_class = self.research.executor_class
         n_iters = self.research.n_iters
+        self.research.monitor.send(worker=self, status='start')
         task = self.tasks.get()
         while task is not None:
             task_idx, executor_configs = task
+            self.research.monitor.send(worker=self, status='get task', task_idx=task_idx)
             name = f"Task {task_idx}"
             executor = executor_class(self.research.experiment, research=self.research, target=self.research.executor_target,
                                       configs=executor_configs, n_iters=n_iters, task_name=name)
@@ -197,12 +199,12 @@ class Worker:
                 process.join()
             else:
                 executor.run(self)
-            if self.research.parallel:
-                self.tasks.task_done()
-                task = self.tasks.get()
-            else:
-                break
+            self.research.monitor.send(worker=self, status='finish task', task_idx=task_idx)
+            self.tasks.task_done()
+            print('Worker finish task')
+            task = self.tasks.get()
         self.tasks.task_done()
+        self.research.monitor.send(worker=self, status='stop')
 
 class Distributor:
     """ Distributor of jobs between workers. """
@@ -245,37 +247,44 @@ class Distributor:
         else:
             while n_tasks > 0:
                 workers[0]()
-                self.get_results()
+                self.research.results.get()
                 n_tasks = self.tasks.next_tasks(1)
             workers[0]()
 
 class ResearchMonitor:
-    COLUMNS = ['time', 'id', 'it', 'status', 'exception', 'worker', 'pid', 'worker_pid']
+    COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid']
     def __init__(self, path):
         self.queue = mp.JoinableQueue()
         self.path = path
 
-    def send(self, experiment, **kwargs):
-        self.queue.put({
+    def send(self, experiment=None, worker=None, **kwargs):
+        signal = {
             'time': str(datetime.datetime.now()),
-            'id': experiment.id,
-            'pid': experiment.executor.pid,
-            'worker': experiment.executor.worker.index,
-            'worker_pid': experiment.executor.worker.pid,
             **kwargs
-        })
+        }
+        if experiment is not None:
+            signal = {**signal, **{
+                'id': experiment.id,
+                'pid': experiment.executor.pid,
+            }}
+        if worker is not None:
+            signal = {**signal, **{
+                'worker': worker.index,
+                'worker_pid': worker.pid,
+            }}
+        self.queue.put(signal)
 
     # def start_execution(self, name, experiment):
     #     self.send(experiment, name=name, it=experiment.iteration, status='start')
 
     def finish_execution(self, name, experiment):
-        self.send(experiment, name=name, it=experiment.iteration, status='success')
+        self.send(experiment, experiment.executor.worker, name=name, it=experiment.iteration, status='success')
 
     def fail_execution(self, name, experiment):
-        self.send(experiment, name=name, it=experiment.iteration, status='error', exception=experiment.exception.__class__)
+        self.send(experiment, experiment.executor.worker, name=name, it=experiment.iteration, status='error', exception=experiment.exception.__class__)
 
     def stop_iteration(self, name, experiment):
-        self.send(experiment, name=name, it=experiment.iteration, status='stop_iteration')
+        self.send(experiment, experiment.executor.worker, name=name, it=experiment.iteration, status='stop_iteration')
 
     def listener(self): #TODO: rename
         filename = os.path.join(self.path, 'monitor.csv')
@@ -286,10 +295,9 @@ class ResearchMonitor:
 
         signal = self.queue.get()
         while signal is not None:
-            for column in self.COLUMNS:
-                with open(filename, 'a') as f:
-                    writer = csv.writer(f)
-                    writer.writerow([str(signal.get(column, '')) for column in self.COLUMNS])
+            with open(filename, 'a') as f:
+                writer = csv.writer(f)
+                writer.writerow([str(signal.get(column, '')) for column in self.COLUMNS])
             signal = self.queue.get()
 
     def start(self):
