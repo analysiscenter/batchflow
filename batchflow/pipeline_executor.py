@@ -13,7 +13,7 @@ from .utils_random import make_seed_sequence
 warnings.filterwarnings("always", category=RuntimeWarning, module=__name__)
 warnings.filterwarnings("always", category=EmptyBatchSequence)
 
-END_PIPELINE = -1
+END_PIPELINE_SIGNAL = -1
 
 
 class PipelineExecutor:
@@ -72,22 +72,22 @@ class PipelineExecutor:
                                                new_loop=True)
                 self._prefetch_queue.put(future, block=True)
                 iteration = iteration + 1
-        self._prefetch_queue.put(END_PIPELINE, block=True)
+        self._prefetch_queue.put(END_PIPELINE_SIGNAL, block=True)
 
     def _run_batches_from_queue(self, ignore_exceptions):
         while not self._stop_flag:
             future = self._prefetch_queue.get(block=True)
 
             try:
-                if future == END_PIPELINE:
-                    batch = END_PIPELINE
+                if future == END_PIPELINE_SIGNAL:
+                    batch = END_PIPELINE_SIGNAL
                 else:
                     batch = future.result()
 
             except SkipBatchException:
                 pass
             except StopPipeline:
-                batch = END_PIPELINE
+                batch = END_PIPELINE_SIGNAL
                 break
             except Exception as exc:   # pylint: disable=broad-except
                 print("Exception:", exc)
@@ -95,7 +95,7 @@ class PipelineExecutor:
                 if ignore_exceptions:
                     batch = None
                 else:
-                    batch = END_PIPELINE
+                    batch = END_PIPELINE_SIGNAL
             finally:
                 self._prefetch_queue.task_done()
                 self._batch_queue.put(batch, block=True)
@@ -265,7 +265,7 @@ class PipelineExecutor:
             while not self._stop_flag:
                 batch_res = self._batch_queue.get(block=True)
                 self._batch_queue.task_done()
-                if batch_res == END_PIPELINE:
+                if batch_res == END_PIPELINE_SIGNAL:
                     self._stop_flag = True
                 else:
                     # the batch has been created in another thread, so we need to set pipeline
