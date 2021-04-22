@@ -394,6 +394,7 @@ class Batch(metaclass=MethodsTransformingMeta):
             return getattr(self.data, name, None)
         if name not in dir(self):
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+        return getattr(self, name)
 
     def __setattr__(self, name, value):
         if self.components is not None:
