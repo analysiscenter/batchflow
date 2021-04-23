@@ -8,7 +8,7 @@ from tensorflow.keras.models import Model
 from ..base import BaseModel
 
 
-class KerasModel(Model, BaseModel):
+class KerasModel(Model, BaseModel):   # pylint:disable=too-many-ancestors
     """ Base class for all keras models.
 
     Contains load, dump and compile methods which are shared between all
