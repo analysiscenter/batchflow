@@ -2,7 +2,7 @@
 Golnaz Ghiasi, Tsung-Yi Lin, Quoc V. Le "`DropBlock: A regularization method for convolutional networks
 <https://arxiv.org/abs/1810.12890>`_"
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from .layer import Layer, add_as_function
 from .pooling import MaxPooling

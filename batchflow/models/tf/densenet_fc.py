@@ -2,7 +2,7 @@
 Fully Convolutional DenseNets for Semantic Segmentation
 <https://arxiv.org/abs/1611.09326>`_"
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from . import TFModel
 from .densenet import DenseNet

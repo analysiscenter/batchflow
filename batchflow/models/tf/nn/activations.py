@@ -1,5 +1,5 @@
 """ Contains custom tf activation functions """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 def h_swish(inputs):
     """ Hard-swish nonlinearity function.

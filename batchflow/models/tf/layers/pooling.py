@@ -1,7 +1,7 @@
 """ Contains pooling layers """
 from functools import partial
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import tensorflow.keras.layers as K #pylint: disable=import-error
 
 from .layer import Layer, add_as_function

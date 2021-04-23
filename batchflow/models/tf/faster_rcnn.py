@@ -5,7 +5,7 @@
 Ren S. et al "`Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks
 <https://arxiv.org/abs/1506.01497>`_"
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import numpy as np
 
 from . import TFModel, VGG7

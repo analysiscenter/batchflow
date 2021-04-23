@@ -1,5 +1,5 @@
 """ Contains various flavours of dice """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 
 def _dice(targets, predictions, weights=1.0, label_smoothing=0, scope=None,

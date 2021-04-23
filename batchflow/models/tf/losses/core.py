@@ -1,5 +1,5 @@
 """ Contains base tf losses """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 
 def softmax_cross_entropy(labels, logits, *args, **kwargs):

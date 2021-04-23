@@ -1,7 +1,7 @@
 """  Lin G. et al "`RefineNet: Multi-Path Refinement Networks for High-Resolution Semantic Segmentation
 <https://arxiv.org/abs/1611.06612>`_"
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from .layers import conv_block
 from . import TFModel

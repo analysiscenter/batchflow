@@ -2,7 +2,7 @@
 <https://arxiv.org/abs/1602.07360>`_"
 """
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from . import TFModel
 from .layers import conv_block

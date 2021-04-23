@@ -3,7 +3,7 @@ François Chollet. "`Xception: Deep Learning with Depthwise Separable Convolutio
 <https://arxiv.org/abs/1610.02357>`_"
 """
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from . import TFModel
 from .layers import conv_block, depthwise_conv, combine

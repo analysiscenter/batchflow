@@ -7,7 +7,7 @@ Sandler M. et al. "`MobileNetV2: Inverted Residuals and Linear Bottlenecks
 Howard A. et al. "`Searching for MobileNetV3
 <https://arxiv.org/abs/1905.02244>`_"
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from . import TFModel
 from .layers import conv_block, combine

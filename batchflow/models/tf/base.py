@@ -7,7 +7,7 @@ import threading
 
 import dill
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 from tensorflow.python.client import device_lib
 
 from ... import Config

@@ -1,6 +1,6 @@
 """ Christian Szegedy et al. "`Inception-v4, Inception-ResNet and the Impact of Residual Connections on Learning
 <https://arxiv.org/abs/1602.07261>`_" """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from .layers import conv_block
 from .inception_base import Inception

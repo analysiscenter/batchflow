@@ -1,7 +1,7 @@
 """ Contains layers, that are used as separate letters in layout convention, as well as convenient combining block. """
 import inspect
 import logging
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import tensorflow.keras.layers as K # pylint: disable=import-error
 
 from .core import Activation, Dense, Dropout, AlphaDropout, BatchNormalization, Combine, Mip

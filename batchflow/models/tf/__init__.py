@@ -4,7 +4,7 @@
     This module requires TensorFlow package.
  """
 import sys
-import tensorflow as tf_
+import tensorflow.compat.v1 as tf_
 
 class SilentTF:
     """ Class to supress deprecation warnings. """

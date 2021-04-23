@@ -4,7 +4,7 @@ Mingxing Tan, Quoc V. Le "`EfficientNet: Rethinking Model Scaling for Convolutio
 <https://arxiv.org/abs/1905.11946>`_"
 
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from . import TFModel, MobileNet_v2, EncoderDecoder
 
