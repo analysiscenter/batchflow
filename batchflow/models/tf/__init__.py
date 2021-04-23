@@ -4,25 +4,6 @@
     This module requires TensorFlow package.
  """
 import sys
-import tensorflow.compat.v1 as tf_
-
-class SilentTF:
-    """ Class to supress deprecation warnings. """
-    def __init__(self):
-        modules = []
-        if hasattr(tf_.compat, 'v1'):
-            modules.append(tf_.compat.v1)
-
-        self.modules = modules
-
-
-    def __getattr__(self, name):
-        for module in self.modules:
-            if name in module.__dict__:
-                return getattr(module, name)
-        return getattr(tf_, name)
-
-sys.modules['tensorflow'] = SilentTF()
 
 
 from .base import TFModel
