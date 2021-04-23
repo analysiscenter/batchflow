@@ -91,6 +91,6 @@ class KerasModel(Model, BaseModel):
         return Model.load_weights(self, *args, **kwargs)
 
     @functools.wraps(Model.save_weights)
-    def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs):    # pylint:disable=signature-differs
         """ Wrapper for keras.models.Model.save_weights. """
         return Model.save_weights(self, *args, **kwargs)
