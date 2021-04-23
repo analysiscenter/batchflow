@@ -4,7 +4,7 @@
 
 import functools
 import numpy as np
-from keras.models import Model
+from tensorflow.keras.models import Model
 from ..base import BaseModel
 
 
