@@ -20,20 +20,24 @@ def make_function(method, is_global=False):
     source = inspect.getsource(method).split('\n')
     indent = len(source[0]) - len(source[0].lstrip())
 
-    # skip all decorator lines and strip indent spaces
-    source = [s[indent:] for s in source if len(s) > indent and s[indent] != '@']
-    source = '\n'.join(source)
+    # strip indent spaces
+    source = [s[indent:] for s in source if len(s) > indent]
+    # skip all decorator and comment lines before 'def' or 'async def'
+    start = 0
+    for i, s in enumerate(source):
+        if s[:3] in ['def', 'asy']:
+            start = i
+            break
+    source = '\n'.join(source[start:])
 
     globs = globals() if is_global else method.__globals__.copy()
     exec(source, globs)    # pylint:disable=exec-used
 
-    if is_global:
-        # Method with the same name might exist in various classes
-        # so a global function should have a unique name
-        function_name = method.__qualname__.replace('.', '_')
-        globs[function_name] = globs[method.__name__]
-    else:
-        function_name = method.__name__
+    # Method with the same name might exist in various classes or modules
+    # so a global function should have a unique name
+    function_name = method.__module__ + "_" + method.__qualname__
+    function_name = function_name.replace('.', '_')
+    globs[function_name] = globs[method.__name__]
     return globs[function_name]
 
 
@@ -146,7 +150,6 @@ def any_action_failed(results):
     """ Return `True` if some parallelized invocations threw exceptions """
     return any(isinstance(res, Exception) for res in results)
 
-
 def call_method(method, use_self, args, kwargs, seed=None):
     """ Call a method with given args """
     if use_self:
@@ -155,16 +158,15 @@ def call_method(method, use_self, args, kwargs, seed=None):
     return method(*args, **kwargs)
 
 def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kwargs):
-    """ Decorator for parallel methods in :class:`~batchflow.Batch` classes"""
+    """ Decorator for parallel methods in :class:`~.Batch` classes"""
     if target not in ['nogil', 'threads', 'mpc', 'async', 'for', 't', 'm', 'a', 'f']:
         raise ValueError("target should be one of 'threads', 'mpc', 'async', 'for'")
 
     def inbatch_parallel_decorator(method):
         """ Return a decorator which run a method in parallel """
         use_self = '.' in method.__qualname__ if _use_self is None else _use_self
-
         if use_self:
-            method = make_function(method, is_global=True)
+            mpc_method = make_function(method, is_global=True)
 
         def _check_functions(self):
             """ Check decorator's `init` and `post` parameters """
@@ -311,7 +313,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                     margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
                     seed = self.random_seed.spawn(1)[0] if use_self else None
-                    one_ft = executor.submit(call_method, method, use_self, margs, mkwargs, seed=seed)
+                    one_ft = executor.submit(call_method, mpc_method, use_self, margs, mkwargs, seed=seed)
                     futures.append(one_ft)
 
                 timeout = kwargs.pop('timeout', None)
