@@ -120,12 +120,17 @@ class Batch(metaclass=MethodsTransformingMeta):
     @property
     def data(self):
         """: tuple or named components - batch data """
-        if self._data is None and self._preloaded is not None:
-            # load data the first time it's requested
-            with self._preloaded_lock:
-                if self._data is None and self._preloaded is not None:
-                    self.load(src=self._preloaded)
-        res = self._data if self.components is None else self._data_named
+        try:
+            if self._data is None and self._preloaded is not None:
+                # load data the first time it's requested
+                with self._preloaded_lock:
+                    if self._data is None and self._preloaded is not None:
+                        self.load(src=self._preloaded)
+            res = self._data if self.components is None else self._data_named
+        except Exception as exc:
+            print("Exception:", exc)
+            traceback.print_tb(exc.__traceback__)
+            raise
         return res
 
     @data.setter
@@ -392,9 +397,7 @@ class Batch(metaclass=MethodsTransformingMeta):
     def __getattr__(self, name):
         if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
             return getattr(self.data, name, None)
-        if name not in dir(self):
-            raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
-        return getattr(self, name)
+        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def __setattr__(self, name, value):
         if self.components is not None:
