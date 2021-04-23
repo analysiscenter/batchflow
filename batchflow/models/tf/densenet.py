@@ -2,7 +2,7 @@
 Huang G. et al. "`Densely Connected Convolutional Networks
 <https://arxiv.org/abs/1608.06993>`_"
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from . import TFModel
 from .layers import conv_block

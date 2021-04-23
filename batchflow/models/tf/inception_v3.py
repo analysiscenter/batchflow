@@ -1,7 +1,7 @@
 """ Christian Szegedy et al. "`Rethinking the Inception Architecture for Computer Vision
 <https://arxiv.org/abs/1512.00567>`_"
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from .layers import conv_block
 from .inception_base import Inception
