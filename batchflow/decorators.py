@@ -7,6 +7,8 @@ import asyncio
 import functools
 import logging
 import inspect
+
+import numpy as np
 try:
     from numba import jit
 except ImportError:
@@ -281,6 +283,12 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
 
             return margs, mkwargs
 
+        def spawn_random_seed(self):
+            """ Return a new seed sequence or None """
+            if hasattr(self, 'random_seed') and isinstance(self.random_seed, np.random.SeedSequence):
+                return self.random_seed.spawn(1)[0]
+            return None
+
         def wrap_with_threads(self, args, kwargs):
             """ Run a method in parallel threads """
             init_fn, post_fn = _check_functions(self)
@@ -292,7 +300,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 full_kwargs = {**dec_kwargs, **kwargs}
                 for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                     margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                    seed = self.random_seed.spawn(1)[0] if use_self else None
+                    seed = spawn_random_seed(self)
                     one_ft = executor.submit(call_method, method, use_self, margs, mkwargs, seed=seed)
                     futures.append(one_ft)
 
@@ -312,7 +320,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 full_kwargs = {**dec_kwargs, **kwargs}
                 for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                     margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                    seed = self.random_seed.spawn(1)[0] if use_self else None
+                    seed = spawn_random_seed(self)
                     one_ft = executor.submit(call_method, mpc_method, use_self, margs, mkwargs, seed=seed)
                     futures.append(one_ft)
 
@@ -350,10 +358,9 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             futures = []
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
-            random_seed = self.random_seed
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                seed = random_seed.spawn(1)[0] if use_self else None
+                seed = spawn_random_seed(self)
                 futures.append(asyncio.ensure_future(call_method(method, use_self, margs, mkwargs, seed=seed),
                                                      loop=loop))
 
@@ -371,11 +378,10 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             futures = []
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
-            random_seed = self.random_seed
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
 
-                seed = random_seed.spawn(1)[0] if use_self else None
+                seed = spawn_random_seed(self)
                 try:
                     one_ft = call_method(method, use_self, margs, mkwargs, seed=seed)
                 except Exception as e:   # pylint: disable=broad-except
