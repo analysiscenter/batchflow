@@ -155,8 +155,8 @@ def any_action_failed(results):
 def call_method(method, use_self, args, kwargs, seed=None):
     """ Call a method with given args """
     if use_self:
+        # set batch.random_seed to create RNG
         args[0].random_seed = seed
-        return method(*args, **kwargs)
     return method(*args, **kwargs)
 
 def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kwargs):
@@ -283,10 +283,12 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
 
             return margs, mkwargs
 
-        def spawn_random_seed(self):
+        def spawn_random_seed(source):
             """ Return a new seed sequence or None """
-            if hasattr(self, 'random_seed') and isinstance(self.random_seed, np.random.SeedSequence):
-                return self.random_seed.spawn(1)[0]
+            if isinstance(source, np.random.SeedSequence):
+                return source.spawn(1)[0]
+            if isinstance(getattr(source, 'random_seed', None), np.random.SeedSequence):
+                return source.random_seed.spawn(1)[0]
             return None
 
         def wrap_with_threads(self, args, kwargs):
@@ -358,9 +360,11 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             futures = []
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
+            # save an initial seed to generate child seeds from
+            random_seed = self.random_seed
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                seed = spawn_random_seed(self)
+                seed = spawn_random_seed(random_seed)
                 futures.append(asyncio.ensure_future(call_method(method, use_self, margs, mkwargs, seed=seed),
                                                      loop=loop))
 
@@ -378,10 +382,12 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             futures = []
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
+            # save an initial seed to generate child seeds from
+            random_seed = self.random_seed
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
 
-                seed = spawn_random_seed(self)
+                seed = spawn_random_seed(random_seed)
                 try:
                     one_ft = call_method(method, use_self, margs, mkwargs, seed=seed)
                 except Exception as e:   # pylint: disable=broad-except
@@ -401,10 +407,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 # still need self to preserve the signatures of other functions
                 self = None
 
-            if 'target' in kwargs:
-                _target = kwargs.pop('target')
-            else:
-                _target = target
+            _target = kwargs.pop('target', target)
 
             if asyncio.iscoroutinefunction(method) or _target in ['async', 'a']:
                 x = wrap_with_async(self, args, kwargs)
