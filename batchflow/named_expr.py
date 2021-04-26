@@ -16,30 +16,33 @@ class _DummyBatch:
 
 def eval_expr(expr, **kwargs):
     """ Evaluate a named expression recursively """
-    if isinstance(expr, NamedExpression):
-        _expr = expr.get(**kwargs)
-        if isinstance(expr, W):
+    try:
+        if isinstance(expr, NamedExpression):
+            _expr = expr.get(**kwargs)
+            if isinstance(expr, W):
+                expr = _expr
+            elif isinstance(_expr, (NamedExpression, list, tuple, dict, Config)):
+                expr = eval_expr(_expr, **kwargs)
+            else:
+                expr = _expr
+        elif isinstance(expr, (list, tuple)):
+            _expr = []
+            for val in expr:
+                _expr.append(eval_expr(val, **kwargs))
+            expr = type(expr)(_expr)
+        elif isinstance(expr, (dict, Config)):
+            if isinstance(expr, defaultdict):
+                _expr = type(expr)(expr.default_factory)
+            else:
+                _expr = type(expr)()
+            for key, val in expr.items():
+                key = eval_expr(key, **kwargs)
+                val = eval_expr(val, **kwargs)
+                _expr.update({key: val})
             expr = _expr
-        elif isinstance(_expr, (NamedExpression, list, tuple, dict, Config)):
-            expr = eval_expr(_expr, **kwargs)
-        else:
-            expr = _expr
-    elif isinstance(expr, (list, tuple)):
-        _expr = []
-        for val in expr:
-            _expr.append(eval_expr(val, **kwargs))
-        expr = type(expr)(_expr)
-    elif isinstance(expr, (dict, Config)):
-        if isinstance(expr, defaultdict):
-            _expr = type(expr)(expr.default_factory)
-        else:
-            _expr = type(expr)()
-        for key, val in expr.items():
-            key = eval_expr(key, **kwargs)
-            val = eval_expr(val, **kwargs)
-            _expr.update({key: val})
-        expr = _expr
-    return expr
+        return expr
+    except Exception as e:
+        raise Exception(f"Can't evaluate expression: {expr} because \n {str(e)}") from e
 
 
 def swap(op):
