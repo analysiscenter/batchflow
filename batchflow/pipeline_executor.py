@@ -271,7 +271,7 @@ class PipelineExecutor:
                     # the batch has been created in another thread, so we need to set pipeline
                     if batch_res is not None:
                         batch_res.pipeline = self.pipeline
-                    notifier.update(pipeline=self, batch=batch_res)
+                    notifier.update(pipeline=self.pipeline, batch=batch_res)
                     yield batch_res
                     self._prefetch_count.get(block=True)
                     self._prefetch_count.task_done()
