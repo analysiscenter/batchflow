@@ -307,7 +307,7 @@ class VisualizationMixin:
 
         if input_tensor is None:
             input_shape = self.input_shapes[-1]
-            input_tensor = torch.randn(input_shape)
+            input_tensor = torch.randn(input_shape, device=self.device)
 
         statistics = {
             'Average Channel Squared Mean': [],
