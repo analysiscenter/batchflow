@@ -76,3 +76,24 @@ def make_seed_sequence(shuffle=False):
         raise TypeError('shuffle can be bool or int', shuffle)
 
     return seed
+
+
+def spawn_seed_sequence(source):
+    """ Return a new seed sequence or None
+
+    Parameters
+    ----------
+    source : numpy.random.SeedSequence or Batch or Pipeline
+
+    Returns
+    -------
+    numpy.random.SeedSequence
+    """
+    if isinstance(source, np.random.SeedSequence):
+        pass
+    elif isinstance(getattr(source, 'random_seed', None), np.random.SeedSequence):
+        source = source.random_seed
+    else:
+        raise ValueError('source should be SeedSequence, Batch or Pipeline, but given %s' % type(source))
+
+    return source.spawn(1)[0]
