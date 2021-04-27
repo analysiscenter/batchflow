@@ -115,7 +115,7 @@ class ResNet50(ResNet34):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/layout'] = 'cna'
+        config['body/encoder/blocks/layout'] = 'cn'
         config['body/encoder/blocks/bottleneck'] = True
         return config
 
