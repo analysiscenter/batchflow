@@ -559,6 +559,11 @@ class TorchModel(BaseModel, VisualizationMixin):
                 if self.classes is None:
                     self.classes = shapes[0][0]
 
+    def _to_device(self):
+        if len(self.devices) > 1:
+            self.model = nn.DataParallel(self.model, self.devices)
+        else:
+            self.model.to(self.device)
 
     # Chain multiple building blocks to create model
     def _build(self, inputs=None):
@@ -586,10 +591,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 blocks.append((block_name, block))
 
         self.model = nn.Sequential(OrderedDict(blocks))
-        if len(self.devices) > 1:
-            self.model = nn.DataParallel(self.model, self.devices)
-        else:
-            self.model.to(self.device)
+        self._to_device()
 
         self.make_loss(**self.unpack('loss'))
         self.make_optimizer(**self.unpack('optimizer'))
@@ -726,10 +728,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         """ Set the underlying model to a supplied one and update training infrastructure. """
         self.model = model
 
-        if len(self.devices) > 1:
-            self.model = nn.DataParallel(self.model, self.devices)
-        else:
-            self.model.to(self.device)
+        self._to_device()
 
         self.make_loss(**self.unpack('loss'))
         self.make_optimizer(**self.unpack('optimizer'))
@@ -1411,10 +1410,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             setattr(self, item, checkpoint.get(item))
         self.full_config = self.full_config + load_config
 
-        if len(self.devices) > 1:
-            self.model = nn.DataParallel(self.model, self.devices)
-        else:
-            self.model.to(self.device)
+        self._to_device()
 
         if eval:
             self.model.eval()
