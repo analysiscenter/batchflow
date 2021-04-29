@@ -1402,10 +1402,18 @@ class TorchModel(BaseModel, VisualizationMixin):
         else:
             checkpoint = torch.load(path, **kwargs)
 
+        # Save load config values to update `full_config` later
+        load_config = self.config
+        # Remove unnecessary key from load config
+        _ = load_config.pop('build')
+
         for item in self.PRESERVE:
             setattr(self, item, checkpoint.get(item))
+        self.full_config.update(load_config)
 
-        if self.device:
+        if len(self.devices) > 1:
+            self.model = nn.DataParallel(self.model, self.devices)
+        else:
             self.model.to(self.device)
 
         if eval:
