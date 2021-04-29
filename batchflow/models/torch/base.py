@@ -1409,7 +1409,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         for item in self.PRESERVE:
             setattr(self, item, checkpoint.get(item))
-        self.full_config.update(load_config)
+        self.full_config = self.full_config + load_config
 
         if len(self.devices) > 1:
             self.model = nn.DataParallel(self.model, self.devices)
