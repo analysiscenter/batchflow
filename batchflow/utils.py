@@ -414,7 +414,7 @@ def read_data_from(src, **kwargs):
     return data
 
 
-def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2):
+def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, log=False):
     """ Select `n` gpus from available and free devices.
 
     Parameters
@@ -436,23 +436,29 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2):
     nvidia_smi.nvmlInit()
     n_devices = nvidia_smi.nvmlDeviceGetCount()
 
-    available_devices = []
+    available_devices, memory_usage = [], []
     for i in range(n_devices):
         handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
         info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
 
         fraction_free = info.free / info.total
-
         num_processes = len(nvidia_smi.nvmlDeviceGetComputeRunningProcesses(handle))
 
-        if (fraction_free > min_free_memory) & (num_processes <= max_processes):
+        consider_available = (fraction_free > min_free_memory) & (num_processes <= max_processes)
+        if consider_available:
             available_devices.append(i)
+            memory_usage.append(fraction_free)
+
+        if log:
+            print(f'Device {i} | Free memory: {fraction_free:4.2f} | '
+                  f'Number of running processes: {num_processes:>2} | Free: {consider_available}')
 
     if len(available_devices) < n:
         raise ValueError(f'Not enough free devices: requested {n}, found {len(available_devices)}')
-    return available_devices[:n]
+    available_devices = np.array(available_devices)[np.argsort(memory_usage)[::-1]]
+    return sorted(available_devices[:n])
 
-def set_gpus(n=1, min_free_memory=0.9, max_processes=2):
+def set_gpus(n=1, min_free_memory=0.9, max_processes=2, log=False):
     """ Set the `CUDA_VISIBLE_DEVICES` variable to `n` available devices.
 
     Parameters
@@ -467,7 +473,10 @@ def set_gpus(n=1, min_free_memory=0.9, max_processes=2):
     if 'CUDA_VISIBLE_DEVICES' in os.environ.keys():
         raise ValueError('`CUDA_VISIBLE_DEVICES` is already set!')
 
-    devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes)
+    devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes, log=log)
     str_devices = ','.join(str(i) for i in devices)
     os.environ['CUDA_VISIBLE_DEVICES'] = str_devices
-    return str_devices
+
+    newline = "\n" if log else ""
+    print(f'{newline}`CUDA_VISIBLE_DEVICES` set to "{str_devices}"')
+    return devices
