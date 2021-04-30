@@ -406,3 +406,61 @@ def read_data_from(src, **kwargs):
         data = data[0]
 
     return data
+
+def get_available_gpus(n=1, fraction_memory=0.9, max_processes=2):
+    """ Select `n` gpus from available and free devices.
+
+    Parameters
+    ----------
+    n : int
+        Number of devices to select.
+    fraction_memory : float
+        Minimum percentage of free memory on a device to consider it free.
+    max_processes : int
+        Maximum amount of computed processes on a device to consider it free.
+
+    Returns
+    -------
+    List with indices of availble GPUs
+    """
+    if nvidia_smi is None:
+        raise ImportError('Install Python interface for nvidia_smi')
+
+    nvidia_smi.nvmlInit()
+    n_devices = nvidia_smi.nvmlDeviceGetCount()
+
+    available_devices = []
+    for i in range(n_devices):
+        handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
+        info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+
+        fraction_free = info.free / info.total
+
+        num_processes = len(nvidia_smi.nvmlDeviceGetComputeRunningProcesses(handle))
+
+        if (fraction_free > fraction_memory) & (num_processes <= max_processes):
+            available_devices.append(i)
+
+    if len(available_devices) < n:
+        raise ValueError(f'Not enough free devices: requested {n}, found {len(available_devices)}')
+    return available_devices[:n]
+
+def set_gpus(n=1, fraction_memory=0.9, max_processes=2):
+    """ Set the `CUDA_VISIBLE_DEVICES` variable to `n` available devices.
+
+    Parameters
+    ----------
+    n : int
+        Number of devices to select.
+    fraction_memory : float
+        Minimum percentage of free memory on a device to consider it free.
+    max_processes : int
+        Maximum amount of computed processes on a device to consider it free.
+    """
+    if 'CUDA_VISIBLE_DEVICES' in os.environ.keys():
+        raise ValueError('`CUDA_VISIBLE_DEVICES` is already set!')
+
+    devices = get_available_gpus(n=n, fraction_memory=fraction_memory, max_processes=max_processes)
+    str_devices = ','.join(str(i) for i in devices)
+    os.environ['CUDA_VISIBLE_DEVICES'] = str_devices
+    return str_devices
