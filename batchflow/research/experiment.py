@@ -1,5 +1,6 @@
 import os
-from collections import OrderedDict
+import datetime
+import csv
 from copy import copy, deepcopy
 import itertools
 import traceback
@@ -7,53 +8,15 @@ import multiprocess as mp
 import hashlib
 import random
 import dill
+import logging
+from collections import OrderedDict
 
-from .. import Config, inbatch_parallel, Pipeline
-from .domain import Domain, ConfigAlias
-from .distributor import Distributor, ResearchMonitor, ResearchResults
+from .. import Config, inbatch_parallel
 from ..named_expr import NamedExpression, eval_expr
 
-class E(NamedExpression):
-    def __init__(self, unit=None, all=False, **kwargs):
-        self.unit = unit
-        self.all = all
-
-    def _get(self, **kwargs):
-        experiment = kwargs['experiment']
-        if self.all:
-            return experiment.executor.experiments
-        return [experiment]
-
-    def get(self, **kwargs):
-        experiments = self._get(**kwargs)
-        results = self.transform(experiments)
-        if self.all:
-            return results
-        return results[0]
-
-    def transform(self, experiments):
-        if self.unit is not None:
-            return [exp[self.unit] for exp in experiments]
-        return experiments
-
-class EC(E):
-    def __init__(self, name=None, **kwargs):
-        self.name = name
-        super().__init__(**kwargs)
-
-    def transform(self, experiments):
-        if self.name is None:
-            return [exp.config for exp in experiments]
-        else:
-            return [exp.config[self.name] for exp in experiments]
-
-class O(E):
-    def __init__(self, name, **kwargs):
-        self.name = name
-        super().__init__(**kwargs)
-
-    def transform(self, experiments):
-        return [exp[self.name]._output for exp in experiments]
+from .domain import ConfigAlias
+from .named_expr import E, O, EC
+from .utils import create_logger
 
 class PipelineWrapper:
     def __init__(self, pipeline, mode='generator'):
@@ -204,7 +167,7 @@ class Experiment:
         self.last = False
         self.outputs = dict()
         self.results = OrderedDict()
-        self.dump_results = False
+        self.has_dump = False
 
     @property
     def is_alive(self):
@@ -222,7 +185,7 @@ class Experiment:
     def exception_raised(self, value):
         self._exception_raised = self._exception_raised or value
 
-    def add_namespace(self, name, namespace, root=False, **kwargs):
+    def add_instance(self, name, namespace, root=False, **kwargs):
         self.namespaces[name] = Namespace(name, namespace, root, **kwargs)
         def _create_instance(experiments, item_name):
             if not isinstance(experiments, list):
@@ -275,20 +238,21 @@ class Experiment:
         return self
 
     def dump(self, variable=None, iterations_to_execute=['last']):
-        self.dump_results = True
+        self.has_dump = True
 
         def _dump_results(variable, experiment):
-            values = experiment.results[variable] if variable is not None else experiment.results
-            iteration = experiment.iteration
-            variable_path = os.path.join(experiment.full_path, variable or 'all_results')
-            if not os.path.exists(variable_path):
-                os.makedirs(variable_path)
-            with open(os.path.join(variable_path, str(iteration)), 'wb') as file:
-                dill.dump(values, file)
-            if variable is None:
-                experiment.results = OrderedDict() # TODO: does it removed?
-            else:
-                del experiment.results[variable]
+            if experiment.dump_results:
+                values = experiment.results[variable] if variable is not None else experiment.results
+                iteration = experiment.iteration
+                variable_path = os.path.join(experiment.full_path, variable or 'all_results')
+                if not os.path.exists(variable_path):
+                    os.makedirs(variable_path)
+                with open(os.path.join(variable_path, str(iteration)), 'wb') as file:
+                    dill.dump(values, file)
+                if variable is None:
+                    experiment.results = OrderedDict() # TODO: does it removed?
+                else:
+                    del experiment.results[variable]
 
         name = self.add_postfix('dump_results')
         self.add_callable(name, _dump_results,
@@ -298,10 +262,6 @@ class Experiment:
 
     def add_postfix(self, name):
         return name + '_' + str(sum([item.startswith(name) for item in self.actions]))
-
-    def dump_results(self, name):
-        # TODO
-        return self
 
     def parse_name(self, name):
         if '.' not in name:
@@ -315,7 +275,7 @@ class Experiment:
         namespaces = copy(self.namespaces)
         actions = OrderedDict([(name, copy(unit)) for name, unit in self.actions.items()])
         new_experiment = Experiment(namespaces=namespaces, actions=actions)
-        new_experiment.dump_results = self.dump_results
+        new_experiment.has_dump = self.has_dump
         return new_experiment
 
     def copy_state(self, src):
@@ -333,7 +293,7 @@ class Experiment:
         return self.copy()
 
     def generate_id(self, alias):
-        self.id = hashlib.md5(alias.encode('utf-8')).hexdigest() + str(random.getrandbits(16))
+        self.id = hashlib.md5(alias.encode('utf-8')).hexdigest()[:8] + str(random.getrandbits(16))
 
     def create_folder(self):
         # make dir using path from self.meta
@@ -347,6 +307,7 @@ class Experiment:
         self.config = config.config()
         self.executor = executor
         self.research = executor.research
+        self.dump_results = self.research.dump_results
         self.generate_id(config.alias(as_string=True))
         self.create_folder()
         self.instances = OrderedDict()
@@ -359,10 +320,22 @@ class Experiment:
             else:
                 self.actions[name].set_unit(config=config, experiment=self)
 
+    def create_logger(self):
+        name = f"{self.executor.research.name}.{self.id}"
+        path = os.path.join(self.full_path, 'experiment.log') if self.dump_results else None
+        loglevel = getattr(logging, self.research.loglevel.upper())
+
+        self.logger = create_logger(name, path, loglevel)
+
+    # def close_logger(self):
+    #     self.logger.removeHandler(self.logger.handlers[0])
+
     def call(self, name, iteration, n_iters=None):
         if self.is_alive:
             self.last = self.last or (iteration + 1 == n_iters)
             self.iteration = iteration
+
+            self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
             # self.research.monitor.start_execution(name, self)
             try:
                 # self.info(name, 'call')
@@ -371,10 +344,13 @@ class Experiment:
                 self.exception_raised = True
                 self.last = True
                 if isinstance(e, StopIteration):
-                    # self.info(name, 'was stopped by StopIteration')
+                    self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
                     self.research.monitor.stop_iteration(name, self)
                 else:
                     self.exception = e
+                    ex_traceback = e.__traceback__
+                    msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
+                    self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
                     self.research.monitor.fail_execution(name, self)
             else:
                 self.research.monitor.finish_execution(name, self)
@@ -419,6 +395,7 @@ class Executor:
             config = ConfigAlias(config) + ConfigAlias(branch_config) + ConfigAlias(self.executor_config)
             experiment = self.experiment_template.copy()
             experiment.create_instances(config, self)
+            experiment.create_logger()
             self.experiments.append(experiment)
 
     def run(self, worker):
@@ -454,278 +431,3 @@ class Executor:
         if self.research is not None:
             for experiment in self.experiments:
                 self.research.results.put(experiment.id, experiment.results)
-
-class NewResearch:
-    def __init__(self, name=None, domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=100):
-        self.domain = Domain(domain)
-        self.n_configs = n_configs
-        self.n_reps = n_reps
-        self.repeat_each = repeat_each
-        self.experiment = experiment or Experiment()
-        self.name = name or 'research'
-
-        self.results = ResearchResults()
-        self.monitor = ResearchMonitor(self.name)
-
-    def init_instance(self, *args, **kwargs):
-        self.experiment.add_namespace(*args, **kwargs)
-        return self
-
-    def add_callable(self, *args, **kwargs):
-        self.experiment.add_callable(*args, **kwargs)
-        return self
-
-    def add_generator(self, *args, **kwargs):
-        self.experiment.add_generator(*args, **kwargs)
-        return self
-
-    def add_pipeline(self, *args, **kwargs):
-        self.experiment.add_pipeline(*args, **kwargs)
-        return self
-
-    def update_domain(self, **kwargs):
-        """ Add domain update functions or update parameters.
-
-        Parameters
-        ----------
-        function : callable or None
-
-        each : int or 'last'
-            when update method will be called. If 'last', domain will be updated
-            when iterator will be finished. If int, domain will be updated with
-            that period.
-        n_updates : int
-            the total number of updates.
-        *args, **kwargs :
-            update function parameters.
-        """
-        self.domain.set_update(function, each, n_updates, **kwargs)
-        return self
-
-    def load_results(self, *args, **kwargs):
-        """ Load results of research as pandas.DataFrame or dict (see :meth:`~.Results.load`). """
-        return Results(self.name, *args, **kwargs)
-
-    def attach_env_meta(self, **kwargs):
-        """ Save the information about the current state of project repository.
-
-        Parameters
-        ----------
-        kwargs : dict
-            dict where values are bash commands and keys are names of files to save output of the command.
-        """
-        commands = {
-            'commit': "git log --name-status HEAD^..HEAD",
-            'diff': 'git diff',
-            'status': 'git status',
-            **kwargs
-        }
-
-        for filename, command in commands.items():
-            process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
-            output, _ = process.communicate()
-            result = re.sub('"image/png": ".*?"', '"image/png": "..."', output.decode('utf'))
-            if not os.path.exists(os.path.join(self.name, 'env')):
-                os.makedirs(os.path.join(self.name, 'env'))
-            with open(os.path.join(self.name, 'env', filename + '.txt'), 'w') as file:
-                print(result, file=file)
-
-    def _get_devices(self, devices):
-        n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
-        n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
-        total_n_branches = n_workers * n_branches
-        if devices is None:
-            devices = [[[None]] * n_branches] * n_workers
-        if isinstance(devices, (int, str)):
-            devices = [devices]
-        if isinstance(devices[0], (int, str)):
-            if total_n_branches > len(devices):
-                _devices = list(itertools.chain.from_iterable(
-                    zip(*itertools.repeat(devices, total_n_branches // len(devices)))
-                ))
-                devices = _devices + devices[:total_n_branches % len(devices)]
-            else:
-                devices = devices + devices[:-len(devices) % (total_n_branches)]
-            if total_n_branches % len(devices) == 0:
-                branches_per_device = total_n_branches // len(devices)
-                devices = list(itertools.chain.from_iterable(itertools.repeat(x, branches_per_device) for x in devices))
-            if len(devices) % total_n_branches == 0:
-                devices_per_branch = len(devices) // total_n_branches
-                devices = [
-                    [
-                        [
-                            devices[n_branches * devices_per_branch * i + devices_per_branch * j + k]
-                            for k in range(devices_per_branch)
-                        ] for j in range(n_branches)
-                    ] for i in range(n_workers)
-                ]
-        if isinstance(devices[0], list):
-            def _transform_item(x):
-                values = [str(item) if isinstance(item, int) else item for item in x]
-                return dict(device=values) if x is not None else dict()
-
-            devices = [[_transform_item(branch_config) for branch_config in worker_config] for worker_config in devices]
-        return devices
-
-    def create_research_folder(self):
-        if not os.path.exists(self.name):
-            os.makedirs(self.name)
-            for subfolder in ['configs', 'description', 'env', 'results']:
-                config_path = os.path.join(self.name, subfolder)
-                if not os.path.exists(config_path):
-                    os.makedirs(config_path)
-        else:
-            raise ValueError(
-                "Research with name '{}' already exists".format(self.name)
-            )
-
-    def run(self, workers=1, branches=1, name=None, n_iters=None, bar=False, devices=None, executor_class=None,
-            dump_results=True, parallel=True, executor_target='threads'):
-        """ Run research.
-
-        Parameters
-        ----------
-        n_iters: int or None
-            number of iterations for each configuration. If None, wait StopIteration exception for at least
-            one executable unit.
-        workers : int or list of dicts (Configs)
-            If int - number of workers to run pipelines or workers that will run them, `worker_class` will be used.
-
-            If list of dicts (Configs) - list of additional configs which will be appended to configs from tasks.
-
-            Each element corresponds to one worker.
-        branches: int or list of dicts (Configs)
-            Number of different branches with different configs with the same root. Each branch will use the same batch
-            from `root`. Pipelines will be executed in different threads.
-
-            If int - number of pipelines with different configs that will use the same prepared batch
-            from `root`.
-
-            If list of dicts (Configs) - list of dicts with additional configs to each pipeline.
-        name : str or None
-            name folder to save research. By default is 'research'.
-        bar : bool or callable
-            Whether to show a progress bar.
-            If callable, it must have the same signature as `tqdm`.
-        devices : str, list or None
-            all devices will be distributed between workwers and branches.
-            If you want to use different devices in branches, use expression `C('device')`.
-
-            For example, for :class:`~.TFModel` add `device=C('device')` to model config.
-            If None, default gpu configuration will be used
-        worker_class : type
-            worker class. `PipelineWorker` by default.
-        timeout : int
-            each job will be killed if it doesn't answer more then that time in minutes
-        trials : int
-            trials to execute job
-
-        **How does it work**
-
-        At each iteration all pipelines and functions will be executed in the order in which were added.
-        If `update_config` callable is defined, each config will be updated by that function and then
-        will be passed into each `ExecutableUnit`.
-        If `update_domain` callable is defined, domain will be updated with the corresponding function
-        accordingly to `each` parameter of `update_domain`.
-        """
-        if parallel:
-            if isinstance(workers, int):
-                workers = 1
-            else:
-                workers = [workers[0]]
-        self.n_iters = n_iters
-        self.workers = workers
-        self.branches = branches
-        self.devices = self._get_devices(devices)
-        self.executor_class = Executor
-        self.dump_results = dump_results
-        self.parallel = parallel
-        self.executor_target = executor_target
-
-        if self.dump_results:
-            self.create_research_folder()
-
-        if isinstance(workers, int):
-            self.workers = [Config() for _ in range(workers)]
-        if isinstance(branches, int):
-            self.branches = [Config() for _ in range(branches)]
-
-        self.domain.set_iter(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each)
-
-        if self.domain.size is None and (self.domain.update_func is None or self.domain.update_each == 'last'):
-            warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
-                          stacklevel=2)
-
-        print("Research {} is starting...".format(self.name))
-
-        n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
-
-        tasks = DynamicQueue(self.domain, self, n_branches)
-        distributor = Distributor(tasks, self)
-
-        self.monitor.start()
-        distributor.run(bar)
-        self.monitor.stop()
-
-        return self
-
-class DynamicQueue:
-    """ Queue of tasks that can be changed depending on previous results. """
-    def __init__(self, domain, research, n_branches):
-        self.domain = domain
-        self.research = research
-        self.n_branches = n_branches
-
-        self.queue = mp.JoinableQueue()
-        self.withdrawn_tasks = 0
-
-    @property
-    def total(self):
-        """ Total estimated size of queue before the following domain update. """
-        if self.domain.size is not None:
-            return self.domain.size / self.n_branches
-        return None
-
-    def update(self):
-        """ Update domain. """
-        new_domain = self.domain.update(self.research) #TODO: put research instead of path
-        if new_domain is not None:
-            self.domain = new_domain
-            return True
-        return False
-
-    def next_tasks(self, n_tasks=1):
-        """ Get next `n_tasks` elements of queue. """
-        configs = []
-        for i in range(n_tasks):
-            branch_tasks = [] # TODO: rename it
-            try:
-                for _ in range(self.n_branches):
-                    branch_tasks.append(next(self.domain))
-                configs.append(branch_tasks)
-            except StopIteration:
-                if len(branch_tasks) > 0:
-                    configs.append(branch_tasks)
-                break
-        for i, executor_configs in enumerate(configs):
-            self.put((self.withdrawn_tasks + i, executor_configs))
-        n_tasks = len(configs)
-        self.withdrawn_tasks += n_tasks
-        return n_tasks
-
-    def stop_workers(self, n_workers):
-        """ Stop all workers by putting `None` task into queue. """
-        for _ in range(n_workers):
-            self.put(None)
-
-    def join(self):
-        self.queue.join()
-
-    def get(self):
-        return self.queue.get()
-
-    def put(self, value):
-        self.queue.put(value)
-
-    def task_done(self):
-        self.queue.task_done()

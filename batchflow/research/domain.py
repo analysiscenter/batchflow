@@ -391,7 +391,7 @@ class Domain:
             from that domain. If `n_items` is None and there is a cube that consists
             only of sampler-option then domain will produce infinite number of configs.
         n_reps : int
-            each element will be repeated n_reps times.
+            each element will be repeated `n_reps` times.
         repeat_each : int
             if there is not a cube that consists only of sampler-options then
             elements will be repeated after producing `repeat_each` configs. Else

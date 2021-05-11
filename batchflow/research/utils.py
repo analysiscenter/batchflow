@@ -2,6 +2,7 @@
 import os
 import glob
 import shutil
+import logging
 
 
 def to_list(value):
@@ -38,3 +39,19 @@ def transform_research_results(research_name):
             shutil.move(src, dst)
     for path in initial_results:
         shutil.rmtree(path)
+
+def create_logger(name, path, loglevel):
+    logger = logging.getLogger(name)
+    logger.setLevel(loglevel)
+
+    if path is not None:
+        fh = logging.FileHandler(path)
+    else:
+        fh = logging.StreamHandler() #TODO: filter outputs
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                                datefmt='%y-%m-%d %H:%M:%S')
+    fh.setLevel(loglevel)
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+
+    return logger
