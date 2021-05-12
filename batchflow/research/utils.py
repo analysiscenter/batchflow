@@ -41,6 +41,7 @@ def transform_research_results(research_name):
         shutil.rmtree(path)
 
 def create_logger(name, path, loglevel):
+    loglevel = getattr(logging, loglevel.upper())
     logger = logging.getLogger(name)
     logger.setLevel(loglevel)
 

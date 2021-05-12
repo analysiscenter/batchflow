@@ -29,13 +29,15 @@ class Worker:
         n_branches = len(self.research.branches)
         devices = self.research.devices[self.index]
 
-        all_devices = set(device for i in range(n_branches) for device in devices[i]['device'] if device is not None)
-
-        devices = [{'device': item['device'][0] if len(item['device']) == 1 else item['device']} for item in devices]
+        all_devices = set(device for i in range(n_branches) for device in devices[i] if device is not None)
 
         if len(all_devices) > 0:
             os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
             os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(all_devices)
+
+        device_reindexation = {device: i for i, device in enumerate(all_devices)}
+        devices = [[device_reindexation.get(i) for i in item] for item in devices]
+        devices = [{'device': item[0] if len(item) == 1 else item} for item in devices]
 
         while task is not None:
             task_idx, configs = task

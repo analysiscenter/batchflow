@@ -1,8 +1,10 @@
 import pytest
+import os
+
 from batchflow import Dataset, Pipeline, B, V, F, C
 from batchflow.research import *
 
-class TestExperiment:
+class TestExecutor:
     def test_callable(self):
         experiment = (Experiment()
             .add_callable('sum', sum, args=[range(10)])
@@ -72,7 +74,7 @@ class TestExperiment:
                 return sum(range(self.x))
 
         experiment = (Experiment()
-            .add_namespace('instance', MyClass, x=EC('x'))
+            .add_instance('instance', MyClass, x=EC('x'))
             .add_callable('instance.sum')
             .save(O('instance.sum'), 'sum')
         )
@@ -92,7 +94,7 @@ class TestExperiment:
 
         experiment = (Experiment()
             .add_pipeline('ppl', ppl)
-            .save(E('ppl').v('var'), save_to='var', iterations_to_execute=['last'])
+            .save(E('ppl').v('var'), dst='var', iterations_to_execute=['last'])
         )
 
         executor = Executor(experiment, target='f', n_iters=10)
@@ -109,7 +111,7 @@ class TestExperiment:
 
         experiment = (Experiment()
             .add_pipeline('ppl', root, ppl)
-            .save(E('ppl_branch').v('var'), save_to='var', iterations_to_execute=['last'])
+            .save(E('ppl_branch').v('var'), dst='var', iterations_to_execute=['last'])
         )
 
         executor = Executor(experiment, target='f', n_iters=10, configs=[{'x': 10}, {'x': 20}], )
@@ -146,3 +148,28 @@ class TestExperiment:
 
         executor = Executor(experiment, target='f', configs=[{'n':10}, {'n': 20}], n_iters=None)
         executor.run()
+
+class TestResearch:
+    @pytest.mark.parametrize('parallel', [False, True])
+    @pytest.mark.parametrize('dump_results', [False, True])
+    @pytest.mark.parametrize('target', ['f', 't'])
+    @pytest.mark.parametrize('workers', [1, 3])
+    @pytest.mark.parametrize('branches', [1, 3])
+    def test_research(self, parallel, dump_results, target, workers, branches, tmp_path):
+        n_iters = 3
+        def f(x, y):
+            return sum([x, y])
+
+        experiment = (Experiment()
+            .add_callable('sum', f, x=EC('x'), y=EC('y'))
+            .save(O('sum'), 'sum')
+            .save(EC()['x'], 'config')
+        )
+
+        domain = Option('x', [1, 2]) * Option('y', [2, 3])
+
+        research = Research(name=os.path.join(tmp_path, 'research'), experiment=experiment, domain=domain)
+
+        research.run(n_iters=n_iters, workers=workers, branches=branches, parallel=parallel, dump_results=dump_results, executor_target=target)
+
+        assert len(research.results.to_df()) == n_iters * len(domain)

@@ -5,7 +5,8 @@ from copy import copy, deepcopy
 import itertools
 import subprocess
 import re
-import traceback
+import functools
+import pandas as pd
 import multiprocess as mp
 import hashlib
 import glob
@@ -47,9 +48,6 @@ class Research:
         self.n_reps = n_reps
         self.repeat_each = repeat_each
         self._env = dict()
-
-        self.results = ResearchResults()          # stores results during research execution
-        self.monitor = ResearchMonitor(self.name) # process execution signals
 
     def add_instance(self, *args, **kwargs):
         self.experiment.add_instance(*args, **kwargs)
@@ -164,7 +162,7 @@ class Research:
         if isinstance(devices[0], list):
             def _transform_item(x):
                 values = [str(item) if isinstance(item, int) else item for item in x]
-                return dict(device=values) if x is not None else dict()
+                return values if x is not None else []
 
             devices = [[_transform_item(branch_config) for branch_config in worker_config] for worker_config in devices]
         return devices
@@ -263,6 +261,9 @@ class Research:
         tasks_queue = DynamicQueue(self.domain, self, n_branches)
         distributor = Distributor(tasks_queue, self)
 
+        self.results = ResearchResults(self.name, self.dump_results)
+        self.monitor = ResearchMonitor(self.name) # process execution signals
+
         self.monitor.start(self.dump_results)
         distributor.run()
         self.monitor.stop()
@@ -272,9 +273,8 @@ class Research:
     def create_logger(self):
         name = f"{self.name}"
         path = os.path.join(self.name, 'research.log') if self.dump_results else None
-        loglevel = getattr(logging, self.loglevel.upper())
 
-        self.logger = create_logger(name, path, loglevel)
+        self.logger = create_logger(name, path, self.loglevel)
 
 class DynamicQueue:
     """ Queue of tasks that can be changed depending on previous results. """
@@ -397,8 +397,56 @@ class ResearchMonitor:
         self.queue.put(None)
 
 class ResearchResults:
-    def __init__(self):
+    def __init__(self, name, dump_results):
+        self.name = name
+        self.dump_results = dump_results
         self.results = mp.Manager().dict()
 
     def put(self, id, results):
         self.results[id] = results
+
+    def to_df(self, pivot=False, include_config=True, **kwargs):
+        df = []
+        for experiment_id in self.results:
+            experiment_df = []
+            for name in self.results[experiment_id]:
+                if name == 'config':
+                    continue
+                _df = {
+                    'id': experiment_id,
+                    'iteration': self.results[experiment_id][name].keys()
+                }
+                if pivot:
+                    _df[name] = self.results[experiment_id][name].values()
+                else:
+                    _df['name'] = name
+                    _df['value'] = self.results[experiment_id][name].values()
+                experiment_df += [pd.DataFrame(_df)]
+            if pivot and len(experiment_df) > 0:
+                experiment_df = [functools.reduce(functools.partial(pd.merge, on=['id', 'iteration']), experiment_df)]
+            df += experiment_df
+        res = pd.concat(df) if len(df) > 0 else pd.DataFrame()
+        if include_config:
+            res = pd.merge(res, self.configs(**kwargs), how='outer', on='id')
+        return res
+
+    # def load_dumped(self):
+    #     if self.dump_results:
+    #         glob.glob(self.name, 'results', '*', '*', '*')
+
+    def configs(self, use_alias=True, concat_config=False, remove_auxilary=True):
+        df = []
+        for experiment_id in self.results:
+            config = self.results[experiment_id]['config']
+            if remove_auxilary:
+                for key in ['repetition', 'device']:
+                    config.pop_config(key)
+            if use_alias:
+                if concat_config:
+                    config = {'config': config.alias(as_string=concat_config)}
+                else:
+                    config = config.alias()
+            else:
+                config = config.config()
+            df += [pd.DataFrame({'id': [experiment_id], **config})]
+        return pd.concat(df)
