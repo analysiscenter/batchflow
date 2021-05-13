@@ -426,8 +426,8 @@ class ResearchResults:
                 experiment_df = [functools.reduce(functools.partial(pd.merge, on=['id', 'iteration']), experiment_df)]
             df += experiment_df
         res = pd.concat(df) if len(df) > 0 else pd.DataFrame()
-        if include_config:
-            res = pd.merge(res, self.configs_to_df(**kwargs), how='outer', on='id')
+        if include_config and len(res) > 0:
+            res = pd.merge(res, self.configs_to_df(**kwargs), how='inner', on='id')
         return res
 
     def load_iteration_files(self, path, iteration):
@@ -450,10 +450,13 @@ class ResearchResults:
                         results[it] = values[it]
         return results
 
-    def load(self, experiment_id=None, name=None, iteration=None):
+    def load(self, experiment_id=None, name=None, iteration=None, config=None, alias=None, domain=None, **kwargs):
         experiment_id = experiment_id if experiment_id is None else to_list(experiment_id)
         name = name if name is None else to_list(name)
         iteration = iteration if iteration is None else to_list(iteration)
+
+        filtered_ids = self.filter_ids_by_configs(config, alias, domain, **kwargs)
+        experiment_id = np.intersect1d(experiment_id, filtered_ids) if experiment_id is not None else filtered_ids
 
         if self.dump_results:
             self.results = OrderedDict()
@@ -488,3 +491,52 @@ class ResearchResults:
                 config = config.config()
             df += [pd.DataFrame({'id': [experiment_id], **config})]
         return pd.concat(df)
+
+    def filter_ids_by_configs(self, config=None, alias=None, domain=None, **kwargs):
+        """ Filter configs.
+
+        Parameters
+        ----------
+        repetition : int, optional
+            index of the repetition to load, by default None
+        experiment_id : str or list, optional
+            experiment id to load, by default None
+        configs : dict, optional
+            specify keys and corresponding values to load results, by default None
+        aliases : dict, optional
+            the same as `configs` but specify aliases of parameters, by default None
+
+        Returns
+        -------
+        list
+            filtered list on configs
+        """
+        if sum([domain is not None, config is not None, alias is not None]) > 1:
+            raise ValueError('Only one of `config`, `alias` and `domain` can be not None')
+        filtered_ids = []
+        if domain is not None:
+            for config in domain.iterator():
+                filtered_ids += self.filter_ids_by_configs(config=config.config())
+            return filtered_ids
+
+        if len(kwargs) > 0:
+            if config is not None:
+                config = {**config, **kwargs}
+            elif alias is not None:
+                alias = {**alias, **kwargs}
+            else:
+                config = kwargs
+
+        if config is None and alias is None:
+            return list(self.configs.keys())
+
+        for experiment_id, supconfig in self.configs.items():
+            if config is not None:
+                _config = supconfig.config()
+                if all(item in _config.items() for item in config.items()):
+                    filtered_ids += [experiment_id]
+            else:
+                _config = supconfig.alias()
+                if all(item in _config.items() for item in alias.items()):
+                    filtered_ids += [experiment_id]
+        return filtered_ids

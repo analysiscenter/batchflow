@@ -4,6 +4,20 @@ import os
 from batchflow import Dataset, Pipeline, B, V, F, C
 from batchflow.research import *
 
+@pytest.fixture
+def simple_research(tmp_path):
+    def f(x, y):
+        return sum([x, y])
+
+    experiment = (Experiment()
+        .add_callable('sum', f, x=EC('x'), y=EC('y'))
+        .save(O('sum'), 'sum')
+    )
+
+    domain = Option('x', [1, 2]) * Option('y', [2, 3, 4])
+    research = Research(name=os.path.join(tmp_path, 'research'), experiment=experiment, domain=domain)
+
+    return research
 class TestExecutor:
     def test_callable(self):
         experiment = (Experiment()
@@ -146,7 +160,7 @@ class TestExecutor:
         assert executor.experiments[0].results['func'][10] == sum(range(10)) + 1
         assert executor.experiments[1].results['func'][20] == sum(range(20)) + 1
 
-        executor = Executor(experiment, target='f', configs=[{'n':10}, {'n': 20}], n_iters=None)
+        executor = Executor(experiment, target='f', configs=[{'n': 10}, {'n': 20}], n_iters=None)
         executor.run()
 
 class TestResearch:
@@ -154,23 +168,36 @@ class TestResearch:
     @pytest.mark.parametrize('dump_results', [False, True])
     @pytest.mark.parametrize('workers', [1, 3])
     @pytest.mark.parametrize('branches, target', [[1, 'f'], [3, 'f'], [3, 't']])
-    def test_research(self, parallel, dump_results, target, workers, branches, tmp_path):
+    def test_research(self, parallel, dump_results, target, workers, branches, simple_research):
         n_iters = 3
-        def f(x, y):
-            return sum([x, y])
-
-        experiment = (Experiment()
-            .add_callable('sum', f, x=EC('x'), y=EC('y'))
-            .save(O('sum'), 'sum')
-        )
-
-        domain = Option('x', [1, 2]) * Option('y', [2, 3])
-
-        research = Research(name=os.path.join(tmp_path, 'research'), experiment=experiment, domain=domain)
-
-        research.run(n_iters=n_iters, workers=workers, branches=branches, parallel=parallel, dump_results=dump_results, executor_target=target)
+        simple_research.run(n_iters=n_iters, workers=workers, branches=branches, parallel=parallel,
+                            dump_results=dump_results, executor_target=target)
 
         if dump_results:
-            research.results.load()
+            simple_research.results.load()
 
-        assert len(research.results.to_df()) == n_iters * len(domain)
+        assert len(simple_research.results.to_df()) == 18
+
+class TestResults:
+    def test_filter_by_config(self, simple_research):
+        simple_research.run(n_iters=3)
+        simple_research.results.load(config={'y': 2})
+        df = simple_research.results.to_df(use_alias=False)
+
+        assert len(df) == 6
+        assert (df.y.values == 2).all()
+
+    def test_filter_by_alias(self, simple_research):
+        simple_research.run(n_iters=3)
+        simple_research.results.load(alias={'y': '2'})
+        df = simple_research.results.to_df(use_alias=False)
+
+        assert len(df) == 6
+        assert (df.y.values == 2).all()
+
+    def test_filter_by_domain(self, simple_research):
+        simple_research.run(n_iters=3)
+        simple_research.results.load(domain=Option('y', [2, 3]))
+        df = simple_research.results.to_df(use_alias=False)
+
+        assert len(df) == 12
