@@ -152,9 +152,8 @@ class TestExecutor:
 class TestResearch:
     @pytest.mark.parametrize('parallel', [False, True])
     @pytest.mark.parametrize('dump_results', [False, True])
-    @pytest.mark.parametrize('target', ['f', 't'])
     @pytest.mark.parametrize('workers', [1, 3])
-    @pytest.mark.parametrize('branches', [1, 3])
+    @pytest.mark.parametrize('branches, target', [[1, 'f'], [3, 'f'], [3, 't']])
     def test_research(self, parallel, dump_results, target, workers, branches, tmp_path):
         n_iters = 3
         def f(x, y):
@@ -163,7 +162,6 @@ class TestResearch:
         experiment = (Experiment()
             .add_callable('sum', f, x=EC('x'), y=EC('y'))
             .save(O('sum'), 'sum')
-            .save(EC()['x'], 'config')
         )
 
         domain = Option('x', [1, 2]) * Option('y', [2, 3])
@@ -171,5 +169,8 @@ class TestResearch:
         research = Research(name=os.path.join(tmp_path, 'research'), experiment=experiment, domain=domain)
 
         research.run(n_iters=n_iters, workers=workers, branches=branches, parallel=parallel, dump_results=dump_results, executor_target=target)
+
+        if dump_results:
+            research.results.load()
 
         assert len(research.results.to_df()) == n_iters * len(domain)

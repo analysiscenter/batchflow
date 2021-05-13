@@ -324,10 +324,11 @@ class Experiment:
                 for var in variables_to_dump:
                     values = experiment.results[var]
                     iteration = experiment.iteration
-                    variable_path = os.path.join(experiment.full_path, var)
+                    variable_path = os.path.join(experiment.full_path, 'results', var)
                     if not os.path.exists(variable_path):
                         os.makedirs(variable_path)
-                    with open(os.path.join(variable_path, str(iteration)), 'wb') as file:
+                    filename = os.path.join(variable_path, str(iteration))
+                    with open(filename, 'wb') as file:
                         dill.dump(values, file)
                     experiment.results[var] = OrderedDict()
 
@@ -369,11 +370,14 @@ class Experiment:
         self.id = hashlib.md5(alias.encode('utf-8')).hexdigest()[:8] + str(random.getrandbits(16))
 
     def create_folder(self):
-        if self.dump_results:
-            self.experiment_path = os.path.join('results', self.id)
-            self.full_path = os.path.join(self.name, self.experiment_path)
-            if not os.path.exists(self.full_path):
-                os.makedirs(self.full_path)
+        self.experiment_path = os.path.join('experiments', self.id)
+        self.full_path = os.path.join(self.name, self.experiment_path)
+        if not os.path.exists(self.full_path):
+            os.makedirs(self.full_path)
+
+    def dump_config(self):
+        with open(os.path.join(self.name, self.experiment_path, 'config'), 'wb') as file:
+            dill.dump(self.config_alias, file)
 
     def create_instances(self, index, config, executor=None):
         self.index = index
@@ -391,7 +395,10 @@ class Experiment:
             setattr(self, attr, value)
 
         self.generate_id(config.alias(as_string=True))
-        self.create_folder()
+        if self.dump_results:
+            self.create_folder()
+            self.dump_config()
+
         self.instances = OrderedDict()
 
         root_experiment = executor.experiments[0] if len(executor.experiments) > 0 else None
@@ -513,5 +520,4 @@ class Executor:
     def send_results(self):
         if self.research is not None:
             for experiment in self.experiments:
-                experiment.results['config'] = experiment.config_alias
-                self.research.results.put(experiment.id, experiment.results)
+                self.research.results.put(experiment.id, experiment.results, experiment.config_alias)

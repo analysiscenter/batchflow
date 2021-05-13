@@ -6,20 +6,19 @@ import itertools
 import subprocess
 import re
 import functools
-import pandas as pd
 import multiprocess as mp
-import hashlib
-import glob
-import random
 import dill
-import logging
+import glob
+from collections import OrderedDict
 
-from .. import Config, inbatch_parallel, Pipeline
-from .domain import Domain, ConfigAlias
+import numpy as np
+import pandas as pd
+
+from .. import Config
+from .domain import Domain
 from .distributor import Distributor
 from .experiment import Experiment, Executor
-from ..named_expr import NamedExpression, eval_expr
-from .utils import create_logger
+from .utils import create_logger, to_list
 
 class Research:
     def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=100):
@@ -170,7 +169,7 @@ class Research:
     def create_research_folder(self):
         if not os.path.exists(self.name):
             os.makedirs(self.name)
-            for subfolder in ['configs', 'description', 'env', 'results']:
+            for subfolder in ['configs', 'description', 'env', 'experiments']:
                 config_path = os.path.join(self.name, subfolder)
                 if not os.path.exists(config_path):
                     os.makedirs(config_path)
@@ -240,6 +239,7 @@ class Research:
 
         if self.dump_results:
             self.create_research_folder()
+            self.experiment = self.experiment.dump()
         self.attach_env_meta()
 
         if isinstance(workers, int):
@@ -401,17 +401,17 @@ class ResearchResults:
         self.name = name
         self.dump_results = dump_results
         self.results = mp.Manager().dict()
+        self.configs = mp.Manager().dict()
 
-    def put(self, id, results):
+    def put(self, id, results, config):
         self.results[id] = results
+        self.configs[id] = config
 
     def to_df(self, pivot=False, include_config=True, **kwargs):
         df = []
         for experiment_id in self.results:
             experiment_df = []
             for name in self.results[experiment_id]:
-                if name == 'config':
-                    continue
                 _df = {
                     'id': experiment_id,
                     'iteration': self.results[experiment_id][name].keys()
@@ -427,17 +427,55 @@ class ResearchResults:
             df += experiment_df
         res = pd.concat(df) if len(df) > 0 else pd.DataFrame()
         if include_config:
-            res = pd.merge(res, self.configs(**kwargs), how='outer', on='id')
+            res = pd.merge(res, self.configs_to_df(**kwargs), how='outer', on='id')
         return res
 
-    # def load_dumped(self):
-    #     if self.dump_results:
-    #         glob.glob(self.name, 'results', '*', '*', '*')
+    def load_iteration_files(self, path, iteration):
+        filenames = glob.glob(os.path.join(path, '*'))
+        if iteration is None:
+            files_to_load = {int(os.path.basename(filename)): filename for filename in filenames}
+        else:
+            dumped_iteration = np.sort(np.array([int(os.path.basename(filename)) for filename in filenames]))
+            files_to_load = dict()
+            for it in iteration:
+                _it = dumped_iteration[np.argwhere(dumped_iteration >= it)[0, 0]]
+                files_to_load[_it] = os.path.join(path, str(_it))
+        files_to_load = OrderedDict(sorted(files_to_load.items()))
+        results = OrderedDict()
+        for filename in files_to_load.values():
+            with open(filename, 'rb') as f:
+                values = dill.load(f)
+                for it in values:
+                    if iteration is None or it in iteration:
+                        results[it] = values[it]
+        return results
 
-    def configs(self, use_alias=True, concat_config=False, remove_auxilary=True):
+    def load(self, experiment_id=None, name=None, iteration=None):
+        experiment_id = experiment_id if experiment_id is None else to_list(experiment_id)
+        name = name if name is None else to_list(name)
+        iteration = iteration if iteration is None else to_list(iteration)
+
+        if self.dump_results:
+            self.results = OrderedDict()
+            for path in glob.glob(os.path.join(self.name, 'experiments', '*', 'results', '*')):
+                path = os.path.normpath(path)
+                _experiment_id, _, _name = path.split(os.sep)[-3:]
+                if experiment_id is None or _experiment_id in experiment_id:
+                    if name is None or _name in name:
+                        if _experiment_id not in self.results:
+                            self.results[_experiment_id] = OrderedDict()
+                        experiment_results = self.results[_experiment_id]
+
+                        if _name not in experiment_results:
+                            experiment_results[_name] = OrderedDict()
+                        name_results = experiment_results[_name]
+                        new_values = self.load_iteration_files(path, iteration)
+                        experiment_results[_name] = OrderedDict([*name_results.items(), *new_values.items()])
+
+    def configs_to_df(self, use_alias=True, concat_config=False, remove_auxilary=True):
         df = []
-        for experiment_id in self.results:
-            config = self.results[experiment_id]['config']
+        for experiment_id in self.configs:
+            config = self.configs[experiment_id]
             if remove_auxilary:
                 for key in ['repetition', 'device']:
                     config.pop_config(key)
