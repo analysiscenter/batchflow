@@ -1193,7 +1193,7 @@ class Pipeline:
         name = self._eval_expr(action['model_name'], batch=batch)
         model_class = self._eval_expr(action['model_class'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, None)
-        self.models.load_model(mode, name, model_class, *args, **kwargs)
+        self.models.load_model(name, model_class, mode, *args, **kwargs)
 
     def load_model_now(self, mode, name=None, model_class=None, *args, batch=None, **kwargs):
         """ Load a model immediately
