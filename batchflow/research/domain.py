@@ -466,7 +466,7 @@ class Domain:
             self.create_iter()
         return self._iterator
 
-    def set_update(self, function, when, n_updates, **kwargs):
+    def set_update(self, function, when, **kwargs):
         """ Set domain update parameters. """
         iter_kwargs = dict()
         for attr in ['n_items', 'n_reps', 'repeat_each']:

@@ -64,7 +64,7 @@ class Research:
         self.experiment.add_pipeline(*args, **kwargs)
         return self
 
-    def update_domain(self, function, when, n_updates, **kwargs):
+    def update_domain(self, function, when, **kwargs):
         """ Add domain update functions or update parameters.
 
         Parameters
@@ -80,7 +80,7 @@ class Research:
         kwargs :
             update function parameters.
         """
-        self.domain.set_update(function, when, n_updates, **kwargs)
+        self.domain.set_update(function, when, **kwargs)
         return self
 
     def load_results(self, *args, **kwargs):

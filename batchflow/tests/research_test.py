@@ -46,17 +46,34 @@ class TestDomain:
         assert domain.size == n_items * n_reps
         assert len(configs) == n_items * n_reps
 
-    @pytest.mark.parametrize('repeat_each', [None, 1])
-    def test_reps(self, repeat_each):
+    @pytest.mark.parametrize('repeat_each', [None, 1, 2])
+    @pytest.mark.parametrize('n_reps', [1, 2, 3])
+    def test_repetitions_order(self, repeat_each, n_reps):
         domain = Option('a', [1, 2]) * Option('b', [3, 4])
-        domain.set_iter_params(n_reps=2, repeat_each=repeat_each)
+        domain.set_iter_params(n_reps=n_reps, repeat_each=repeat_each)
         configs = list(domain.iterator())
 
         for i, config in enumerate(configs):
             if repeat_each is None:
                 assert config.config()['repetition'] == i // len(domain)
             else:
-                assert config.config()['repetition'] == i % 2
+                assert config.config()['repetition'] == i % (repeat_each * n_reps) // repeat_each
+
+    def test_domain_update(self):
+        domain = Domain(Option('a', [1, 2]))
+
+        def update():
+            return Domain(Option('x', [3, 4]))
+
+        domain.set_update(update, ['last'])
+        configs = list(domain.iterator())
+
+        domain = domain.update(len(domain)-1, None)
+        configs += list(domain.iterator())
+
+        assert len(configs) == 4
+        for i, config in enumerate(configs):
+            assert config.config()['updates'] == (2 * i) // len(configs)
 
 class TestExecutor:
     def test_callable(self):
