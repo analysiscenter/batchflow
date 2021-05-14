@@ -64,7 +64,7 @@ class Research:
         self.experiment.add_pipeline(*args, **kwargs)
         return self
 
-    def update_domain(self, function, each, n_updates, **kwargs):
+    def update_domain(self, function, when, n_updates, **kwargs):
         """ Add domain update functions or update parameters.
 
         Parameters
@@ -80,7 +80,7 @@ class Research:
         kwargs :
             update function parameters.
         """
-        self.domain.set_update(function, each, n_updates, **kwargs)
+        self.domain.set_update(function, when, n_updates, **kwargs)
         return self
 
     def load_results(self, *args, **kwargs):
@@ -247,7 +247,7 @@ class Research:
         if isinstance(branches, int):
             self.branches = [Config() for _ in range(branches)]
 
-        self.domain.set_iter(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each)
+        self.domain.set_iter_params(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each)
 
         if self.domain.size is None and (self.domain.update_func is None or self.domain.update_each == 'last'):
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
@@ -285,6 +285,7 @@ class DynamicQueue:
 
         self.queue = mp.JoinableQueue()
         self.withdrawn_tasks = 0
+        self.finished_tasks = 0
 
     @property
     def total(self):
@@ -293,13 +294,11 @@ class DynamicQueue:
             return self.domain.size / self.n_branches
         return None
 
-    def update(self):
+    def update_domain(self):
         """ Update domain. """
-        new_domain = self.domain.update(self.research) #TODO: put research instead of path
+        new_domain = self.domain.update(self.finished_tasks, self.research) #TODO: put research instead of path
         if new_domain is not None:
             self.domain = new_domain
-            return True
-        return False
 
     def next_tasks(self, n_tasks=1):
         """ Get next `n_tasks` elements of queue. """
@@ -327,15 +326,14 @@ class DynamicQueue:
 
     def join(self):
         self.queue.join()
+        self.finished_tasks += 1
 
-    def get(self):
-        return self.queue.get()
+    def in_progress(self):
+        return self.withdrawn_tasks != self.finished_tasks
 
-    def put(self, value):
-        self.queue.put(value)
-
-    def task_done(self):
-        self.queue.task_done()
+    def __getattr__(self, key):
+        # join, get, put, task_done, empty
+        return getattr(self.queue, key)
 
 class ResearchMonitor:
     COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid']

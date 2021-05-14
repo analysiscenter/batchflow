@@ -94,20 +94,26 @@ class Distributor:
         for i, worker_config in enumerate(self.research.workers):
             workers += [Worker(i, worker_config, self.tasks, self.research)]
 
-        n_tasks = self.tasks.next_tasks(len(workers)+1)
+        self.tasks.next_tasks(len(workers)+1)
         if self.research.parallel:
             self.research.logger.info('Start workers (parallel)')
             for worker in workers:
                 mp.Process(target=worker).start()
-            while n_tasks > 0:
+
+            while self.tasks.in_progress():
                 self.tasks.join()
-                n_tasks = self.tasks.next_tasks(1)
+                self.tasks.next_tasks(1)
+                self.tasks.update_domain()
+
             self.tasks.stop_workers(len(workers))
-            self.tasks.join()
+            for _ in workers:
+                self.tasks.join()
         else:
             self.research.logger.info('Start worker (no parallel)')
-            while n_tasks > 0:
+            while self.tasks.in_progress():
                 self.tasks.stop_workers(1)
                 workers[0]()
-                n_tasks = self.tasks.next_tasks(1)
+                self.tasks.finished_tasks += 1
+                self.tasks.update_domain()
+                self.tasks.next_tasks(1)
         self.research.logger.info('All workers have finished the work')

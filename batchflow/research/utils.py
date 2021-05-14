@@ -56,3 +56,19 @@ def create_logger(name, path, loglevel):
     logger.addHandler(fh)
 
     return logger
+
+def must_execute(iteration, iterations_to_execute, n_iters=None, last=False):
+    """ Returns does unit must be executed for the current iteration. """
+    if last and 'last' in iterations_to_execute:
+        return True
+
+    frequencies = (item for item in iterations_to_execute if isinstance(item, int) and item > 0)
+    iterations = (int(item[1:]) for item in iterations_to_execute if isinstance(item, str) and item != 'last')
+
+    it_ok = iteration in iterations
+    freq_ok = any((iteration+1) % item == 0 for item in frequencies)
+
+    if n_iters is None:
+        return it_ok or freq_ok
+
+    return (iteration + 1 == n_iters and 'last' in iterations_to_execute) or it_ok or freq_ok

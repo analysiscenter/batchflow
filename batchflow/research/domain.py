@@ -1,5 +1,6 @@
 """ Options and configs. """
 
+from batchflow.research.utils import must_execute
 from itertools import product, islice
 from collections import OrderedDict
 from copy import copy, deepcopy
@@ -277,16 +278,14 @@ class Domain:
             self.weights = weights
 
         self.weights = np.array(self.weights) # weights for each cube to sample values from it
-        self.update_each = None # how often call updating function
-        self.update_kwargs = None
-        self.n_updates = 0
-        self.update_idx = 0
+        self.updates = []
+        self.n_produced = None
 
         self._iterator = None
         self.n_items = None
         self.n_reps = 1
         self.repeat_each = 100
-        self.update_func = None
+        self.n_updates = 0
 
         self.brute_force = []
         for cube in self.cubes:
@@ -370,15 +369,27 @@ class Domain:
         return self.cubes == other.cubes
 
     def __next__(self):
-        if self._iterator is None:
-            self.set_iter(self.n_items, self.n_reps, self.repeat_each)
-            self._reset_iter(self.n_items, self.n_reps, self.repeat_each)
-        return next(self._iterator)
+        return next(self.iterator())
+
+    @property
+    def size(self):
+        """ Return the number of configs that will be produces from domain. """
+        if self.n_items is not None:
+            return self.n_reps * self.n_items
+        return None
+
+    def __len__(self):
+        """ Return the number of configs that will be produced from domain without repetitions. """
+        cube_sizes = [
+            np.prod([len(op.values) for op in cube if isinstance(op.values, (list, tuple, np.ndarray))], dtype='int')
+            for cube in self.cubes
+        ]
+        return max(0, sum(cube_sizes))
 
     def reset_iter(self):
         self._iterator = None
 
-    def set_iter(self, n_items=None, n_reps=1, repeat_each=100):
+    def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=None):
         """ Set parameters for iterator.
 
         Parameters
@@ -398,20 +409,22 @@ class Domain:
             `repeat_each` will be setted to the number of configs that can be produced
             from domain.
         """
-        size = self._options_size()
+        size = len(self)
         self.n_items = n_items or size
         self.n_reps = n_reps
-        self.repeat_each = repeat_each
-
-        self._iterator = None
-
-    def _reset_iter(self, n_items=None, n_reps=1, repeat_each=100):
-        blocks = self._get_sampling_blocks()
-        size = self._options_size()
-        if n_items is not None:
-            repeat_each = n_items
+        if self.n_items is not None:
+            self.repeat_each = repeat_each or self.n_items
         elif size is not None:
-            repeat_each = size
+            self.repeat_each = repeat_each or size
+        else:
+            self.repeat_each = repeat_each or 100
+        self.n_produced = produced
+
+        self.reset_iter()
+
+    def create_iter(self):
+        blocks = self._get_sampling_blocks()
+
         def _iterator():
             while True:
                 for block in blocks:
@@ -419,7 +432,7 @@ class Domain:
                     weights[np.isnan(weights)] = 1
                     iterators = [self._cube_iterator(cube) for cube in np.array(self.cubes)[block]]
                     while len(iterators) > 0:
-                        index = np.random.choice(len(block), p=weights / weights.sum())
+                        index = np.random.choice(len(block), p=weights/weights.sum())
                         try:
                             yield next(iterators[index])
                         except StopIteration:
@@ -429,57 +442,52 @@ class Domain:
 
         def _iterator_with_repetitions():
             iterator = _iterator()
-            if n_reps == 1:
+            if self.n_reps == 1:
                 i = 0
-                while n_items is None or i < n_items:
-                    yield next(iterator) + ConfigAlias([('repetition', 0)]) # pylint: disable=stop-iteration-return
+                additional = ConfigAlias([('repetition', 0)]) + ConfigAlias([('updates', self.n_updates)])
+                while self.n_items is None or i < self.n_items:
+                    yield next(iterator) + additional # pylint: disable=stop-iteration-return
                     i += 1
             else:
                 i = 0
-                while n_items is None or i < n_items:
-                    samples = list(islice(iterator, int(repeat_each)))
-                    for repetition in range(n_reps):
+                while self.n_items is None or i < self.n_items:
+                    samples = list(islice(iterator, int(self.repeat_each)))
+                    for repetition in range(self.n_reps):
+                        additional = ConfigAlias({'repetition': repetition}) + ConfigAlias({'updates': self.n_updates})
                         for sample in samples:
-                            yield sample + ConfigAlias([('repetition', repetition)])
-                    i += repeat_each
+                            yield sample + additional
+                    i += self.repeat_each
         self._iterator = _iterator_with_repetitions()
-
-    @property
-    def size(self):
-        """ The number of configs that will be produces from domain. """
-        if self.n_items is not None:
-            return self.n_reps * self.n_items
-        return None
-
-    def __len__(self):
-        cube_sizes = [
-            np.prod([len(op.values) for op in cube if isinstance(op.values, list)], dtype='int')
-            for cube in self.cubes
-        ]
-        return max(0, sum(cube_sizes))
 
     def iterator(self):
         """ Get domain iterator. """
         if self._iterator is None:
-            self.set_iter(self.n_items, self.n_reps, self.repeat_each)
-            self._reset_iter(self.n_items, self.n_reps, self.repeat_each)
+            self.set_iter_params(self.n_items, self.n_reps, self.repeat_each)
+            self.create_iter()
         return self._iterator
 
-    def set_update(self, function, each, n_updates, **kwargs):
+    def set_update(self, function, when, n_updates, **kwargs):
         """ Set domain update parameters. """
-        self.update_kwargs = kwargs
-        self.update_each = each
-        self.n_updates = n_updates #TODO: must be >= 0
-        self.update_func = function
+        iter_kwargs = dict()
+        for attr in ['n_items', 'n_reps', 'repeat_each']:
+            iter_kwargs[attr] = kwargs.pop(attr) if attr in kwargs else getattr(self, attr)
+        self.updates.append({
+            'function': function,
+            'when': when,
+            'kwargs': kwargs,
+            'iter_kwargs': iter_kwargs
+        })
 
-    def update(self, path):
+    def update(self, iteration, research):
         """ Update domain by `update_func`. If returns None, domain will not be updated. """
-        if self.n_updates is None or self.update_idx < self.n_updates:
-            kwargs = eval_expr(self.update_kwargs, path=path)
-            new_domain = self.update_func(**kwargs)
-            new_domain.update_idx += 1
-            new_domain.set_update(**self.update_domain)
-            return new_domain
+        for update in self.updates:
+            if must_execute(iteration, update['when'], self.n_items):
+                kwargs = eval_expr(update['kwargs'], research=research)
+                new_domain = update['function'](**kwargs)
+                new_domain.updates = self.updates
+                new_domain.n_updates = self.n_updates + 1
+                new_domain.set_iter_params(produced=self.n_produced, **update['iter_kwargs'])
+                return new_domain
         return None
 
     def _is_array_option(self):
@@ -541,13 +549,3 @@ class Domain:
         excl = np.concatenate(([0], incl[:-1]))
         block_indices = incl + excl
         return [np.where(block_indices == i)[0] for i in set(block_indices)]
-
-    def _options_size(self):
-        """ Return the number of configs that will be produced from domain without repetitions. """
-        size = 0
-        for cube in self.cubes:
-            lengthes = [len(option.values) for option in cube if isinstance(option.values, (list, tuple, np.ndarray))]
-            if len(lengthes) == 0:
-                return None
-            size += np.product(lengthes)
-        return size

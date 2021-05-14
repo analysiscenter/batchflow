@@ -16,7 +16,7 @@ from ..named_expr import NamedExpression, eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import create_logger, to_list
+from .utils import create_logger, must_execute, to_list
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -197,19 +197,8 @@ class ExecutableUnit:
 
     def must_execute(self, iteration, n_iters=None, last=False):
         """ Returns does unit must be executed for the current iteration. """
-        if last and 'last' in self.iterations_to_execute:
-            return True
+        return must_execute(iteration, self.iterations_to_execute, n_iters, last)
 
-        frequencies = (item for item in self.iterations_to_execute if isinstance(item, int) and item > 0)
-        iterations = (int(item[1:]) for item in self.iterations_to_execute if isinstance(item, str) and item != 'last')
-
-        it_ok = iteration in iterations
-        freq_ok = any((iteration+1) % item == 0 for item in frequencies)
-
-        if n_iters is None:
-            return it_ok or freq_ok
-
-        return (iteration + 1 == n_iters and 'last' in self.iterations_to_execute) or it_ok or freq_ok
 
     def __copy__(self):
         """ Create copy of the unit. """

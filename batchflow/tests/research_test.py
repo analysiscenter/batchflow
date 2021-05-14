@@ -18,6 +18,46 @@ def simple_research(tmp_path):
     research = Research(name=os.path.join(tmp_path, 'research'), experiment=experiment, domain=domain)
 
     return research
+
+SIZE_CALC = {
+    '+': lambda x, y: x + y,
+    '*': lambda x, y: x * y,
+    '@': lambda x, y: x
+}
+class TestDomain:
+    @pytest.mark.parametrize('op', ['+', '*', '@'])
+    @pytest.mark.parametrize('a', [[0, 1, 2], [0, 1, 2, 4]])
+    @pytest.mark.parametrize('b', [[2, 3, 4]])
+    @pytest.mark.parametrize('n_reps', [1, 2])
+    def test_operations(self, op, a, b, n_reps):
+        option_1 = Option('a', a)
+        option_2 = Option('b', b)
+
+        if op == '@' and len(a) != len(b):
+            return None
+
+        domain = eval(f'option_1 {op} option_2')
+        domain.set_iter_params(n_reps=n_reps)
+
+        configs = list(domain.iterator())
+        n_items = SIZE_CALC[op](len(a), len(b))
+
+        assert len(domain) == n_items
+        assert domain.size == n_items * n_reps
+        assert len(configs) == n_items * n_reps
+
+    @pytest.mark.parametrize('repeat_each', [None, 1])
+    def test_reps(self, repeat_each):
+        domain = Option('a', [1, 2]) * Option('b', [3, 4])
+        domain.set_iter_params(n_reps=2, repeat_each=repeat_each)
+        configs = list(domain.iterator())
+
+        for i, config in enumerate(configs):
+            if repeat_each is None:
+                assert config.config()['repetition'] == i // len(domain)
+            else:
+                assert config.config()['repetition'] == i % 2
+
 class TestExecutor:
     def test_callable(self):
         experiment = (Experiment()
@@ -162,7 +202,6 @@ class TestExecutor:
 
         executor = Executor(experiment, target='f', configs=[{'n': 10}, {'n': 20}], n_iters=None)
         executor.run()
-
 class TestResearch:
     @pytest.mark.parametrize('parallel', [False, True])
     @pytest.mark.parametrize('dump_results', [False, True])
