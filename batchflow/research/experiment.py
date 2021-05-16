@@ -16,7 +16,7 @@ from ..named_expr import NamedExpression, eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import create_logger, must_execute, to_list
+from .utils import create_logger, must_execute, to_list, parse_name
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -34,9 +34,15 @@ class PipelineWrapper:
     def __init__(self, pipeline, mode='generator'):
         if mode not in['generator', 'func', 'execute_for']:
             raise ValueError(f'Unknown PipelineWrapper mode: {mode}')
+        if isinstance(pipeline, str):
+            pipeline = parse_name(pipeline)
         self.pipeline = pipeline
         self.mode = mode
         self.config = None
+
+    def eval_name(self, experiment):
+        if isinstance(self.pipeline, (list, tuple)):
+            self.pipeline = getattr(experiment.instances[self.pipeline[0]], self.pipeline[1])
 
     def __call__(self, config, batch=None):
         """ Execute pipeline.
@@ -80,8 +86,10 @@ class PipelineWrapper:
 
     def __copy__(self):
         """ Create copy of the pipeline with the same mode. """
-        new_unit = PipelineWrapper(self.pipeline + Pipeline(), self.mode)
-        return new_unit
+        if isinstance(self.pipeline, (list, tuple)):
+            return PipelineWrapper(self.pipeline, self.mode)
+        else:
+            return PipelineWrapper(self.pipeline + Pipeline(), self.mode)
 
 class Namespace:
     """ Namespace to use in each experiment in research. Will be initialized at the start of the experiment execution.
@@ -161,6 +169,8 @@ class ExecutableUnit:
         src = getattr(self, attr)
         if isinstance(src, (tuple, list)):
             setattr(self, attr, getattr(self.experiment.instances[src[0]], src[1]))
+        if isinstance(src, PipelineWrapper):
+            src.eval_name(self.experiment)
 
     def __call__(self, iteration, n_iters, last=False):
         """ Call unit: execute callable or get the next item from generator.
@@ -266,7 +276,7 @@ class Experiment:
 
     def add_executable_unit(self, name, src=None, mode='func', args=None, iterations_to_execute=1, save_to=None, **kwargs):
         if src is None:
-            kwargs[mode] = self.parse_name(name)
+            kwargs[mode] = parse_name(name)
         else:
             kwargs[mode] = src
         self.actions[name] = ExecutableUnit(name=name, args=args, iterations_to_execute=iterations_to_execute, **kwargs)
@@ -280,10 +290,10 @@ class Experiment:
     def add_generator(self, name, generator=None, args=None, **kwargs):
         return self.add_executable_unit(name, src=generator, mode='generator', args=args, **kwargs)
 
-    def add_pipeline(self, name, root_pipeline, branch_pipeline=None, run=False, **kwargs):
+    def add_pipeline(self, name, root_pipeline=None, branch_pipeline=None, run=False, **kwargs):
         if branch_pipeline is None:
             mode = 'func' if run else 'generator'
-            pipeline = PipelineWrapper(root_pipeline, mode=mode)
+            pipeline = PipelineWrapper(root_pipeline if root_pipeline is not None else name, mode=mode)
             self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), **kwargs)
         else:
             root_pipeline = PipelineWrapper(root_pipeline, mode='generator')
@@ -329,14 +339,6 @@ class Experiment:
 
     def add_postfix(self, name):
         return name + '_' + str(sum([item.startswith(name) for item in self.actions]))
-
-    def parse_name(self, name):
-        if '.' not in name:
-            raise ValueError('`func` parameter must be provided or name must be "namespace_name.unit_name"')
-        name_components = name.split('.')
-        if len(name_components) > 2:
-            raise ValueError(f'name must be "namespace_name.unit_name" but {name} were given')
-        return name_components
 
     def copy(self):
         namespaces = copy(self.namespaces)

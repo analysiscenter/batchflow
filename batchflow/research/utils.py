@@ -72,3 +72,11 @@ def must_execute(iteration, iterations_to_execute, n_iters=None, last=False):
         return it_ok or freq_ok
 
     return (iteration + 1 == n_iters and 'last' in iterations_to_execute) or it_ok or freq_ok
+
+def parse_name(name):
+    if '.' not in name:
+        raise ValueError('`func` parameter must be provided or name must be "namespace_name.unit_name"')
+    name_components = name.split('.')
+    if len(name_components) > 2:
+        raise ValueError(f'name must be "namespace_name.unit_name" but {name} were given')
+    return name_components

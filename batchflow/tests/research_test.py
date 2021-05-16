@@ -2,12 +2,13 @@ import pytest
 import os
 
 from batchflow import Dataset, Pipeline, B, V, F, C
+from batchflow.opensets import MNIST
 from batchflow.research import *
 
 @pytest.fixture
 def simple_research(tmp_path):
     def f(x, y):
-        return sum([x, y])
+        return x + y
 
     experiment = (Experiment()
         .add_callable('sum', f, x=EC('x'), y=EC('y'))
@@ -16,6 +17,54 @@ def simple_research(tmp_path):
 
     domain = Option('x', [1, 2]) * Option('y', [2, 3, 4])
     research = Research(name=os.path.join(tmp_path, 'research'), experiment=experiment, domain=domain)
+
+    return research
+
+@pytest.fixture
+def complex_research():
+    class Model:
+        def __init__(self):
+            self.ds = MNIST()
+            self.model_config = {
+                'head/layout': 'f',
+                'head/units': 10,
+                'head/kernel_size': 1,
+                'loss': 'ce'
+            }
+            self.create_train_ppl()
+            self.create_test_ppl()
+
+        def create_train_ppl(self):
+            ppl = (Pipeline()
+                .init_model('dynamic', ResNet, 'model', config=self.model_config)
+                .to_array(channels='first', src='images', dst='images')
+                .train_model('model', B('images'), B('labels'))
+                .run_later(batch_size=64, n_iters=1, shuffle=True, drop_last=True)
+            )
+            self.train_ppl = ppl << self.ds.train
+
+        def create_test_ppl(self):
+            test_ppl = (Pipeline()
+                .import_model('model', self.train_ppl)
+                .init_variable('metrics', None)
+                .to_array(channels='first', src='images', dst='images')
+                .predict_model('model', B('images'), fetches='predictions', save_to=B('predictions'))
+                .gather_metrics('classification', B('labels'), B('predictions'), fmt='logits', axis=-1,
+                                num_classes=10, save_to=V('metrics', mode='update'))
+                .run_later(batch_size=64, n_epochs=1, shuffle=False, drop_last=False)
+            )
+            self.test_ppl = test_ppl << self.ds.test
+
+        def eval_metrics(self, metrics, **kwargs):
+            return self.test_ppl.v('metrics').evaluate(metrics, **kwargs)
+
+    research = (Research(n_reps=2)
+        .add_instance('controller', Model)
+        .add_pipeline('controller.train_ppl')
+        .add_pipeline('controller.test_ppl', run=True, iterations_to_execute='last')
+        .add_callable('controller.eval_metrics', metrics='accuracy', iterations_to_execute='last')
+        .save(O('controller.eval_metrics'), 'accuracy', iterations_to_execute='last')
+    )
 
     return research
 
@@ -224,7 +273,7 @@ class TestResearch:
     @pytest.mark.parametrize('dump_results', [False, True])
     @pytest.mark.parametrize('workers', [1, 3])
     @pytest.mark.parametrize('branches, target', [[1, 'f'], [3, 'f'], [3, 't']])
-    def test_research(self, parallel, dump_results, target, workers, branches, simple_research):
+    def test_simple_research(self, parallel, dump_results, target, workers, branches, simple_research):
         n_iters = 3
         simple_research.run(n_iters=n_iters, workers=workers, branches=branches, parallel=parallel,
                             dump_results=dump_results, executor_target=target)
@@ -233,6 +282,13 @@ class TestResearch:
             simple_research.results.load()
 
         assert len(simple_research.results.to_df()) == 18
+
+    @pytest.mark.parametrize('parallel', [False, True])
+    @pytest.mark.parametrize('workers', [1, 2])
+    def test_complex_research(self, parallel, workers, complex_research):
+        complex_research.run(dump_results=False, parallel=parallel, workers=workers)
+
+        assert len(complex_research.results.to_df()) == 2
 
 class TestResults:
     def test_filter_by_config(self, simple_research):

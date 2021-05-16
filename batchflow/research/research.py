@@ -64,6 +64,14 @@ class Research:
         self.experiment.add_pipeline(*args, **kwargs)
         return self
 
+    def save(self, *args, **kwargs):
+        self.experiment.save(*args, **kwargs)
+        return self
+
+    def dump(self, *args, **kwargs):
+        self.experiment.dump(*args, **kwargs)
+        return self
+
     def update_domain(self, function, when, **kwargs):
         """ Add domain update functions or update parameters.
 
@@ -279,13 +287,21 @@ class Research:
 class DynamicQueue:
     """ Queue of tasks that can be changed depending on previous results. """
     def __init__(self, domain, research, n_branches):
-        self.domain = domain
+        self._domain = domain
         self.research = research
         self.n_branches = n_branches
 
         self.queue = mp.JoinableQueue()
         self.withdrawn_tasks = 0
         self.finished_tasks = 0
+
+    @property
+    def domain(self):
+        if self._domain.size == 0:
+            domain = Domain({'repetition': [None]})
+            domain.set_iter_params(n_reps=self._domain.n_reps, produced=self._domain.n_produced)
+            self._domain = domain
+        return self._domain
 
     @property
     def total(self):
@@ -331,9 +347,17 @@ class DynamicQueue:
     def in_progress(self):
         return self.withdrawn_tasks != self.finished_tasks
 
-    def __getattr__(self, key):
-        # join, get, put, task_done, empty
-        return getattr(self.queue, key)
+    def get(self):
+        return self.queue.get()
+
+    def put(self, *args, **kwargs):
+        return self.queue.put(*args, **kwargs)
+
+    def task_done(self):
+        return self.queue.task_done()
+
+    def empty(self):
+        return self.queue.empty()
 
 class ResearchMonitor:
     COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid']
