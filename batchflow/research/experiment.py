@@ -1,14 +1,10 @@
 import os
-import datetime
-import csv
 from copy import copy, deepcopy
 import itertools
 import traceback
-import multiprocess as mp
 import hashlib
 import random
 import dill
-import logging
 from collections import OrderedDict
 
 from .. import Config, inbatch_parallel, Pipeline
@@ -407,8 +403,8 @@ class Experiment:
 
         self.logger = create_logger(name, path, self.loglevel)
 
-    # def close_logger(self):
-    #     self.logger.removeHandler(self.logger.handlers[0])
+    def close_logger(self):
+        self.logger.removeHandler(self.logger.handlers[0])
 
     def call(self, name, iteration, n_iters=None):
         if self.is_alive:
@@ -432,7 +428,7 @@ class Experiment:
                     msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
                     self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
                     if self.monitor:
-                        self.monitor.fail_execution(name, self)
+                        self.monitor.fail_execution(name, self, msg)
             else:
                 if self.monitor:
                     self.monitor.finish_execution(name, self)
@@ -490,6 +486,9 @@ class Executor:
                     self.parallel_call(iteration, unit_name)
             if not any([experiment.is_alive for experiment in self.experiments]):
                 break
+
+        for experiment in self.experiments:
+            experiment.close_logger()
         self.send_results()
 
     def _parallel_call(self, experiment, iteration, unit_name):

@@ -13,6 +13,7 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
+import warnings
 
 from .. import Config
 from .domain import Domain
@@ -21,7 +22,7 @@ from .experiment import Experiment, Executor
 from .utils import create_logger, to_list
 
 class Research:
-    def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=100):
+    def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=None):
         """ Research is an instrument to run multiple parallel experiments with different combinations of
         parameters called experiment configs.
 
@@ -314,7 +315,7 @@ class DynamicQueue:
         """ Update domain. """
         new_domain = self.domain.update(self.finished_tasks, self.research) #TODO: put research instead of path
         if new_domain is not None:
-            self.domain = new_domain
+            self._domain = new_domain
 
     def next_tasks(self, n_tasks=1):
         """ Get next `n_tasks` elements of queue. """
@@ -364,6 +365,8 @@ class ResearchMonitor:
     def __init__(self, path=None):
         self.queue = mp.JoinableQueue()
         self.path = path
+        self.exceptions = mp.Manager().list()
+
 
     def send(self, experiment=None, worker=None, **kwargs):
         signal = {
@@ -381,6 +384,8 @@ class ResearchMonitor:
                 'worker_pid': worker.pid,
             }}
         self.queue.put(signal)
+        if 'exception' in signal:
+            self.exceptions.append(signal)
 
     def start_execution(self, name, experiment):
         self.send(experiment, name=name, it=experiment.iteration, status='start')
@@ -388,8 +393,9 @@ class ResearchMonitor:
     def finish_execution(self, name, experiment):
         self.send(experiment, experiment.executor.worker, name=name, it=experiment.iteration, status='success')
 
-    def fail_execution(self, name, experiment):
-        self.send(experiment, experiment.executor.worker, name=name, it=experiment.iteration, status='error', exception=experiment.exception.__class__)
+    def fail_execution(self, name, experiment, msg):
+        self.send(experiment, experiment.executor.worker, name=name, it=experiment.iteration, status='error',
+                  exception=msg)
 
     def stop_iteration(self, name, experiment):
         self.send(experiment, experiment.executor.worker, name=name, it=experiment.iteration, status='stop_iteration')

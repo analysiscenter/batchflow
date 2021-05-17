@@ -284,7 +284,7 @@ class Domain:
         self._iterator = None
         self.n_items = None
         self.n_reps = 1
-        self.repeat_each = 100
+        self.repeat_each = None
         self.n_updates = 0
 
         self.brute_force = []
@@ -409,13 +409,13 @@ class Domain:
             `repeat_each` will be setted to the number of configs that can be produced
             from domain.
         """
-        size = len(self)
-        self.n_items = n_items or size
+        n_configs = len(self)
+        self.n_items = n_items or n_configs
         self.n_reps = n_reps
         if self.n_items is not None:
             self.repeat_each = repeat_each or self.n_items
-        elif size is not None:
-            self.repeat_each = repeat_each or size
+        elif n_configs is not None:
+            self.repeat_each = repeat_each or n_configs
         else:
             self.repeat_each = repeat_each or 100
         self.n_produced = produced
@@ -462,7 +462,7 @@ class Domain:
     def iterator(self):
         """ Get domain iterator. """
         if self._iterator is None:
-            self.set_iter_params(self.n_items, self.n_reps, self.repeat_each)
+            self.set_iter_params(self.n_items, self.n_reps, self.repeat_each, self.n_produced)
             self.create_iter()
         return self._iterator
 
@@ -483,7 +483,7 @@ class Domain:
         for update in self.updates:
             if must_execute(iteration, update['when'], self.n_items):
                 kwargs = eval_expr(update['kwargs'], research=research)
-                new_domain = update['function'](**kwargs)
+                new_domain = Domain(update['function'](**kwargs))
                 new_domain.updates = self.updates
                 new_domain.n_updates = self.n_updates + 1
                 new_domain.set_iter_params(produced=self.n_produced, **update['iter_kwargs'])

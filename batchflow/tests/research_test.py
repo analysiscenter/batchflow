@@ -2,6 +2,7 @@ import pytest
 import os
 
 from batchflow import Dataset, Pipeline, B, V, F, C
+from batchflow.models.torch import ResNet
 from batchflow.opensets import MNIST
 from batchflow.research import *
 
@@ -26,9 +27,8 @@ def complex_research():
         def __init__(self):
             self.ds = MNIST()
             self.model_config = {
-                'head/layout': 'f',
-                'head/units': 10,
-                'head/kernel_size': 1,
+                'head/layout': C('layout'),
+                'head/units': C('units'),
                 'loss': 'ce'
             }
             self.create_train_ppl()
@@ -39,7 +39,7 @@ def complex_research():
                 .init_model('dynamic', ResNet, 'model', config=self.model_config)
                 .to_array(channels='first', src='images', dst='images')
                 .train_model('model', B('images'), B('labels'))
-                .run_later(batch_size=64, n_iters=1, shuffle=True, drop_last=True)
+                .run_later(batch_size=8, n_iters=1, shuffle=True, drop_last=True)
             )
             self.train_ppl = ppl << self.ds.train
 
@@ -51,14 +51,15 @@ def complex_research():
                 .predict_model('model', B('images'), fetches='predictions', save_to=B('predictions'))
                 .gather_metrics('classification', B('labels'), B('predictions'), fmt='logits', axis=-1,
                                 num_classes=10, save_to=V('metrics', mode='update'))
-                .run_later(batch_size=64, n_epochs=1, shuffle=False, drop_last=False)
+                .run_later(batch_size=8, n_iters=2, shuffle=False, drop_last=False)
             )
             self.test_ppl = test_ppl << self.ds.test
 
         def eval_metrics(self, metrics, **kwargs):
             return self.test_ppl.v('metrics').evaluate(metrics, **kwargs)
 
-    research = (Research(n_reps=2)
+    domain = Option('layout', ['f', 'faf']) @ Option('units', [[10], [100, 10]])
+    research = (Research(domain=domain, n_reps=2)
         .add_instance('controller', Model)
         .add_pipeline('controller.train_ppl')
         .add_pipeline('controller.test_ppl', run=True, iterations_to_execute='last')
@@ -268,6 +269,7 @@ class TestExecutor:
 
         executor = Executor(experiment, target='f', configs=[{'n': 10}, {'n': 20}], n_iters=None)
         executor.run()
+
 class TestResearch:
     @pytest.mark.parametrize('parallel', [False, True])
     @pytest.mark.parametrize('dump_results', [False, True])
@@ -281,14 +283,41 @@ class TestResearch:
         if dump_results:
             simple_research.results.load()
 
+        assert len(simple_research.monitor.exceptions) == 0
         assert len(simple_research.results.to_df()) == 18
 
-    @pytest.mark.parametrize('parallel', [False, True])
-    @pytest.mark.parametrize('workers', [1, 2])
-    def test_complex_research(self, parallel, workers, complex_research):
-        complex_research.run(dump_results=False, parallel=parallel, workers=workers)
+    def test_empty_domain(self):
+        research = Research().add_callable('func', lambda: 100).save(O('func'), 'sum')
+        research.run(n_iters=10, dump_results=False)
 
-        assert len(complex_research.results.to_df()) == 2
+        assert len(research.monitor.exceptions) == 0
+        assert len(research.results.to_df()) == 10
+
+    def test_domain_update(self):
+        def update():
+            return Option('x', [4, 5, 6])
+
+        research = (Research(domain=Option('x', [1, 2, 3]), n_reps=2)
+            .add_callable('func', lambda x: x, x=EC('x'))
+            .save(O('func'), 'sum')
+            .update_domain(update, when=['%5', '%8'], n_reps=2)
+        )
+        research.run(n_iters=1, dump_results=False)
+
+        assert len(research.monitor.exceptions) == 0
+        assert len(research.results.to_df()) == 15
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize('workers', [1, 2])
+    def test_complex_research(self, workers, complex_research):
+        complex_research.run(dump_results=False, parallel=True, workers=workers)
+
+        assert len(complex_research.monitor.exceptions) == 0
+        assert len(complex_research.results.to_df()) == 4
+
+    def test_exceptions_in_research(self):
+        pass
+
 
 class TestResults:
     def test_filter_by_config(self, simple_research):
