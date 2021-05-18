@@ -185,7 +185,7 @@ class SEResNet18(ResNet18):
     def default_config(cls):
         config = super().default_config()
         config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/ratio'] = 16
+        config['body/encoder/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNet34(ResNet34):
@@ -194,7 +194,7 @@ class SEResNet34(ResNet34):
     def default_config(cls):
         config = super().default_config()
         config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/ratio'] = 16
+        config['body/encoder/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNet50(ResNet50):
@@ -203,7 +203,7 @@ class SEResNet50(ResNet50):
     def default_config(cls):
         config = super().default_config()
         config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/ratio'] = 16
+        config['body/encoder/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNet101(ResNet101):
@@ -212,7 +212,7 @@ class SEResNet101(ResNet101):
     def default_config(cls):
         config = super().default_config()
         config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/ratio'] = 16
+        config['body/encoder/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNet152(ResNet152):
@@ -221,7 +221,7 @@ class SEResNet152(ResNet152):
     def default_config(cls):
         config = super().default_config()
         config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/ratio'] = 16
+        config['body/encoder/blocks/self_attention/ratio'] = 16
         return config
 
 
@@ -232,7 +232,7 @@ class SEResNeXt18(ResNeXt18):
     def default_config(cls):
         config = super().default_config()
         config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/ratio'] = 16
+        config['body/encoder/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNeXt34(ResNeXt34):
@@ -241,7 +241,7 @@ class SEResNeXt34(ResNeXt34):
     def default_config(cls):
         config = super().default_config()
         config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/ratio'] = 16
+        config['body/encoder/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNeXt50(ResNeXt50):
@@ -250,7 +250,7 @@ class SEResNeXt50(ResNeXt50):
     def default_config(cls):
         config = super().default_config()
         config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/ratio'] = 16
+        config['body/encoder/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNeXt101(ResNeXt101):
@@ -259,7 +259,7 @@ class SEResNeXt101(ResNeXt101):
     def default_config(cls):
         config = super().default_config()
         config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/ratio'] = 16
+        config['body/encoder/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNeXt152(ResNeXt152):
@@ -268,5 +268,5 @@ class SEResNeXt152(ResNeXt152):
     def default_config(cls):
         config = super().default_config()
         config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/ratio'] = 16
+        config['body/encoder/blocks/self_attention/ratio'] = 16
         return config
