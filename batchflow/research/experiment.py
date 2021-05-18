@@ -8,7 +8,7 @@ import dill
 from collections import OrderedDict
 
 from .. import Config, inbatch_parallel, Pipeline
-from ..named_expr import NamedExpression, eval_expr
+from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
