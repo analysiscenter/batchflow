@@ -1,7 +1,6 @@
 import os
 import datetime
 import csv
-from copy import copy, deepcopy
 import itertools
 import subprocess
 import re
@@ -9,13 +8,13 @@ import functools
 import multiprocess as mp
 import dill
 import glob
+import tqdm
 from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
 import warnings
 
-from .. import Config
 from .domain import Domain
 from .distributor import Distributor
 from .experiment import Experiment, Executor
@@ -188,7 +187,7 @@ class Research:
             )
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=None,
-            dump_results=True, parallel=True, executor_target='threads', loglevel='debug'):
+            dump_results=True, parallel=True, executor_target='threads', loglevel='debug', bar=True):
         """ Run research.
 
         Parameters
@@ -245,16 +244,12 @@ class Research:
         self.parallel = parallel
         self.executor_target = executor_target
         self.loglevel = loglevel
+        self.bar = bar
 
         if self.dump_results:
             self.create_research_folder()
             self.experiment = self.experiment.dump()
         self.attach_env_meta()
-
-        if isinstance(workers, int):
-            self.workers = [Config() for _ in range(workers)]
-        if isinstance(branches, int):
-            self.branches = [Config() for _ in range(branches)]
 
         self.domain.set_iter_params(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each)
 
@@ -267,14 +262,14 @@ class Research:
         self.logger.info("Research is starting")
 
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
-        tasks_queue = DynamicQueue(self.domain, self, n_branches)
-        distributor = Distributor(tasks_queue, self)
+        self.tasks_queue = DynamicQueue(self.domain, self, n_branches)
+        self.distributor = Distributor(self.tasks_queue, self)
 
         self.results = ResearchResults(self.name, self.dump_results)
-        self.monitor = ResearchMonitor(self.name) # process execution signals
+        self.monitor = ResearchMonitor(self, self.name, bar=self.bar) # process execution signals
 
         self.monitor.start(self.dump_results)
-        distributor.run()
+        self.distributor.run()
         self.monitor.stop()
 
         return self
@@ -296,7 +291,7 @@ class Research:
             params_repr += [f"{param}: {getattr(self, param, None)}"]
         params_repr = '\n'.join(params_repr)
 
-        items = {'Experiment': str(self.experiment), 'Domain': str(self.domain), 'params': params_repr}
+        items = {'params': params_repr, 'experiment': str(self.experiment), 'domain': str(self.domain)}
         for name in items:
             repr += f"{name}:\n"
             repr += '\n'.join([spacing + item for item in str(items[name]).split('\n')])
@@ -312,8 +307,10 @@ class DynamicQueue:
         self.n_branches = n_branches
 
         self.queue = mp.JoinableQueue()
+
         self.withdrawn_tasks = 0
         self.finished_tasks = 0
+        self.remains = int(np.ceil(self._domain.size // self.n_branches))
 
     @property
     def domain(self):
@@ -323,18 +320,12 @@ class DynamicQueue:
             self._domain = domain
         return self._domain
 
-    @property
-    def total(self):
-        """ Total estimated size of queue before the following domain update. """
-        if self.domain.size is not None:
-            return self.domain.size / self.n_branches
-        return None
-
     def update_domain(self):
         """ Update domain. """
         new_domain = self.domain.update(self.finished_tasks, self.research) #TODO: put research instead of path
         if new_domain is not None:
             self._domain = new_domain
+            self.remains = self._domain.size
 
     def next_tasks(self, n_tasks=1):
         """ Get next `n_tasks` elements of queue. """
@@ -360,9 +351,11 @@ class DynamicQueue:
         for _ in range(n_workers):
             self.put(None)
 
-    def join(self):
+    def join(self, inc=True):
         self.queue.join()
-        self.finished_tasks += 1
+        if inc:
+            self.remains -= 1
+            self.finished_tasks += 1
 
     def in_progress(self):
         return self.withdrawn_tasks != self.finished_tasks
@@ -380,11 +373,19 @@ class DynamicQueue:
         return self.queue.empty()
 
 class ResearchMonitor:
-    COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid']
-    def __init__(self, path=None):
+    COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid',
+               'finished', 'withdrawn', 'remains']
+    def __init__(self, research, path=None, bar=True):
         self.queue = mp.JoinableQueue()
+        self.research = research
         self.path = path
         self.exceptions = mp.Manager().list()
+        self.bar = tqdm.tqdm(disable=(not bar)) if isinstance(bar, bool) else bar
+
+        self.finished_iterations = 0
+        self.current_iterations = {}
+        self.remained_iterations = None
+        self.n_iters = self.research.n_iters
 
 
     def send(self, experiment=None, worker=None, **kwargs):
@@ -422,12 +423,19 @@ class ResearchMonitor:
     def listener(self): #TODO: rename
         signal = self.queue.get()
         filename = os.path.join(self.path, 'monitor.csv')
-        while signal is not None:
-            if self.dump:
-                with open(filename, 'a') as f:
-                    writer = csv.writer(f)
-                    writer.writerow([str(signal.get(column, '')) for column in self.COLUMNS])
-            signal = self.queue.get()
+        with self.bar as progress:
+            while signal is not None:
+                if 'finished' in signal:
+                    progress.n = signal['finished']
+                    progress.total = progress.n + signal['remains']
+                    progress.refresh()
+                if self.dump:
+                    with open(filename, 'a') as f:
+                        writer = csv.writer(f)
+                        writer.writerow([str(signal.get(column, '')) for column in self.COLUMNS])
+                self.queue.task_done()
+                signal = self.queue.get()
+            self.queue.task_done()
 
     def start(self, dump):
         self.dump = dump
@@ -437,11 +445,13 @@ class ResearchMonitor:
                 with open(filename, 'w') as f:
                     writer = csv.writer(f)
                     writer.writerow(self.COLUMNS)
-                # TODO progress bar
+        #         # TODO progress bar
         mp.Process(target=self.listener).start()
 
     def stop(self):
         self.queue.put(None)
+        while not self.queue.empty():
+            self.queue.join()
 
 class ResearchResults:
     def __init__(self, name, dump_results):

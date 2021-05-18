@@ -167,7 +167,7 @@ class ConfigAlias:
         -------
             dict or str
         """
-        config_alias = {item[0].alias: item[1].alias for item in self._config}
+        config_alias = Config({item[0].alias: item[1].alias for item in self._config})
         if as_string:
             config_alias = OrderedDict(sorted(config_alias.items()))
             config_alias = delim.join([str(key)+'_'+str(value) for key, value in config_alias.items()])
@@ -212,7 +212,8 @@ class ConfigAlias:
         return self.config()[key]
 
     def __repr__(self):
-        return 'ConfigAlias(' + str(self.alias()) + ')'
+        from pprint import pformat
+        return pformat(self.alias().config)
 
     def __add__(self, other):
         config = ConfigAlias()
@@ -409,7 +410,7 @@ class Domain:
     def reset_iter(self):
         self._iterator = None
 
-    def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=None):
+    def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=None): #TODO: produce infinite sequencies for samplers
         """ Set parameters for iterator.
 
         Parameters

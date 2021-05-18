@@ -3,7 +3,7 @@
 import os
 import multiprocess as mp
 
-from ..config import Config
+from .. import Config
 
 
 class Worker:
@@ -22,7 +22,11 @@ class Worker:
         self.research.monitor.send(worker=self, status='start')
         task = self.tasks.get()
 
-        n_branches = len(self.research.branches)
+        if isinstance(self.research.branches, int):
+            branches_configs = [Config() for _ in range(self.research.branches)]
+        else:
+            branches_configs = self.research.branches
+        n_branches = len(branches_configs)
         devices = self.research.devices[self.index]
 
         all_devices = set(device for i in range(n_branches) for device in devices[i] if device is not None)
@@ -39,12 +43,13 @@ class Worker:
             task_idx, configs = task
 
             self.research.monitor.send(worker=self, status='get task', task_idx=task_idx)
+            self.research.logger.info(f"Worker {self.index}[{self.pid}] have got task {task_idx}.")
             name = f"Task {task_idx}"
 
             experiment = self.research.experiment
             target = self.research.executor_target # 'for' or 'thread' for branches execution
 
-            branches_configs = [config + Config(_devices) for config, _devices in zip(self.research.branches, devices)]
+            branches_configs = [config + Config(_devices) for config, _devices in zip(branches_configs, devices)]
             branches_configs = branches_configs[:len(configs)]
 
             executor = executor_class(experiment, research=self.research, target=target, configs=configs,
@@ -61,6 +66,8 @@ class Worker:
             task = self.tasks.get()
         self.tasks.task_done()
         self.research.monitor.send(worker=self, status='stop')
+
+        self.research.logger.info(f"Worker {self.index}[{self.pid}] has stopped.")
 
 class Distributor:
     """ Distributor of jobs between workers. """
@@ -87,7 +94,11 @@ class Distributor:
         bar : bool or callable
         """
         workers = []
-        for i, worker_config in enumerate(self.research.workers):
+        if isinstance(self.research.workers, int):
+            worker_configs = [Config() for _ in range(self.research.workers)]
+        else:
+            worker_configs = workers
+        for i, worker_config in enumerate(worker_configs):
             workers += [Worker(i, worker_config, self.tasks, self.research)]
 
         self.tasks.next_tasks(len(workers)+1)
@@ -96,20 +107,31 @@ class Distributor:
             for worker in workers:
                 mp.Process(target=worker).start()
 
+            self.send()
             while self.tasks.in_progress():
                 self.tasks.join()
-                self.tasks.next_tasks(1)
                 self.tasks.update_domain()
+                self.send()
+                self.tasks.next_tasks(1)
 
+            self.send()
             self.tasks.stop_workers(len(workers))
             for _ in workers:
-                self.tasks.join()
+                self.tasks.join(inc=False)
         else:
-            self.research.logger.info('Start worker (no parallel)')
+            self.research.logger.info('Start workers (no parallel)')
             while self.tasks.in_progress():
-                self.tasks.stop_workers(1)
+                self.tasks.stop_workers(1) # worker can't be in separate process so we restart it after each task
                 workers[0]()
-                self.tasks.finished_tasks += 1
+                self.tasks.finished_tasks += 1 # instead of join
                 self.tasks.update_domain()
+                self.send()
                 self.tasks.next_tasks(1)
         self.research.logger.info('All workers have finished the work')
+
+    def send(self):
+        self.research.monitor.send(
+            finished=self.tasks.finished_tasks,
+            withdrawn=self.tasks.withdrawn_tasks,
+            remains=self.tasks.remains
+        )

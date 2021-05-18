@@ -486,10 +486,11 @@ class Executor:
     def create_experiments(self):
         self.experiments = []
         for index, (config, branch_config) in enumerate(zip(self.configs, self.branches_configs)):
-            config = ConfigAlias(config) + ConfigAlias(branch_config) + ConfigAlias(self.executor_config)
+            full_config = ConfigAlias(config) + ConfigAlias(branch_config) + ConfigAlias(self.executor_config)
             experiment = self.experiment_template.copy()
-            experiment.create_instances(index, config, self)
+            experiment.create_instances(index, full_config, self)
             experiment.create_logger()
+            experiment.logger.info(f"{self.task_name}[{index}] has been started with config:\n {repr(config)}")
             self.experiments.append(experiment)
 
     def run(self, worker=None):
@@ -506,7 +507,8 @@ class Executor:
             if not any([experiment.is_alive for experiment in self.experiments]):
                 break
 
-        for experiment in self.experiments:
+        for index, experiment in enumerate(self.experiments):
+            experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
             experiment.close_logger()
         self.send_results()
 
