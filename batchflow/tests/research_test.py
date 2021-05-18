@@ -29,7 +29,9 @@ def complex_research():
             self.model_config = {
                 'head/layout': C('layout'),
                 'head/units': C('units'),
-                'loss': 'ce'
+                'loss': 'ce',
+                'device': 'cpu',
+                'amp': False
             }
             self.create_train_ppl()
             self.create_test_ppl()
@@ -342,3 +344,6 @@ class TestResults:
         df = simple_research.results.to_df(use_alias=False)
 
         assert len(df) == 12
+
+#TODO: logging tests, samplers in domain, test that exceptions in one branch don't affect other bracnhes, 
+#      divices splitting, ...

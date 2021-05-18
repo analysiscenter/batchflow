@@ -76,9 +76,13 @@ class Option:
         return Domain(self) + Domain(other)
 
     def __repr__(self):
+        alias = self.parameter.alias
+        values = self.values
+
         if isinstance(self.values, (list, tuple, np.ndarray)):
-            return 'Option({}, {})'.format(self.parameter.alias, [item.alias for item in self.values])
-        return 'Option({}, {})'.format(self.parameter.alias, self.values)
+            values = [item.alias if not isinstance(item.value, str) else f"'{item.value}'" for item in values]
+            values = f'[{",".join(values)}]'
+        return f'Option({alias}: {values})'
 
     def sample(self, size=None):
         """ Return `ConfigAlias` objects created on the base of Sampler-option.
@@ -360,7 +364,23 @@ class Domain:
         return result
 
     def __repr__(self):
-        return 'Domain(' + str(self.cubes) + ')'
+        repr = ''
+        cubes_reprs = []
+        spacing = 4 * ' '
+
+        for cube in self.cubes:
+            cubes_reprs += [' * '.join([str(option) for option in cube])]
+        repr += ' + \n'.join(cubes_reprs)
+        repr += 2 * '\n' + 'params:\n'
+        repr += '\n'.join([spacing + f"{attr}={getattr(self, attr)}" for attr in ['n_items', 'n_reps', 'repeat_each']])
+
+        if len(self.updates) > 0:
+            repr += 2 * '\n' + 'updates:\n'
+            update_reprs = []
+            for update in self.updates:
+                update_reprs += [str('\n'.join(spacing + f"{key}: {value}" for key, value in update.items()))]
+            repr += '\n\n'.join(update_reprs)
+        return repr
 
     def __getitem__(self, index):
         return Domain([self.cubes[index]])

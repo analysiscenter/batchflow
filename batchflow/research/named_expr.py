@@ -6,6 +6,7 @@ from ..named_expr import NamedExpression, eval_expr
 
 class E(NamedExpression):
     def __init__(self, unit=None, all=False, **kwargs):
+        self.name = None
         self.unit = unit
         self.all = all
 
@@ -29,8 +30,8 @@ class E(NamedExpression):
 
 class EC(E):
     def __init__(self, name=None, **kwargs):
-        self.name = name
         super().__init__(**kwargs)
+        self.name = name
 
     def transform(self, experiments):
         if self.name is None:
@@ -40,8 +41,8 @@ class EC(E):
 
 class O(E):
     def __init__(self, name, **kwargs):
-        self.name = name
         super().__init__(**kwargs)
+        self.name = name
 
     def transform(self, experiments):
         return [exp[self.name]._output for exp in experiments]

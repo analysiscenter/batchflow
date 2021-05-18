@@ -435,6 +435,25 @@ class Experiment:
             if self.exception_raised and (list(self.actions.keys())[-1] == name):
                 self.is_alive = False
 
+    def __str__(self):
+        repr = "instances:\n"
+        spacing = ' ' * 4
+        for name, namespace in self.namespaces.items():
+            repr += spacing + f"{name}(\n"
+            repr += 2 * spacing + f"root={namespace.root},\n"
+            repr += ''.join([spacing * 2 + f"{key}={value}\n" for key, value in namespace.kwargs.items()])
+            repr += spacing + ")\n"
+
+        repr += "\nunits:\n"
+        attrs = ['callable', 'generator', 'root', 'iterations_to_execute', 'args']
+        for name, action in self.actions.items():
+            repr += spacing + f"{name}(\n"
+            repr += ''.join([spacing * 2 + f"{key}={getattr(action, key)}\n" for key in attrs])
+            repr += ''.join([spacing * 2 + f"{key}={value}\n" for key, value in action.kwargs.items()])
+            repr += spacing + ")\n"
+
+        return repr
+
 class Executor:
     def __init__(self, experiment, research=None, configs=None, executor_config=None, branches_configs=None,
                  target='threads', n_iters=None, task_name=None, **kwargs):

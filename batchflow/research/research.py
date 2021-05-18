@@ -285,6 +285,25 @@ class Research:
 
         self.logger = create_logger(name, path, self.loglevel)
 
+    def __str__(self):
+        spacing = ' ' * 4
+        repr = ''
+
+        params = ['name', 'workers', 'branches', 'n_iters', 'devices', 'dump_results',
+                  'parallel', 'loglevel', 'executor_target', 'executor_class']
+        params_repr = []
+        for param in params:
+            params_repr += [f"{param}: {getattr(self, param, None)}"]
+        params_repr = '\n'.join(params_repr)
+
+        items = {'Experiment': str(self.experiment), 'Domain': str(self.domain), 'params': params_repr}
+        for name in items:
+            repr += f"{name}:\n"
+            repr += '\n'.join([spacing + item for item in str(items[name]).split('\n')])
+            repr += '\n'
+
+        return repr
+
 class DynamicQueue:
     """ Queue of tasks that can be changed depending on previous results. """
     def __init__(self, domain, research, n_branches):
