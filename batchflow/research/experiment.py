@@ -412,7 +412,6 @@ class Experiment:
             self.iteration = iteration
 
             self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
-            # self.research.monitor.start_execution(name, self)
             try:
                 self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
             except Exception as e:
@@ -428,10 +427,10 @@ class Experiment:
                     msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
                     self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
                     if self.monitor:
-                        self.monitor.fail_execution(name, self, msg)
+                        self.monitor.fail_item_execution(name, self, msg)
             else:
                 if self.monitor:
-                    self.monitor.finish_execution(name, self)
+                    self.monitor.execute_iteration(name, self)
             if self.exception_raised and (list(self.actions.keys())[-1] == name):
                 self.is_alive = False
 
@@ -498,6 +497,8 @@ class Executor:
         self.pid = os.getpid()
 
         iterations = range(self.n_iters) if self.n_iters else itertools.count()
+        for experiment in self.experiments:
+            self.research.monitor.start_experiment(experiment)
         for iteration in iterations:
             for unit_name, unit in self.experiment_template.actions.items():
                 if unit.root:
@@ -508,6 +509,7 @@ class Executor:
                 break
 
         for index, experiment in enumerate(self.experiments):
+            self.research.monitor.stop_experiment(experiment)
             experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
             experiment.close_logger()
         self.send_results()

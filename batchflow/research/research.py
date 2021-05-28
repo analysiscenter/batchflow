@@ -308,9 +308,14 @@ class DynamicQueue:
 
         self.queue = mp.JoinableQueue()
 
-        self.withdrawn_tasks = 0
-        self.finished_tasks = 0
-        self.remains = int(np.ceil(self._domain.size // self.n_branches))
+        self.in_queue = 0
+        self.finished = 0
+
+        self.remains = self._domain.size
+
+    @property
+    def generated(self):
+        return self.in_queue + self.finished
 
     @property
     def domain(self):
@@ -322,7 +327,7 @@ class DynamicQueue:
 
     def update_domain(self):
         """ Update domain. """
-        new_domain = self.domain.update(self.finished_tasks, self.research) #TODO: put research instead of path
+        new_domain = self.domain.update(self.finished, self.research)
         if new_domain is not None:
             self._domain = new_domain
             self.remains = self._domain.size
@@ -341,9 +346,13 @@ class DynamicQueue:
                     configs.append(branch_tasks)
                 break
         for i, executor_configs in enumerate(configs):
-            self.put((self.withdrawn_tasks + i, executor_configs))
+            self.put((self.generated + i, executor_configs))
         n_tasks = len(configs)
-        self.withdrawn_tasks += n_tasks
+        n_configs = sum([len(item) for item in configs])
+
+        self.in_queue += n_configs
+        self.remains -= n_configs
+        self.research.logger.info(f'Get {n_tasks} tasks with {n_configs} configs, remains {self.remains}')
         return n_tasks
 
     def stop_workers(self, n_workers):
@@ -354,11 +363,8 @@ class DynamicQueue:
     def join(self, inc=True):
         self.queue.join()
         if inc:
-            self.remains -= 1
-            self.finished_tasks += 1
-
-    def in_progress(self):
-        return self.withdrawn_tasks != self.finished_tasks
+            self.finished += 1
+            self.in_queue -= 1
 
     def get(self):
         return self.queue.get()
@@ -384,13 +390,23 @@ class ResearchMonitor:
 
         self.finished_iterations = 0
         self.current_iterations = {}
-        self.remained_iterations = None
+        self.remained_experiments = None
         self.n_iters = self.research.n_iters
 
+        self.stop_signal = mp.JoinableQueue()
 
-    def send(self, experiment=None, worker=None, **kwargs):
+    @property
+    def total(self):
+        return self.finished_iterations + self.n_iters * (self.in_progress + self.remained_experiments)
+
+    @property
+    def in_progress(self):
+        return len(self.current_iterations)
+
+    def send(self, status, experiment=None, worker=None, **kwargs):
         signal = {
             'time': str(datetime.datetime.now()),
+            'status': status,
             **kwargs
         }
         if experiment is not None:
@@ -407,35 +423,49 @@ class ResearchMonitor:
         if 'exception' in signal:
             self.exceptions.append(signal)
 
-    def start_execution(self, name, experiment):
-        self.send(experiment, name=name, it=experiment.iteration, status='start')
+    def start_experiment(self, experiment):
+        self.send('START_EXP', experiment, experiment.executor.worker)
 
-    def finish_execution(self, name, experiment):
-        self.send(experiment, experiment.executor.worker, name=name, it=experiment.iteration, status='success')
+    def stop_experiment(self, experiment):
+        self.send('FINISH_EXP', experiment, experiment.executor.worker, it=experiment.iteration)
 
-    def fail_execution(self, name, experiment, msg):
-        self.send(experiment, experiment.executor.worker, name=name, it=experiment.iteration, status='error',
-                  exception=msg)
+    def execute_iteration(self, name, experiment):
+        self.send('EXECUTE_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration)
+
+    def fail_item_execution(self, name, experiment, msg):
+        self.send('FAIL_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration, exception=msg)
 
     def stop_iteration(self, name, experiment):
-        self.send(experiment, experiment.executor.worker, name=name, it=experiment.iteration, status='stop_iteration')
+        self.send('STOP_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration)
 
     def listener(self): #TODO: rename
         signal = self.queue.get()
         filename = os.path.join(self.path, 'monitor.csv')
         with self.bar as progress:
             while signal is not None:
-                if 'finished' in signal:
-                    progress.n = signal['finished']
-                    progress.total = progress.n + signal['remains']
+                status = signal.get('status')
+                if status == 'TASKS_EXECUTION':
+                    self.remained_experiments = signal['remains']
+                elif status == 'START_EXP':
+                    self.current_iterations[signal['id']] = 0
+                elif status == 'EXECUTE_IT':
+                    self.current_iterations[signal['id']] = signal['it']
+                elif status == 'FINISH_EXP':
+                    self.current_iterations.pop(signal['id'])
+                    self.finished_iterations += signal['it'] + 1
+
+                if status in ['START_EXP', 'EXECUTE_IT', 'FINISH_EXP']:
+                    print(f"{status}\n finished: {self.finished_iterations} \n in: {self.in_progress} \n iterations: {self.current_iterations} \n rem: {self.remained_experiments} \n total: {self.total}")
+                    progress.n = self.finished_iterations + sum(self.current_iterations.values())
+                    progress.total = self.total
                     progress.refresh()
+
                 if self.dump:
                     with open(filename, 'a') as f:
                         writer = csv.writer(f)
                         writer.writerow([str(signal.get(column, '')) for column in self.COLUMNS])
-                self.queue.task_done()
                 signal = self.queue.get()
-            self.queue.task_done()
+        self.stop_signal.put(None)
 
     def start(self, dump):
         self.dump = dump
@@ -450,8 +480,7 @@ class ResearchMonitor:
 
     def stop(self):
         self.queue.put(None)
-        while not self.queue.empty():
-            self.queue.join()
+        self.stop_signal.get()
 
 class ResearchResults:
     def __init__(self, name, dump_results):

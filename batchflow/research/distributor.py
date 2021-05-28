@@ -19,7 +19,7 @@ class Worker:
 
         executor_class = self.research.executor_class
         n_iters = self.research.n_iters
-        self.research.monitor.send(worker=self, status='start')
+        self.research.monitor.send(status='START_WORKER', worker=self)
         task = self.tasks.get()
 
         if isinstance(self.research.branches, int):
@@ -42,7 +42,7 @@ class Worker:
         while task is not None:
             task_idx, configs = task
 
-            self.research.monitor.send(worker=self, status='get task', task_idx=task_idx)
+            self.research.monitor.send(worker=self, status='GET_TASK', task_idx=task_idx)
             self.research.logger.info(f"Worker {self.index}[{self.pid}] have got task {task_idx}.")
             name = f"Task {task_idx}"
 
@@ -61,11 +61,11 @@ class Worker:
                 process.join()
             else:
                 executor.run(self)
-            self.research.monitor.send(worker=self, status='finish task', task_idx=task_idx)
+            self.research.monitor.send(worker=self, status='FINISH_TASK', task_idx=task_idx)
             self.tasks.task_done()
             task = self.tasks.get()
         self.tasks.task_done()
-        self.research.monitor.send(worker=self, status='stop')
+        self.research.monitor.send(worker=self, status='STOP_WORKER')
 
         self.research.logger.info(f"Worker {self.index}[{self.pid}] has stopped.")
 
@@ -97,41 +97,47 @@ class Distributor:
         if isinstance(self.research.workers, int):
             worker_configs = [Config() for _ in range(self.research.workers)]
         else:
-            worker_configs = workers
+            worker_configs = self.research.workers
         for i, worker_config in enumerate(worker_configs):
             workers += [Worker(i, worker_config, self.tasks, self.research)]
 
-        self.tasks.next_tasks(len(workers)+1)
+        if not self.research.parallel:
+            workers = workers[:1]
+
+        self.tasks.next_tasks(len(workers))
+        self.research.logger.info(f'Start workers (parallel={self.research.parallel})')
+
         if self.research.parallel:
-            self.research.logger.info('Start workers (parallel)')
             for worker in workers:
                 mp.Process(target=worker).start()
 
             self.send()
-            while self.tasks.in_progress():
+            while self.tasks.in_queue > 0:
                 self.tasks.join()
                 self.tasks.update_domain()
-                self.send()
                 self.tasks.next_tasks(1)
+                self.send()
 
             self.send()
             self.tasks.stop_workers(len(workers))
             for _ in workers:
                 self.tasks.join(inc=False)
         else:
-            self.research.logger.info('Start workers (no parallel)')
-            while self.tasks.in_progress():
+            self.send()
+            while self.tasks.in_queue > 0:
                 self.tasks.stop_workers(1) # worker can't be in separate process so we restart it after each task
                 workers[0]()
-                self.tasks.finished_tasks += 1 # instead of join
+                self.tasks.join()
                 self.tasks.update_domain()
-                self.send()
                 self.tasks.next_tasks(1)
+                self.send()
+
         self.research.logger.info('All workers have finished the work')
 
     def send(self):
         self.research.monitor.send(
-            finished=self.tasks.finished_tasks,
-            withdrawn=self.tasks.withdrawn_tasks,
+            'TASKS_EXECUTION',
+            in_queue=self.tasks.in_queue,
+            finished=self.tasks.finished,
             remains=self.tasks.remains
         )
