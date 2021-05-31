@@ -462,7 +462,6 @@ class ResearchMonitor:
                     self.current_iterations.pop(signal['id'])
                     self.finished_iterations += signal['it'] + 1
                     self.finished_experiments += 1
-                    # self.remained_experiments -= 1
 
                 if status in ['START_EXP', 'EXECUTE_IT', 'FINISH_EXP']:
                     if self.n_iters:
@@ -577,7 +576,7 @@ class ResearchResults:
         for experiment_id in self.configs:
             config = self.configs[experiment_id]
             if remove_auxilary:
-                for key in ['repetition', 'device']:
+                for key in ['repetition', 'device', 'updates']:
                     config.pop_config(key)
             if use_alias:
                 if concat_config:

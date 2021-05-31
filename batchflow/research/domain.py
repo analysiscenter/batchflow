@@ -284,7 +284,7 @@ class Domain:
 
         self.weights = np.array(self.weights) # weights for each cube to sample values from it
         self.updates = []
-        self.n_produced = None
+        self.n_produced = 0
 
         self._iterator = None
         self.n_items = None
@@ -410,7 +410,7 @@ class Domain:
     def reset_iter(self):
         self._iterator = None
 
-    def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=None): #TODO: produce infinite sequencies for samplers
+    def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=0): #TODO: produce infinite sequencies for samplers
         """ Set parameters for iterator.
 
         Parameters
@@ -502,12 +502,12 @@ class Domain:
     def update(self, generated, research):
         """ Update domain by `update_func`. If returns None, domain will not be updated. """
         for update in self.updates:
-            if must_execute(generated-1, update['when'], self.size):
+            if must_execute(generated-1, update['when'], self.n_produced + self.size):
                 kwargs = eval_expr(update['kwargs'], research=research)
                 new_domain = Domain(update['function'](**kwargs))
                 new_domain.updates = self.updates
                 new_domain.n_updates = self.n_updates + 1
-                new_domain.set_iter_params(produced=self.n_produced, **update['iter_kwargs'])
+                new_domain.set_iter_params(produced=generated, **update['iter_kwargs'])
                 return new_domain
         return None
 
