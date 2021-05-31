@@ -18,7 +18,20 @@ from .utils_random import spawn_seed_sequence
 
 
 def make_function(method, is_global=False):
-    """ Makes a function from a method """
+    """ Makes a function from a method
+
+    Parameters
+    ----------
+    method
+        a callable
+
+    is_global : bool
+        whether to create a function in a global namespace
+
+    Notes
+    -----
+    A method should not be decorated with any other decorator.
+    """
     source = inspect.getsource(method).split('\n')
     indent = len(source[0]) - len(source[0].lstrip())
 
@@ -160,7 +173,26 @@ def call_method(method, use_self, args, kwargs, seed=None):
     return method(*args, **kwargs)
 
 def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kwargs):
-    """ Decorator for parallel methods in :class:`~.Batch` classes"""
+    """ Decorator for parallel methods in :class:`~.Batch` classes
+
+    Parameters
+    ----------
+    init
+        a method name or a callable that returns an iterable for parallelization
+        (e.g. a list of indices or items to be passed to a parallelized method)
+    post
+        a method name or a callable to call after parallel invocations
+        (e.g. to assemble the batch)
+    target : 'threads', 'mpc', 'async', 'for'
+        a parallelization engine
+    _use_self : bool
+        whether to pass `self` (i.e. whether a decorated callable is a method or a function)
+
+    Notes
+    -----
+    `mpc` can be used with a method that is decorated only by `inbatch_parallel`.
+    All other decorators will be ignored.
+    """
     if target not in ['nogil', 'threads', 'mpc', 'async', 'for', 't', 'm', 'a', 'f']:
         raise ValueError("target should be one of 'threads', 'mpc', 'async', 'for'")
 
@@ -168,7 +200,10 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
         """ Return a decorator which run a method in parallel """
         use_self = '.' in method.__qualname__ if _use_self is None else _use_self
         if use_self:
-            mpc_method = make_function(method, is_global=True)
+            try:
+                mpc_method = make_function(method, is_global=True)
+            except Exception:  # pylint:disable=broad-except
+                mpc_method = None
 
         def _check_functions(self):
             """ Check decorator's `init` and `post` parameters """
@@ -406,7 +441,10 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             elif _target in ['threads', 't']:
                 x = wrap_with_threads(self, args, kwargs)
             elif _target in ['mpc', 'm']:
-                x = wrap_with_mpc(self, args, kwargs)
+                if mpc_method is not None:
+                    x = wrap_with_mpc(self, args, kwargs)
+                else:
+                    raise ValueError('Cannot use MPC with this method', method)
             elif _target in ['for', 'f']:
                 x = wrap_with_for(self, args, kwargs)
             else:
