@@ -120,7 +120,7 @@ class TestDomain:
         domain.set_update(update, ['last'])
         configs = list(domain.iterator())
 
-        domain = domain.update(len(domain)-1, None)
+        domain = domain.update(len(domain), None)
         configs += list(domain.iterator())
 
         assert len(configs) == 4
@@ -304,7 +304,7 @@ class TestResearch:
             .save(O('func'), 'sum')
             .update_domain(update, when=['%5', '%8'], n_reps=2)
         )
-        research.run(n_iters=1, dump_results=False)
+        research.run(n_iters=1, dump_results=False, bar=False)
 
         assert len(research.monitor.exceptions) == 0
         assert len(research.results.to_df()) == 15
@@ -312,7 +312,7 @@ class TestResearch:
     @pytest.mark.slow
     @pytest.mark.parametrize('workers', [1, 2])
     def test_complex_research(self, workers, complex_research):
-        complex_research.run(dump_results=False, parallel=True, workers=workers)
+        complex_research.run(dump_results=False, parallel=True, workers=workers, bar=False)
 
         assert len(complex_research.monitor.exceptions) == 0
         assert len(complex_research.results.to_df()) == 4

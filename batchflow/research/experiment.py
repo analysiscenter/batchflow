@@ -498,7 +498,8 @@ class Executor:
 
         iterations = range(self.n_iters) if self.n_iters else itertools.count()
         for experiment in self.experiments:
-            self.research.monitor.start_experiment(experiment)
+            if self.research:
+                self.research.monitor.start_experiment(experiment)
         for iteration in iterations:
             for unit_name, unit in self.experiment_template.actions.items():
                 if unit.root:
@@ -509,7 +510,8 @@ class Executor:
                 break
 
         for index, experiment in enumerate(self.experiments):
-            self.research.monitor.stop_experiment(experiment)
+            if self.research:
+                self.research.monitor.stop_experiment(experiment)
             experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
             experiment.close_logger()
         self.send_results()

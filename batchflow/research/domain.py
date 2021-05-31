@@ -499,10 +499,10 @@ class Domain:
             'iter_kwargs': iter_kwargs
         })
 
-    def update(self, iteration, research):
+    def update(self, generated, research):
         """ Update domain by `update_func`. If returns None, domain will not be updated. """
         for update in self.updates:
-            if must_execute(iteration, update['when'], self.n_items):
+            if must_execute(generated-1, update['when'], self.size):
                 kwargs = eval_expr(update['kwargs'], research=research)
                 new_domain = Domain(update['function'](**kwargs))
                 new_domain.updates = self.updates

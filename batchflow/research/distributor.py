@@ -7,11 +7,12 @@ from .. import Config
 
 
 class Worker:
-    def __init__(self, index, worker_config, tasks, research):
+    def __init__(self, index, worker_config, tasks, responses, research):
         self.index = index
         self.worker_config = worker_config
         self.tasks = tasks
         self.research = research
+        self.responses = responses
 
     def __call__(self):
         self.pid = os.getpid()
@@ -63,6 +64,7 @@ class Worker:
                 executor.run(self)
             self.research.monitor.send(worker=self, status='FINISH_TASK', task_idx=task_idx)
             self.tasks.task_done()
+            self.responses.put((self.index, task_idx))
             task = self.tasks.get()
         self.tasks.task_done()
         self.research.monitor.send(worker=self, status='STOP_WORKER')
@@ -81,6 +83,7 @@ class Distributor:
         """
         self.tasks = tasks
         self.research = research
+        self.responses = mp.JoinableQueue()
 
     def run(self):
         """ Run disributor and workers.
@@ -99,7 +102,7 @@ class Distributor:
         else:
             worker_configs = self.research.workers
         for i, worker_config in enumerate(worker_configs):
-            workers += [Worker(i, worker_config, self.tasks, self.research)]
+            workers += [Worker(i, worker_config, self.tasks, self.responses, self.research)]
 
         if not self.research.parallel:
             workers = workers[:1]
@@ -111,33 +114,33 @@ class Distributor:
             for worker in workers:
                 mp.Process(target=worker).start()
 
-            self.send()
-            while self.tasks.in_queue > 0:
-                self.tasks.join()
+            self.send_state()
+            while self.tasks.tasks_in_queue > 0:
+                self.responses.get()
+                self.tasks.finished_tasks += 1
+                self.tasks.tasks_in_queue -= 1
+
                 self.tasks.update_domain()
                 self.tasks.next_tasks(1)
-                self.send()
+                self.send_state()
 
-            self.send()
             self.tasks.stop_workers(len(workers))
             for _ in workers:
-                self.tasks.join(inc=False)
+                self.tasks.join()
         else:
-            self.send()
-            while self.tasks.in_queue > 0:
+            self.send_state()
+            while self.tasks.tasks_in_queue > 0:
                 self.tasks.stop_workers(1) # worker can't be in separate process so we restart it after each task
                 workers[0]()
-                self.tasks.join()
+
+                self.tasks.finished_tasks += 1
+                self.tasks.tasks_in_queue -= 1
+
                 self.tasks.update_domain()
                 self.tasks.next_tasks(1)
-                self.send()
+                self.send_state()
 
         self.research.logger.info('All workers have finished the work')
 
-    def send(self):
-        self.research.monitor.send(
-            'TASKS_EXECUTION',
-            in_queue=self.tasks.in_queue,
-            finished=self.tasks.finished,
-            remains=self.tasks.remains
-        )
+    def send_state(self):
+        self.research.monitor.send('TASKS', generated=self.tasks.configs_generated, remains=self.tasks.configs_remains)
