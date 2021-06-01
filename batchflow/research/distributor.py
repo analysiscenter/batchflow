@@ -4,7 +4,83 @@ import os
 import multiprocess as mp
 
 from .. import Config
+from .domain import Domain
 
+class DynamicQueue:
+    """ Queue of tasks that can be changed depending on previous results. """
+    def __init__(self, domain, research, n_branches):
+        self._domain = domain
+        self.research = research
+        self.n_branches = n_branches
+
+        self.queue = mp.JoinableQueue()
+
+        self.configs_generated = 0
+        self.configs_remains = self._domain.size
+
+        self.finished_tasks = 0
+        self.tasks_in_queue = 0
+
+    @property
+    def domain(self):
+        if self._domain.size == 0:
+            domain = Domain({'repetition': [None]}) # the value of repetition will be rewritten
+            domain.set_iter_params(n_reps=self._domain.n_reps, produced=self._domain.n_produced)
+            self._domain = domain
+        return self._domain
+
+    def update_domain(self):
+        """ Update domain. """
+        new_domain = self.domain.update(self.configs_generated, self.research)
+        if new_domain is not None:
+            self._domain = new_domain
+            self.configs_remains = self._domain.size
+        return new_domain is not None
+
+    def next_tasks(self, n_tasks=1):
+        """ Get next `n_tasks` elements of queue. """
+        configs = []
+        for i in range(n_tasks):
+            branch_tasks = [] # TODO: rename it
+            try:
+                for _ in range(self.n_branches):
+                    branch_tasks.append(next(self.domain))
+                configs.append(branch_tasks)
+            except StopIteration:
+                if len(branch_tasks) > 0:
+                    configs.append(branch_tasks)
+                break
+        for i, executor_configs in enumerate(configs):
+            self.put((self.configs_generated + i, executor_configs))
+
+        n_configs = sum([len(item) for item in configs])
+
+        self.configs_generated += n_configs
+        self.configs_remains -= n_configs
+        self.tasks_in_queue += len(configs)
+        self.research.logger.info(f'Get {n_tasks} tasks with {n_configs} configs, remains {self.configs_remains}')
+
+        return n_configs
+
+    def stop_workers(self, n_workers):
+        """ Stop all workers by putting `None` task into queue. """
+        for _ in range(n_workers):
+            self.put(None)
+
+    def join(self):
+        self.queue.join()
+
+    def get(self):
+        return self.queue.get()
+
+    def put(self, *args, **kwargs):
+        return self.queue.put(*args, **kwargs)
+
+    def task_done(self):
+        return self.queue.task_done()
+
+    def empty(self):
+        return self.queue.empty()
 
 class Worker:
     def __init__(self, index, worker_config, tasks, responses, research):

@@ -160,8 +160,7 @@ class TestExecutor:
             return (x, y, z)
 
         experiment = (Experiment()
-            .add_callable('sum', f, x=EC('x'), y=EC('y'), z=EC('z'))
-            .save(O('sum'), 'sum')
+            .add_callable('sum', f, x=EC('x'), y=EC('y'), z=EC('z'), save_to='sum')
         )
 
         executor = Executor(experiment, target='f', configs=[{'x': 10}, {'x': 20}],
@@ -282,18 +281,24 @@ class TestResearch:
         simple_research.run(n_iters=n_iters, workers=workers, branches=branches, parallel=parallel,
                             dump_results=dump_results, executor_target=target)
 
-        if dump_results:
-            simple_research.results.load()
-
         assert len(simple_research.monitor.exceptions) == 0
-        assert len(simple_research.results.to_df()) == 18
+        assert len(simple_research.results.df) == 18
+
+    @pytest.mark.parametrize('parallel', [False, True])
+    def test_load(self, parallel, simple_research):
+        n_iters = 3
+        simple_research.run(n_iters=n_iters, parallel=parallel, dump_results=True)
+
+        loaded_research = Research.load(simple_research.name)
+
+        assert len(loaded_research.results.df) == 18
 
     def test_empty_domain(self):
         research = Research().add_callable('func', lambda: 100).save(O('func'), 'sum')
         research.run(n_iters=10, dump_results=False)
 
         assert len(research.monitor.exceptions) == 0
-        assert len(research.results.to_df()) == 10
+        assert len(research.results.df) == 10
 
     def test_domain_update(self):
         def update():
@@ -307,43 +312,53 @@ class TestResearch:
         research.run(n_iters=1, dump_results=False, bar=False)
 
         assert len(research.monitor.exceptions) == 0
-        assert len(research.results.to_df()) == 15
+        assert len(research.results.df) == 15
 
-    @pytest.mark.slow
-    @pytest.mark.parametrize('workers', [1, 2])
-    def test_complex_research(self, workers, complex_research):
-        complex_research.run(dump_results=False, parallel=True, workers=workers, bar=False)
+    # @pytest.mark.slow
+    # @pytest.mark.parametrize('workers', [1, 2])
+    # def test_complex_research(self, workers, complex_research):
+    #     complex_research.run(dump_results=False, parallel=True, workers=workers, bar=False)
 
-        assert len(complex_research.monitor.exceptions) == 0
-        assert len(complex_research.results.to_df()) == 4
+    #     assert len(complex_research.monitor.exceptions) == 0
+    #     assert len(complex_research.results.df) == 4
 
-    def test_exceptions_in_research(self):
-        pass
+    # def test_exceptions_in_research(self):
+    #     pass
 
 
 class TestResults:
-    def test_filter_by_config(self, simple_research):
-        simple_research.run(n_iters=3)
-        simple_research.results.load(config={'y': 2})
-        df = simple_research.results.to_df(use_alias=False)
+    @pytest.mark.parametrize('parallel', [False, True])
+    @pytest.mark.parametrize('dump_results', [False, True])
+    def test_filter_by_config(self, parallel, dump_results, simple_research):
+        simple_research.run(n_iters=3, parallel=parallel, dump_results=dump_results)
+        df = simple_research.results.to_df(use_alias=False, config={'y': 2})
 
         assert len(df) == 6
         assert (df.y.values == 2).all()
 
-    def test_filter_by_alias(self, simple_research):
-        simple_research.run(n_iters=3)
-        simple_research.results.load(alias={'y': '2'})
-        df = simple_research.results.to_df(use_alias=False)
+    @pytest.mark.parametrize('parallel', [False, True])
+    @pytest.mark.parametrize('dump_results', [False, True])
+    def test_filter_by_alias(self, parallel, dump_results, simple_research):
+        simple_research.run(n_iters=3, parallel=parallel, dump_results=dump_results)
+        df = simple_research.results.to_df(use_alias=False, alias={'y': '2'})
 
         assert len(df) == 6
         assert (df.y.values == 2).all()
 
-    def test_filter_by_domain(self, simple_research):
-        simple_research.run(n_iters=3)
-        simple_research.results.load(domain=Option('y', [2, 3]))
-        df = simple_research.results.to_df(use_alias=False)
+    @pytest.mark.parametrize('parallel', [False, True])
+    @pytest.mark.parametrize('dump_results', [False, True])
+    def test_filter_by_domain(self, parallel, dump_results, simple_research):
+        simple_research.run(n_iters=3, parallel=parallel, dump_results=dump_results)
+        df = simple_research.results.to_df(use_alias=False, domain=Option('y', [2, 3]))
 
         assert len(df) == 12
+
+    def test_load(self, simple_research):
+        simple_research.run(n_iters=3)
+
+        df = ResearchResults(simple_research.name, domain=Option('y', [2, 3])).df
+        assert len(df) == 12
+
 
 #TODO: logging tests, samplers in domain, test that exceptions in one branch don't affect other bracnhes, 
 #      divices splitting, ...

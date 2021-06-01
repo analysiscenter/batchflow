@@ -1,150 +1,144 @@
-""" Research results class """
-
 import os
+import functools
 from collections import OrderedDict
 import glob
-import json
 import dill
-import numpy as np
+import multiprocess as mp
 import pandas as pd
-
+import numpy as np
 from .utils import to_list
 
-class Results:
-    """ Class for dealing with results of research
+class ResearchResults:
+    def __init__(self, name, dump_results=True, **kwargs):
+        self.name = name
+        self.dump_results = dump_results
+        self.results = mp.Manager().dict()
+        self.configs = mp.Manager().dict()
 
-    Parameters
-    ----------
-    path : str
-        path to root folder of research
+        self.kwargs = kwargs
 
-    **How to perform slicing**
-        Method `load` with default parameters will create pandas.DataFrame with all dumped
-        parameters. To specify subset of results one can define names of pipelines/functions,
-        produced variables/outputs of them, iterations and configs. For example,
-        we have the following research:
+    def put(self, id, results, config):
+        self.results[id] = results
+        self.configs[id] = config
 
-        ```
-        domain = Option('layout', ['cna', 'can', 'acn']) * Option('model', [VGG7, VGG16])
+    def load(self, **kwargs):
+        self.kwargs = {**self.kwargs, **kwargs}
+        if self.dump_results:
+            self.load_configs()
+            self.load_results(**self.kwargs)
 
-        research = (Research()
-        .add_pipeline(train_ppl, variables='loss', name='train')
-        .add_pipeline(test_ppl, name='test', execute=100, run=True, import_from='train')
-        .add_callable(accuracy, returns='accuracy', name='test_accuracy',
-                    execute=100, pipeline='test')
-        .add_domain(domain))
+    def load_configs(self):
+        for path in glob.glob(os.path.join(self.name, 'experiments', '*', 'config')):
+            path = os.path.normpath(path)
+            _experiment_id = path.split(os.sep)[-2]
+            with open(path, 'rb') as f:
+                self.configs[_experiment_id] = dill.load(f)
 
-        research.run(n_iters=10000)
-        ```
-        The code
-        ```
-        Results(research=research).load(iterations=np.arange(5000, 10000),
-                                        variables='accuracy', names='test_accuracy',
-                                        configs=Option('layout', ['cna', 'can']))
-        ```
-        will load output of ``accuracy`` function for configs
-        that contain layout 'cna' or 'can' for iterations starting with 5000.
-        The resulting dataframe will have columns 'iteration', 'name',
-        'accuracy', 'layout', 'model'. One can get the same in the follwing way:
-        ```
-        results = Results(research=research).load()
-        results = results[(results.iterations >= 5000) &
-                            (results.name == 'test_accuracy') & results.layout.isin(['cna', 'can'])]
-        ```
-    """
-    def __init__(self, path):
-        self.path = path
-        self.description = self._get_description()
-        self.configs = self._load_configs()
-        self.names = list(self.description['executables'].keys())
-        self.variables = [var for unit in self.description['executables'].values() for var in unit['variables']]
+    def load_results(self, experiment_id=None, name=None, iteration=None,
+                     config=None, alias=None, domain=None, **kwargs):
+        experiment_id, name, iteration = self.filter(experiment_id, name, iteration, config, alias, domain, **kwargs)
+        results = dict()
+        for path in glob.glob(os.path.join(self.name, 'experiments', '*', 'results', '*')):
+            path = os.path.normpath(path)
+            _experiment_id, _, _name = path.split(os.sep)[-3:]
+            if experiment_id is None or _experiment_id in experiment_id:
+                if name is None or _name in name:
+                    if _experiment_id not in results:
+                        results[_experiment_id] = OrderedDict()
+                    experiment_results = results[_experiment_id]
+
+                    if _name not in experiment_results:
+                        experiment_results[_name] = OrderedDict()
+                    name_results = experiment_results[_name]
+                    new_values = self.load_iteration_files(path, iteration)
+                    experiment_results[_name] = OrderedDict([*name_results.items(), *new_values.items()])
+        self.results = mp.Manager().dict(**results)
+
+    def filter(self, experiment_id=None, name=None, iteration=None, config=None, alias=None, domain=None, **kwargs):
+        experiment_id = experiment_id if experiment_id is None else to_list(experiment_id)
+        name = name if name is None else to_list(name)
+        iteration = iteration if iteration is None else to_list(iteration)
+
+        filtered_ids = self.filter_ids_by_configs(config, alias, domain, **kwargs)
+        experiment_id = np.intersect1d(experiment_id, filtered_ids) if experiment_id is not None else filtered_ids
+
+        return experiment_id, name, iteration
 
     @property
     def df(self):
-        return self._load_df()
+        return self.to_df()
 
-    @property
-    def artifacts(self):
-        return self._load_artifactes()
+    def to_df(self, pivot=False, include_config=True, use_alias=True, concat_config=False,
+              remove_auxilary=True, **kwargs):
+        if self.dump_results:
+            self.load(**kwargs)
 
-    def load_df(self, *args, **kwargs):
-        """ Load dataframe with results.
+        kwargs = {**self.kwargs, **kwargs}
+        experiment_ids, names, iterations = self.filter(**kwargs)
 
-        Parameters
-        ----------
-        names : list, optional
-            names of units (pipleines and functions) to load results, by default None
-        variables : list, optional
-            variables to load, by default None
-        iterations : int or list, optional
-            iterations to load, by default None
-        repetition : int, optional
-            repetition to load, by default None
-        experiment_id : str, optional
-            experiment id to load, by default None
-        configs : dict, optional
-            specify keys and corresponding values to load results, by default None
-        aliases : dict, optional
-            the same as `configs` but specify aliases of parameters, by default None
-        use_alias : bool, optional
-            use aliases for parameter values, by default True
-        concat_config : bool, optional
-            concatenate all config options into one string and store it in 'config' column, by default False
-        drop_columns : bool, optional
-            remove parameters columns if `concat_config=True`, by default True
-        kwargs : dict
-            kwargs will be interpreted as config paramter
+        df = []
+        for experiment_id in experiment_ids:
+            experiment_df = []
+            for name in (names or self.results[experiment_id]):
+                _df = {
+                    'id': experiment_id,
+                    'iteration': self.results[experiment_id][name].keys()
+                }
+                if pivot:
+                    _df[name] = self.results[experiment_id][name].values()
+                else:
+                    _df['name'] = name
+                    _df['value'] = self.results[experiment_id][name].values()
+                _df = pd.DataFrame(_df)
+                if iterations is not None:
+                    _df = _df[_df.iteration.isin(iterations)]
+                experiment_df += [_df]
+            if pivot and len(experiment_df) > 0:
+                experiment_df = [functools.reduce(functools.partial(pd.merge, on=['id', 'iteration']), experiment_df)]
+            df += experiment_df
+        res = pd.concat(df) if len(df) > 0 else pd.DataFrame()
+        if include_config and len(res) > 0:
+            res = pd.merge(res, self.configs_to_df(use_alias, concat_config, remove_auxilary), how='inner', on='id')
+        return res
 
-        Returns
-        -------
-        pandas.DataFrame or dict
-            dataframe columns: iteration, name (of pipeline/function), repetition, update
-            (is used if domain was dynamically updated), and column(-s) for config.
-            Also it will have column for each variable of pipeline
-            and output of the function that was saved as a result of the research.
-        """
-        return self._load_df(*args, **kwargs)
+    def load_iteration_files(self, path, iteration):
+        filenames = glob.glob(os.path.join(path, '*'))
+        if iteration is None:
+            files_to_load = {int(os.path.basename(filename)): filename for filename in filenames}
+        else:
+            dumped_iteration = np.sort(np.array([int(os.path.basename(filename)) for filename in filenames]))
+            files_to_load = dict()
+            for it in iteration:
+                _it = dumped_iteration[np.argwhere(dumped_iteration >= it)[0, 0]]
+                files_to_load[_it] = os.path.join(path, str(_it))
+        files_to_load = OrderedDict(sorted(files_to_load.items()))
+        results = OrderedDict()
+        for filename in files_to_load.values():
+            with open(filename, 'rb') as f:
+                values = dill.load(f)
+                for it in values:
+                    if iteration is None or it in iteration:
+                        results[it] = values[it]
+        return results
 
-    def load_artifactes(self, *args, **kwargs):
-        """ Load paths to artifactes for experiments.
+    def configs_to_df(self, use_alias=True, concat_config=False, remove_auxilary=True):
+        df = []
+        for experiment_id in self.configs:
+            config = self.configs[experiment_id]
+            if remove_auxilary:
+                for key in ['repetition', 'device', 'updates']:
+                    config.pop_config(key)
+            if use_alias:
+                if concat_config:
+                    config = {'config': config.alias(as_string=concat_config)}
+                else:
+                    config = config.alias()
+            else:
+                config = config.config()
+            df += [pd.DataFrame({'id': [experiment_id], **config})]
+        return pd.concat(df)
 
-        Parameters
-        ----------
-        name : str, optional
-            name of artifact to load, by default None. Can be used with iteration as prefix/postfix
-            (see `format` parameter)
-        iterations : int or list, optional
-            iterations to load, by default None
-        repetition : int, optional
-            repetition to load, by default None
-        experiment_id : str or list, optional
-            experiment id to load, by default None
-        configs : dict, optional
-            specify keys and corresponding values to load paths, by default None
-        aliases : dict, optional
-            the same as `configs` but specify aliases of parameters, by default None
-        use_alias : bool, optional
-            use aliases for parameter values, by default True
-        concat_config : bool, optional
-            concatenate all config options into one string and store it in 'config' column, by default False
-        drop_columns : bool, optional
-            remove parameters columns if `concat_config=True`, by default True
-        format : str, optional
-            one of '_{}', '/{}' (iteration as postfix for name), '{}_', '{}/' (iteration as prefix for name),
-            by default None
-        kwargs : dict
-            kwargs will be interpreted as config paramter
-
-        Returns
-        -------
-        pandas.DataFrame or dict
-            dataframe columns: iteration, name (of pipeline/function), repetition, update
-            (is used if domain was dynamically updated), column for config, artifact_path (full path to artefact
-            including file name), filename.
-        """
-        return self._load_artifactes(*args, **kwargs)
-
-    def filter_configs(self, repetition=None, experiment_id=None, configs=None, aliases=None, **kwargs):
+    def filter_ids_by_configs(self, config=None, alias=None, domain=None, **kwargs):
         """ Filter configs.
 
         Parameters
@@ -163,177 +157,32 @@ class Results:
         list
             filtered list on configs
         """
+        if sum([domain is not None, config is not None, alias is not None]) > 1:
+            raise ValueError('Only one of `config`, `alias` and `domain` can be not None')
+        filtered_ids = []
+        if domain is not None:
+            for config in domain.iterator():
+                filtered_ids += self.filter_ids_by_configs(config=config.config())
+            return filtered_ids
+
         if len(kwargs) > 0:
-            aliases = kwargs if aliases is None else {**aliases, **kwargs}
+            if config is not None:
+                config = {**config, **kwargs}
+            elif alias is not None:
+                alias = {**alias, **kwargs}
+            else:
+                config = kwargs
 
-        if experiment_id is not None:
-            _configs = {id: config for id, config in self.configs.items() if id in to_list(experiment_id)}
-        else:
-            _configs = self.configs
+        if config is None and alias is None:
+            return list(self.configs.keys())
 
-        if configs is None and aliases is None and repetition is None:
-            return _configs
-
-        if repetition is not None:
-            repetition = {'repetition': repetition}
-        else:
-            repetition = dict()
-
-        if configs is None and aliases is None:
-            configs = dict()
-
-        result = {}
-        for _experiment_id, supconfig in _configs.items():
-            if configs is not None:
-                configs.update(repetition)
+        for experiment_id, supconfig in self.configs.items():
+            if config is not None:
                 _config = supconfig.config()
-                if all(item in _config.items() for item in configs.items()):
-                    result[_experiment_id] = supconfig
+                if all(item in _config.items() for item in config.items()):
+                    filtered_ids += [experiment_id]
             else:
                 _config = supconfig.alias()
-                aliases.update(repetition)
-                if all(item in _config.items() for item in aliases.items()):
-                    result[_experiment_id] = supconfig
-        return result
-
-    def _load_df(self, names=None, variables=None, iterations=None, repetition=None, experiment_id=None,
-                 configs=None, aliases=None, use_alias=True, concat_config=False, drop_columns=True, **kwargs):
-        _configs = self.filter_configs(repetition, experiment_id, configs, aliases, **kwargs)
-
-        names = to_list(names or self.names)
-        variables = to_list(variables or self.variables)
-        iterations = to_list(iterations)
-
-        all_results = []
-        for _experiment_id, config_alias in _configs.items():
-            _repetition = config_alias.pop_config('repetition').config()['repetition']
-            _update = config_alias.pop_config('update').config()['update']
-            path = os.path.join(self.path, 'results', _experiment_id)
-
-            for unit in names:
-                files = glob.glob(glob.escape(os.path.join(path, unit)) + '_[0-9]*')
-                files = self._sort_files(files, iterations)
-                if len(files) != 0:
-                    res = []
-                    for filename, iterations_to_load in files.items():
-                        with open(filename, 'rb') as file:
-                            res.append(self._slice_file(dill.load(file), iterations_to_load, variables))
-                    res = self._concat(res, variables)
-
-                    config_alias.pop_config('_dummy')
-                    res = self._append_config(res, config_alias, concat_config, use_alias, drop_columns,
-                                              repetition=_repetition, update=_update, name=unit)
-                    all_results.append(pd.DataFrame(res))
-        return pd.concat(all_results, sort=False).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)
-
-    def _load_artifactes(self, names=None, iterations=None, repetition=None, experiment_id=None, configs=None,
-                         aliases=None, use_alias=True, concat_config=False, drop_columns=True,
-                         format=None, **kwargs):
-        _configs = self.filter_configs(repetition, experiment_id, configs, aliases, **kwargs)
-        iterations = to_list(iterations or '*')
-        names = to_list(names or '*')
-
-        all_results = []
-        for _experiment_id, config_alias in _configs.items():
-            _repetition = config_alias.pop_config('repetition').config()['repetition']
-            _update = config_alias.pop_config('update').config()['update']
-            path = os.path.join(self.path, 'results', _experiment_id)
-            for name in names:
-                res = {}
-                if format in ['_{}', '/{}']:
-                    name = name + format
-                elif format in ['{}_', '{}/']:
-                    name = format + name
-                for i in iterations:
-                    filenames = []
-                    for filename in glob.glob(os.path.join(path, name.format(i))):
-                        if not any([os.path.basename(filename).startswith(unit_name) for unit_name in self.names]):
-                            filenames.append(filename)
-                res.update({'artifact_path': filenames})
-                res.update({'filename': [os.path.basename(item) for item in filenames]})
-                res.update({'experiment_id': [_experiment_id] * len(filenames)})
-                res = self._append_config(res, config_alias, concat_config, use_alias, drop_columns,
-                                          repetition=_repetition, update=_update)
-                all_results.append(pd.DataFrame(res))
-        return pd.concat(all_results, sort=False).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)
-
-    def _append_config(self, res, config_alias, concat_config, use_alias, drop_columns, **kwargs):
-        length = self._fix_length(res)
-        if concat_config:
-            res['config'] = config_alias.alias(as_string=True)
-        if use_alias:
-            if not concat_config or not drop_columns:
-                res.update(config_alias.alias(as_string=False))
-        else:
-            config = config_alias.config()
-            config = {k: [v] * length for k, v in config.items()}
-            res.update(config)
-        res.update(kwargs)
-        return res
-
-    def _load_configs(self, experiment_id=None):
-        configs = {}
-        for filename in glob.glob(os.path.join(self.path, 'configs', experiment_id or '*')):
-            _experiment_id = os.path.split(filename)[-1]
-            with open(filename, 'rb') as f:
-                configs[_experiment_id] = dill.load(f)
-        return configs
-
-    def _sort_files(self, files, iterations):
-        files = {file: int(file.split('_')[-1]) for file in files}
-        files = OrderedDict(sorted(files.items(), key=lambda x: x[1]))
-        result = []
-        start = 0
-        iterations = [item for item in iterations if item is not None]
-        for name, end in files.items():
-            if len(iterations) == 0:
-                intersection = np.arange(start, end)
-            else:
-                intersection = np.intersect1d(iterations, np.arange(start, end))
-            if len(intersection) > 0:
-                result.append((name, intersection))
-            start = end
-        return OrderedDict(result)
-
-    def _slice_file(self, dumped_file, iterations_to_load, variables):
-        iterations = dumped_file['iteration']
-        if len(iterations) > 0:
-            elements_to_load = np.array([np.isin(it, iterations_to_load) for it in iterations])
-            res = OrderedDict()
-            for variable in ['iteration', 'experiment_id', *variables]:
-                if variable in dumped_file:
-                    res[variable] = np.array(dumped_file[variable])[elements_to_load]
-        else:
-            res = None
-        return res
-
-    def _concat(self, results, variables):
-        res = {key: [] for key in [*variables, 'iteration', 'experiment_id']}
-        for chunk in results:
-            if chunk is not None:
-                for key, values in res.items():
-                    if key in chunk:
-                        values.extend(chunk[key])
-        return res
-
-    def _fix_length(self, chunk):
-        """ Pad arrays in the dict with nans to the same length. """
-        max_len = max([len(value) if isinstance(value, (list, tuple, pd.Series)) else 1 for value in chunk.values()])
-        for value in chunk.values():
-            if len(value) < max_len:
-                value.extend([np.nan] * (max_len - len(value)))
-        return max_len
-
-    def _get_description(self):
-        with open(os.path.join(self.path, 'description', 'research.json'), 'r') as file:
-            return json.load(file)
-
-    def get_config(self, experiment_id=None):
-        """ Get configs by experiment_id. """
-        res = {}
-        for path in glob.glob(os.path.join(self.path, 'configs', experiment_id or '*')):
-            with open(path, 'rb') as f:
-                res[os.path.basename(path)] = dill.load(f)
-        if experiment_id:
-            res = res[experiment_id]
-        return res
+                if all(item in _config.items() for item in alias.items()):
+                    filtered_ids += [experiment_id]
+        return filtered_ids

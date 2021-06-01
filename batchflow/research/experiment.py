@@ -223,6 +223,12 @@ class ExecutableUnit:
         src = getattr(self, attr)
         return src[key]
 
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+
 class Experiment:
     def __init__(self, namespaces=None, actions=None):
         if namespaces is not None:
