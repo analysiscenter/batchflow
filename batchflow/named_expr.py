@@ -13,8 +13,19 @@ class _DummyBatch:
         self.dataset = pipeline.dataset if pipeline is not None else None
 
 
-def eval_expr(expr, **kwargs):
-    """ Evaluate a named expression recursively """
+def eval_expr(expr, no_eval=None, **kwargs):
+    """ Evaluate a named expression recursively
+
+    Parameters
+    ----------
+    expr
+        an expression to evaluate
+
+    no_eval : sequence of str
+        a list of arguments not to evalute.
+        Applicable only if expr is a dict which keys are checked against `no_eval` list.
+    """
+    no_eval = no_eval or []
     if isinstance(expr, NamedExpression):
         _expr = expr.get(**kwargs)
         if isinstance(expr, W):
@@ -35,7 +46,8 @@ def eval_expr(expr, **kwargs):
             _expr = type(expr)()
         for key, val in expr.items():
             key = eval_expr(key, **kwargs)
-            val = eval_expr(val, **kwargs)
+            if key not in no_eval:
+                val = eval_expr(val, **kwargs)
             _expr.update({key: val})
         expr = _expr
     return expr
@@ -352,7 +364,7 @@ class AlgebraicNamedExpression(NamedExpression):
         if self.op == '#str':
             return 'str(' + repr(self.a) + ')'
         if self.op == '#attr':
-            return repr(self.a) + '.' + repr(self.b)
+            return repr(self.a) + '.' + repr(self.b)[1:-1]
         if self.op == '#item':
             return repr(self.a) + '[' + repr(self.b) +']'
         if self.op == '#format':

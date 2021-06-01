@@ -65,36 +65,48 @@ def _workers_count():
     return cpu_count * 4
 
 
-def _make_action_wrapper_with_args(use_lock=None):    # pylint: disable=redefined-outer-name
-    return functools.partial(_make_action_wrapper, _use_lock=use_lock)
+def _make_action_wrapper_with_args(use_lock=None, no_eval=None):    # pylint: disable=redefined-outer-name
+    return functools.partial(_make_action_wrapper, use_lock=use_lock, no_eval=no_eval)
 
-def _make_action_wrapper(action_method, _use_lock=None):
+def _make_action_wrapper(action_method, use_lock=None, no_eval=None):
     @functools.wraps(action_method)
     def _action_wrapper(action_self, *args, **kwargs):
         """ Call the action method """
-        if _use_lock is not None:
+        if use_lock is not None:
             if action_self.pipeline is not None:
-                if isinstance(_use_lock, bool):
+                if isinstance(use_lock, bool):
                     _lock_name = '#_lock_' + action_method.__name__
                 else:
-                    _lock_name = _use_lock
+                    _lock_name = use_lock
                 if not action_self.pipeline.has_variable(_lock_name):
                     action_self.pipeline.init_variable(_lock_name, threading.Lock())
                 action_self.pipeline.get_variable(_lock_name).acquire()
 
         _res = action_method(action_self, *args, **kwargs)
 
-        if _use_lock is not None:
+        if use_lock is not None:
             if action_self.pipeline is not None:
                 action_self.pipeline.get_variable(_lock_name).release()
 
         return _res
 
-    _action_wrapper.action = dict(method=action_method, use_lock=_use_lock)
+    if isinstance(no_eval, str):
+        no_eval = [no_eval]
+    _action_wrapper.action = dict(method=action_method, use_lock=use_lock, no_eval=no_eval)
     return _action_wrapper
 
 def action(*args, **kwargs):
     """ Decorator for action methods in :class:`~.Batch` classes
+
+    Parameters
+    ----------
+    use_lock : bool or str
+        whether to lock an action when a pipeline is executed. It can be bool or a lock name.
+        A pipeline variable with a lock is created in the pipeline during the execution.
+
+    no_eval : str or a sequence of str
+        parameters to skip from named expression evaluation.
+        A parameter should be passed as a named argument only.
 
     Examples
     --------
@@ -105,8 +117,8 @@ def action(*args, **kwargs):
         def some_action(self, arg1, arg2):
             ...
 
-        @action(model='some_model')
-        def train_model(self, model, another_arg):
+        @action(no_eval='dst')
+        def calc_offset(self, src, dst=None):
             ...
 
         @action(use_lock=True)

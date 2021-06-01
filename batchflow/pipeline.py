@@ -761,7 +761,7 @@ class Pipeline:
         return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to), **kwargs)
 
     def _exec_call(self, batch, action):
-        fn = self._eval_expr(action['fn'], batch)
+        fn = self._eval_expr(action['fn'], batch=batch)
         if callable(fn):
             output = fn(*action['args'], **action['kwargs'])
         else:
@@ -799,15 +799,29 @@ class Pipeline:
             raise AttributeError("Method '%s' has not been found in the %s class" % (name, type(batch).__name__))
         return action_method, action_spec
 
-    def _exec_one_action(self, batch, action, args, kwargs, iteration=None):
+    def _exec_one_action(self, batch, action, iteration=None):
         if self._needs_exec(batch, action):
             repeat = self._eval_expr(action['repeat'], batch=batch) or 1
             for _ in range(repeat):
-                action_method, _ = self._get_action_method(batch, action['name'])
-                batch = action_method(*args, **kwargs)
-                if batch is not None:
-                    batch.pipeline = self
-                    batch.iteration = iteration
+                if action['name'] in ACTIONS:
+                    action_method = getattr(self, ACTIONS[action['name']])
+                    no_eval = None
+                else:
+                    action_method, action_spec = self._get_action_method(batch, action['name'])
+                    no_eval = action_spec['no_eval']
+
+                if 'args' in action:
+                    action['args'] = self._eval_expr(action['args'], batch=batch)
+                if 'kwargs' in action:
+                    action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch, no_eval=no_eval)
+
+                if action['name'] in ACTIONS:
+                    action_method(batch, action)
+                else:
+                    batch = action_method(*action['args'], **action['kwargs'])
+                    if batch is not None:
+                        batch.pipeline = self
+                        batch.iteration = iteration
         return batch
 
     def _exec_nested_pipeline(self, batch, action):
@@ -917,55 +931,41 @@ class Pipeline:
                 start_time = time.time()
                 self._profiler.enable()
 
-            _action = action.copy()
-            if 'args' in action:
-                _action['args'] = self._eval_expr(action['args'], batch=batch)
-            if 'kwargs' in action:
-                _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch)
-
-            if self._profiler:
-                eval_expr_time = time.time() - start_time
-
-            if _action.get('#dont_run', False):
+            if action.get('#dont_run', False):
                 pass
-            elif _action['name'] in [JOIN_ID, MERGE_ID]:
+            elif action['name'] in [JOIN_ID, MERGE_ID]:
                 join_batches = []
                 for pipe in _action['pipelines']:   # pylint: disable=not-an-iterable
-                    if _action['mode'] == 'i':
+                    if action['mode'] == 'i':
                         jbatch = pipe.create_batch(batch.index)
-                    elif _action['mode'] == 'n':
+                    elif action['mode'] == 'n':
                         jbatch = pipe.next_batch()
                     join_batches.append(jbatch)
 
-                if _action['name'] == MERGE_ID:
-                    if _action['fn'] is None:
-                        batch, _ = batch.merge([batch] + join_batches, components=_action['components'])
+                if action['name'] == MERGE_ID:
+                    if action['fn'] is None:
+                        batch, _ = batch.merge([batch] + join_batches, components=action['components'])
                     else:
-                        batch, _ = _action['fn']([batch] + join_batches)
+                        batch, _ = action['fn']([batch] + join_batches)
                     join_batches = None
-            elif _action['name'] == REBATCH_ID:
+            elif action['name'] == REBATCH_ID:
                 pass
-            elif _action['name'] == PIPELINE_ID:
-                batch = self._exec_nested_pipeline(batch, _action)
-            elif _action['name'] == DISCARD_BATCH_ID:
+            elif action['name'] == PIPELINE_ID:
+                batch = self._exec_nested_pipeline(batch, action)
+            elif action['name'] == DISCARD_BATCH_ID:
                 batch = None
-            elif _action['name'] in ACTIONS:
-                action_fn = getattr(self, ACTIONS[_action['name']])
-                action_fn(batch, _action)
             else:
-                if join_batches is None:
-                    _action_args = _action['args']
-                else:
-                    _action_args = tuple([tuple(join_batches), *_action['args']])
+                if join_batches is not None:
+                    action['args'] = tuple([tuple(join_batches), *action['args']])
                     join_batches = None
 
-                batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'], iteration=iteration)
+                batch = self._exec_one_action(batch, action, iteration=iteration)
 
             if self._profiler:
                 self._profiler.disable()
                 exec_time = time.time() - start_time
                 self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time,
-                                       eval_expr_time=eval_expr_time)
+                                       eval_expr_time=None)
 
         return batch
 
@@ -1008,8 +1008,8 @@ class Pipeline:
             notifier.update(pipeline=self, batch=batch_res)
         return batch_res
 
-    def _eval_expr(self, expr, batch=None):
-        return eval_expr(expr, batch=batch, pipeline=self)
+    def _eval_expr(self, expr, batch=None, no_eval=None):
+        return eval_expr(expr, batch=batch, pipeline=self, no_eval=no_eval)
 
     def get_model_by_name(self, name, batch=None):
         """ Retrieve a model by its name """
@@ -1380,7 +1380,7 @@ class Pipeline:
                                 **kwargs)
 
     def _exec_gather_metrics(self, batch, action):
-        metrics_class = self._eval_expr(action['metrics_class'], batch)
+        metrics_class = self._eval_expr(action['metrics_class'], batch=batch)
         if isinstance(metrics_class, str):
             available_metrics = [m for m in METRICS if metrics_class in m]
             if len(available_metrics) > 1:
