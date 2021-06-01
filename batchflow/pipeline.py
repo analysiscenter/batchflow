@@ -803,6 +803,10 @@ class Pipeline:
         if self._needs_exec(batch, action):
             repeat = self._eval_expr(action['repeat'], batch=batch) or 1
             for _ in range(repeat):
+
+                # to save original args and kwargs with named expressions
+                _action = action.copy()
+
                 if action['name'] in ACTIONS:
                     action_method = getattr(self, ACTIONS[action['name']])
                     no_eval = None
@@ -811,14 +815,14 @@ class Pipeline:
                     no_eval = action_spec['no_eval']
 
                 if 'args' in action:
-                    action['args'] = self._eval_expr(action['args'], batch=batch)
+                    _action['args'] = self._eval_expr(action['args'], batch=batch)
                 if 'kwargs' in action:
-                    action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch, no_eval=no_eval)
+                    _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch, no_eval=no_eval)
 
                 if action['name'] in ACTIONS:
-                    action_method(batch, action)
+                    action_method(batch, _action)
                 else:
-                    batch = action_method(*action['args'], **action['kwargs'])
+                    batch = action_method(*_action['args'], **_action['kwargs'])
                     if batch is not None:
                         batch.pipeline = self
                         batch.iteration = iteration
@@ -941,6 +945,7 @@ class Pipeline:
                     elif action['mode'] == 'n':
                         jbatch = pipe.next_batch()
                     join_batches.append(jbatch)
+                join_batches = tuple(join_batches)
 
                 if action['name'] == MERGE_ID:
                     if action['fn'] is None:
@@ -956,7 +961,7 @@ class Pipeline:
                 batch = None
             else:
                 if join_batches is not None:
-                    action['args'] = tuple([tuple(join_batches), *action['args']])
+                    action['args'] = join_batches + action['args']
                     join_batches = None
 
                 batch = self._exec_one_action(batch, action, iteration=iteration)
