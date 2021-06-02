@@ -36,10 +36,6 @@ class PipelineWrapper:
         self.mode = mode
         self.config = None
 
-    def eval_name(self, experiment):
-        if isinstance(self.pipeline, (list, tuple)):
-            self.pipeline = getattr(experiment.instances[self.pipeline[0]], self.pipeline[1])
-
     def __call__(self, config, batch=None):
         """ Execute pipeline.
 
@@ -78,6 +74,7 @@ class PipelineWrapper:
         return getattr(self.pipeline, attr)
 
     def reset(self):
+        """ Reset pipeline state: variables and bacth generator. """
         self.pipeline.reset('iter', 'vars')
 
     def __copy__(self):
@@ -97,21 +94,26 @@ class Namespace:
     namespace : class
         class which represents namespace.
     root : bool, optional
-        does namespace is the same for all branches or not, by default False
+        does namespace is the same for all branches or not, by default False.
+    args : list
+        args for namespace initialization, by default None.
     kwargs : dict
-        kwargs for namespace initialization
+        kwargs for namespace initialization.
     """
-    def __init__(self, name, namespace, root=False, **kwargs):
+    def __init__(self, name, namespace, root=False, args=None, **kwargs):
         self.name = name
         self.namespace = namespace
         self.root = root
+        self.args = args or []
         self.kwargs = kwargs
 
-    def __call__(self, experiment, **kwargs):
+    def __call__(self, experiment, *args, **kwargs):
         """ Create instance of the namespace. """
+        args = [*self.args, *args]
         kwargs = {**self.kwargs, **kwargs}
+        args = eval_expr(args, experiment=experiment)
         kwargs = eval_expr(kwargs, experiment=experiment)
-        return self.namespace(**kwargs)
+        return self.namespace(*args, **kwargs)
 
 class ExecutableUnit:
     """ Class to represent callables and generators executed in experiment.
@@ -119,15 +121,15 @@ class ExecutableUnit:
     Parameters
     ----------
     name : str
-
+        name of the unit.
     func : callable or tuple of str, optional
-        callable itself or tuple consists of namespace name and its attribute to call, by default None. `func` and
+        callable itself or tuple whcih consists of namespace name and its attribute to call, by default None. `func` and
         `generator` can't be defined simultaneously.
-    generator : generator, optional
-        generator itself or tuple consists of namespace name and its attribute to call, by default None. `func` and
+    generator : generator or tuple of str, optional
+        generator itself or tuple which consists of namespace name and its attribute to call, by default None. `func` and
         `generator` can't be defined simultaneously.
     root : bool, optional
-        [description], by default False
+        does unit is the same for all branches or not, by default False.
     iterations_to_execute : str, int or list of ints, optional
         iterations of the experiment to execute unit, by default 1.
             - If `'last'`, unit will be executed just at last iteration (if `iteration + 1 == n_iters` or `StopIteration`
@@ -149,10 +151,14 @@ class ExecutableUnit:
 
         if isinstance(self.iterations_to_execute, (int, str)):
             self.iterations_to_execute = [self.iterations_to_execute]
-        self.kwargs = kwargs
+
         self.args = [] if args is None else args
-        self._output = None # the previous output of the unit.
-        self._iterator = None
+        self.kwargs = kwargs
+
+        self.config = None
+        self.experiment = None
+        self.output = None # the last output of the unit.
+        self.iterator = None # created iterator
 
     def set_unit(self, config, experiment):
         """ Set config and experiment instance for the unit. """
@@ -160,13 +166,14 @@ class ExecutableUnit:
         self.experiment = experiment
 
     def get_method(self):
-        """ Transform `callable` or `generator` from tuples to instance attributes. """
+        """ Transform `callable` or `generator` from tuples of str to instance attributes. """
         attr = 'callable' if self.callable is not None else 'generator'
         src = getattr(self, attr)
         if isinstance(src, (tuple, list)):
             setattr(self, attr, getattr(self.experiment.instances[src[0]], src[1]))
-        if isinstance(src, PipelineWrapper):
-            src.eval_name(self.experiment)
+        if isinstance(src, PipelineWrapper) and isinstance(src.pipeline, (tuple, list)):
+            pipeline = src.pipeline
+            setattr(pipeline, attr, getattr(self.experiment.instances[pipeline[0]], pipeline[1]))
 
     def __call__(self, iteration, n_iters, last=False):
         """ Call unit: execute callable or get the next item from generator.
@@ -174,13 +181,13 @@ class ExecutableUnit:
         Parameters
         ----------
         iteration : int
-            current iteration
+            current iteration of the experiment.
         n_iters : int or None
-            total number of iterations for the experiment. `None` means that experiment will be executed until
+            total number of iterations of the experiment. `None` means that experiment will be executed until
             `StopIteration` for at least one executable unit.
         last : bool, optional
-            does it last iteration or not, by default False. `last` is True when StopIteration was raised for one
-            of the previously executed units or `iteration + 1 == n_iters` when `n_iters` is not None.
+            does it is the last iteration or not, by default False. `last` is `True` when StopIteration was raised
+            for one of the previously executed units or `iteration + 1 == n_iters` when `n_iters` is not None.
 
         Returns
         -------
@@ -189,22 +196,22 @@ class ExecutableUnit:
         """
         if iteration == 0:
             self.get_method()
+
         if self.must_execute(iteration, n_iters, last):
             self.iteration = iteration
             args = eval_expr(self.args, experiment=self.experiment)
             kwargs = eval_expr(self.kwargs, experiment=self.experiment)
             if self.callable is not None:
-                self._output = self.callable(*args, **kwargs)
+                self.output = self.callable(*args, **kwargs)
             else:
-                if self._iterator is None:
-                    self._iterator = self.generator(*args, **kwargs)
-                self._output = next(self._iterator)
-            return self._output
+                if self.iterator is None:
+                    self.iterator = self.generator(*args, **kwargs)
+                self.output = next(self.iterator)
+            return self.output
 
     def must_execute(self, iteration, n_iters=None, last=False):
         """ Returns does unit must be executed for the current iteration. """
         return must_execute(iteration, self.iterations_to_execute, n_iters, last)
-
 
     def __copy__(self):
         """ Create copy of the unit. """
@@ -230,23 +237,41 @@ class ExecutableUnit:
         self.__dict__.update(d)
 
 class Experiment:
+    """ Experiment description which consists of lists of namespaces and actions to execute. Each action defines
+    executable unit (callable or generator) and corresponding execution parameters. Actions will be executed in
+    the order defined by list. Actions can be defined as attributes of some namespace (e.g., see `name` of
+    `:meth:.add_callable`).
+
+    Parameters
+    ----------
+    namespaces : list, optional
+        list of namespaces, by default None. Can be extended by `:meth:.add_instance`.
+    actions : list, optional
+        list of actions, by default None.  Can be extended by `:meth:.add_executable_unit` and other methods.
+    """
     def __init__(self, namespaces=None, actions=None):
         if namespaces is not None:
-             self.namespaces = OrderedDict(namespaces)
+            self.namespaces = OrderedDict(namespaces)
         else:
             self.namespaces = OrderedDict()
         if actions is None:
-            self.actions = OrderedDict() # unit_name : (namespace_name, attr_name)
+            self.actions = OrderedDict() # unit_name : (namespace_name, attr_name) or callable
         else:
             self.actions = actions
 
         self._is_alive = True # should experiment be executed or not. Becomes False when Exceptions was raised and all
                               # units for these iterations were executed.
         self._exception_raised = False # was an exception raised or not
+
         self.last = False
         self.outputs = dict()
         self.results = OrderedDict()
-        self.has_dump = False
+
+        self.has_dump = False # does unit has any dump actions or not
+        self.name = None # name of the executor/research
+        self.dump_results = None
+        self.loglevel = None
+        self.monitor = None
 
     @property
     def is_alive(self):
@@ -265,6 +290,21 @@ class Experiment:
         self._exception_raised = self._exception_raised or value
 
     def add_instance(self, name, namespace, root=False, **kwargs):
+        """ Add class as namespace.
+
+        Parameters
+        ----------
+        name : str
+            namespace name.
+        namespace : class
+            class which instance will be used as namespace to get attributes.
+        root : bool, optional
+            does instances is the same for all branches or not, by default False.
+
+        Returns
+        -------
+        Experiment
+        """
         self.namespaces[name] = Namespace(name, namespace, root, **kwargs)
         def _create_instance(experiments, item_name):
             if not isinstance(experiments, list):
@@ -276,23 +316,124 @@ class Experiment:
                           root=root, item_name=name, iterations_to_execute="%0")
         return self
 
-    def add_executable_unit(self, name, src=None, mode='func', args=None, iterations_to_execute=1, save_to=None, **kwargs):
+    def add_executable_unit(self, name, src=None, mode='func', iterations_to_execute=1,
+                            save_to=None, args=None, **kwargs):
+        """ Add executable unit to experiment.
+
+        Parameters
+        ----------
+        name : str
+            name of unit to use inside of the research. Can be `'instance_name.attr'` to refer to instance attr.
+        src : callable or generator, optional
+            callable or generator to wrap into ExecutableUnit, by default None.
+        mode : str, optional
+            type of src ('func' or 'generator'), by default 'func'
+        iterations_to_execute : int, str or list, optional
+            iterations to execute callable (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+        save_to : NamedExpression, optional
+            dst to save output of the unit (if needed), by default None.
+        args : list, optional
+            args to execute unit, by default None.
+        kwargs : dict
+            kwargs to execute unit.
+
+        Returns
+        -------
+        Research
+        """
+        if not isinstance(name, str) and hasattr(name, '__name__'):
+            src = name
+            name = src.__name__
+
         if src is None:
             kwargs[mode] = parse_name(name)
         else:
             kwargs[mode] = src
+
         self.actions[name] = ExecutableUnit(name=name, args=args, iterations_to_execute=iterations_to_execute, **kwargs)
         if save_to is not None:
             self.save(src=O(name), dst=save_to, iterations_to_execute=iterations_to_execute, copy=False)
         return self
 
-    def add_callable(self, name, func=None, args=None, **kwargs):
-        return self.add_executable_unit(name, src=func, mode='func', args=args, **kwargs)
+    def add_callable(self, name, func=None, args=None, iterations_to_execute=1, save_to=None, **kwargs):
+        """ Add callable to experiment.
+
+        Parameters
+        ----------
+        name : str
+            name of callable to use inside of the research. Can be `'instance_name.method'` to refer to instance method.
+        func : callable, optional
+            callable to add into experiment, by default None.
+        args : list, optional
+            args to execute callable, by default None.
+        iterations_to_execute : int, str or list, optional
+            iterations to execute callable (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+        save_to : NamedExpression, optional
+            dst to save output of the callable (if needed), by default None.
+        root : bool, optional
+            does unit is the same for all branches or not, by default False.
+        kwargs : dict
+            kwargs to execute callable.
+
+        Returns
+        -------
+        Research
+        """
+        return self.add_executable_unit(name, src=func, mode='func', iterations_to_execute=iterations_to_execute,
+                                        save_to=save_to, args=args, **kwargs)
 
     def add_generator(self, name, generator=None, args=None, **kwargs):
+        """ Add generator to experiment.
+
+        Parameters
+        ----------
+        name : str
+            name of generator to use inside of the research. Can be `'instance_name.method'` to refer to instance method.
+        generator : generator, optional
+            generator to add into experiment, by default None.
+        args : list, optional
+            args to create iterator, by default None.
+        iterations_to_execute : int, str or list, optional
+            iterations to get item from generator (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+        save_to : NamedExpression, optional
+            dst to save generated item (if needed), by default None.
+        root : bool, optional
+            does unit is the same for all branches or not, by default False.
+        kwargs : dict
+            kwargs to create iterator.
+
+        Returns
+        -------
+        Research
+        """
         return self.add_executable_unit(name, src=generator, mode='generator', args=args, **kwargs)
 
     def add_pipeline(self, name, root_pipeline=None, branch_pipeline=None, run=False, **kwargs):
+        """ Add pipeline to experiment.
+
+        Parameters
+        ----------
+        name : str
+            name of pipeline to use inside of the research. Can be `'instance_name.attribute'` to refer to instance
+            attribute.
+        root_pipeline : batchflow.Pipeline, optional
+            a pipeline to execute, by default None. It must contain `run` action with `lazy=True` or `run_later`.
+            Only if `branch` is None, `root` may contain parameters that can be defined by config.
+            from domain.
+        branch_pipeline : Pipeline, optional
+            a parallelized pipeline to execute, by default None. Several copies of branch pipeline will be executed
+            in parallel per each batch received from the root pipeline. May contain parameters that can be
+            defined by domain, all branch pipelines will correspond to different experiments and will have
+            different configs from domain.
+        run : bool, optional
+            if False then `.next_batch()` will be applied to pipeline, else `.run()` , by default False.
+        iterations_to_execute : int, str or list, optional
+            iterations to execute (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+
+        Returns
+        -------
+        Research
+        """
         if branch_pipeline is None:
             mode = 'func' if run else 'generator'
             pipeline = PipelineWrapper(root_pipeline if root_pipeline is not None else name, mode=mode)
@@ -306,6 +447,19 @@ class Experiment:
         return self
 
     def save(self, src, dst, iterations_to_execute=1, copy=False):
+        """ Save something to research results.
+
+        Parameters
+        ----------
+        src : NamedExpression
+            value to save.
+        dst : str
+            name in the results.
+        iterations_to_execute : int, str or list, optional
+            iterations to execute (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+        copy : bool, optional
+            copy value or not, by default False
+        """
         def _save_results(_src, _dst, experiment, copy): #TODO: test does copy work
             previous_values = experiment.results.get(_dst, OrderedDict())
             previous_values[experiment.iteration] = deepcopy(_src) if copy else _src
@@ -317,9 +471,23 @@ class Experiment:
         return self
 
     def dump(self, variable=None, iterations_to_execute=['last']):
+        """ Dump current results to the storage and clear it.
+
+        Parameters
+        ----------
+        variable : str, optional
+            names in results to dump, by default None. None means that all results will be dumped.
+        iterations_to_execute : int, str or list, optional
+            iterations to execute (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+
+        Returns
+        -------
+        Research
+        """
         self.has_dump = True
 
         def _dump_results(variable, experiment):
+            """ Callable to dump results. """
             if experiment.dump_results:
                 variables_to_dump = list(experiment.results.keys()) if variable is None else to_list(variable)
                 for var in variables_to_dump:
@@ -340,9 +508,11 @@ class Experiment:
         return self
 
     def add_postfix(self, name):
+        """ Add postfix for conincided unit name. """
         return name + '_' + str(sum([item.startswith(name) for item in self.actions]))
 
     def copy(self):
+        """ Create copy of the experiment. Is needed to create experiments for branches. """
         namespaces = copy(self.namespaces)
         actions = OrderedDict([(name, copy(unit)) for name, unit in self.actions.items()])
         new_experiment = Experiment(namespaces=namespaces, actions=actions)
@@ -360,19 +530,23 @@ class Experiment:
         return self.copy()
 
     def generate_id(self, alias):
+        """ Create unique name for trhe experiment. """
         self.id = hashlib.md5(alias.encode('utf-8')).hexdigest()[:8] + str(random.getrandbits(16))
 
     def create_folder(self):
+        """ Create folder for experiment results. """
         self.experiment_path = os.path.join('experiments', self.id)
         self.full_path = os.path.join(self.name, self.experiment_path)
         if not os.path.exists(self.full_path):
             os.makedirs(self.full_path)
 
     def dump_config(self):
+        """ Dump config (as serialized ConfigAlias instance). """
         with open(os.path.join(self.name, self.experiment_path, 'config'), 'wb') as file:
             dill.dump(self.config_alias, file)
 
-    def create_instances(self, index, config, executor=None):
+    def init(self, index, config, executor=None):
+        """ Create all instances of units to start experiment. """
         self.index = index
         self.config_alias = config
         self.config = config.config()
@@ -403,6 +577,7 @@ class Experiment:
                 self.actions[name].set_unit(config=config, experiment=self)
 
     def create_logger(self):
+        """ Create experiment logger. """
         name = f"{self.name}." if self.name else ""
         name += f"{self.id}"
         path = os.path.join(self.full_path, 'experiment.log') if self.dump_results else None
@@ -410,9 +585,11 @@ class Experiment:
         self.logger = create_logger(name, path, self.loglevel)
 
     def close_logger(self):
+        """ Close experiment logger. """
         self.logger.removeHandler(self.logger.handlers[0])
 
     def call(self, name, iteration, n_iters=None):
+        """ Execute one iteration of the experiment. """
         if self.is_alive:
             self.last = self.last or (iteration + 1 == n_iters)
             self.iteration = iteration
@@ -460,6 +637,27 @@ class Experiment:
         return repr
 
 class Executor:
+    """ Executor of experiments in branches.
+
+    Parameters
+    ----------
+    experiment : Experiment
+        experiment scheme.
+    research : Research, optional
+        Research instance to get meta information (if needed), by default None.
+    configs : list, optional
+        configs for different branches, by default None.
+    executor_config : Config of dict, optional
+        config for the all experiments, will be appended to each expeirment config, by default None.
+    branches_configs : list, optional
+        configs for each branch, will be appended to each expeirment config, by default None.
+    target : str, optional
+        how to parallelize branches ('threads' or 'for'), by default 'threads'.
+    n_iters : int, optional
+        the number of iterations to execute, by default None.
+    task_name : str, optional
+        name of the task, by default None
+    """
     def __init__(self, experiment, research=None, configs=None, executor_config=None, branches_configs=None,
                  target='threads', n_iters=None, task_name=None, **kwargs):
         if configs is None:
@@ -486,19 +684,23 @@ class Executor:
 
         self.create_experiments()
 
-        self.parallel_call = inbatch_parallel(init=self._parallel_init_call, target=target, _use_self=False)(self._parallel_call)
+        self.parallel_call = inbatch_parallel(
+            init=self._parallel_init_call, target=target, _use_self=False
+        )(self._parallel_call)
 
     def create_experiments(self):
+        """ Initialize experiments. """
         self.experiments = []
         for index, (config, branch_config) in enumerate(zip(self.configs, self.branches_configs)):
             full_config = ConfigAlias(config) + ConfigAlias(branch_config) + ConfigAlias(self.executor_config)
             experiment = self.experiment_template.copy()
-            experiment.create_instances(index, full_config, self)
+            experiment.init(index, full_config, self)
             experiment.create_logger()
             experiment.logger.info(f"{self.task_name}[{index}] has been started with config:\n {repr(config)}")
             self.experiments.append(experiment)
 
     def run(self, worker=None):
+        """ Run experiments. """
         self.worker = worker
         self.pid = os.getpid()
 
@@ -523,15 +725,17 @@ class Executor:
         self.send_results()
 
     def _parallel_call(self, experiment, iteration, unit_name):
-        """ Parallel call of the unit 'name' """
+        """ Parallel call of the unit 'unit_name' """
         experiment.call(unit_name, iteration, self.n_iters)
 
     def _parallel_init_call(self, iteration, unit_name):
+        """ Auxilary method to call before '_parallel_call'. """
         _ = iteration, unit_name
         return self.experiments
 
     def call_root(self, iteration, unit_name):
-        # TODO: experiment can be alive if error was in the branch after all roots
+        """ Call root executable unit. """
+        # TODO: experiment must be alive if error was in the branch after all roots
         self.experiments[0].call(unit_name, iteration, self.n_iters)
         for experiment in self.experiments[1:]:
             experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
@@ -539,6 +743,7 @@ class Executor:
                 setattr(experiment, attr, getattr(self.experiments[0], attr))
 
     def send_results(self):
+        """ Put experiment results into research results. """
         if self.research is not None:
             for experiment in self.experiments:
                 self.research.results.put(experiment.id, experiment.results, experiment.config_alias)

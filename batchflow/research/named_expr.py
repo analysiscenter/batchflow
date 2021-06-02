@@ -45,4 +45,4 @@ class O(E):
         self.name = name
 
     def transform(self, experiments):
-        return [exp[self.name]._output for exp in experiments]
+        return [exp[self.name].output for exp in experiments]

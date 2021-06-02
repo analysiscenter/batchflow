@@ -155,6 +155,23 @@ class TestExecutor:
 
         assert executor.experiments[0].results['sum'][9] == sum(range(10))
 
+    def test_units_without_name(self):
+        def generator(n):
+            s = 0
+            for i in range(n):
+                s += i
+                yield s
+
+        experiment = (Experiment()
+            .add_callable(sum, args=[range(10)])
+            .add_generator(generator, n=10)
+            .save(O('sum'), 'sum')
+        )
+        executor = Executor(experiment, target='f', n_iters=1)
+        executor.run()
+
+        assert executor.experiments[0].results['sum'][0] == sum(range(10))
+
     def test_configs(self):
         def f(x, y, z):
             return (x, y, z)

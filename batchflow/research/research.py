@@ -21,22 +21,25 @@ from .utils import create_logger
 class Research:
     def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=None):
         """ Research is an instrument to run multiple parallel experiments with different combinations of
-        parameters called experiment configs.
+        parameters called experiment configs. Configs are produced by :class:`domain.Domain` (some kind of
+        parameters grid.)
 
         Parameters
         ----------
         name : str, optional
-            name of the research and corresponding folder to store results, by default 'research'
+            name (relative path) of the research and corresponding folder to store results, by default 'research'.
         domain : Domain or Option, optional
-            grid of parameters to produce experiment configs, by default None
+            grid of parameters (see :class:`domain.Domain`) to produce experiment configs, by default None.
         experiment : Experiment, optional
-            description of the experiment (see :class:`experiment.Experiment`), by default None
+            description of the experiment (see :class:`experiment.Experiment`), by default None. Experiment can be
+            defined explicitly as a parameter or constructed by Research methods (`:meth:.add_callable`,
+            `:meth:.add_generator`, etc.).
         n_configs : int, optional
-            the number of configs to get from domain (see `n_items` of :meth:`domain.Domain.set_iter`), by default None
+            the number of configs to get from domain (see `n_items` of :meth:`domain.Domain.set_iter`), by default None.
         n_reps : int, optional
-            the number of repetitions for each config (see :meth:`domain.Domain.set_iter`), by default 1
+            the number of repetitions for each config (see `n_reps` of :meth:`domain.Domain.set_iter`), by default 1.
         repeat_each : int, optional
-            see :meth:`domain.Domain.set_iter`, by default 100
+            see `repeat_each` of :meth:`domain.Domain.set_iter`, by default 100.
         """
         self.name = name
         self.domain = Domain(domain)
@@ -44,32 +47,24 @@ class Research:
         self.n_configs = n_configs
         self.n_reps = n_reps
         self.repeat_each = repeat_each
-        self._env = dict()
-        self._results = None
 
-    def add_instance(self, *args, **kwargs):
-        self.experiment.add_instance(*args, **kwargs)
-        return self
+        self._env = dict() # current state of git repo and other environment information.
 
-    def add_callable(self, *args, **kwargs):
-        self.experiment.add_callable(*args, **kwargs)
-        return self
+    def __getattr__(self, key):
+        if key in ['add_instance', 'add_callable', 'add_generator', 'add_pipeline', 'save', 'dump']:
+            def _method(*args, **kwargs):
+                getattr(self.experiment, key)(*args, **kwargs)
+                return self
+            _method.__doc__ = getattr(self.experiment, key).__doc__
+            return _method
+        else:
+            raise ValueError(f'Unknown action: {key}')
 
-    def add_generator(self, *args, **kwargs):
-        self.experiment.add_generator(*args, **kwargs)
-        return self
+    def __getstate__(self):
+        return self.__dict__
 
-    def add_pipeline(self, *args, **kwargs):
-        self.experiment.add_pipeline(*args, **kwargs)
-        return self
-
-    def save(self, *args, **kwargs):
-        self.experiment.save(*args, **kwargs)
-        return self
-
-    def dump(self, *args, **kwargs):
-        self.experiment.dump(*args, **kwargs)
-        return self
+    def __setstate__(self, d):
+        self.__dict__.update(d)
 
     def update_domain(self, function, when, **kwargs):
         """ Add domain update functions or update parameters.
@@ -77,13 +72,9 @@ class Research:
         Parameters
         ----------
         function : callable or None
-
-        each : int or 'last'
-            when update method will be called. If 'last', domain will be updated
-            when iterator will be finished. If int, domain will be updated with
-            that period.
-        n_updates : int
-            the total number of updates.
+            function to update domain, returns new domain.
+        when : int, str or list, optional
+            iterations to update (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
         kwargs :
             update function parameters.
         """
@@ -120,6 +111,7 @@ class Research:
 
     @property
     def env(self):
+        """ Environment state. """
         env = dict()
         if self.dump_results:
             filenames = glob.glob(os.path.join(self.name, 'env', '*'))
@@ -170,6 +162,7 @@ class Research:
         return devices
 
     def create_research_folder(self):
+        """ Create folder for the research results. """
         os.makedirs(self.name)
         for subfolder in ['configs', 'description', 'env', 'experiments']:
             config_path = os.path.join(self.name, subfolder)
@@ -208,6 +201,8 @@ class Research:
             how to execute branches, by default 'threads'
         loglevel : str, optional
             logging level, by default 'debug'
+        bar : bool or class
+            use or not progress bar.
 
         Returns
         -------
@@ -271,17 +266,20 @@ class Research:
         return self
 
     def create_logger(self):
+        """ Create research logger. """
         name = f"{self.name}"
         path = os.path.join(self.name, 'research.log') if self.dump_results else None
 
         self.logger = create_logger(name, path, self.loglevel)
 
     def dump_research(self):
+        """ Dump research object. """
         with open(os.path.join(self.name, 'research.dill'), 'wb') as f:
             dill.dump(self, f)
 
     @classmethod
     def load(cls, name):
+        """ Load research object. """
         with open(os.path.join(name, 'research.dill'), 'rb') as f:
             research = dill.load(f)
         research.results = ResearchResults(research.name, research.dump_results)
@@ -309,6 +307,17 @@ class Research:
 class ResearchMonitor:
     COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid',
                'finished', 'withdrawn', 'remains']
+    """ Class to get signals from experiment and other objects and store all states.
+
+    Parameters
+    ----------
+    research : Research
+        Research object
+    path : str, optional
+        path to save signals, by default None
+    bar : bool or class
+        use or not progress bar.
+    """
     def __init__(self, research, path=None, bar=True):
         self.queue = mp.JoinableQueue()
         self.research = research
@@ -328,6 +337,7 @@ class ResearchMonitor:
 
     @property
     def total(self):
+        """ Total number of iterations or experiments in the current moment. It changes after domain updates. """
         if self.n_iters:
             return self.finished_iterations + self.n_iters * (self.in_queue + self.remained_experiments)
         else:
@@ -335,13 +345,16 @@ class ResearchMonitor:
 
     @property
     def in_progress(self):
+        """ The number of experiments in progress. """
         return len(self.current_iterations)
 
     @property
     def in_queue(self):
+        """ The number of experimenys in queue of tasks. """
         return self.generated_experiments - self.finished_experiments
 
     def send(self, status, experiment=None, worker=None, **kwargs):
+        """ Send signal to monitor. """
         signal = {
             'time': str(datetime.datetime.now()),
             'status': status,
@@ -362,21 +375,27 @@ class ResearchMonitor:
             self.exceptions.append(signal)
 
     def start_experiment(self, experiment):
+        """" Signal when experiment starts. """
         self.send('START_EXP', experiment, experiment.executor.worker)
 
     def stop_experiment(self, experiment):
+        """" Signal when experiment stops. """
         self.send('FINISH_EXP', experiment, experiment.executor.worker, it=experiment.iteration)
 
     def execute_iteration(self, name, experiment):
+        """" Signal for iteration execution. """
         self.send('EXECUTE_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration)
 
     def fail_item_execution(self, name, experiment, msg):
+        """" Signal for iteration execution fail. """
         self.send('FAIL_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration, exception=msg)
 
     def stop_iteration(self, name, experiment):
+        """" Signal for StopIteration exception. """
         self.send('STOP_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration)
 
-    def listener(self): #TODO: rename
+    def handler(self):
+        """ Signals handler. """
         signal = self.queue.get()
         filename = os.path.join(self.path, 'monitor.csv')
         with self.bar as progress:
@@ -410,6 +429,7 @@ class ResearchMonitor:
         self.stop_signal.put(None)
 
     def start(self, dump):
+        """ Start handler. """
         self.dump = dump
         if self.dump:
             filename = os.path.join(self.path, 'monitor.csv')
@@ -417,8 +437,9 @@ class ResearchMonitor:
                 with open(filename, 'w') as f:
                     writer = csv.writer(f)
                     writer.writerow(self.COLUMNS)
-        mp.Process(target=self.listener).start()
+        mp.Process(target=self.handler).start()
 
     def stop(self):
+        """ Stop handler. """
         self.queue.put(None)
         self.stop_signal.get()

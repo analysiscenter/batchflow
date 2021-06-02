@@ -489,6 +489,8 @@ class Domain:
 
     def set_update(self, function, when, **kwargs):
         """ Set domain update parameters. """
+        if isinstance(when, (int, str)):
+            when = [when]
         iter_kwargs = dict()
         for attr in ['n_items', 'n_reps', 'repeat_each']:
             iter_kwargs[attr] = kwargs.pop(attr) if attr in kwargs else getattr(self, attr)
