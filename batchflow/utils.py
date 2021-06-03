@@ -12,8 +12,6 @@ except ImportError:
 from matplotlib import pyplot as plt
 from matplotlib import colors as mcolors
 
-from .named_expr import NamedExpression
-
 
 def is_iterable(obj):
     """ Check if an object is a sequence """
@@ -24,6 +22,14 @@ def is_iterable(obj):
     except TypeError:
         return False
     return True
+
+
+def to_list(obj):
+    """Cast an object to a list. Almost identical to `list(obj)` for 1-D
+    objects, except for `str`, which won't be split into separate letters but
+    transformed into a list of a single element.
+    """
+    return np.array(obj).ravel().tolist()
 
 
 def partialmethod(func, *frozen_args, **frozen_kwargs):
@@ -276,7 +282,6 @@ def print_results(df, layout, average_repetitions=False, sort_by=None, ascending
     return res_df
 
 
-
 def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_names=None, **kwargs):
     """ Plot images and optionally true labels as well as predicted class proba.
         - In case labels and proba are not passed, just shows images.
@@ -358,6 +363,7 @@ def save_data_to(data, dst, **kwargs):
     kwargs
         arguments to be passed into a NamedExpression
     """
+    from .named_expr import NamedExpression
     if not isinstance(dst, (tuple, list)):
         dst = [dst]
         if isinstance(dst, (tuple, list)):
@@ -388,6 +394,7 @@ def read_data_from(src, **kwargs):
     kwargs
         arguments to be passed into a NamedExpression
     """
+    from .named_expr import NamedExpression
     if not isinstance(src, (tuple, list)):
         src_ = [src]
         data = [None]
