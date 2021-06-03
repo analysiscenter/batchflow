@@ -2,7 +2,7 @@
 Improve Semantic Segmentation by Global Convolutional Network
 <https://arxiv.org/abs/1703.02719>`_"
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from .layers import conv_block
 from . import TFModel

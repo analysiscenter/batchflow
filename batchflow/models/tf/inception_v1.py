@@ -1,7 +1,7 @@
 """ Szegedy C. et al "`Going Deeper with Convolutions
 <https://arxiv.org/abs/1409.4842>`_"
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from .inception_base import Inception
 from .layers import conv_block
