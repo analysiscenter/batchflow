@@ -46,7 +46,11 @@ def eval_expr(expr, no_eval=None, **kwargs):
             _expr = type(expr)()
         for key, val in expr.items():
             key = eval_expr(key, **kwargs)
-            if key not in no_eval:
+            if key in no_eval:
+                # save current params for later evaluation
+                if isinstance(val, NamedExpression):
+                    val.set_params(**kwargs)
+            else:
                 val = eval_expr(val, **kwargs)
             _expr.update({key: val})
         expr = _expr
