@@ -7,12 +7,53 @@ import asyncio
 import functools
 import logging
 import inspect
+
 try:
     from numba import jit
 except ImportError:
     jit = None
 
 from .named_expr import P
+from .utils_random import spawn_seed_sequence
+
+
+def make_function(method, is_global=False):
+    """ Makes a function from a method
+
+    Parameters
+    ----------
+    method
+        a callable
+
+    is_global : bool
+        whether to create a function in a global namespace
+
+    Notes
+    -----
+    A method should not be decorated with any other decorator.
+    """
+    source = inspect.getsource(method).split('\n')
+    indent = len(source[0]) - len(source[0].lstrip())
+
+    # strip indent spaces
+    source = [s[indent:] for s in source if len(s) > indent]
+    # skip all decorator and comment lines before 'def' or 'async def'
+    start = 0
+    for i, s in enumerate(source):
+        if s[:3] in ['def', 'asy']:
+            start = i
+            break
+    source = '\n'.join(source[start:])
+
+    globs = globals() if is_global else method.__globals__.copy()
+    exec(source, globs)    # pylint:disable=exec-used
+
+    # Method with the same name might exist in various classes or modules
+    # so a global function should have a unique name
+    function_name = method.__module__ + "_" + method.__qualname__
+    function_name = function_name.replace('.', '_')
+    globs[function_name] = globs[method.__name__]
+    return globs[function_name]
 
 
 def _workers_count():
@@ -24,36 +65,48 @@ def _workers_count():
     return cpu_count * 4
 
 
-def _make_action_wrapper_with_args(use_lock=None):    # pylint: disable=redefined-outer-name
-    return functools.partial(_make_action_wrapper, _use_lock=use_lock)
+def _make_action_wrapper_with_args(use_lock=None, no_eval=None):    # pylint: disable=redefined-outer-name
+    return functools.partial(_make_action_wrapper, use_lock=use_lock, no_eval=no_eval)
 
-def _make_action_wrapper(action_method, _use_lock=None):
+def _make_action_wrapper(action_method, use_lock=None, no_eval=None):
     @functools.wraps(action_method)
     def _action_wrapper(action_self, *args, **kwargs):
         """ Call the action method """
-        if _use_lock is not None:
+        if use_lock is not None:
             if action_self.pipeline is not None:
-                if isinstance(_use_lock, bool):
+                if isinstance(use_lock, bool):
                     _lock_name = '#_lock_' + action_method.__name__
                 else:
-                    _lock_name = _use_lock
+                    _lock_name = use_lock
                 if not action_self.pipeline.has_variable(_lock_name):
                     action_self.pipeline.init_variable(_lock_name, threading.Lock())
                 action_self.pipeline.get_variable(_lock_name).acquire()
 
         _res = action_method(action_self, *args, **kwargs)
 
-        if _use_lock is not None:
+        if use_lock is not None:
             if action_self.pipeline is not None:
                 action_self.pipeline.get_variable(_lock_name).release()
 
         return _res
 
-    _action_wrapper.action = dict(method=action_method, use_lock=_use_lock)
+    if isinstance(no_eval, str):
+        no_eval = [no_eval]
+    _action_wrapper.action = dict(method=action_method, use_lock=use_lock, no_eval=no_eval)
     return _action_wrapper
 
 def action(*args, **kwargs):
     """ Decorator for action methods in :class:`~.Batch` classes
+
+    Parameters
+    ----------
+    use_lock : bool or str
+        whether to lock an action when a pipeline is executed. It can be bool or a lock name.
+        A pipeline variable with a lock is created in the pipeline during the execution.
+
+    no_eval : str or a sequence of str
+        parameters to skip from named expression evaluation.
+        A parameter should be passed as a named argument only.
 
     Examples
     --------
@@ -64,8 +117,8 @@ def action(*args, **kwargs):
         def some_action(self, arg1, arg2):
             ...
 
-        @action(model='some_model')
-        def train_model(self, model, another_arg):
+        @action(no_eval='dst')
+        def calc_offset(self, src, dst=None):
             ...
 
         @action(use_lock=True)
@@ -124,14 +177,45 @@ def any_action_failed(results):
     """ Return `True` if some parallelized invocations threw exceptions """
     return any(isinstance(res, Exception) for res in results)
 
+def call_method(method, use_self, args, kwargs, seed=None):
+    """ Call a method with given args """
+    if use_self:
+        # set batch.random_seed to create RNG
+        args[0].random_seed = seed
+    return method(*args, **kwargs)
+
 def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kwargs):
-    """ Decorator for parallel methods in :class:`~batchflow.Batch` classes"""
+    """ Decorator for parallel methods in :class:`~.Batch` classes
+
+    Parameters
+    ----------
+    init
+        a method name or a callable that returns an iterable for parallelization
+        (e.g. a list of indices or items to be passed to a parallelized method)
+    post
+        a method name or a callable to call after parallel invocations
+        (e.g. to assemble the batch)
+    target : 'threads', 'mpc', 'async', 'for'
+        a parallelization engine
+    _use_self : bool
+        whether to pass `self` (i.e. whether a decorated callable is a method or a function)
+
+    Notes
+    -----
+    `mpc` can be used with a method that is decorated only by `inbatch_parallel`.
+    All other decorators will be ignored.
+    """
     if target not in ['nogil', 'threads', 'mpc', 'async', 'for', 't', 'm', 'a', 'f']:
         raise ValueError("target should be one of 'threads', 'mpc', 'async', 'for'")
 
     def inbatch_parallel_decorator(method):
         """ Return a decorator which run a method in parallel """
         use_self = '.' in method.__qualname__ if _use_self is None else _use_self
+        if use_self:
+            try:
+                mpc_method = make_function(method, is_global=True)
+            except Exception:  # pylint:disable=broad-except
+                mpc_method = None
 
         def _check_functions(self):
             """ Check decorator's `init` and `post` parameters """
@@ -147,22 +231,18 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             elif callable(init):
                 init_fn = init
             else:
-                init_fn = lambda *a, **k: init
+                init_fn = init
 
-            if post is not None:
-                if isinstance(post, str):
-                    try:
-                        post_fn = getattr(self, post)
-                    except AttributeError as e:
-                        raise ValueError("post should refer to a method of the class", type(self).__name__) from e
-                elif callable(post):
-                    post_fn = post
-                else:
-                    post_fn = lambda *a, **k: post
-                if not callable(post_fn):
-                    raise ValueError("post should refer to a callable or a method of the batch class")
+            if isinstance(post, str):
+                try:
+                    post_fn = getattr(self, post)
+                except AttributeError as e:
+                    raise ValueError("post should refer to a method of the class", type(self).__name__) from e
+            elif callable(post):
+                post_fn = post
             else:
-                post_fn = None
+                post_fn = post
+
             return init_fn, post_fn
 
         def _call_init_fn(init_fn, args, kwargs):
@@ -251,7 +331,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             return margs, mkwargs
 
         def wrap_with_threads(self, args, kwargs):
-            """ Run a method in parallel """
+            """ Run a method in parallel threads """
             init_fn, post_fn = _check_functions(self)
 
             n_workers = kwargs.pop('n_workers', _workers_count())
@@ -261,7 +341,8 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 full_kwargs = {**dec_kwargs, **kwargs}
                 for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                     margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                    one_ft = executor.submit(method, *margs, **mkwargs)
+                    seed = spawn_seed_sequence(self)
+                    one_ft = executor.submit(call_method, method, use_self, margs, mkwargs, seed=seed)
                     futures.append(one_ft)
 
                 timeout = kwargs.get('timeout', None)
@@ -270,18 +351,18 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
         def wrap_with_mpc(self, args, kwargs):
-            """ Run a method in parallel """
+            """ Run a method in parallel processes """
             init_fn, post_fn = _check_functions(self)
 
             n_workers = kwargs.pop('n_workers', _workers_count())
             with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
-                mpc_func = method(self, *args, **kwargs)
                 args, kwargs, params = _prepare_args(self, args, kwargs)
                 full_kwargs = {**dec_kwargs, **kwargs}
                 for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
-                    margs, mkwargs = _make_args(None, iteration, arg, args, kwargs, params)
-                    one_ft = executor.submit(mpc_func, *margs, **mkwargs)
+                    margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
+                    seed = spawn_seed_sequence(self)
+                    one_ft = executor.submit(call_method, mpc_method, use_self, margs, mkwargs, seed=seed)
                     futures.append(one_ft)
 
                 timeout = kwargs.pop('timeout', None)
@@ -318,9 +399,13 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             futures = []
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
+            # save an initial seed to generate child seeds from
+            random_seed = self.random_seed
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                futures.append(asyncio.ensure_future(method(*margs, **mkwargs), loop=loop))
+                seed = spawn_seed_sequence(random_seed)
+                futures.append(asyncio.ensure_future(call_method(method, use_self, margs, mkwargs, seed=seed),
+                                                     loop=loop))
 
             if thread is not None:
                 thread.submit(loop.run_until_complete, wait_for_all(futures, loop)).result()
@@ -336,10 +421,14 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             futures = []
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
+            # save an initial seed to generate child seeds from
+            random_seed = self.random_seed
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
+
+                seed = spawn_seed_sequence(random_seed)
                 try:
-                    one_ft = method(*margs, **mkwargs)
+                    one_ft = call_method(method, use_self, margs, mkwargs, seed=seed)
                 except Exception as e:   # pylint: disable=broad-except
                     one_ft = e
                 futures.append(one_ft)
@@ -357,23 +446,24 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 # still need self to preserve the signatures of other functions
                 self = None
 
-            if 'target' in kwargs:
-                _target = kwargs.pop('target')
-            else:
-                _target = target
+            _target = kwargs.pop('target', target)
 
             if asyncio.iscoroutinefunction(method) or _target in ['async', 'a']:
                 x = wrap_with_async(self, args, kwargs)
             elif _target in ['threads', 't']:
                 x = wrap_with_threads(self, args, kwargs)
             elif _target in ['mpc', 'm']:
-                x = wrap_with_mpc(self, args, kwargs)
+                if mpc_method is not None:
+                    x = wrap_with_mpc(self, args, kwargs)
+                else:
+                    raise ValueError('Cannot use MPC with this method', method)
             elif _target in ['for', 'f']:
                 x = wrap_with_for(self, args, kwargs)
             else:
                 raise ValueError('Wrong parallelization target:', _target)
             return x
         return wrapped_method
+
     return inbatch_parallel_decorator
 
 
@@ -399,16 +489,16 @@ def njit(nogil=True, parallel=True):  # pylint: disable=redefined-outer-name
 
 
 def mjit(*args, nopython=True, nogil=True, **kwargs):
-    """ jit decorator for methods """
+    """ jit decorator for methods
+
+    Notes
+    -----
+    This decorator should be applied directly to a method, not another decorator.
+    """
     def _jit(method):
-        source = inspect.getsource(method).split('\n')
-        indent = len(source[0]) - len(source[0].lstrip())
-        source = [s[indent:] for s in source if len(s) > indent and s[indent] != '@']
-        source = '\n'.join(source)
-        globs = method.__globals__.copy()
-        exec(source, globs)  # pylint: disable=exec-used
         if jit is not None:
-            func = jit(*args, nopython=nopython, nogil=nogil, **kwargs)(globs[method.__name__])
+            func = make_function(method)
+            func = jit(*args, nopython=nopython, nogil=nogil, **kwargs)(func)
         else:
             func = method
             logging.warning('numba is not installed. This causes a severe performance degradation for method %s',
@@ -430,6 +520,7 @@ def mjit(*args, nopython=True, nogil=True, **kwargs):
 def deprecated(msg):
     """ Decorator for deprecated functions and methods """
     def decorator(func):
+        @functools.wraps(func)
         def _call(*args, **kwargs):
             logging.warning(msg)
             return func(*args, **kwargs)

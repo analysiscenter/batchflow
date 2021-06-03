@@ -287,6 +287,80 @@ class VisualizationMixin:
         camera = np.uint8(camera * 255)
         return camera
 
+    # Visualize signal propagation statistics
+    def get_signal_propagation(self, model=None, input_tensor=None):
+        """ Compute signal propagation statistics of all layers in the network.
+        Brock A. et al "`Characterizing signal propagation to close the performance gap in unnormalized ResNets
+        <https://arxiv.org/pdf/2101.08692.pdf>`_"
+
+        Under the hood, forward hooks are registered to capture outputs of all layers,
+        and they are removed after extraction of all the activations.
+
+        Parameters
+        ----------
+        model : nn.Module
+            Model to base visualizations on.
+        input_tensor : Tensor
+            Input tensor for signal propagation.
+        """
+        model = model or self.model
+
+        if input_tensor is None:
+            input_shape = self.input_shapes[-1]
+            input_tensor = torch.randn(input_shape, device=self.device)
+
+        statistics = {
+            'Average Channel Squared Mean': [],
+            'Average Channel Variance': [],
+            'Modules instances': []
+        }
+        extractors = []
+        signals = []
+
+        try:
+            for module in model.modules():
+                submodules_amount = sum(1 for _ in module.modules())
+                module_instance = module.__class__.__name__
+                if (submodules_amount == 1) and (module_instance != 'Identity'):
+                    extractors.append(LayerExtractor(module))
+                    statistics['Modules instances'].append(module_instance)
+            _ = model(input_tensor)
+        finally:
+            for extractor in extractors:
+                signals.append(extractor.activation)
+                extractor.close()
+
+        for tensor in signals:
+            avg_ch_squared_mean = torch.mean(torch.mean(tensor, axis=1) ** 2).item()
+            avg_ch_var =  torch.mean(torch.var(tensor, axis=1)).item()
+
+            statistics['Average Channel Squared Mean'].append(avg_ch_squared_mean)
+            statistics['Average Channel Variance'].append(avg_ch_var)
+        return statistics
+
+    def get_signal_propagation_plot(self, model=None, input_tensor=None, statistics=None):
+        """ Visualize signal propagation plot.
+
+        Parameters
+        ----------
+        model : nn.Module
+            Model to base visualizations on.
+        input_tensor : Tensor
+            Input tensor for signal propagation.
+        statistics : dict
+            Dict with signal propagation statistics.
+        """
+        if statistics is None:
+            statistics = self.get_signal_propagation(model=model, input_tensor=input_tensor)
+
+        fig, axes = plt.subplots(1, len(statistics)-1, figsize=(15, 5))
+        for (ax, (title, data)) in zip(axes, statistics.items()):
+            ax.plot(data)
+            ax.set_title(title + " over network units", fontsize=14)
+            ax.set_xlabel("Network depth", fontsize=12)
+            ax.set_ylabel(title, fontsize=12)
+            ax.grid(True)
+        fig.show()
 
 
 class LayerExtractor:

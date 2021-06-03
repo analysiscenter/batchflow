@@ -1,8 +1,10 @@
 """ Base class """
+import warnings
 import numpy as np
 
 from .decorators import deprecated
 
+warnings.filterwarnings("always", category=RuntimeWarning, module=__name__)
 
 class Baseset:
     """ Base class """
@@ -175,6 +177,10 @@ class Baseset:
     def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
                   notifier=False, *args, **kwargs):
         """ Generate batches """
+        if n_epochs is None and n_iters is None:
+            warnings.warn('Batch generation will never stop as ' \
+                          'n_epochs=None and n_iters=None', RuntimeWarning)
+
         iter_params = kwargs.pop('iter_params', None)
         for ix_batch in self.index.gen_batch(batch_size, shuffle, n_iters, n_epochs, drop_last,
                                              notifier, iter_params):
@@ -188,6 +194,6 @@ class Baseset:
         batch = self.create_batch(batch_index, *args, **kwargs)
         return batch
 
-    def create_batch(self, batch_indices, pos=True):
+    def create_batch(self, batch_indices, pos=True, **kwargs):
         """ Create batch with indices given """
         raise NotImplementedError("create_batch should be implemented in child classes")

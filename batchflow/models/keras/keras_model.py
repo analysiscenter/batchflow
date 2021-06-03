@@ -4,11 +4,11 @@
 
 import functools
 import numpy as np
-from keras.models import Model
+from tensorflow.keras.models import Model
 from ..base import BaseModel
 
 
-class KerasModel(Model, BaseModel):
+class KerasModel(Model, BaseModel):   # pylint:disable=too-many-ancestors
     """ Base class for all keras models.
 
     Contains load, dump and compile methods which are shared between all
@@ -91,6 +91,6 @@ class KerasModel(Model, BaseModel):
         return Model.load_weights(self, *args, **kwargs)
 
     @functools.wraps(Model.save_weights)
-    def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs):    # pylint:disable=signature-differs
         """ Wrapper for keras.models.Model.save_weights. """
         return Model.save_weights(self, *args, **kwargs)

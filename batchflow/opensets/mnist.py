@@ -77,7 +77,9 @@ class MNIST(ImagesOpenset):
         filename = os.path.basename(url)
         localname = os.path.join(path, filename)
         if not os.path.isfile(localname):
-            urllib.request.urlretrieve(url, localname)
+            opener = urllib.request.URLopener()
+            opener.addheader('User-agent', 'Mozilla/5.0') # https://github.com/pytorch/vision/issues/1938
+            opener.retrieve(url, localname)
             logger.info("Downloaded %s", filename)
         if self.bar:
             self.bar.update(1)
