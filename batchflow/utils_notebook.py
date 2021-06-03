@@ -246,16 +246,19 @@ def set_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False):
         Minimum percentage of free memory on a device to consider it free.
     max_processes : int
         Maximum amount of computed processes on a device to consider it free.
-    verbose : bool
+    verbose : bool or int
         Whether to show individual device information.
+        If 0 or False, then no information is displayed.
+        If 1 or True, then display the value assigned to `CUDA_VISIBLE_DEVICES` variable.
+        If 2, then display memory and process information for each device.
     """
     if 'CUDA_VISIBLE_DEVICES' in os.environ.keys():
-        raise ValueError('`CUDA_VISIBLE_DEVICES` is already set!')
+        raise ValueError(f'`CUDA_VISIBLE_DEVICES` is already set to "{os.environ["CUDA_VISIBLE_DEVICES"]}"!')
 
-    devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes, verbose=verbose)
+    devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes, verbose=verbose==2)
     str_devices = ','.join(str(i) for i in devices)
     os.environ['CUDA_VISIBLE_DEVICES'] = str_devices
 
-    newline = "\n" if verbose else ""
+    newline = "\n" if verbose==2 else ""
     print(f'{newline}`CUDA_VISIBLE_DEVICES` set to "{str_devices}"')
     return devices
