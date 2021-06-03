@@ -3,6 +3,8 @@
 # pylint: disable=redefined-outer-name
 import pytest
 
+import numpy as np
+
 from batchflow import Pipeline
 from batchflow import B, V, C
 from batchflow.models.torch import VGG7, EfficientNetB0
@@ -67,3 +69,29 @@ class Test_models:
         batch = test_pipeline.next_batch(2, n_epochs=None)
 
         assert len(batch) == 2
+
+    @pytest.mark.parametrize('fetches, save_to', list(zip(
+        ['loss', ['loss', 'predictions']],
+        [V('current_loss', mode='a'), [V('current_loss', mode='a'), V('predictions', mode='a')]]
+    )))
+    def test_fetches(self, model, model_setup_images_clf, image_shape, fetches, save_to):
+        dataset, model_config = model_setup_images_clf('channels_first', image_shape=image_shape)
+        pipeline = (Pipeline()
+                    .init_variable('current_loss', [])
+                    .init_variable('predictions', [])
+                    .init_model('dynamic', C('model_class'),
+                                'model', C('model_config'))
+                    .to_array(dtype='float32')
+                    .train_model('model', B('images'), B('labels'), fetches=fetches, save_to=save_to)
+                    )
+
+        config = {'model_class': model, 'model_config': model_config}
+        test_pipeline = (pipeline << dataset) << config
+
+        for i in range(10):
+            test_pipeline.next_batch(2, n_epochs=None)
+
+        assert len(test_pipeline.v('current_loss')) == 10
+
+        if 'predictions' in fetches:
+            assert np.concatenate(test_pipeline.v('predictions'), axis=0).shape == (20, 10)
