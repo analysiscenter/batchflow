@@ -1,3 +1,5 @@
+""" Research results. """
+
 import os
 import functools
 from collections import OrderedDict
@@ -9,6 +11,15 @@ import numpy as np
 from .utils import to_list
 
 class ResearchResults:
+    """ Class to collect, load and process research results.
+
+    Parameters
+    ----------
+    name : str
+        research name.
+    dump_results : bool, optional
+        does research dump results or not, by default True.
+    """
     def __init__(self, name, dump_results=True, **kwargs):
         self.name = name
         self.dump_results = dump_results
@@ -17,26 +28,29 @@ class ResearchResults:
 
         self.kwargs = kwargs
 
-    def put(self, id, results, config):
-        self.results[id] = results
-        self.configs[id] = config
+    def put(self, experiment_id, results, config):
+        self.results[experiment_id] = results
+        self.configs[experiment_id] = config
 
     def load(self, **kwargs):
+        """ Load (filtered if needed) results and configs if they was dumped. """
         self.kwargs = {**self.kwargs, **kwargs}
         if self.dump_results:
             self.load_configs()
             self.load_results(**self.kwargs)
 
     def load_configs(self):
+        """ Load experiment configs. """
         for path in glob.glob(os.path.join(self.name, 'experiments', '*', 'config')):
             path = os.path.normpath(path)
             _experiment_id = path.split(os.sep)[-2]
             with open(path, 'rb') as f:
                 self.configs[_experiment_id] = dill.load(f)
 
-    def load_results(self, experiment_id=None, name=None, iteration=None,
+    def load_results(self, experiment_id=None, name=None, iterations=None,
                      config=None, alias=None, domain=None, **kwargs):
-        experiment_id, name, iteration = self.filter(experiment_id, name, iteration, config, alias, domain, **kwargs)
+        """ Load and filter experiment results. """
+        experiment_id, name, iterations = self.filter(experiment_id, name, iterations, config, alias, domain, **kwargs)
         results = dict()
         for path in glob.glob(os.path.join(self.name, 'experiments', '*', 'results', '*')):
             path = os.path.normpath(path)
@@ -50,11 +64,12 @@ class ResearchResults:
                     if _name not in experiment_results:
                         experiment_results[_name] = OrderedDict()
                     name_results = experiment_results[_name]
-                    new_values = self.load_iteration_files(path, iteration)
+                    new_values = self.load_iteration_files(path, iterations)
                     experiment_results[_name] = OrderedDict([*name_results.items(), *new_values.items()])
         self.results = mp.Manager().dict(**results)
 
     def filter(self, experiment_id=None, name=None, iteration=None, config=None, alias=None, domain=None, **kwargs):
+        """ Filter results by specified parameters. """
         experiment_id = experiment_id if experiment_id is None else to_list(experiment_id)
         name = name if name is None else to_list(name)
         iteration = iteration if iteration is None else to_list(iteration)
@@ -66,10 +81,12 @@ class ResearchResults:
 
     @property
     def df(self):
+        """ Create pandas.DataFrame from results. """
         return self.to_df()
 
     def to_df(self, pivot=False, include_config=True, use_alias=True, concat_config=False,
               remove_auxilary=True, **kwargs):
+        """ Create pandas.DataFrame from filtered results. """
         if self.dump_results:
             self.load(**kwargs)
 
@@ -101,27 +118,29 @@ class ResearchResults:
             res = pd.merge(res, self.configs_to_df(use_alias, concat_config, remove_auxilary), how='inner', on='id')
         return res
 
-    def load_iteration_files(self, path, iteration):
+    def load_iteration_files(self, path, iterations):
+        """ Load files for specified iterations. """
         filenames = glob.glob(os.path.join(path, '*'))
-        if iteration is None:
+        if iterations is None:
             files_to_load = {int(os.path.basename(filename)): filename for filename in filenames}
         else:
             dumped_iteration = np.sort(np.array([int(os.path.basename(filename)) for filename in filenames]))
             files_to_load = dict()
-            for it in iteration:
-                _it = dumped_iteration[np.argwhere(dumped_iteration >= it)[0, 0]]
+            for iteration in iterations:
+                _it = dumped_iteration[np.argwhere(dumped_iteration >= iteration)[0, 0]]
                 files_to_load[_it] = os.path.join(path, str(_it))
         files_to_load = OrderedDict(sorted(files_to_load.items()))
         results = OrderedDict()
         for filename in files_to_load.values():
             with open(filename, 'rb') as f:
                 values = dill.load(f)
-                for it in values:
-                    if iteration is None or it in iteration:
-                        results[it] = values[it]
+                for iteration in values:
+                    if iterations is None or iteration in iterations:
+                        results[iteration] = values[iteration]
         return results
 
     def configs_to_df(self, use_alias=True, concat_config=False, remove_auxilary=True):
+        """ Create pandas.DataFrame with configs. """
         df = []
         for experiment_id in self.configs:
             config = self.configs[experiment_id]
@@ -161,8 +180,8 @@ class ResearchResults:
             raise ValueError('Only one of `config`, `alias` and `domain` can be not None')
         filtered_ids = []
         if domain is not None:
-            for config in domain.iterator():
-                filtered_ids += self.filter_ids_by_configs(config=config.config())
+            for _config in domain.iterator():
+                filtered_ids += self.filter_ids_by_configs(config=_config.config())
             return filtered_ids
 
         if len(kwargs) > 0:

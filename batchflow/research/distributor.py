@@ -23,6 +23,7 @@ class DynamicQueue:
 
     @property
     def domain(self):
+        """ Get (or create if needed) domain. """
         if self._domain.size == 0:
             domain = Domain({'repetition': [None]}) # the value of repetition will be rewritten
             domain.set_iter_params(n_reps=self._domain.n_reps, produced=self._domain.n_produced)
@@ -83,12 +84,29 @@ class DynamicQueue:
         return self.queue.empty()
 
 class Worker:
+    """ Worker to get tasks from queue and run executors.
+
+    Parameters
+    ----------
+    index : int
+        numerical index of the worker (from 0)
+    worker_config : Config
+        additional config for all experiments executed in Worker
+    tasks : DynamicQueue
+        tasks queue
+    responses : multiprocess.JoinableQueue
+        queue for responses aboute executed tasks
+    research : Research
+        research
+    """
     def __init__(self, index, worker_config, tasks, responses, research):
         self.index = index
         self.worker_config = worker_config
         self.tasks = tasks
-        self.research = research
         self.responses = responses
+        self.research = research
+
+        self.pid = None
 
     def __call__(self):
         self.pid = os.getpid()
@@ -148,30 +166,22 @@ class Worker:
         self.research.logger.info(f"Worker {self.index}[{self.pid}] has stopped.")
 
 class Distributor:
-    """ Distributor of jobs between workers. """
-    def __init__(self, tasks, research):
-        """
-        Parameters
-        ----------
-        workers : int or list of Worker configs
+    """ Distributor of jobs between workers.
 
-        worker_class : Worker subclass or None
-        """
+    Parameters
+    ----------
+    tasks : DynamicQueue
+        tasks queue
+    research : Research
+        research
+    """
+    def __init__(self, tasks, research):
         self.tasks = tasks
         self.research = research
         self.responses = mp.JoinableQueue()
 
     def run(self):
-        """ Run disributor and workers.
-
-        Parameters
-        ----------
-        jobs_queue : DynamicQueue of tasks
-
-        n_iters : int or None
-
-        bar : bool or callable
-        """
+        """ Run disributor and all workers. """
         workers = []
         if isinstance(self.research.workers, int):
             worker_configs = [Config() for _ in range(self.research.workers)]

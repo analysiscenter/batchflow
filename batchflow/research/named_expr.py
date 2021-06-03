@@ -1,11 +1,19 @@
 """ Contains named expression classes for Research """
 
-import os
-
-from ..named_expr import NamedExpression, eval_expr
+from ..named_expr import NamedExpression
 
 class E(NamedExpression):
+    """ NamedExpression for Experiment or its unit in Research.
+
+    Parameters
+    ----------
+    unit : str, optional
+        name of unit to, by default None. If None, experiment will be returned.
+    all : bool, optional
+        if True, return all experiments in executor, otherwise just one, by default False.
+    """
     def __init__(self, unit=None, all=False, **kwargs):
+        _ = kwargs
         self.name = None
         self.unit = unit
         self.all = all
@@ -17,32 +25,46 @@ class E(NamedExpression):
         return [experiment]
 
     def get(self, **kwargs):
+        """ Return a value. """
         experiments = self._get(**kwargs)
-        results = self.transform(experiments)
+        results = self._transform(experiments)
         if self.all:
             return results
         return results[0]
 
-    def transform(self, experiments):
+    def _transform(self, experiments):
         if self.unit is not None:
             return [exp[self.unit] for exp in experiments]
         return experiments
 
 class EC(E):
+    """ NamedExpression for Experiment config.
+
+    Parameters
+    ----------
+    name : str, optional
+        key of config to get, by default None. If None, return entire config.
+    """
     def __init__(self, name=None, **kwargs):
         super().__init__(**kwargs)
         self.name = name
 
-    def transform(self, experiments):
+    def _transform(self, experiments):
         if self.name is None:
             return [exp.config for exp in experiments]
-        else:
-            return [exp.config[self.name] for exp in experiments]
+        return [exp.config[self.name] for exp in experiments]
 
 class O(E):
+    """ NamedExpression for ExecutableUnit output.
+
+    Parameters
+    ----------
+    name : str
+        name of the unit to get output.
+    """
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
         self.name = name
 
-    def transform(self, experiments):
+    def _transform(self, experiments):
         return [exp[self.name].output for exp in experiments]

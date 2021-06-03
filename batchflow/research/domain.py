@@ -1,11 +1,11 @@
 """ Options and configs. """
 
-from batchflow.research.utils import must_execute
 from itertools import product, islice
 from collections import OrderedDict
 from copy import copy, deepcopy
 import numpy as np
 
+from .utils import must_execute
 from .. import Config, Sampler
 from ..named_expr import eval_expr
 
@@ -410,7 +410,7 @@ class Domain:
     def reset_iter(self):
         self._iterator = None
 
-    def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=0): #TODO: produce infinite sequencies for samplers
+    def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=0):
         """ Set parameters for iterator.
 
         Parameters
@@ -429,6 +429,8 @@ class Domain:
             elements will be repeated after producing `repeat_each` configs. Else
             `repeat_each` will be setted to the number of configs that can be produced
             from domain.
+        produced: int
+            how many configs was produced before (is needed to use after domain update).
         """
         n_configs = len(self)
         self.n_items = n_items or n_configs
@@ -444,6 +446,7 @@ class Domain:
         self.reset_iter()
 
     def create_iter(self):
+        """ Create iterator. """
         blocks = self._get_sampling_blocks()
 
         def _iterator():

@@ -1,11 +1,14 @@
+#pylint:disable=logging-fstring-interpolation
+""" Experiment and corresponding classes. """
+
 import os
 from copy import copy, deepcopy
 import itertools
 import traceback
 import hashlib
 import random
-import dill
 from collections import OrderedDict
+import dill
 
 from .. import Config, inbatch_parallel, Pipeline
 from ..named_expr import eval_expr
@@ -57,14 +60,14 @@ class PipelineWrapper:
         if self.config is None:
             self.config = config
             self.pipeline.set_config(self.config)
+
         if self.mode == 'generator':
             return self.generator()
-        elif self.mode == 'func':
+        if self.mode == 'func':
             return self.pipeline.run()
-        else: # 'execute_for'
-            return self.pipeline.execute_for(batch)
+        return self.pipeline.execute_for(batch) # if self.mode == 'execute_for'
 
-    def generator(self, **kwargs):
+    def generator(self):
         """ Generator returns batches from pipeline. Generator will stop when StopIteration will be raised. """
         self.reset()
         while True:
@@ -81,8 +84,8 @@ class PipelineWrapper:
         """ Create copy of the pipeline with the same mode. """
         if isinstance(self.pipeline, (list, tuple)):
             return PipelineWrapper(self.pipeline, self.mode)
-        else:
-            return PipelineWrapper(self.pipeline + Pipeline(), self.mode)
+
+        return PipelineWrapper(self.pipeline + Pipeline(), self.mode)
 
 class Namespace:
     """ Namespace to use in each experiment in research. Will be initialized at the start of the experiment execution.
@@ -123,17 +126,17 @@ class ExecutableUnit:
     name : str
         name of the unit.
     func : callable or tuple of str, optional
-        callable itself or tuple whcih consists of namespace name and its attribute to call, by default None. `func` and
-        `generator` can't be defined simultaneously.
+        callable itself or tuple whcih consists of namespace name and its attribute to call, by default None.
+        `func` and `generator` can't be defined simultaneously.
     generator : generator or tuple of str, optional
-        generator itself or tuple which consists of namespace name and its attribute to call, by default None. `func` and
-        `generator` can't be defined simultaneously.
+        generator itself or tuple which consists of namespace name and its attribute to call, by default None.
+        `func` and `generator` can't be defined simultaneously.
     root : bool, optional
         does unit is the same for all branches or not, by default False.
     iterations_to_execute : str, int or list of ints, optional
         iterations of the experiment to execute unit, by default 1.
-            - If `'last'`, unit will be executed just at last iteration (if `iteration + 1 == n_iters` or `StopIteration`
-              was raised).
+            - If `'last'`, unit will be executed just at last iteration (if `iteration + 1 == n_iters` or
+              `StopIteration` was raised).
             - If positive int, pipeline will be executed each `iterations_to_execute` iterations.
             - If str, must be `'#{it}'` or `'last'` where it is int, the pipeline will be executed at this
               iteration (zero-based).
@@ -159,6 +162,9 @@ class ExecutableUnit:
         self.experiment = None
         self.output = None # the last output of the unit.
         self.iterator = None # created iterator
+
+        self.iteration = 0
+
 
     def set_unit(self, config, experiment):
         """ Set config and experiment instance for the unit. """
@@ -208,6 +214,8 @@ class ExecutableUnit:
                     self.iterator = self.generator(*args, **kwargs)
                 self.output = next(self.iterator)
             return self.output
+
+        return None
 
     def must_execute(self, iteration, n_iters=None, last=False):
         """ Returns does unit must be executed for the current iteration. """
@@ -272,6 +280,19 @@ class Experiment:
         self.dump_results = None
         self.loglevel = None
         self.monitor = None
+
+        self.id = None #pylint:disable=invalid-name
+        self.experiment_path = None
+        self.full_path = None
+        self.index = None
+        self.config_alias = None
+        self.config = None
+        self.executor = None
+        self.research = None
+        self.instances = None
+        self.logger = None
+        self.iteration = None
+        self.exception = None
 
     @property
     def is_alive(self):
@@ -388,13 +409,15 @@ class Experiment:
         Parameters
         ----------
         name : str
-            name of generator to use inside of the research. Can be `'instance_name.method'` to refer to instance method.
+            name of generator to use inside of the research. Can be `'instance_name.method'` to refer
+            to instance method.
         generator : generator, optional
             generator to add into experiment, by default None.
         args : list, optional
             args to create iterator, by default None.
         iterations_to_execute : int, str or list, optional
-            iterations to get item from generator (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+            iterations to get item from generator (see `iterations_to_execute` of `:class:ExecutableUnit`),
+            by default 1.
         save_to : NamedExpression, optional
             dst to save generated item (if needed), by default None.
         root : bool, optional
@@ -446,7 +469,7 @@ class Experiment:
             self.add_callable(f'{name}_branch', func=branch_pipeline, config=EC(), batch=O(f'{name}_root'), **kwargs)
         return self
 
-    def save(self, src, dst, iterations_to_execute=1, copy=False):
+    def save(self, src, dst, iterations_to_execute=1, copy=False): #pylint:disable=redefined-outer-name
         """ Save something to research results.
 
         Parameters
@@ -460,7 +483,7 @@ class Experiment:
         copy : bool, optional
             copy value or not, by default False
         """
-        def _save_results(_src, _dst, experiment, copy): #TODO: test does copy work
+        def _save_results(_src, _dst, experiment, copy): #pylint:disable=redefined-outer-name
             previous_values = experiment.results.get(_dst, OrderedDict())
             previous_values[experiment.iteration] = deepcopy(_src) if copy else _src
             experiment.results[_dst] = previous_values
@@ -470,7 +493,7 @@ class Experiment:
                           _src=src, _dst=dst, experiment=E(), copy=copy)
         return self
 
-    def dump(self, variable=None, iterations_to_execute=['last']):
+    def dump(self, variable=None, iterations_to_execute='last'):
         """ Dump current results to the storage and clear it.
 
         Parameters
@@ -597,7 +620,7 @@ class Experiment:
             self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
             try:
                 self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
-            except Exception as e:
+            except Exception as e: #pylint:disable=broad-except
                 self.exception_raised = True
                 self.last = True
                 if isinstance(e, StopIteration):
@@ -668,8 +691,7 @@ class Executor:
         else:
             if branches_configs is not None and len(configs) != len(branches_configs):
                 raise ValueError('`configs` and `branches_configs` must be of the same length.')
-            else:
-                self.n_branches = len(configs)
+            self.n_branches = len(configs)
 
         self.configs = configs or [Config() for _ in range(self.n_branches)]
         self.executor_config = Config(executor_config or dict())
@@ -687,6 +709,9 @@ class Executor:
         self.parallel_call = inbatch_parallel(
             init=self._parallel_init_call, target=target, _use_self=False
         )(self._parallel_call)
+
+        self.worker = None
+        self.pid = None
 
     def create_experiments(self):
         """ Initialize experiments. """

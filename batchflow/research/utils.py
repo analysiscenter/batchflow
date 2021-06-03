@@ -40,20 +40,21 @@ def transform_research_results(research_name):
     for path in initial_results:
         shutil.rmtree(path)
 
-def create_logger(name, path, loglevel):
+def create_logger(name, path=None, loglevel='info'):
+    """ Create logger. """
     loglevel = getattr(logging, loglevel.upper())
     logger = logging.getLogger(name)
     logger.setLevel(loglevel)
 
     if path is not None:
-        fh = logging.FileHandler(path)
+        handler = logging.FileHandler(path)
     else:
-        fh = logging.StreamHandler() #TODO: filter outputs
+        handler = logging.StreamHandler() #TODO: filter outputs
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                                 datefmt='%y-%m-%d %H:%M:%S')
-    fh.setLevel(loglevel)
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
+    handler.setLevel(loglevel)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
     return logger
 
@@ -74,6 +75,7 @@ def must_execute(iteration, iterations_to_execute, n_iters=None, last=False):
     return (iteration + 1 == n_iters and 'last' in iterations_to_execute) or it_ok or freq_ok
 
 def parse_name(name):
+    """ Parse name of the form 'namespace_name.unit_name' into tuple ('namespace_name', 'unit_name'). """
     if '.' not in name:
         raise ValueError('`func` parameter must be provided or name must be "namespace_name.unit_name"')
     name_components = name.split('.')

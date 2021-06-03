@@ -1,16 +1,16 @@
+""" Research class for muliple parallel experiments. """
+
 import os
 import datetime
 import csv
 import itertools
 import subprocess
 import re
+import glob
+import warnings
 import dill
 import multiprocess as mp
-import glob
 import tqdm
-from collections import OrderedDict
-
-import warnings
 
 from .domain import Domain
 from .distributor import Distributor, DynamicQueue
@@ -19,28 +19,28 @@ from .results import ResearchResults
 from .utils import create_logger
 
 class Research:
-    def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=None):
-        """ Research is an instrument to run multiple parallel experiments with different combinations of
-        parameters called experiment configs. Configs are produced by :class:`domain.Domain` (some kind of
-        parameters grid.)
+    """ Research is an instrument to run multiple parallel experiments with different combinations of
+    parameters called experiment configs. Configs are produced by :class:`domain.Domain` (some kind of
+    parameters grid.)
 
-        Parameters
-        ----------
-        name : str, optional
-            name (relative path) of the research and corresponding folder to store results, by default 'research'.
-        domain : Domain or Option, optional
-            grid of parameters (see :class:`domain.Domain`) to produce experiment configs, by default None.
-        experiment : Experiment, optional
-            description of the experiment (see :class:`experiment.Experiment`), by default None. Experiment can be
-            defined explicitly as a parameter or constructed by Research methods (`:meth:.add_callable`,
-            `:meth:.add_generator`, etc.).
-        n_configs : int, optional
-            the number of configs to get from domain (see `n_items` of :meth:`domain.Domain.set_iter`), by default None.
-        n_reps : int, optional
-            the number of repetitions for each config (see `n_reps` of :meth:`domain.Domain.set_iter`), by default 1.
-        repeat_each : int, optional
-            see `repeat_each` of :meth:`domain.Domain.set_iter`, by default 100.
-        """
+    Parameters
+    ----------
+    name : str, optional
+        name (relative path) of the research and corresponding folder to store results, by default 'research'.
+    domain : Domain or Option, optional
+        grid of parameters (see :class:`domain.Domain`) to produce experiment configs, by default None.
+    experiment : Experiment, optional
+        description of the experiment (see :class:`experiment.Experiment`), by default None. Experiment can be
+        defined explicitly as a parameter or constructed by Research methods (`:meth:.add_callable`,
+        `:meth:.add_generator`, etc.).
+    n_configs : int, optional
+        the number of configs to get from domain (see `n_items` of :meth:`domain.Domain.set_iter`), by default None.
+    n_reps : int, optional
+        the number of repetitions for each config (see `n_reps` of :meth:`domain.Domain.set_iter`), by default 1.
+    repeat_each : int, optional
+        see `repeat_each` of :meth:`domain.Domain.set_iter`, by default 100.
+    """
+    def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=None):
         self.name = name
         self.domain = Domain(domain)
         self.experiment = experiment or Experiment()
@@ -50,6 +50,22 @@ class Research:
 
         self._env = dict() # current state of git repo and other environment information.
 
+        self.workers = 1
+        self.branches = 1
+        self.n_iters = None
+        self.devices = None
+        self.executor_class = Executor
+        self.dump_results = True
+        self.parallel = True
+        self.executor_target = 'threads'
+        self.loglevel = 'info'
+        self.bar = True
+        self.tasks_queue = None
+        self.distributor = None
+        self.monitor = None
+        self.results = None
+        self.logger = None
+
     def __getattr__(self, key):
         if key in ['add_instance', 'add_callable', 'add_generator', 'add_pipeline', 'save', 'dump']:
             def _method(*args, **kwargs):
@@ -57,8 +73,7 @@ class Research:
                 return self
             _method.__doc__ = getattr(self.experiment, key).__doc__
             return _method
-        else:
-            raise ValueError(f'Unknown action: {key}')
+        raise ValueError(f'Unknown action: {key}')
 
     def __getstate__(self):
         return self.__dict__
@@ -120,8 +135,7 @@ class Research:
                 with open(filename, 'r') as file:
                     env[name] = file.read().strip()
             return env
-        else:
-            return self._env
+        return self._env
 
     def get_devices(self, devices):
         """ Return list if lists. Each sublist consists of devices for each branch. """ #TODO extend
@@ -170,8 +184,8 @@ class Research:
                 os.makedirs(config_path)
 
 
-    def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=None,
-            dump_results=True, parallel=True, executor_target='threads', loglevel='debug', bar=True):
+    def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
+            dump_results=True, parallel=True, executor_target='threads', loglevel='info', bar=True):
         """ Run research.
 
         Parameters
@@ -226,7 +240,7 @@ class Research:
         self.branches = branches
         self.n_iters = n_iters
         self.devices = self.get_devices(devices)
-        self.executor_class = executor_class or Executor
+        self.executor_class = executor_class
         self.dump_results = dump_results
         self.parallel = parallel
         self.executor_target = executor_target
@@ -305,8 +319,6 @@ class Research:
         return repr
 
 class ResearchMonitor:
-    COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid',
-               'finished', 'withdrawn', 'remains']
     """ Class to get signals from experiment and other objects and store all states.
 
     Parameters
@@ -318,6 +330,9 @@ class ResearchMonitor:
     bar : bool or class
         use or not progress bar.
     """
+    COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid',
+               'finished', 'withdrawn', 'remains']
+
     def __init__(self, research, path=None, bar=True):
         self.queue = mp.JoinableQueue()
         self.research = research
@@ -335,13 +350,14 @@ class ResearchMonitor:
 
         self.stop_signal = mp.JoinableQueue()
 
+        self.dump = False
+
     @property
     def total(self):
         """ Total number of iterations or experiments in the current moment. It changes after domain updates. """
         if self.n_iters:
             return self.finished_iterations + self.n_iters * (self.in_queue + self.remained_experiments)
-        else:
-            return self.finished_experiments + self.in_queue + self.remained_experiments
+        return self.finished_experiments + self.in_queue + self.remained_experiments
 
     @property
     def in_progress(self):
