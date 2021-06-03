@@ -559,6 +559,19 @@ class TorchModel(BaseModel, VisualizationMixin):
                 if self.classes is None:
                     self.classes = shapes[0][0]
 
+    def _to_device(self):
+        """ Select whether to put model on a single device or to a number of devices in `DataParallel` mode.
+
+        Notes
+        -----
+        The method serves for code simplification at build / load stages and shouldn't be applied to prebuilt
+        models since it does not change models attributes (like `self.device`) and does not process model-related
+        objects (like loss functions or optimizers).
+        """
+        if len(self.devices) > 1:
+            self.model = nn.DataParallel(self.model, self.devices)
+        else:
+            self.model.to(self.device)
 
     # Chain multiple building blocks to create model
     def _build(self, inputs=None):
@@ -586,10 +599,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 blocks.append((block_name, block))
 
         self.model = nn.Sequential(OrderedDict(blocks))
-        if len(self.devices) > 1:
-            self.model = nn.DataParallel(self.model, self.devices)
-        else:
-            self.model.to(self.device)
+        self._to_device()
 
         self.make_loss(**self.unpack('loss'))
         self.make_optimizer(**self.unpack('optimizer'))
@@ -726,10 +736,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         """ Set the underlying model to a supplied one and update training infrastructure. """
         self.model = model
 
-        if len(self.devices) > 1:
-            self.model = nn.DataParallel(self.model, self.devices)
-        else:
-            self.model.to(self.device)
+        self._to_device()
 
         self.make_loss(**self.unpack('loss'))
         self.make_optimizer(**self.unpack('optimizer'))
@@ -1402,11 +1409,15 @@ class TorchModel(BaseModel, VisualizationMixin):
         else:
             checkpoint = torch.load(path, **kwargs)
 
+        # `load_config` is a reference to `self.config` used to update `full_config`
+        # It is required since `self.config` is overwritten in the cycle below
+        load_config = self.config
+
         for item in self.PRESERVE:
             setattr(self, item, checkpoint.get(item))
+        self.full_config = self.full_config + load_config
 
-        if self.device:
-            self.model.to(self.device)
+        self._to_device()
 
         if eval:
             self.model.eval()

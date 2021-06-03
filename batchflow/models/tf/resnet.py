@@ -12,7 +12,7 @@ Xie S. et al. "`Aggregated Residual Transformations for Deep Neural Networks
 <https://arxiv.org/abs/1611.05431>`_"
 """
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from . import TFModel
 from .layers import conv_block

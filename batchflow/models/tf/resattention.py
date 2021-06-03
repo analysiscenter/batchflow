@@ -2,7 +2,7 @@
 """ Wang F. at all. "`Residual Attention Network for Image Classification
 <https://arxiv.org/abs/1704.06904>`_"
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from .layers import conv_block
 from . import TFModel

@@ -101,28 +101,32 @@ class MyBatch1(Batch):
 
 @pytest.mark.parametrize('pipeline', [False, True])
 class TestOneComponent:
-    @pytest.mark.parametrize('dst', [False, 'images'])
-    def test_array(self, pipeline, dst):
+    def test_array_fail(self, pipeline):
         labels = np.arange(DATASET_SIZE)
         data = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
+        dst = False
 
-        if pipeline is True and dst is False:
+        # the pipeline accesses batch data and fails when preloading the dataset
+        if pipeline is True:
             with pytest.raises(AttributeError) as execinfo:
                 batch = get_batch(data, pipeline, batch_class=MyBatch1, skip=2, dst=dst)
             assert "data not found in class" in str(execinfo.value)
             return
 
+        batch = get_batch(data, pipeline=False, batch_class=MyBatch1, skip=2, dst=dst)
+        # Batch tries to read `data.images` and fails at preload
+        with pytest.raises(AttributeError) as execinfo:
+            _ = batch.images
+        assert "data not found in class" in str(execinfo.value)
+
+    def test_array(self, pipeline):
+        labels = np.arange(DATASET_SIZE)
+        data = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
+        dst = 'images'
+
         batch = get_batch(data, pipeline, batch_class=MyBatch1, skip=2, dst=dst)
 
-        if dst is False:
-            # since data is an array, Batch tries to read `data.images`
-            # this fails when preloading
-            with pytest.raises(AttributeError) as execinfo:
-                _ = batch.images
-            assert "data not found in class" in str(execinfo.value)
-        else:
-            # but does not fail when loading as it loads only one component
-            assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
+        assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
 
     @pytest.mark.parametrize('dst', [False, ('images',)])
     def test_tuple(self, pipeline, dst):

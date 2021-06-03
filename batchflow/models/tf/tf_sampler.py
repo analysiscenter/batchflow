@@ -1,7 +1,7 @@
 """ Contains tensorflow-sampler class. """
 
 from copy import copy
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 from ...sampler import Sampler, _get_method_by_alias
 
 

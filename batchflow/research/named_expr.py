@@ -19,6 +19,7 @@ class REU(ResearchNamedExpression): # ResearchExecutableUnit
         return experiment
 
     def get(self, **kwargs):
+        """ Return an experiment attr """
         experiment = self._get(**kwargs)
         if isinstance(experiment, (list, tuple)):
             _experiment = experiment
@@ -37,6 +38,7 @@ class RP(REU): # ResearchPipeline
         self.root = root
 
     def get(self, **kwargs):
+        """ Return a research pipeline """
         if self.name is None:
             raise ValueError('`name` must be defined for RP expressions')
         res = super().get(**kwargs)
@@ -85,6 +87,7 @@ class RID(ResearchNamedExpression): # ResearchExperimentID
         return kwargs['job'], kwargs['experiment']
 
     def get(self, **kwargs):
+        """ Return an experiment id """
         job, experiment = self._get(**kwargs)
         unit = list(experiment.values())[0]
         return job.ids[unit.index]
@@ -110,6 +113,7 @@ class REP(ResearchNamedExpression): # ResearchExperimentPath
         return kwargs['job'], kwargs['experiment'], kwargs['path']
 
     def get(self, **kwargs):
+        """ Return an experiment path """
         job, experiment, path = self._get(**kwargs)
         # unit to get attributes (each unit will have the same so we take the first)
         unit = next(iter(experiment.values()))
@@ -135,5 +139,6 @@ class RR(ResearchNamedExpression): # ResearchResults
         return path
 
     def get(self, **kwargs):
+        """ Return the experiment results """
         path = self._get(**kwargs)
         return Results(path, *eval_expr(self.args, **kwargs), **eval_expr(self.kwargs, **kwargs))
