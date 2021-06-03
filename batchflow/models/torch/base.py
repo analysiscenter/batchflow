@@ -560,6 +560,14 @@ class TorchModel(BaseModel, VisualizationMixin):
                     self.classes = shapes[0][0]
 
     def _to_device(self):
+        """ Select whether to put model on a single device or to a number of devices in `DataParallel` mode.
+
+        Notes
+        -----
+        The method serves for code simplification at build / load stages and shouldn't be applied to prebuilt
+        models since it does not change models attributes (like `self.device`) and does not process model-related
+        objects (like loss functions or optimizers).
+        """
         if len(self.devices) > 1:
             self.model = nn.DataParallel(self.model, self.devices)
         else:
