@@ -60,6 +60,7 @@ class Research:
         self.executor_target = 'threads'
         self.loglevel = 'info'
         self.bar = True
+        self.detach = False
         self.tasks_queue = None
         self.distributor = None
         self.monitor = None
@@ -185,7 +186,7 @@ class Research:
 
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
-            dump_results=True, parallel=True, executor_target='threads', loglevel='info', bar=True):
+            dump_results=True, parallel=True, executor_target='threads', loglevel='info', bar=True, detach=False):
         """ Run research.
 
         Parameters
@@ -217,6 +218,8 @@ class Research:
             logging level, by default 'debug'
         bar : bool or class
             use or not progress bar.
+        detach : bool
+            run research in separate process or not.
 
         Returns
         -------
@@ -246,6 +249,7 @@ class Research:
         self.executor_target = executor_target
         self.loglevel = loglevel
         self.bar = bar
+        self.detach = detach
 
         if dump_results and os.path.exists(self.name):
             raise ValueError(f"Research with name '{self.name}' already exists")
@@ -273,9 +277,15 @@ class Research:
         self.monitor = ResearchMonitor(self, self.name, bar=self.bar) # process execution signals
         self.results = ResearchResults(self.name, self.dump_results)
 
-        self.monitor.start(self.dump_results)
-        self.distributor.run()
-        self.monitor.stop()
+        def _run():
+            self.monitor.start(self.dump_results)
+            self.distributor.run()
+            self.monitor.stop()
+
+        if detach:
+            mp.Process(target=_run).start()
+        else:
+            _run()
 
         return self
 

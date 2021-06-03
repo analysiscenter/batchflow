@@ -9,8 +9,9 @@ import hashlib
 import random
 from collections import OrderedDict
 import dill
+import threading
 
-from .. import Config, inbatch_parallel, Pipeline
+from .. import Config, Pipeline, parallel, make_seed_sequence
 from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
@@ -701,14 +702,12 @@ class Executor:
         self.research = research
         self.experiment_template = experiment
         self.task_name = task_name or 'Task'
+        self.target = target
 
         self.kwargs = kwargs
 
+        self.random_seed = make_seed_sequence()
         self.create_experiments()
-
-        self.parallel_call = inbatch_parallel(
-            init=self._parallel_init_call, target=target, _use_self=False
-        )(self._parallel_call)
 
         self.worker = None
         self.pid = None
@@ -738,7 +737,7 @@ class Executor:
                 if unit.root:
                     self.call_root(iteration, unit_name)
                 else:
-                    self.parallel_call(iteration, unit_name)
+                    self.parallel_call(iteration, unit_name, target=self.target)
             if not any([experiment.is_alive for experiment in self.experiments]):
                 break
 
@@ -749,7 +748,8 @@ class Executor:
             experiment.close_logger()
         self.send_results()
 
-    def _parallel_call(self, experiment, iteration, unit_name):
+    @parallel(init='_parallel_init_call')
+    def parallel_call(self, experiment, iteration, unit_name):
         """ Parallel call of the unit 'unit_name' """
         experiment.call(unit_name, iteration, self.n_iters)
 
