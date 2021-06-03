@@ -5,6 +5,7 @@ from collections import defaultdict
 import numpy as np
 
 from .config import Config
+from .utils import to_list
 from .utils_random import make_rng
 
 
@@ -474,17 +475,10 @@ class Component:
     def __setitem__(self, key, value):
         key = to_list(key)
         if len(self.component) != len(value):
-                raise ValueError("Given `value`'s length must be equal to batch size.")
+            raise ValueError("Given `value`'s length must be equal to batch size.")
         for item, val in zip(self.component, value):
             # note, the __setitem__ method must be overridden in the component's class.
             item[key] = val
-
-def to_list(obj):
-    """Cast an object to a list. Almost identical to `list(obj)` for 1-D
-    objects, except for `str`, which won't be split into separate letters but
-    transformed into a list of a single element.
-    """
-    return np.array(obj).ravel().tolist()
 
 class PipelineNamedExpression(NamedExpression):
     #pylint: disable=abstract-method
