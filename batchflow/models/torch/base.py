@@ -1401,10 +1401,9 @@ class TorchModel(BaseModel, VisualizationMixin):
         else:
             checkpoint = torch.load(path, **kwargs)
 
-        # Save load config values to update `full_config` later
+        # `load_config` is a reference to `self.config` used to update `full_config`
+        # It is required since `self.config` is overwritten in the cycle below
         load_config = self.config
-        # Remove unnecessary key from load config
-        _ = load_config.pop('build')
 
         for item in self.PRESERVE:
             setattr(self, item, checkpoint.get(item))
