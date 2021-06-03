@@ -60,7 +60,7 @@ class Test_models:
     """
 
     @pytest.mark.parametrize('decay', [None, {'name':'exp', 'frequency': 25}])
-    def test_data_format(self, model, model_setup_images_clf, pipeline, decay, image_shape):
+    def test_data_format(self, model, image_shape, decay, model_setup_images_clf, pipeline):
         """ We can explicitly pass 'data_format' to inputs or common."""
         dataset, model_config = model_setup_images_clf('channels_first', image_shape=image_shape)
         model_config.update(decay=decay)
@@ -70,15 +70,18 @@ class Test_models:
 
         assert len(batch) == 2
 
-    @pytest.mark.parametrize('fetches, save_to', list(zip(
-        ['loss', ['loss', 'predictions']],
-        [V('current_loss', mode='a'), [V('current_loss', mode='a'), V('predictions', mode='a')]]
-    )))
-    def test_fetches(self, model, model_setup_images_clf, image_shape, fetches, save_to):
+    @pytest.mark.parametrize('fetches, save_to', [
+        ['loss', V('current_loss', mode='a')],
+        [['loss', 'predictions'], V('output', mode='a')],
+        [['loss', 'predictions'], [V('current_loss', mode='a'), V('predictions', mode='a')]]
+    ])
+    def test_fetches(self, model, image_shape, fetches, save_to, model_setup_images_clf, pipeline):
+        """ Check different combinations of 'fetches' and 'save_to'. """
         dataset, model_config = model_setup_images_clf('channels_first', image_shape=image_shape)
         pipeline = (Pipeline()
                     .init_variable('current_loss', [])
                     .init_variable('predictions', [])
+                    .init_variable('output', [])
                     .init_model('dynamic', C('model_class'),
                                 'model', C('model_config'))
                     .to_array(dtype='float32')
@@ -91,7 +94,16 @@ class Test_models:
         for i in range(10):
             test_pipeline.next_batch(2, n_epochs=None)
 
-        assert len(test_pipeline.v('current_loss')) == 10
+        if len(test_pipeline.v('current_loss')) > 0:
+            loss = test_pipeline.v('current_loss')
 
+        if len(test_pipeline.v('predictions')) > 0:
+            predictions = test_pipeline.v('predictions')
+
+        if len(test_pipeline.v('output')) > 0:
+            loss = [item[0] for item in test_pipeline.v('output')]
+            predictions = [item[1] for item in test_pipeline.v('output')]
+
+        assert len(loss) == 10
         if 'predictions' in fetches:
-            assert np.concatenate(test_pipeline.v('predictions'), axis=0).shape == (20, 10)
+            assert np.concatenate(predictions, axis=0).shape == (20, 10)
