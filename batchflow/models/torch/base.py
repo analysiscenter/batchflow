@@ -186,6 +186,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
     amp : bool
         Whether to use automated mixed precision during model training and inference. Default is True.
+        The output type of predictions remains float32.
 
     sync_frequency : int
         How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
@@ -1189,6 +1190,12 @@ class TorchModel(BaseModel, VisualizationMixin):
                 output_container = {}
                 inputs = self.transfer_to_device(inputs)
                 predictions = self.model(inputs)
+
+                if self.amp:
+                    if isinstance(predictions, (tuple, list)):
+                        predictions = type(predictions)(p.float() for p in predictions)
+                    else:
+                        predictions = predictions.float()
                 output_container['predictions'] = predictions
 
                 if targets is not None:

@@ -25,6 +25,7 @@ class DummyBar:
         self.args, self.kwargs = args, kwargs
 
         self.n = 0
+        self.desc = ''
         self.start_t = time()
 
     def update(self, n):
@@ -37,8 +38,8 @@ class DummyBar:
     def sp(self, *args, **kwargs):
         _ = args, kwargs
 
-    def set_description(self, *args, **kwargs):
-        _ = args, kwargs
+    def set_description(self, description):
+        self.desc = description
 
     def close(self):
         pass

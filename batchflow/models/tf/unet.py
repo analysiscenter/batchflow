@@ -6,7 +6,7 @@ Zhou Z. et al "UNet++: A Nested U-Net Architecture for Medical Image Segmentatio
 <https://arxiv.org/abs/1807.10165>`_"
 """
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from .encoder_decoder import EncoderDecoder
 from .layers import conv_block, combine

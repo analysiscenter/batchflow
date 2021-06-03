@@ -1,6 +1,6 @@
 """ Contains convolutional layers """
 from functools import partial
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import tensorflow.keras.layers as K #pylint: disable=import-error
 
 from .layer import Layer, add_as_function

@@ -15,13 +15,6 @@ class Openset(Dataset):
             self.train = type(self).from_dataset(self, self._train_index, batch_class=batch_class, **kwargs)
             self.test = type(self).from_dataset(self, self._test_index, batch_class=batch_class, **kwargs)
 
-    @staticmethod
-    def uild_index(index):
-        """ Create an index """
-        if index is not None:
-            return super().build_index(index)
-        return None
-
     def download(self, path):
         """ Download a dataset from the source web-site.
 

@@ -1,6 +1,6 @@
 """ Contains upsampling and resize layers """
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from .layer import Layer, add_as_function
 from .conv import ConvTranspose

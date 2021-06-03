@@ -303,18 +303,8 @@ class Dataset(Baseset):
         n_splits : int
             a number of folds
 
-        shuffle : bool, int, class:`numpy.random.RandomState` or callable
-            specifies the order of items, could be:
-
-            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
-                if `True`, items are shuffled randomly before each epoch.
-
-            - int - a seed number for a random shuffle.
-
-            - :class:`numpy.random.RandomState` instance.
-
-            - callable - a function which takes an array of item indices in the initial order
-                (as they appear in the index) and returns the order of items.
+        shuffle
+            specifies the order of items (see :meth:`~.DatasetIndex.shuffle`)
 
         Examples
         --------
