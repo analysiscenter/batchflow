@@ -9,7 +9,6 @@ import hashlib
 import random
 from collections import OrderedDict
 import dill
-import threading
 
 from .. import Config, Pipeline, parallel, make_seed_sequence
 from ..named_expr import eval_expr
@@ -737,7 +736,7 @@ class Executor:
                 if unit.root:
                     self.call_root(iteration, unit_name)
                 else:
-                    self.parallel_call(iteration, unit_name, target=self.target)
+                    self.parallel_call(iteration, unit_name, target=self.target) #pylint:disable=unexpected-keyword-arg
             if not any([experiment.is_alive for experiment in self.experiments]):
                 break
 

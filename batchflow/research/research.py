@@ -74,7 +74,9 @@ class Research:
                 return self
             _method.__doc__ = getattr(self.experiment, key).__doc__
             return _method
-        raise ValueError(f'Unknown action: {key}')
+        if key in self.monitor.SHARED_VARIABLES:
+            return getattr(self.monitor, key)
+        raise AttributeError(f'Unknown attribute: {key}')
 
     def __getstate__(self):
         return self.__dict__
@@ -328,7 +330,9 @@ class Research:
 
         return repr
 
+
 class ResearchMonitor:
+    #pylint:disable=attribute-defined-outside-init
     """ Class to get signals from experiment and other objects and store all states.
 
     Parameters
@@ -342,6 +346,8 @@ class ResearchMonitor:
     """
     COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid',
                'finished', 'withdrawn', 'remains']
+    SHARED_VARIABLES = ['finished_experiments', 'finished_iterations', 'remained_experiments',
+                        'generated_experiments']
 
     def __init__(self, research, path=None, bar=True):
         self.queue = mp.JoinableQueue()
@@ -350,17 +356,27 @@ class ResearchMonitor:
         self.exceptions = mp.Manager().list()
         self.bar = tqdm.tqdm(disable=(not bar)) if isinstance(bar, bool) else bar
 
-        self.finished_experiments = 0
-        self.finished_iterations = 0
-        self.remained_experiments = None
-        self.generated_experiments = 0
+        self.shared_values = mp.Manager().dict()
+        for key in self.SHARED_VARIABLES:
+            self.shared_values[key] = 0
+        self.current_iterations = mp.Manager().dict()
 
-        self.current_iterations = {}
         self.n_iters = self.research.n_iters
 
         self.stop_signal = mp.JoinableQueue()
 
         self.dump = False
+
+    def __getattr__(self, key):
+        if key in self.SHARED_VARIABLES:
+            return self.shared_values[key]
+        raise AttributeError(f'Unknown attribute: {key}')
+
+    def __setattr__(self, key, value):
+        if key in self.SHARED_VARIABLES:
+            self.shared_values[key] = value
+        else:
+            super().__setattr__(key, value)
 
     @property
     def total(self):

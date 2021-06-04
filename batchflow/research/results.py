@@ -113,7 +113,9 @@ class ResearchResults:
                             _df = _df[_df.iteration.isin(iterations)]
                         experiment_df += [_df]
                 if pivot and len(experiment_df) > 0:
-                    experiment_df = [functools.reduce(functools.partial(pd.merge, on=['id', 'iteration']), experiment_df)]
+                    experiment_df = [
+                        functools.reduce(functools.partial(pd.merge, on=['id', 'iteration']), experiment_df)
+                    ]
                 df += experiment_df
         res = pd.concat(df) if len(df) > 0 else pd.DataFrame()
         if include_config and len(res) > 0:
