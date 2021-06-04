@@ -331,16 +331,13 @@ class TestResearch:
         assert len(research.monitor.exceptions) == 0
         assert len(research.results.df) == 15
 
-    # @pytest.mark.slow
-    # @pytest.mark.parametrize('workers', [1, 2])
-    # def test_complex_research(self, workers, complex_research):
-    #     complex_research.run(dump_results=False, parallel=True, workers=workers, bar=False)
+    @pytest.mark.slow
+    @pytest.mark.parametrize('workers', [1, 2])
+    def test_complex_research(self, workers, complex_research):
+        complex_research.run(dump_results=False, parallel=True, workers=workers, bar=False)
 
-    #     assert len(complex_research.monitor.exceptions) == 0
-    #     assert len(complex_research.results.df) == 4
-
-    # def test_exceptions_in_research(self):
-    #     pass
+        assert len(complex_research.monitor.exceptions) == 0
+        assert len(complex_research.results.df) == 4
 
 
 class TestResults:

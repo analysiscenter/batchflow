@@ -8,6 +8,7 @@ import subprocess
 import re
 import glob
 import warnings
+import psutil
 import dill
 import multiprocess as mp
 import tqdm
@@ -66,6 +67,7 @@ class Research:
         self.monitor = None
         self.results = None
         self.logger = None
+        self.process = None
 
     def __getattr__(self, key):
         if key in ['add_instance', 'add_callable', 'add_generator', 'add_pipeline', 'save', 'dump']:
@@ -285,11 +287,22 @@ class Research:
             self.monitor.stop()
 
         if detach:
-            mp.Process(target=_run).start()
+            self.process = mp.Process(target=_run)
+            self.process.start()
+            self.logger.info(f"Detach research[pid:{self.process.pid}]")
         else:
             _run()
 
         return self
+
+    def terminate(self):
+        """ Kill detached process. """
+        if self.process is not None:
+            self.logger.info(f"Terminate research process[pid:{self.process.pid}]")
+            parent = psutil.Process(self.process.pid)
+            for child in parent.children(recursive=True):
+                child.kill()
+            parent.kill()
 
     def create_logger(self):
         """ Create research logger. """

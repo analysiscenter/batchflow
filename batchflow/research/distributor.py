@@ -110,7 +110,7 @@ class Worker:
 
     def __call__(self):
         self.pid = os.getpid()
-        self.research.logger.info(f"Worker {self.index}[{self.pid}] has started.")
+        self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has started.")
 
         executor_class = self.research.executor_class
         n_iters = self.research.n_iters
@@ -138,7 +138,7 @@ class Worker:
             task_idx, configs = task
 
             self.research.monitor.send(worker=self, status='GET_TASK', task_idx=task_idx)
-            self.research.logger.info(f"Worker {self.index}[{self.pid}] have got task {task_idx}.")
+            self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] have got task {task_idx}.")
             name = f"Task {task_idx}"
 
             experiment = self.research.experiment
@@ -163,7 +163,7 @@ class Worker:
         self.tasks.task_done()
         self.research.monitor.send(worker=self, status='STOP_WORKER')
 
-        self.research.logger.info(f"Worker {self.index}[{self.pid}] has stopped.")
+        self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has stopped.")
 
 class Distributor:
     """ Distributor of jobs between workers.
