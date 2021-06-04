@@ -898,8 +898,7 @@ class Pipeline:
             warnings.warn("Profiling has not been enabled.")
             return None
 
-        light_profile = not isinstance(self._profiler, Profile)
-        detailed = False if light_profile else detailed
+        detailed = False if not isinstance(self._profiler, Profile) else detailed
 
         if per_iter is False and detailed is False:
             columns = columns or ['total_time', 'pipeline_time']
@@ -1486,9 +1485,9 @@ class Pipeline:
 
         self.random_seed = seed
 
-        if profile == 'full':
+        if profile == 2 or 'detailed'.startswith(profile):
             self._profiler = Profile()
-        elif profile is True:
+        elif profile is True or profile == 1:
             self._profiler = True
         else:
             self._profiler = None
@@ -1614,6 +1613,12 @@ class Pipeline:
             whether to continue the pipeline when an exception for any batch is caught (default=True).
             When exceptions are not ignored while prefetching, the pipeline is stopped when the first one is caught,
             however, all prefeteched batches will still be processed in the background.
+
+        profile
+            whether to gather execution statistics.
+            0 or False - do not gather
+            1 or True - gather action times
+            2 or 'detailed' - gather full profiling with cProfile.
 
         Yields
         ------
