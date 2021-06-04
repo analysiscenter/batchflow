@@ -155,16 +155,20 @@ class PipelineExecutor:
             - 'variables' - re-initialize all pipeline variables
             - 'models' - reset all models
 
-        ignore_exceptions : bool
-            whether to continue the pipeline when an exception for any batch is caught (default=True).
-            When exceptions are not ignored while prefetching, the pipeline is stopped when the first one is caught,
-            however, all prefeteched batches will still be processed in the background.
-
         dataset
             a dataset to get batches from
 
         rebatch : bool
             if rebatching is needed
+
+        profile : bool or 'full'
+            whether to calculate times of the pipeline action execution.
+            if `full`, the detailed profiling with `cProfile` is enabled.
+
+        ignore_exceptions : bool
+            whether to continue the pipeline when an exception for any batch is caught (default=True).
+            When exceptions are not ignored while prefetching, the pipeline is stopped when the first one is caught,
+            however, all prefeteched batches will still be processed in the background.
 
         Yields
         ------

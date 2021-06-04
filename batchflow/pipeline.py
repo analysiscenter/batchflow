@@ -8,6 +8,7 @@ import asyncio
 import logging
 from pstats import Stats
 from cProfile import Profile
+import warnings
 
 try:
     import pandas as pd
@@ -814,10 +815,12 @@ class Pipeline:
                     action_method, action_spec = self._get_action_method(batch, action['name'])
                     no_eval = action_spec['no_eval']
 
+                eval_time = time.time()
                 if 'args' in action:
                     _action['args'] = self._eval_expr(action['args'], batch=batch)
                 if 'kwargs' in action:
                     _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch, no_eval=no_eval)
+                eval_time = time.time() - eval_time
 
                 if action['name'] in ACTIONS:
                     action_method(batch, _action)
@@ -826,7 +829,8 @@ class Pipeline:
                     if batch is not None:
                         batch.pipeline = self
                         batch.iteration = iteration
-        return batch
+        # eval_time contains time of the last repeat only
+        return batch, eval_time
 
     def _exec_nested_pipeline(self, batch, action):
         if self._needs_exec(batch, action):
@@ -839,34 +843,33 @@ class Pipeline:
         name = self.get_action_name(action, add_index=True)
         iter_no = batch.iteration
 
-        start_time = time.time()
-        stats = Stats(self._profiler)
-        self._profiler.clear()
+        if isinstance(self._profiler, Profile):
+            stats = Stats(self._profiler)
+            self._profiler.clear()
 
-        indices, values = [], []
-        for key, value in stats.stats.items():
-            for k, v in value[4].items():
-                # action name, method_name, file_name, line_no, callee
-                indices.append((name, '{}::{}::{}::{}'.format(key[2], *k)))
-                row_dict = {
-                    'iter': iter_no, 'total_time': exec_time, 'pipeline_time': stats.total_tt, # base stats
-                    'ncalls': v[0], 'tottime': v[2], 'cumtime': v[3], # detailed stats
-                    'batch_id': id(batch), **kwargs
-                }
-                values.append(row_dict)
+            indices, values = [], []
+            for key, value in stats.stats.items():
+                for k, v in value[4].items():
+                    # action name, method_name, file_name, line_no, callee
+                    indices.append((name, '{}::{}::{}::{}'.format(key[2], *k)))
+                    row_dict = {
+                        'iter': iter_no, 'total_time': exec_time, 'pipeline_time': stats.total_tt, # base stats
+                        'ncalls': v[0], 'tottime': v[2], 'cumtime': v[3], # detailed stats
+                        'batch_id': id(batch), **kwargs
+                    }
+                    values.append(row_dict)
+        else:
+            indices = [(name, '')]
+            values = [{'iter': iter_no, 'total_time': exec_time, 'pipeline_time': exec_time, 'batch_id': id(batch),
+                       **kwargs}]
 
         multiindex = pd.MultiIndex.from_tuples(indices, names=['action', 'id'])
-        df = pd.DataFrame(values, index=multiindex,
-                          columns=['iter', 'total_time', 'pipeline_time',
-                                   'ncalls', 'tottime', 'cumtime',
-                                   'batch_id', *list(kwargs.keys())])
-        df['total_time'] += time.time() - start_time
+        df = pd.DataFrame(values, index=multiindex)
 
-        if self.profile_info is None:
-            with self._profile_info_lock:
+        with self._profile_info_lock:
+            if self.profile_info is None:
                 self.profile_info = df
-        else:
-            with self._profile_info_lock:
+            else:
                 self.profile_info = self.profile_info.append(df)
 
     def show_profile_info(self, per_iter=False, detailed=False,
@@ -891,6 +894,13 @@ class Pipeline:
         parse : bool
             Allows to re-create underlying dataframe from scratches.
         """
+        if self.profile_info is None:
+            warnings.warn("Profiling has not been enabled.")
+            return None
+
+        light_profile = not isinstance(self._profiler, Profile)
+        detailed = False if light_profile else detailed
+
         if per_iter is False and detailed is False:
             columns = columns or ['total_time', 'pipeline_time']
             sortby = sortby or ('total_time', 'sum')
@@ -933,13 +943,14 @@ class Pipeline:
         for action in actions:
             if self._profiler:
                 start_time = time.time()
-                self._profiler.enable()
+                if isinstance(self._profiler, Profile):
+                    self._profiler.enable()
 
             if action.get('#dont_run', False):
                 pass
             elif action['name'] in [JOIN_ID, MERGE_ID]:
                 join_batches = []
-                for pipe in _action['pipelines']:   # pylint: disable=not-an-iterable
+                for pipe in action['pipelines']:   # pylint: disable=not-an-iterable
                     if action['mode'] == 'i':
                         jbatch = pipe.create_batch(batch.index)
                     elif action['mode'] == 'n':
@@ -964,13 +975,14 @@ class Pipeline:
                     action['args'] = join_batches + action['args']
                     join_batches = None
 
-                batch = self._exec_one_action(batch, action, iteration=iteration)
+                batch, eval_time = self._exec_one_action(batch, action, iteration=iteration)
 
             if self._profiler:
-                self._profiler.disable()
+                if isinstance(self._profiler, Profile):
+                    self._profiler.disable()
                 exec_time = time.time() - start_time
                 self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time,
-                                       eval_expr_time=None)
+                                       eval_time=eval_time)
 
         return batch
 
@@ -1474,7 +1486,12 @@ class Pipeline:
 
         self.random_seed = seed
 
-        self._profiler = Profile() if profile else None
+        if profile == 'full':
+            self._profiler = Profile()
+        elif profile is True:
+            self._profiler = True
+        else:
+            self._profiler = None
 
 
     def gen_rebatch(self, *args, **kwargs):
