@@ -469,7 +469,6 @@ class Component:
                 setattr(item, name, val)
 
     def __getitem__(self, key):
-        # note, the __getitem__ method must be overridden in the component's class.
         return np.array([val[key] for val in self.component])
 
     def __setitem__(self, key, value):
@@ -477,7 +476,6 @@ class Component:
         if len(self.component) != len(value):
             raise ValueError("Given `value`'s length must be equal to batch size.")
         for item, val in zip(self.component, value):
-            # note, the __setitem__ method must be overridden in the component's class.
             item[key] = val
 
 class PipelineNamedExpression(NamedExpression):
