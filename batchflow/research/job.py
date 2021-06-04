@@ -5,7 +5,7 @@ from collections import OrderedDict
 import random
 
 from ..named_expr import eval_expr
-from .. import inbatch_parallel
+from .. import inbatch_parallel, make_seed_sequence
 
 class Job:
     """ Contains one job. """
@@ -28,6 +28,8 @@ class Job:
         self.exceptions = []
         self.stopped = []
         self.last_update_time = None
+
+        self.random_seed = make_seed_sequence()
 
     def init(self, worker_config, device_configs, last_update_time):
         """ Create experiments. """
