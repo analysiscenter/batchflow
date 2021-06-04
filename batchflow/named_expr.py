@@ -438,7 +438,7 @@ class B(NamedExpression):
             setattr(batch, name, value)
 
 class BA(B):
-    """ Array batch component. Uses when the batch component is an array of objects.
+    """ Array component to use when the batch component is an array of objects.
 
     Note
     ----
