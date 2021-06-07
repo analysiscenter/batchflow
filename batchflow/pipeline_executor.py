@@ -103,81 +103,8 @@ class PipelineExecutor:
 
     def gen_batch(self, *args, dataset=None, rebatch=False, reset='iter', profile=False,
                   ignore_exceptions=False, **kwargs):
-        """ Generate batches
+        """ Generate batches (see :meth:`~.Pipeline.gen_batch`) """
 
-        Parameters
-        ----------
-        batch_size : int
-            desired number of items in the batch (the actual batch could contain fewer items)
-
-        shuffle : bool or int
-            specifies the randomization and the order of items (default=False):
-
-            - `False` - items go sequentially, one after another as they appear in the index;
-              a random number generator is created with a random entropy
-
-            - `True` - items are shuffled randomly before each epoch;
-              a random number generator is created with a random entropy
-
-            - int - a seed number for a random shuffle;
-              a random number generator is created with the given seed.
-
-        n_iters : int
-            Number of iterations to make (only one of `n_iters` and `n_epochs` should be specified).
-
-        n_epochs : int
-            Number of epochs required (only one of `n_iters` and `n_epochs` should be specified).
-
-        drop_last : bool
-            if `True`, drops the last batch (in each epoch) if it contains fewer than `batch_size` items.
-
-            If `False`, than the last batch in each epoch could contain repeating indices (which might be a problem)
-            and the very last batch could contain fewer than `batch_size` items.
-
-            See :meth:`~.DatasetIndex.gen_batch` for details.
-
-        notifier : str, dict, or instance of :class:`~.Notifier`
-            Configuration of displayed progress notifiers (like bar, etc), if any.
-            If str or dict, then parameters of :class:`~.Notifier` initialization.
-
-        prefetch : int or bool
-            a number of batches to process in advance (default=0)
-            when True, `os.cpu_count() * 4` is used
-
-        target : 'threads' or 'mpc'
-            batch parallelization engine used for prefetching (default='threads').
-            'mpc' rarely works well due to complicated and slow python's inter-process communications.
-
-        reset : list of str, str or bool
-            what to reset to start from scratch:
-
-            - 'iter' - restart the batch iterator
-            - 'variables' - re-initialize all pipeline variables
-            - 'models' - reset all models
-
-        ignore_exceptions : bool
-            whether to continue the pipeline when an exception for any batch is caught (default=True).
-            When exceptions are not ignored while prefetching, the pipeline is stopped when the first one is caught,
-            however, all prefeteched batches will still be processed in the background.
-
-        dataset
-            a dataset to get batches from
-
-        rebatch : bool
-            if rebatching is needed
-
-        Yields
-        ------
-        an instance of the batch class returned by the last action
-
-        Examples
-        --------
-
-        ::
-
-            for batch in pipeline.gen_batch(C('batch_size'), shuffle=True, n_epochs=2, drop_last=True):
-                # do whatever you want
-        """
 
         # create SeedSequence hierarchy
         # - seed (with a random or a given entropy)
