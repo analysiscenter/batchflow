@@ -757,7 +757,7 @@ class Pipeline:
         `call` is convenient with lambdas::
 
             pipeline
-                .call(lambda : (image.shape[1] for image in batch.images), save_to=V('image_widths'))
+                .call(lambda batch: (image.shape[1] for image in batch.images), B(), save_to=V('image_widths'))
         """
         return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to), **kwargs)
 
