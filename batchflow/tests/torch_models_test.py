@@ -75,7 +75,8 @@ class Test_models:
         [['loss', 'predictions'], V('output', mode='a')],
         [['loss', 'predictions'], [V('current_loss', mode='a'), V('predictions', mode='a')]]
     ])
-    def test_fetches(self, model, image_shape, fetches, save_to, model_setup_images_clf, pipeline):
+    @pytest.mark.parametrize('microbatch', [4, 2])
+    def test_fetches(self, model, image_shape, fetches, save_to, microbatch, model_setup_images_clf, pipeline):
         """ Check different combinations of 'fetches' and 'save_to'. """
         dataset, model_config = model_setup_images_clf('channels_first', image_shape=image_shape)
         pipeline = (Pipeline()
@@ -88,11 +89,14 @@ class Test_models:
                     .train_model('model', B('images'), B('labels'), fetches=fetches, save_to=save_to)
                     )
 
+        batch_size = 4
+        model_config['microbatch'] = microbatch
+
         config = {'model_class': model, 'model_config': model_config}
         test_pipeline = (pipeline << dataset) << config
 
         for i in range(10):
-            test_pipeline.next_batch(2, n_epochs=None)
+            test_pipeline.next_batch(batch_size, n_epochs=None)
 
         if len(test_pipeline.v('current_loss')) > 0:
             loss = test_pipeline.v('current_loss')
@@ -106,4 +110,4 @@ class Test_models:
 
         assert len(loss) == 10
         if 'predictions' in fetches:
-            assert np.concatenate(predictions, axis=0).shape == (20, 10)
+            assert np.concatenate(predictions, axis=0).shape == (batch_size * 10, 10)

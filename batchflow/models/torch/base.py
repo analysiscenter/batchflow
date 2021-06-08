@@ -998,7 +998,9 @@ class TorchModel(BaseModel, VisualizationMixin):
             # Store the average value of loss over the entire batch
             self.loss_list.append(np.mean(self._loss_list[-steps:]))
 
-            # Parse outputs to a desired structure
+            # Parse `outputs` to a desired structure. `outputs` stores fetches for each microbatch
+            # which must be aggregated to get fetches for the whole batch. Scalar values will be
+            # aggregated by `mean`, array values will be concatenated by the first (batch) axis.
             if fetches:
                 outputs = [[item] for item in outputs] if isinstance(fetches, str) else outputs
                 output = []
