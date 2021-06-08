@@ -1438,7 +1438,7 @@ class Pipeline:
             - 'variables' - re-initialize all pipeline variables
             - 'models' - reset all models
 
-        profile : bool
+        profile : bool or {0, 1, 2} or 'detailed'
             whether to use profiler
 
         random
@@ -1485,7 +1485,7 @@ class Pipeline:
 
         self.random_seed = seed
 
-        if profile == 2 or 'detailed'.startswith(profile):
+        if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
             self._profiler = Profile()
         elif profile is True or profile == 1:
             self._profiler = True
