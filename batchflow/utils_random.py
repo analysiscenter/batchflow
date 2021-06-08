@@ -54,7 +54,7 @@ def make_seed_sequence(shuffle=False):
 
     Parameters
     ----------
-    shuffle : bool or int
+    shuffle : bool or int or object with a seed sequence attribute
         a random state
 
         - False or True - creates a new seed sequence with random entropy
@@ -64,7 +64,9 @@ def make_seed_sequence(shuffle=False):
     -------
     numpy.random.SeedSequence
     """
-    if isinstance(shuffle, bool):
+    if isinstance(getattr(shuffle, 'random_seed', None), np.random.SeedSequence):
+        return shuffle.random_seed
+    if shuffle is None or isinstance(shuffle, bool):
         seed = np.random.SeedSequence()
     elif isinstance(shuffle, int):
         if shuffle >= 0:
