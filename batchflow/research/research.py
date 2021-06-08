@@ -297,7 +297,6 @@ class Research:
             self.logger.info(f"Detach research[pid:{self.process.pid}]")
         else:
             _run()
-
         return self
 
     def terminate(self):
@@ -392,7 +391,7 @@ class ResearchMonitor:
         self.research = research
         self.path = path
         self.exceptions = mp.Manager().list()
-        self.bar = tqdm.tqdm(disable=(not bar)) if isinstance(bar, bool) else bar
+        self.bar = tqdm.tqdm(disable=(not bar), position = 0, leave = True) if isinstance(bar, bool) else bar
 
         self.shared_values = mp.Manager().dict()
         for key in self.SHARED_VARIABLES:
@@ -523,3 +522,4 @@ class ResearchMonitor:
         """ Stop handler. """
         self.queue.put(None)
         self.stop_signal.get()
+        tqdm.tqdm._instances.clear()
