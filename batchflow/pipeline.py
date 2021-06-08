@@ -757,7 +757,7 @@ class Pipeline:
         `call` is convenient with lambdas::
 
             pipeline
-                .call(lambda : (image.shape[1] for image in batch.images), save_to=V('image_widths'))
+                .call(lambda batch: (image.shape[1] for image in batch.images), B(), save_to=V('image_widths'))
         """
         return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to), **kwargs)
 
@@ -1438,7 +1438,7 @@ class Pipeline:
             - 'variables' - re-initialize all pipeline variables
             - 'models' - reset all models
 
-        profile : bool
+        profile : bool or {0, 1, 2} or 'detailed'
             whether to use profiler
 
         random
@@ -1485,7 +1485,7 @@ class Pipeline:
 
         self.random_seed = seed
 
-        if profile == 2 or 'detailed'.startswith(profile):
+        if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
             self._profiler = Profile()
         elif profile is True or profile == 1:
             self._profiler = True

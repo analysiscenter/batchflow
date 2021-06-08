@@ -3,6 +3,8 @@
 # pylint: disable=redefined-outer-name
 import pytest
 
+import numpy as np
+
 from batchflow import Pipeline
 from batchflow import B, V, C
 from batchflow.models.torch import VGG7, EfficientNetB0
@@ -58,7 +60,7 @@ class Test_models:
     """
 
     @pytest.mark.parametrize('decay', [None, {'name':'exp', 'frequency': 25}])
-    def test_data_format(self, model, model_setup_images_clf, pipeline, decay, image_shape):
+    def test_data_format(self, model, image_shape, decay, model_setup_images_clf, pipeline):
         """ We can explicitly pass 'data_format' to inputs or common."""
         dataset, model_config = model_setup_images_clf('channels_first', image_shape=image_shape)
         model_config.update(decay=decay)
@@ -67,3 +69,45 @@ class Test_models:
         batch = test_pipeline.next_batch(2, n_epochs=None)
 
         assert len(batch) == 2
+
+    @pytest.mark.parametrize('fetches, save_to', [
+        ['loss', V('current_loss', mode='a')],
+        [['loss', 'predictions'], V('output', mode='a')],
+        [['loss', 'predictions'], [V('current_loss', mode='a'), V('predictions', mode='a')]]
+    ])
+    @pytest.mark.parametrize('microbatch', [4, 2])
+    def test_fetches(self, model, image_shape, fetches, save_to, microbatch, model_setup_images_clf, pipeline):
+        """ Check different combinations of 'fetches' and 'save_to'. """
+        dataset, model_config = model_setup_images_clf('channels_first', image_shape=image_shape)
+        pipeline = (Pipeline()
+                    .init_variable('current_loss', [])
+                    .init_variable('predictions', [])
+                    .init_variable('output', [])
+                    .init_model('dynamic', C('model_class'),
+                                'model', C('model_config'))
+                    .to_array(dtype='float32')
+                    .train_model('model', B('images'), B('labels'), fetches=fetches, save_to=save_to)
+                    )
+
+        batch_size = 4
+        model_config['microbatch'] = microbatch
+
+        config = {'model_class': model, 'model_config': model_config}
+        test_pipeline = (pipeline << dataset) << config
+
+        for i in range(10):
+            test_pipeline.next_batch(batch_size, n_epochs=None)
+
+        if len(test_pipeline.v('current_loss')) > 0:
+            loss = test_pipeline.v('current_loss')
+
+        if len(test_pipeline.v('predictions')) > 0:
+            predictions = test_pipeline.v('predictions')
+
+        if len(test_pipeline.v('output')) > 0:
+            loss = [item[0] for item in test_pipeline.v('output')]
+            predictions = [item[1] for item in test_pipeline.v('output')]
+
+        assert len(loss) == 10
+        if 'predictions' in fetches:
+            assert np.concatenate(predictions, axis=0).shape == (batch_size * 10, 10)

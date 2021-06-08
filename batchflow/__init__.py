@@ -13,7 +13,7 @@ from .dataset import Dataset
 from .pipeline import Pipeline
 from .monitor import *
 from .notifier import Notifier
-from .named_expr import NamedExpression, B, C, F, V, M, D, R, W, P, PP, I
+from .named_expr import NamedExpression, B, BA, C, F, V, M, D, R, W, P, PP, I
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, parallel, any_action_failed, mjit, deprecated, apply_parallel
 from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
