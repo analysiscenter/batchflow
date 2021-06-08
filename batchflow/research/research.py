@@ -8,6 +8,7 @@ import subprocess
 import re
 import glob
 import warnings
+import shutil
 import psutil
 import dill
 import multiprocess as mp
@@ -245,7 +246,6 @@ class Research:
 
         self.workers = workers
         self.branches = branches
-        self.n_iters = n_iters
         self.devices = self.get_devices(devices)
         self.executor_class = executor_class
         self.dump_results = dump_results
@@ -254,6 +254,11 @@ class Research:
         self.loglevel = loglevel
         self.bar = bar
         self.detach = detach
+
+        if n_iters is None and self.experiment.only_callables():
+            self.n_iters = 1
+        else:
+            self.n_iters = n_iters
 
         if dump_results and os.path.exists(self.name):
             raise ValueError(f"Research with name '{self.name}' already exists")
@@ -323,6 +328,26 @@ class Research:
             research = dill.load(f)
         research.results = ResearchResults(research.name, research.dump_results)
         return research
+
+    def remove(self, ask=True):
+        """ Remove research folder. """
+        if self.dump_results:
+            if not self.folder_is_research(self.name):
+                raise ValueError(f'{self.name} is not a research folder.')
+            answer = True
+            if ask:
+                answer = 'yes'.startswith(input(f'Remove {self.name}? [y/n]').lower())
+            if answer:
+                shutil.rmtree(self.name)
+
+    @classmethod
+    def folder_is_research(cls, name):
+        """ Check if folder contains research."""
+        try:
+            Research.load(name)
+        except Exception as e:
+            return False
+        return True
 
     def __str__(self):
         spacing = ' ' * 4

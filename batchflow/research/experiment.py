@@ -534,6 +534,13 @@ class Experiment:
         """ Add postfix for conincided unit name. """
         return name + '_' + str(sum([item.startswith(name) for item in self.actions]))
 
+    def only_callables(self):
+        """ Check if experiment has only callables. """
+        for unit in self.actions.values():
+            if unit.callable is None:
+                return False
+        return True
+
     def copy(self):
         """ Create copy of the experiment. Is needed to create experiments for branches. """
         namespaces = copy(self.namespaces)

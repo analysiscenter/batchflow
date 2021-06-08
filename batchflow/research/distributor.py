@@ -16,7 +16,7 @@ class DynamicQueue:
         self.queue = mp.JoinableQueue()
 
         self.configs_generated = 0
-        self.configs_remains = self._domain.size
+        self.configs_remains = self.domain.size
 
         self.finished_tasks = 0
         self.tasks_in_queue = 0
