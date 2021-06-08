@@ -2,7 +2,10 @@
 import operator
 from collections import defaultdict
 
+import numpy as np
+
 from .config import Config
+from .utils import to_list
 from .utils_random import make_rng
 
 
@@ -434,6 +437,46 @@ class B(NamedExpression):
         if name is not None:
             setattr(batch, name, value)
 
+class BA(B):
+    """ Array component to use when the batch component is an array of objects.
+
+    Note
+    ----
+    ``BA('obj').images`` equivalent to the list comprehension ``[val.images for val in batch.obj]``.
+    ``BA("obj")['labels']`` equivalent to the list comprehension ``[val['labels'] for val in batch.obj]``.
+    """
+    def get(self, **kwargs):
+        """ Returns an instance of the class that allows one to access attributes or items
+        stored in the batch component.
+        """
+        return Component(super().get(**kwargs))
+
+class Component:
+    """ Implements an interface for accessing attributes or items of all elements from an array of objects. """
+    def __init__(self, component):
+        self.component = component
+
+    def __getattr__(self, name):
+        return np.array([getattr(val, name) for val in self.component])
+
+    def __setattr__(self, name, value):
+        if name == 'component':
+            self.__dict__[name] = value
+        else:
+            if len(self.component) != len(value):
+                raise ValueError("Given `value`'s length must be equal to batch size.")
+            for item, val in zip(self.component, value):
+                setattr(item, name, val)
+
+    def __getitem__(self, key):
+        return np.array([val[key] for val in self.component])
+
+    def __setitem__(self, key, value):
+        key = to_list(key)
+        if len(self.component) != len(value):
+            raise ValueError("Given `value`'s length must be equal to batch size.")
+        for item, val in zip(self.component, value):
+            item[key] = val
 
 class PipelineNamedExpression(NamedExpression):
     #pylint: disable=abstract-method
