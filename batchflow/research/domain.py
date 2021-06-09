@@ -5,7 +5,7 @@ from collections import OrderedDict
 from copy import copy, deepcopy
 import numpy as np
 
-from .utils import must_execute
+from .utils import must_execute, to_list
 from .. import Config, Sampler
 from ..named_expr import eval_expr
 
@@ -189,8 +189,9 @@ class ConfigAlias:
         -------
             ConfigAlias or None
         """
-        res = [item for item in self._config if item[0].value == key]
-        self._config = [item for item in self._config if item[0].value != key]
+        key = to_list(key)
+        res = [item for item in self._config if item[0].value in key]
+        self._config = [item for item in self._config if item[0].value not in key]
         if len(res) == 1:
             return ConfigAlias(res)
         return None
@@ -202,8 +203,9 @@ class ConfigAlias:
         -------
             ConfigAlias or None
         """
-        res = [item for item in self._config if item[0].alias == key]
-        self._config = [item for item in self._config if item[0].alias != key]
+        key = to_list(key)
+        res = [item for item in self._config if item[0].alias in key]
+        self._config = [item for item in self._config if item[0].alias not in key]
         if len(res) == 1:
             return ConfigAlias(res)
         return None

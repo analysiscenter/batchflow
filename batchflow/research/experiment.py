@@ -100,15 +100,16 @@ class Namespace:
         does namespace is the same for all branches or not, by default False.
     args : list
         args for namespace initialization, by default None.
-    kwargs : dict
+    kwargs, other_kwargs : dict
         kwargs for namespace initialization.
     """
-    def __init__(self, name, namespace, root=False, args=None, **kwargs):
+    def __init__(self, name, namespace, root=False, args=None, kwargs=None, **other_kwargs):
         self.name = name
         self.namespace = namespace
         self.root = root
-        self.args = args or []
-        self.kwargs = kwargs
+        self.args = [] if args is None else args
+        self.kwargs = {} if kwargs is None else kwargs
+        self.other_kwargs = other_kwargs
 
     def __call__(self, experiment, *args, **kwargs):
         """ Create instance of the namespace. """
@@ -116,7 +117,8 @@ class Namespace:
         kwargs = {**self.kwargs, **kwargs}
         args = eval_expr(args, experiment=experiment)
         kwargs = eval_expr(kwargs, experiment=experiment)
-        return self.namespace(*args, **kwargs)
+        other_kwargs = eval_expr(self.other_kwargs, experiment=experiment)
+        return self.namespace(*args, **other_kwargs, **kwargs)
 
 class ExecutableUnit:
     """ Class to represent callables and generators executed in experiment.
@@ -144,7 +146,8 @@ class ExecutableUnit:
     args, kwargs : optional
         args and kwargs for unit call, by default None.
     """
-    def __init__(self, name, func=None, generator=None, root=False, iterations_to_execute=1, args=None, **kwargs):
+    def __init__(self, name, func=None, generator=None, root=False, iterations_to_execute=1,
+                 args=None, kwargs=None, **other_kwargs):
         self.name = name
         self.callable = func
         self.generator = generator
@@ -156,7 +159,8 @@ class ExecutableUnit:
             self.iterations_to_execute = [self.iterations_to_execute]
 
         self.args = [] if args is None else args
-        self.kwargs = kwargs
+        self.kwargs = {} if kwargs is None else kwargs
+        self.other_kwargs = other_kwargs
 
         self.config = None
         self.experiment = None
@@ -207,11 +211,12 @@ class ExecutableUnit:
             self.iteration = iteration
             args = eval_expr(self.args, experiment=self.experiment)
             kwargs = eval_expr(self.kwargs, experiment=self.experiment)
+            other_kwargs = eval_expr(self.other_kwargs, experiment=self.experiment)
             if self.callable is not None:
-                self.output = self.callable(*args, **kwargs)
+                self.output = self.callable(*args, **kwargs, **other_kwargs)
             else:
                 if self.iterator is None:
-                    self.iterator = self.generator(*args, **kwargs)
+                    self.iterator = self.generator(*args, **kwargs, **other_kwargs)
                 self.output = next(self.iterator)
             return self.output
 
@@ -223,9 +228,9 @@ class ExecutableUnit:
 
     def __copy__(self):
         """ Create copy of the unit. """
-        attrs = ['name', 'callable', 'generator', 'root', 'iterations_to_execute', 'args']
+        attrs = ['name', 'callable', 'generator', 'root', 'iterations_to_execute', 'args', 'kwargs']
         params = {attr if attr !='callable' else 'func': copy(getattr(self, attr)) for attr in attrs}
-        new_unit = ExecutableUnit(**params, **copy(self.kwargs))
+        new_unit = ExecutableUnit(**params, **copy(self.other_kwargs))
         return new_unit
 
     def __getattr__(self, key):

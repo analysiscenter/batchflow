@@ -114,12 +114,12 @@ class ResearchResults:
                         experiment_df += [_df]
                 if pivot and len(experiment_df) > 0:
                     experiment_df = [
-                        functools.reduce(functools.partial(pd.merge, on=['id', 'iteration']), experiment_df)
+                        functools.reduce(functools.partial(pd.merge, on=['id', 'iteration'], how='outer'), experiment_df)
                     ]
                 df += experiment_df
         res = pd.concat(df) if len(df) > 0 else pd.DataFrame()
         if include_config and len(res) > 0:
-            res = pd.merge(res, self.configs_to_df(use_alias, concat_config, remove_auxilary), how='inner', on='id')
+            res = pd.merge(self.configs_to_df(use_alias, concat_config, remove_auxilary), res, how='inner', on='id')
         return res
 
     def load_iteration_files(self, path, iterations):

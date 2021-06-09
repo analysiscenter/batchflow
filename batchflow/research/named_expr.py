@@ -37,6 +37,9 @@ class E(NamedExpression):
             return [exp[self.unit] for exp in experiments]
         return experiments
 
+    def __copy__(self):
+        return self
+
 class EC(E):
     """ NamedExpression for Experiment config.
 
@@ -44,15 +47,24 @@ class EC(E):
     ----------
     name : str, optional
         key of config to get, by default None. If None, return entire config.
+    full : bool, optional
+        return aixilary key ('device', 'repetition', etc.) or not, by default False.
     """
-    def __init__(self, name=None, **kwargs):
+    def __init__(self, name=None, full=False, **kwargs):
         super().__init__(**kwargs)
         self.name = name
+        self.full = full
 
     def _transform(self, experiments):
         if self.name is None:
-            return [exp.config for exp in experiments]
+            return [self.remove_keys(exp.config) for exp in experiments]
         return [exp.config[self.name] for exp in experiments]
+
+    def remove_keys(self, config):
+        if self.full:
+            return config
+        else:
+            return {key: config[key] for key in config if key not in ['device', 'repetition', 'updates']}
 
 class O(E):
     """ NamedExpression for ExecutableUnit output.
