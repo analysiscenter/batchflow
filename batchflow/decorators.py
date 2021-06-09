@@ -376,10 +376,6 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
-        async def wait_for_all(futures, loop):
-            """ Wait for all futures to complete """
-            return asyncio.gather(*futures, loop=loop, return_exceptions=True)
-
         def wrap_with_async(self, args, kwargs):
             """ Run a method in parallel with async / await """
             try:
@@ -392,6 +388,9 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 # allow to specify a loop as an action parameter
                 loop = kwargs.get('loop', loop)
 
+            if loop.is_running():
+                raise RuntimeError('Cannot parallel async methods with a running event loop (e.g. in IPython).')
+
             init_fn, post_fn = _check_functions(self)
 
             futures = []
@@ -402,13 +401,9 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
                 seed = spawn_seed_sequence(random_seed)
-                futures.append(asyncio.ensure_future(call_method(method, use_self, margs, mkwargs, seed=seed),
-                                                     loop=loop))
+                futures.append(loop.create_task(call_method(method, use_self, margs, mkwargs, seed=seed)))
 
-            if loop.is_running():
-                asyncio.wait(loop.create_task(wait_for_all(futures, loop)), loop=loop)
-            else:
-                loop.run_until_complete(wait_for_all(futures, loop))
+            loop.run_until_complete(asyncio.gather(*futures, loop=loop, return_exceptions=True))
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
