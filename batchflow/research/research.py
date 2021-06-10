@@ -184,7 +184,7 @@ class Research:
     def create_research_folder(self):
         """ Create folder for the research results. """
         os.makedirs(self.name)
-        for subfolder in ['configs', 'description', 'env', 'experiments']:
+        for subfolder in ['env', 'experiments']:
             config_path = os.path.join(self.name, subfolder)
             if not os.path.exists(config_path):
                 os.makedirs(config_path)

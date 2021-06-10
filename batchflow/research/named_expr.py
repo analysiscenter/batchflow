@@ -80,3 +80,8 @@ class O(E):
 
     def _transform(self, experiments):
         return [exp[self.name].output for exp in experiments]
+
+class EP(E):
+    """ NamedExpression for the experiment path. """
+    def _transform(self, experiments):
+        return [exp.full_path for exp in experiments]

@@ -4,7 +4,7 @@
     This module requries multiprocess package <http://multiprocess.rtfd.io/>`_.
 """
 from .domain import Alias, Domain, Option, ConfigAlias
-from .named_expr import E, EC, O
+from .named_expr import E, EC, O, EP
 from .research import Research
 from .results import ResearchResults
 from .experiment import Experiment, Executor
