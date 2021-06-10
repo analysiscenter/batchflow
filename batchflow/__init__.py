@@ -24,4 +24,4 @@ from .utils_notebook import in_notebook, get_notebook_path, get_notebook_name, p
                             get_available_gpus, set_gpus
 
 
-__version__ = '0.5.0beta3'
+__version__ = '0.5.0'
