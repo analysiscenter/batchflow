@@ -95,7 +95,7 @@ class Test_models:
         config = {'model_class': model, 'model_config': model_config}
         test_pipeline = (pipeline << dataset) << config
 
-        for i in range(10):
+        for _ in range(10):
             test_pipeline.next_batch(batch_size, n_epochs=None)
 
         if len(test_pipeline.v('current_loss')) > 0:
