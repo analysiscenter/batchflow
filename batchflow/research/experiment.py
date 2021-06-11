@@ -9,6 +9,7 @@ import hashlib
 import random
 from collections import OrderedDict
 import dill
+import json
 
 from .. import Config, Pipeline, parallel, make_seed_sequence
 from ..named_expr import eval_expr
@@ -555,8 +556,10 @@ class Experiment:
 
     def dump_config(self):
         """ Dump config (as serialized ConfigAlias instance). """
-        with open(os.path.join(self.name, self.experiment_path, 'config'), 'wb') as file:
+        with open(os.path.join(self.name, self.experiment_path, 'config.dill'), 'wb') as file:
             dill.dump(self.config_alias, file)
+        with open(os.path.join(self.name, self.experiment_path, 'config.json'), 'w') as file:
+            json.dump(self.config.config, file)
 
     def init(self, index, config, executor=None):
         """ Create all instances of units to start experiment. """
