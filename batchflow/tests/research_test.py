@@ -1,10 +1,12 @@
-import pytest
+""" Tests for Research and correspong classes. """
+# pylint: disable=no-name-in-module, missing-docstring, redefined-outer-name
 import os
+import pytest
 
-from batchflow import Dataset, Pipeline, B, V, F, C
+from batchflow import Dataset, Pipeline, B, V, C
 from batchflow.models.torch import ResNet
 from batchflow.opensets import MNIST
-from batchflow.research import *
+from batchflow.research import Experiment, Executor, Option, Domain, Research, E, EC, O, ResearchResults
 
 @pytest.fixture
 def simple_research(tmp_path):
@@ -25,7 +27,7 @@ def simple_research(tmp_path):
 def complex_research():
     class Model:
         def __init__(self):
-            self.ds = MNIST()
+            self.dataset = MNIST()
             self.model_config = {
                 'head/layout': C('layout'),
                 'head/units': C('units'),
@@ -38,12 +40,12 @@ def complex_research():
 
         def create_train_ppl(self):
             ppl = (Pipeline()
-                .init_model('dynamic', ResNet, 'model', config=self.model_config)
+                .init_model('model', ResNet, 'dynamic', config=self.model_config)
                 .to_array(channels='first', src='images', dst='images')
                 .train_model('model', B('images'), B('labels'))
                 .run_later(batch_size=8, n_iters=1, shuffle=True, drop_last=True)
             )
-            self.train_ppl = ppl << self.ds.train
+            self.train_ppl = ppl << self.dataset.train
 
         def create_test_ppl(self):
             test_ppl = (Pipeline()
@@ -55,7 +57,7 @@ def complex_research():
                                 num_classes=10, save_to=V('metrics', mode='update'))
                 .run_later(batch_size=8, n_iters=2, shuffle=False, drop_last=False)
             )
-            self.test_ppl = test_ppl << self.ds.test
+            self.test_ppl = test_ppl << self.dataset.test
 
         def eval_metrics(self, metrics, **kwargs):
             return self.test_ppl.v('metrics').evaluate(metrics, **kwargs)
@@ -82,28 +84,26 @@ class TestDomain:
     @pytest.mark.parametrize('b', [[2, 3, 4]])
     @pytest.mark.parametrize('n_reps', [1, 2])
     def test_operations(self, op, a, b, n_reps):
-        option_1 = Option('a', a)
-        option_2 = Option('b', b)
+        option_1 = Option('a', a) #pylint:disable=unused-variable
+        option_2 = Option('b', b) #pylint:disable=unused-variable
 
-        if op == '@' and len(a) != len(b):
-            return None
+        if not (op == '@' and len(a) != len(b)):
+            domain = eval(f'option_1 {op} option_2') # pylint:disable=eval-used
+            domain.set_iter_params(n_reps=n_reps)
 
-        domain = eval(f'option_1 {op} option_2')
-        domain.set_iter_params(n_reps=n_reps)
+            configs = list(domain.iterator)
+            n_items = SIZE_CALC[op](len(a), len(b))
 
-        configs = list(domain.iterator())
-        n_items = SIZE_CALC[op](len(a), len(b))
-
-        assert len(domain) == n_items
-        assert domain.size == n_items * n_reps
-        assert len(configs) == n_items * n_reps
+            assert len(domain) == n_items
+            assert domain.size == n_items * n_reps
+            assert len(configs) == n_items * n_reps
 
     @pytest.mark.parametrize('repeat_each', [None, 1, 2])
     @pytest.mark.parametrize('n_reps', [1, 2, 3])
     def test_repetitions_order(self, repeat_each, n_reps):
         domain = Option('a', [1, 2]) * Option('b', [3, 4])
         domain.set_iter_params(n_reps=n_reps, repeat_each=repeat_each)
-        configs = list(domain.iterator())
+        configs = list(domain.iterator)
 
         for i, config in enumerate(configs):
             if repeat_each is None:
@@ -118,10 +118,10 @@ class TestDomain:
             return Domain(Option('x', [3, 4]))
 
         domain.set_update(update, ['last'])
-        configs = list(domain.iterator())
+        configs = list(domain.iterator)
 
         domain = domain.update(len(domain), None)
-        configs += list(domain.iterator())
+        configs += list(domain.iterator)
 
         assert len(configs) == 4
         for i, config in enumerate(configs):
@@ -374,5 +374,5 @@ class TestResults:
         assert len(df) == 12
 
 
-#TODO: logging tests, samplers in domain, test that exceptions in one branch don't affect other bracnhes, 
+#TODO: logging tests, samplers in domain, test that exceptions in one branch don't affect other bracnhes,
 #      divices splitting, ...

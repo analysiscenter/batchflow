@@ -114,7 +114,10 @@ class ResearchResults:
                         experiment_df += [_df]
                 if pivot and len(experiment_df) > 0:
                     experiment_df = [
-                        functools.reduce(functools.partial(pd.merge, on=['id', 'iteration'], how='outer'), experiment_df)
+                        functools.reduce(
+                            functools.partial(pd.merge, on=['id', 'iteration'], how='outer'),
+                            experiment_df
+                        )
                     ]
                 df += experiment_df
         res = pd.concat(df) if len(df) > 0 else pd.DataFrame()
@@ -184,7 +187,7 @@ class ResearchResults:
             raise ValueError('Only one of `config`, `alias` and `domain` can be not None')
         filtered_ids = []
         if domain is not None:
-            for _config in domain.iterator():
+            for _config in domain.iterator:
                 filtered_ids += self.filter_ids_by_configs(config=_config.config())
             return filtered_ids
 

@@ -115,6 +115,7 @@ class Option:
             raise TypeError('`values` must be array-like object but {} were given'.format(type(self.values)))
         return [ConfigAlias([[self.parameter, value]]) for value in self.values]
 
+    @property
     def iterator(self):
         """ Produce `ConfigAlias` from the option.
 
@@ -392,7 +393,7 @@ class Domain:
         return self.cubes == other.cubes
 
     def __next__(self):
-        return next(self.iterator())
+        return next(self.iterator)
 
     @property
     def size(self):
@@ -485,6 +486,7 @@ class Domain:
                     i += self.repeat_each
         self._iterator = _iterator_with_repetitions()
 
+    @property
     def iterator(self):
         """ Get domain iterator. """
         if self._iterator is None:
@@ -564,7 +566,7 @@ class Domain:
                 res.extend(combination)
                 yield sum(res, ConfigAlias())
         else:
-            iterators = [option.iterator() for option in cube]
+            iterators = [option.iterator for option in cube]
             while True:
                 try:
                     yield sum([next(iterator) for iterator in iterators], ConfigAlias())

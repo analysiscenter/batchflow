@@ -183,7 +183,8 @@ class ExecutableUnit:
             setattr(self, attr, getattr(self.experiment.instances[src[0]], src[1]))
         if isinstance(src, PipelineWrapper) and isinstance(src.pipeline, (tuple, list)):
             pipeline = src.pipeline
-            setattr(pipeline, attr, getattr(self.experiment.instances[pipeline[0]], pipeline[1]))
+            src.pipeline = getattr(self.experiment.instances[pipeline[0]], pipeline[1])
+            # setattr(self, attr, getattr(self.experiment.instances[pipeline[0]], pipeline[1]))
 
     def __call__(self, iteration, n_iters, last=False):
         """ Call unit: execute callable or get the next item from generator.
@@ -226,6 +227,12 @@ class ExecutableUnit:
         """ Returns does unit must be executed for the current iteration. """
         return must_execute(iteration, self.iterations_to_execute, n_iters, last)
 
+    @property
+    def src(self):
+        """ Return wrapped source (callable or generator) of the unit. """
+        attr = 'callable' if self.callable is not None else 'generator'
+        return getattr(self, attr)
+
     def __copy__(self):
         """ Create copy of the unit. """
         attrs = ['name', 'callable', 'generator', 'root', 'iterations_to_execute', 'args', 'kwargs']
@@ -234,14 +241,10 @@ class ExecutableUnit:
         return new_unit
 
     def __getattr__(self, key):
-        attr = 'callable' if self.callable is not None else 'generator'
-        src = getattr(self, attr)
-        return getattr(src, key)
+        return getattr(self.src, key)
 
     def __getitem__(self, key):
-        attr = 'callable' if self.callable is not None else 'generator'
-        src = getattr(self, attr)
-        return src[key]
+        return self.src[key]
 
     def __getstate__(self):
         return self.__dict__
@@ -274,7 +277,7 @@ class Experiment:
 
         self._is_alive = True # should experiment be executed or not. Becomes False when Exceptions was raised and all
                               # units for these iterations were executed.
-        self._exception_raised = False # was an exception raised or not
+        self._is_failed = False # was an exception raised or not
 
         self.last = False
         self.outputs = dict()
@@ -308,39 +311,12 @@ class Experiment:
         self._is_alive = self._is_alive and value
 
     @property
-    def exception_raised(self):
-        return self._exception_raised
+    def is_failed(self):
+        return self._is_failed
 
-    @exception_raised.setter
-    def exception_raised(self, value):
-        self._exception_raised = self._exception_raised or value
-
-    def add_instance(self, name, namespace, root=False, **kwargs):
-        """ Add class as namespace.
-
-        Parameters
-        ----------
-        name : str
-            namespace name.
-        namespace : class
-            class which instance will be used as namespace to get attributes.
-        root : bool, optional
-            does instances is the same for all branches or not, by default False.
-
-        Returns
-        -------
-        Experiment
-        """
-        self.namespaces[name] = Namespace(name, namespace, root, **kwargs)
-        def _create_instance(experiments, item_name):
-            if not isinstance(experiments, list):
-                experiments = [experiments]
-            instance = experiments[0].namespaces[item_name](experiments[0])
-            for e in experiments:
-                e.instances[item_name] = instance
-        self.add_callable(f'init_{name}', _create_instance, experiments=E(all=root),
-                          root=root, item_name=name, iterations_to_execute="%0")
-        return self
+    @is_failed.setter
+    def is_failed(self, value):
+        self._is_failed = self._is_failed or value
 
     def add_executable_unit(self, name, src=None, mode='func', iterations_to_execute=1,
                             save_to=None, args=None, **kwargs):
@@ -436,6 +412,27 @@ class Experiment:
         """
         return self.add_executable_unit(name, src=generator, mode='generator', args=args, **kwargs)
 
+    def add_instance(self, name, namespace, root=False, **kwargs):
+        """ Add class as namespace.
+
+        Parameters
+        ----------
+        name : str
+            namespace name.
+        namespace : class
+            class which instance will be used as namespace to get attributes.
+        root : bool, optional
+            does instances is the same for all branches or not, by default False.
+
+        Returns
+        -------
+        Experiment
+        """
+        self.namespaces[name] = Namespace(name, namespace, root, **kwargs)
+        self.add_callable(f'init_{name}', _create_instance, experiments=E(all=root),
+                          root=root, item_name=name, iterations_to_execute="%0")
+        return self
+
     def add_pipeline(self, name, root_pipeline=None, branch_pipeline=None, run=False, **kwargs):
         """ Add pipeline to experiment.
 
@@ -488,10 +485,6 @@ class Experiment:
         copy : bool, optional
             copy value or not, by default False
         """
-        def _save_results(_src, _dst, experiment, copy): #pylint:disable=redefined-outer-name
-            previous_values = experiment.results.get(_dst, OrderedDict())
-            previous_values[experiment.iteration] = deepcopy(_src) if copy else _src
-            experiment.results[_dst] = previous_values
         name = self.add_postfix('save_results')
         self.add_callable(name, _save_results,
                           iterations_to_execute=iterations_to_execute,
@@ -513,22 +506,6 @@ class Experiment:
         Research
         """
         self.has_dump = True
-
-        def _dump_results(variable, experiment):
-            """ Callable to dump results. """
-            if experiment.dump_results:
-                variables_to_dump = list(experiment.results.keys()) if variable is None else to_list(variable)
-                for var in variables_to_dump:
-                    values = experiment.results[var]
-                    iteration = experiment.iteration
-                    variable_path = os.path.join(experiment.full_path, 'results', var)
-                    if not os.path.exists(variable_path):
-                        os.makedirs(variable_path)
-                    filename = os.path.join(variable_path, str(iteration))
-                    with open(filename, 'wb') as file:
-                        dill.dump(values, file)
-                    experiment.results[var] = OrderedDict()
-
         name = self.add_postfix('dump_results')
         self.add_callable(name, _dump_results,
                           iterations_to_execute=iterations_to_execute,
@@ -539,6 +516,7 @@ class Experiment:
         """ Add postfix for conincided unit name. """
         return name + '_' + str(sum([item.startswith(name) for item in self.actions]))
 
+    @property
     def only_callables(self):
         """ Check if experiment has only callables. """
         for unit in self.actions.values():
@@ -633,7 +611,7 @@ class Experiment:
             try:
                 self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
             except Exception as e: #pylint:disable=broad-except
-                self.exception_raised = True
+                self.is_failed = True
                 self.last = True
                 if isinstance(e, StopIteration):
                     self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
@@ -649,7 +627,7 @@ class Experiment:
             else:
                 if self.monitor:
                     self.monitor.execute_iteration(name, self)
-            if self.exception_raised and (list(self.actions.keys())[-1] == name):
+            if self.is_failed and (list(self.actions.keys())[-1] == name):
                 self.is_alive = False
 
     def __str__(self):
@@ -775,7 +753,7 @@ class Executor:
         self.experiments[0].call(unit_name, iteration, self.n_iters)
         for experiment in self.experiments[1:]:
             experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
-            for attr in ['_is_alive', '_exception_raised', 'iteration']:
+            for attr in ['_is_alive', '_is_failed', 'iteration']:
                 setattr(experiment, attr, getattr(self.experiments[0], attr))
 
     def send_results(self):
@@ -783,3 +761,30 @@ class Executor:
         if self.research is not None:
             for experiment in self.experiments:
                 self.research.results.put(experiment.id, experiment.results, experiment.config_alias)
+
+def _create_instance(experiments, item_name):
+    if not isinstance(experiments, list):
+        experiments = [experiments]
+    instance = experiments[0].namespaces[item_name](experiments[0])
+    for e in experiments:
+        e.instances[item_name] = instance
+
+def _save_results(_src, _dst, experiment, copy): #pylint:disable=redefined-outer-name
+    previous_values = experiment.results.get(_dst, OrderedDict())
+    previous_values[experiment.iteration] = deepcopy(_src) if copy else _src
+    experiment.results[_dst] = previous_values
+
+def _dump_results(variable, experiment):
+    """ Callable to dump results. """
+    if experiment.dump_results:
+        variables_to_dump = list(experiment.results.keys()) if variable is None else to_list(variable)
+        for var in variables_to_dump:
+            values = experiment.results[var]
+            iteration = experiment.iteration
+            variable_path = os.path.join(experiment.full_path, 'results', var)
+            if not os.path.exists(variable_path):
+                os.makedirs(variable_path)
+            filename = os.path.join(variable_path, str(iteration))
+            with open(filename, 'wb') as file:
+                dill.dump(values, file)
+            experiment.results[var] = OrderedDict()

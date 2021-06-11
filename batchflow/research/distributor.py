@@ -68,20 +68,8 @@ class DynamicQueue:
         for _ in range(n_workers):
             self.put(None)
 
-    def join(self):
-        self.queue.join()
-
-    def get(self):
-        return self.queue.get()
-
-    def put(self, *args, **kwargs):
-        return self.queue.put(*args, **kwargs)
-
-    def task_done(self):
-        return self.queue.task_done()
-
-    def empty(self):
-        return self.queue.empty()
+    def __getattr__(self, key):
+        return getattr(self.queue, key)
 
 class Worker:
     """ Worker to get tasks from queue and run executors.

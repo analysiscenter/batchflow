@@ -48,7 +48,7 @@ class EC(E):
     name : str, optional
         key of config to get, by default None. If None, return entire config.
     full : bool, optional
-        return aixilary key ('device', 'repetition', etc.) or not, by default False.
+        return aixilary keys ('device', 'repetition', 'update') or not, by default False.
     """
     def __init__(self, name=None, full=False, **kwargs):
         super().__init__(**kwargs)
@@ -61,10 +61,10 @@ class EC(E):
         return [exp.config[self.name] for exp in experiments]
 
     def remove_keys(self, config):
+        """ Remove aixilary keys. """
         if self.full:
             return config
-        else:
-            return {key: config[key] for key in config if key not in ['device', 'repetition', 'updates']}
+        return {key: config[key] for key in config if key not in ['device', 'repetition', 'updates']}
 
 class O(E):
     """ NamedExpression for ExecutableUnit output.

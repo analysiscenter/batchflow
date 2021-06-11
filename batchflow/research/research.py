@@ -114,7 +114,7 @@ class Research:
         commands = {
             'commit': "git log --name-status HEAD^..HEAD",
             'diff': 'git diff',
-            'status': 'git status',
+            'status': 'git status -uno',
             **kwargs
         }
 
@@ -255,7 +255,7 @@ class Research:
         self.bar = bar
         self.detach = detach
 
-        if n_iters is None and self.experiment.only_callables():
+        if n_iters is None and self.experiment.only_callables:
             self.n_iters = 1
         else:
             self.n_iters = n_iters
@@ -344,7 +344,7 @@ class Research:
         """ Check if folder contains research."""
         try:
             Research.load(name)
-        except Exception as e:
+        except Exception: #pylint:disable=broad-except
             return False
         return True
 
@@ -367,6 +367,8 @@ class Research:
 
         return repr
 
+    def __del__(self):
+        self.terminate()
 
 class ResearchMonitor:
     #pylint:disable=attribute-defined-outside-init
@@ -522,4 +524,4 @@ class ResearchMonitor:
         """ Stop handler. """
         self.queue.put(None)
         self.stop_signal.get()
-        tqdm.tqdm._instances.clear()
+        tqdm.tqdm._instances.clear() #pylint:disable=protected-access
