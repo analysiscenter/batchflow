@@ -328,16 +328,19 @@ class Research:
         research.results = ResearchResults(research.name, research.dump_results)
         return research
 
-    def remove(self, ask=True):
+    def remove(self, name=None, ask=True):
         """ Remove research folder. """
+        name = name or self.name
         if self.dump_results:
-            if not self.folder_is_research(self.name):
-                raise ValueError(f'{self.name} is not a research folder.')
+            if not os.path.exists(name):
+                warnings.warn(f"Folder {name} doesn't exist.")
+            if not self.folder_is_research(name):
+                raise ValueError(f'{name} is not a research folder.')
             answer = True
             if ask:
-                answer = 'yes'.startswith(input(f'Remove {self.name}? [y/n]').lower())
+                answer = 'yes'.startswith(input(f'Remove {name}? [y/n]').lower())
             if answer:
-                shutil.rmtree(self.name)
+                shutil.rmtree(name)
 
     @classmethod
     def folder_is_research(cls, name):
