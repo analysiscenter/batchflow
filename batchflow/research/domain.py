@@ -41,96 +41,6 @@ class Alias:
             name = str(value)
         return name
 
-class Option:
-    """ Class for single-parameter option. There is an algebra of options (see :class:`~.Domain` operations)
-    Result is a `Domain`.
-
-    Parameters
-    ----------
-    parameter : Alias or str
-        parameter name
-    values : list, tuple, numpy.ndarray or Sampler
-        parameter values. Elements of list or tuple can be Aliases.
-    """
-    def __init__(self, parameter, values):
-        self.parameter = Alias(parameter)
-        if isinstance(values, (list, tuple, np.ndarray)):
-            self.values = [Alias(value) for value in values]
-        elif isinstance(values, Sampler):
-            self.values = values
-        else:
-            raise TypeError('`values` must be array-like object or Sampler but {} were given'.format(type(values)))
-
-    def __matmul__(self, other):
-        return Domain(self) @ Domain(other)
-
-    def __mul__(self, other):
-        if isinstance(other, (int, float)):
-            return Domain(self) * other
-        return Domain(self) * Domain(other)
-
-    def __rmul__(self, other):
-        return self * other
-
-    def __add__(self, other):
-        return Domain(self) + Domain(other)
-
-    def __repr__(self):
-        alias = self.parameter.alias
-        values = self.values
-
-        if isinstance(self.values, (list, tuple, np.ndarray)):
-            values = [item.alias if not isinstance(item.value, str) else f"'{item.value}'" for item in values]
-            values = f'[{",".join(values)}]'
-        return f'Option({alias}: {values})'
-
-    def sample(self, size=None):
-        """ Return `ConfigAlias` objects created on the base of Sampler-option.
-
-        Parameters
-        ----------
-        size : int or None
-            the size of the sample
-
-        Returns
-        -------
-            ConfigAlias (if size is None) or list of ConfigAlias objects (otherwise).
-        """
-
-        if not isinstance(self.values, Sampler):
-            raise TypeError('`values` must be Sampler but {} was given'.format(type(self.values)))
-        res = [ConfigAlias([[self.parameter, self.values.sample(1)[0, 0]]]) for _ in range(size or 1)]
-        if size is None:
-            res = res[0]
-        return res
-
-    def items(self):
-        """ Return all possible `ConfigAlias` instances which can be created from the option.
-
-        Returns
-        -------
-            list of `ConfigAlias` objects.
-        """
-        if not isinstance(self.values, (list, tuple, np.ndarray)):
-            raise TypeError('`values` must be array-like object but {} were given'.format(type(self.values)))
-        return [ConfigAlias([[self.parameter, value]]) for value in self.values]
-
-    @property
-    def iterator(self):
-        """ Produce `ConfigAlias` from the option.
-
-        Returns
-        -------
-            generator.
-        """
-        if isinstance(self.values, Sampler):
-            while True:
-                yield ConfigAlias([[self.parameter, self.values.sample(1)[0, 0]]])
-        else:
-            for value in self.values:
-                yield ConfigAlias([[self.parameter, value]])
-
-
 class ConfigAlias:
     """ Class for config and its aliased version where all keys and values are `str`.
 
@@ -261,26 +171,23 @@ class Domain:
         See more in tutorials (`<../../examples/tutorials/research/04_advance_usage_of_domain.ipynb>_`).
     """
     def __init__(self, domain=None, weights=None, **kwargs):
-        if isinstance(domain, Option):
-            self.cubes = [[domain]]
-            self.weights = [np.nan]
-        elif isinstance(domain, Domain):
+        if isinstance(domain, Domain):
             self.cubes = copy(domain.cubes)
             self.weights = copy(domain.weights)
         elif isinstance(domain, dict):
-            self.cubes = self._dict_to_domain(domain)
+            self.cubes = [self.create_aliases(domain)]
             self.weights = [np.nan]
         elif isinstance(domain, list) and all(isinstance(item, list) for item in domain):
             self.cubes = domain
             self.weights = [np.nan] * len(domain)
+        elif len(kwargs) > 0:
+            self.cubes = [self.create_aliases(kwargs)]
+            self.weights = [np.nan]
         elif domain is None:
             self.cubes = []
             self.weights = []
         else:
-            raise ValueError('domain can be Option, Domain, dict or nested list but {} were given'.format(type(domain)))
-        if len(kwargs) > 0:
-            self.cubes = self._dict_to_domain(kwargs)
-            self.weights = [np.nan]
+            raise ValueError(f'domain can be Domain, dict or nested list but {type(domain)} were given')
 
         if weights is not None:
             self.weights = weights
@@ -295,15 +202,31 @@ class Domain:
         self.repeat_each = None
         self.n_updates = 0
 
-        self.brute_force = []
-        for cube in self.cubes:
-            self.brute_force.append(not all(isinstance(option.values, Sampler) for option in cube))
+    def create_aliases(self, options):
+        """ Create aliases with Alias class for each key and value of the dict. """
+        aliases_options = []
+        for parameter, values in options.items():
+            parameter = Alias(parameter)
+            if isinstance(values, (list, tuple, np.ndarray)):
+                values = [Alias(value) for value in values]
+            elif isinstance(values, Sampler):
+                pass
+            else:
+                raise TypeError('`values` must be array-like object or Sampler but {} were given'.format(type(values)))
+            aliases_options += [(parameter, values)]
+        return aliases_options
 
-    def _dict_to_domain(self, domain):
-        _domain = []
-        for key, value in domain.items():
-            _domain.append(Option(key, value))
-        return [_domain]
+
+    def option_items(self, name, values):
+        """ Return all possible `ConfigAlias` instances which can be created from the option.
+
+        Returns
+        -------
+            list of `ConfigAlias` objects.
+        """
+        if not isinstance(values, (list, tuple, np.ndarray)):
+            raise TypeError('`values` must be array-like object but {} were given'.format(type(values)))
+        return [ConfigAlias([[name, value]]) for value in values]
 
     def __mul__(self, other):
         if isinstance(other, float) and np.isnan(other):
@@ -326,16 +249,11 @@ class Domain:
                 nan_mask = np.array([np.isnan(item).all() for item in pairs])
                 weights[nan_mask] = np.nan
             result = Domain(res, weights=weights)
-        elif isinstance(other, Option):
-            result = self * Domain(other)
         else:
-            raise TypeError('Arguments must be numeric, Domains or Options')
+            raise TypeError('Arguments must be numeric or Domains')
         return result
 
     def __matmul__(self, other):
-        if isinstance(other, Option):
-            return self @ Domain(other)
-
         if self._is_array_option():
             that = self._to_scalar_product()
         else:
@@ -359,8 +277,6 @@ class Domain:
     def __add__(self, other):
         if self.cubes is None:
             result = other
-        elif isinstance(other, Option):
-            result = self + Domain(other)
         elif other.cubes is None:
             result = self
         elif isinstance(other, Domain):
@@ -373,7 +289,7 @@ class Domain:
         spacing = 4 * ' '
 
         for cube in self.cubes:
-            cubes_reprs += [' * '.join([str(option) for option in cube])]
+            cubes_reprs += [' * '.join([self._option_repr(name, values) for name, values in cube])]
         repr += ' + \n'.join(cubes_reprs)
         repr += 2 * '\n' + 'params:\n'
         repr += '\n'.join([spacing + f"{attr}={getattr(self, attr)}" for attr in ['n_items', 'n_reps', 'repeat_each']])
@@ -385,6 +301,14 @@ class Domain:
                 update_reprs += [str('\n'.join(spacing + f"{key}: {value}" for key, value in update.items()))]
             repr += '\n\n'.join(update_reprs)
         return repr
+
+    def _option_repr(self, name, values):
+        alias = name.alias
+
+        if isinstance(values, (list, tuple, np.ndarray)):
+            values = [item.alias if not isinstance(item.value, str) else f"'{item.value}'" for item in values]
+            values = f'[{",".join(values)}]'
+        return '{0}: {1}'.format(alias, values)
 
     def __getitem__(self, index):
         return Domain([self.cubes[index]])
@@ -405,7 +329,7 @@ class Domain:
     def __len__(self):
         """ Return the number of configs that will be produced from domain without repetitions. """
         cube_sizes = [
-            np.prod([len(op.values) for op in cube if isinstance(op.values, (list, tuple, np.ndarray))], dtype='int')
+            np.prod([len(values) for _, values in cube if isinstance(values, (list, tuple, np.ndarray))], dtype='int')
             for cube in self.cubes
         ]
         return max(0, sum(cube_sizes))
@@ -521,10 +445,10 @@ class Domain:
         return None
 
     def _is_array_option(self):
-        """ Return True if domain consists of only on array-like option. """
+        """ Return True if domain consists of only one array-like option. """
         if len(self.cubes) == 1:
             if len(self.cubes[0]) == 1:
-                if isinstance(self.cubes[0][0].values, (list, tuple, np.ndarray)):
+                if isinstance(self.cubes[0][0][1], (list, tuple, np.ndarray)):
                     return True
         return False
 
@@ -533,18 +457,18 @@ class Domain:
         an only one array-like option of length 1.
         """
         for cube in self.cubes:
-            samplers = [option for option in cube if isinstance(option.values, Sampler)]
+            samplers = [name for name, values in cube if isinstance(values, Sampler)]
             if len(samplers) > 0:
                 return False
-            if any(len(item.values) != 1 for item in cube):
+            if any(len(values) != 1 for _, values in cube):
                 return False
         return True
 
     def _to_scalar_product(self):
         """ Transform domain to the matmul format (see :meth:`~.Domain._is_scalar_product`)"""
         if self._is_array_option():
-            option = self.cubes[0][0]
-            cubes = [[Option(option.parameter, [value])] for value in option.values]
+            name, values = self.cubes[0][0]
+            cubes = [[[name, [value]]] for value in values]
             weights = np.concatenate([[self.weights[0]] * len(cubes)])
             return Domain(cubes, weights)
         if self._is_scalar_product():
@@ -555,23 +479,57 @@ class Domain:
         """ Return iterator from the cube. All array-like options will be transformed
         to Cartesian product and all sampler-like options will produce independent samples
         for each condig. """
-        arrays = [option for option in cube if isinstance(option.values, (list, tuple, np.ndarray))]
-        samplers = [option for option in cube if isinstance(option.values, Sampler)]
+        arrays = [item for item in cube if isinstance(item[1], (list, tuple, np.ndarray))]
+        samplers = [item for item in cube if isinstance(item[1], Sampler)]
 
         if len(arrays) > 0:
-            for combination in list(product(*[option.items() for option in arrays])):
+            for combination in list(product(*[self.option_items(name, values) for name, values in arrays])):
                 res = []
-                for option in samplers:
-                    res.append(option.sample())
+                for name, values in samplers:
+                    res.append(self.option_sample(name, values))
                 res.extend(combination)
                 yield sum(res, ConfigAlias())
         else:
-            iterators = [option.iterator for option in cube]
+            iterators = [self.option_iterator(name, values) for name, values in cube]
             while True:
                 try:
                     yield sum([next(iterator) for iterator in iterators], ConfigAlias())
                 except StopIteration:
                     break
+
+    def option_sample(self, name, values, size=None):
+        """ Return `ConfigAlias` objects created on the base of Sampler-option.
+
+        Parameters
+        ----------
+        size : int or None
+            the size of the sample
+
+        Returns
+        -------
+            ConfigAlias (if size is None) or list of ConfigAlias objects (otherwise).
+        """
+
+        if not isinstance(values.value, Sampler):
+            raise TypeError('`values` must be Sampler but {} was given'.format(type(values)))
+        res = [ConfigAlias([[name, values.value.sample(1)[0, 0]]]) for _ in range(size or 1)]
+        if size is None:
+            res = res[0]
+        return res
+
+    def option_iterator(self, name, values):
+        """ Produce `ConfigAlias` from the option.
+
+        Returns
+        -------
+            generator.
+        """
+        if isinstance(values.value, Sampler):
+            while True:
+                yield ConfigAlias([[name, values.value.sample(1)[0, 0]]])
+        else:
+            for value in values:
+                yield ConfigAlias([[name, value]])
 
     def _get_sampling_blocks(self):
         """ Return blocks for sampling on the basis of weights. """
@@ -579,3 +537,8 @@ class Domain:
         excl = np.concatenate(([0], incl[:-1]))
         block_indices = incl + excl
         return [np.where(block_indices == i)[0] for i in set(block_indices)]
+
+class Option(Domain):
+    """ Alias for Domain({name: values}). """
+    def __init__(self, name, values):
+        super().__init__({name: values})

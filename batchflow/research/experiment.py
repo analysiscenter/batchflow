@@ -8,8 +8,8 @@ import traceback
 import hashlib
 import random
 from collections import OrderedDict
-import dill
 import json
+import dill
 
 from .. import Config, Pipeline, parallel, make_seed_sequence
 from ..named_expr import eval_expr

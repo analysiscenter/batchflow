@@ -17,6 +17,7 @@ class E(NamedExpression):
         self.name = None
         self.unit = unit
         self.all = all
+        super().__init__()
 
     def _get(self, **kwargs):
         experiment = kwargs['experiment']
