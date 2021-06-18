@@ -6,7 +6,7 @@ import pytest
 from batchflow import Dataset, Pipeline, B, V, C
 from batchflow.models.torch import ResNet
 from batchflow.opensets import MNIST
-from batchflow.research import Experiment, Executor, Option, Domain, Research, E, EC, O, ResearchResults
+from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults
 
 @pytest.fixture
 def simple_research(tmp_path):
@@ -18,7 +18,7 @@ def simple_research(tmp_path):
         .save(O('sum'), 'sum')
     )
 
-    domain = Option('x', [1, 2]) * Option('y', [2, 3, 4])
+    domain = Domain({'x': [1, 2], 'y': [2, 3, 4]})
     research = Research(name=os.path.join(tmp_path, 'research'), experiment=experiment, domain=domain)
 
     return research
@@ -62,7 +62,7 @@ def complex_research():
         def eval_metrics(self, metrics, **kwargs):
             return self.test_ppl.v('metrics').evaluate(metrics, **kwargs)
 
-    domain = Option('layout', ['f', 'faf']) @ Option('units', [[10], [100, 10]])
+    domain = Domain({'layout': ['f', 'faf']}) @ Domain({'units': [[10], [100, 10]]})
     research = (Research(domain=domain, n_reps=2)
         .add_instance('controller', Model)
         .add_pipeline('controller.train_ppl')
@@ -84,8 +84,8 @@ class TestDomain:
     @pytest.mark.parametrize('b', [[2, 3, 4]])
     @pytest.mark.parametrize('n_reps', [1, 2])
     def test_operations(self, op, a, b, n_reps):
-        option_1 = Option('a', a) #pylint:disable=unused-variable
-        option_2 = Option('b', b) #pylint:disable=unused-variable
+        option_1 = Domain({'a': a}) #pylint:disable=unused-variable
+        option_2 = Domain({'b': b}) #pylint:disable=unused-variable
 
         if not (op == '@' and len(a) != len(b)):
             domain = eval(f'option_1 {op} option_2') # pylint:disable=eval-used
@@ -112,10 +112,10 @@ class TestDomain:
                 assert config.config()['repetition'] == i % (repeat_each * n_reps) // repeat_each
 
     def test_domain_update(self):
-        domain = Domain(Option('a', [1, 2]))
+        domain = Domain({'a': [1, 2]})
 
         def update():
-            return Domain(Option('x', [3, 4]))
+            return Domain({'x': [3, 4]})
 
         domain.set_update(update, ['last'])
         configs = list(domain.iterator)
