@@ -74,6 +74,7 @@ class Research:
         self.logger = None
         self.process = None
         self.debug = False
+        self.finalize = False
 
     def __getattr__(self, key):
         if self.monitor is not None and key in self.monitor.SHARED_VARIABLES:
@@ -196,7 +197,7 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False):
+            debug=False, finalize=False):
         """ Run research.
 
         Parameters
@@ -263,6 +264,7 @@ class Research:
         self.bar = bar
         self.detach = detach
         self.debug = (debug and not parallel)
+        self.finalize = finalize
 
         if n_iters is None and self.experiment.only_callables:
             self.n_iters = 1

@@ -160,7 +160,7 @@ class TestExecutor:
 
     def test_direct_callable(self):
         experiment = (Experiment()
-            .sum(args=[range(10)], save_to='sum')
+            .sum(range(10), save_to='sum')
         )
         executor = Executor(experiment, target='f', n_iters=1)
         executor.run()
@@ -170,8 +170,8 @@ class TestExecutor:
     def test_direct_generator(self, generator): #pylint: disable=unused-argument
         experiment = (Experiment()
             .add_namespace(locals())
-            .generator(name='sum', mode='generator', n=10)
-            .save(O('sum'), 'sum')
+            .generator(10, mode='generator')
+            .save(O('generator'), 'sum')
         )
 
         executor = Executor(experiment, target='f', n_iters=10)
@@ -288,7 +288,7 @@ class TestExecutor:
             .save(O('func'), 'func', iterations_to_execute='last')
         )
 
-        executor = Executor(experiment, target='f', configs=[{'n':10}, {'n': 20}], n_iters=30)
+        executor = Executor(experiment, target='f', configs=[{'n': 10}, {'n': 20}], n_iters=30, finalize=True)
         executor.run()
 
         assert executor.experiments[0].results['sum'][10] == sum(range(10))
@@ -346,7 +346,7 @@ class TestResearch:
     @pytest.mark.slow
     @pytest.mark.parametrize('workers', [1, 2])
     def test_complex_research(self, workers, complex_research):
-        complex_research.run(dump_results=False, parallel=True, workers=workers, bar=False)
+        complex_research.run(dump_results=False, parallel=True, workers=workers, bar=False, finalize=True)
 
         assert len(complex_research.monitor.exceptions) == 0
         assert len(complex_research.results.df) == 4

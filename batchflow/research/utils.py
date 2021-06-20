@@ -89,3 +89,8 @@ def generate_id(config, random):
     name = hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8]
     name += ''.join(str(i) for i in random.integers(10, size=8))
     return name
+
+def explicit_call(method, name, experiment):
+    def _method(*args, **kwargs):
+        return experiment.add_executable_unit(name, src=method, args=args, **kwargs)
+    return _method

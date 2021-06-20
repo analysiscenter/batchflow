@@ -5,7 +5,6 @@ import os
 import sys
 from copy import copy, deepcopy
 import itertools
-from functools import partial
 import traceback
 from collections import OrderedDict
 import json
@@ -16,7 +15,7 @@ from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import create_logger, generate_id, must_execute, to_list, parse_name
+from .utils import create_logger, generate_id, must_execute, to_list, parse_name, explicit_call
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -505,7 +504,7 @@ class Experiment:
         method = self.get_method(name)
         if method is None:
             raise ValueError(f'Method {name} was not found in any namespace.')
-        return partial(self.add_executable_unit, name=name, src=method)
+        return explicit_call(method, name, self)
 
     def save(self, src, dst, iterations_to_execute=1, copy=False): #pylint:disable=redefined-outer-name
         """ Save something to research results.
@@ -679,7 +678,7 @@ class Experiment:
                 else:
                     if self.monitor:
                         self.monitor.execute_iteration(name, self)
-                if self.is_failed and (list(self.actions.keys())[-1] == name):
+                if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
                     self.is_alive = False
 
     def __str__(self):
@@ -751,6 +750,7 @@ class Executor:
         self.task_name = task_name or 'Task'
         self.target = target
         self.debug = self.research.debug if self.research is not None else kwargs.get('debug', False)
+        self.finalize = self.research.finalize if self.research is not None else kwargs.get('finalize', False)
 
         self.kwargs = kwargs
 
@@ -805,7 +805,8 @@ class Executor:
     @parallel(init='_parallel_init_call')
     def parallel_call(self, experiment, iteration, unit_name):
         """ Parallel call of the unit 'unit_name' """
-        experiment.call(unit_name, iteration, self.n_iters)
+        if self.finalize or (not experiment.is_failed):
+            experiment.call(unit_name, iteration, self.n_iters)
 
     def _parallel_init_call(self, iteration, unit_name):
         """ Auxilary method to call before '_parallel_call'. """
@@ -817,7 +818,8 @@ class Executor:
         # TODO: experiment must be alive if error was in the branch after all roots
         self.experiments[0].call(unit_name, iteration, self.n_iters)
         for experiment in self.experiments[1:]:
-            experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
+            if self.finalize or (not experiment.is_failed):
+                experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
             for attr in ['_is_alive', '_is_failed', 'iteration']:
                 setattr(experiment, attr, getattr(self.experiments[0], attr))
 
