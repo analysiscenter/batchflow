@@ -204,7 +204,7 @@ class TestExecutor:
         assert executor.experiments[0].results['sum'][0] == 20
         assert executor.experiments[1].results['sum'][0] == 30
 
-    def test_namespaces(self):
+    def test_instances(self):
         class MyClass:
             def __init__(self, x):
                 self.x = x

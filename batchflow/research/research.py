@@ -1,3 +1,4 @@
+#pylint:disable=logging-fstring-interpolation
 """ Research class for muliple parallel experiments. """
 
 import os

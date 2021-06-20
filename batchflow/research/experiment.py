@@ -86,38 +86,38 @@ class PipelineWrapper:
 
         return PipelineWrapper(self.pipeline + Pipeline(), self.mode)
 
-class Namespace:
-    """ Namespace to use in each experiment in research. Will be initialized at the start of the experiment execution.
+class InstanceCreator:
+    """ Instance class to use in each experiment in research. Will be initialized at the start of the experiment execution.
 
     Parameters
     ----------
     name : str
-        name of the namespace to use in research.
-    namespace : class
-        class which represents namespace.
+        name of the instance to use in research.
+    creator : class
+        class of the instance.
     root : bool, optional
-        does namespace is the same for all branches or not, by default False.
+        does instance is the same for all branches or not, by default False.
     args : list
-        args for namespace initialization, by default None.
+        args for instance initialization, by default None.
     kwargs, other_kwargs : dict
-        kwargs for namespace initialization.
+        kwargs for instance initialization.
     """
-    def __init__(self, name, namespace, root=False, args=None, kwargs=None, **other_kwargs):
+    def __init__(self, name, creator, root=False, args=None, kwargs=None, **other_kwargs):
         self.name = name
-        self.namespace = namespace
+        self.creator = creator
         self.root = root
         self.args = [] if args is None else args
         self.kwargs = {} if kwargs is None else kwargs
         self.other_kwargs = other_kwargs
 
     def __call__(self, experiment, *args, **kwargs):
-        """ Create instance of the namespace. """
+        """ Create instance of the creator. """
         args = [*self.args, *args]
         kwargs = {**self.kwargs, **kwargs}
         args = eval_expr(args, experiment=experiment)
         kwargs = eval_expr(kwargs, experiment=experiment)
         other_kwargs = eval_expr(self.other_kwargs, experiment=experiment)
-        return self.namespace(*args, **other_kwargs, **kwargs)
+        return self.creator(*args, **other_kwargs, **kwargs)
 
 class ExecutableUnit:
     """ Class to represent callables and generators executed in experiment.
@@ -127,10 +127,10 @@ class ExecutableUnit:
     name : str
         name of the unit.
     func : callable or tuple of str, optional
-        callable itself or tuple whcih consists of namespace name and its attribute to call, by default None.
+        callable itself or tuple which consists of instance name and its attribute to call, by default None.
         `func` and `generator` can't be defined simultaneously.
     generator : generator or tuple of str, optional
-        generator itself or tuple which consists of namespace name and its attribute to call, by default None.
+        generator itself or tuple which consists of instance name and its attribute to call, by default None.
         `func` and `generator` can't be defined simultaneously.
     root : bool, optional
         does unit is the same for all branches or not, by default False.
@@ -252,25 +252,25 @@ class ExecutableUnit:
         self.__dict__.update(d)
 
 class Experiment:
-    """ Experiment description which consists of lists of namespaces and actions to execute. Each action defines
+    """ Experiment description which consists of lists of instances and actions to execute. Each action defines
     executable unit (callable or generator) and corresponding execution parameters. Actions will be executed in
-    the order defined by list. Actions can be defined as attributes of some namespace (e.g., see `name` of
+    the order defined by list. Actions can be defined as attributes of some instance (e.g., see `name` of
     `:meth:.add_callable`).
 
     Parameters
     ----------
-    namespaces : list, optional
-        list of namespaces, by default None. Can be extended by `:meth:.add_instance`.
+     : list, optional
+        list of instance_creators, by default None. Can be extended by `:meth:.add_instance`.
     actions : list, optional
         list of actions, by default None.  Can be extended by `:meth:.add_executable_unit` and other methods.
     """
-    def __init__(self, namespaces=None, actions=None):
-        if namespaces is not None:
-            self.namespaces = OrderedDict(namespaces)
+    def __init__(self, instance_creators=None, actions=None):
+        if instance_creators is not None:
+            self.instance_creators = OrderedDict(instance_creators)
         else:
-            self.namespaces = OrderedDict()
+            self.instance_creators = OrderedDict()
         if actions is None:
-            self.actions = OrderedDict() # unit_name : (namespace_name, attr_name) or callable
+            self.actions = OrderedDict() # unit_name : (instance_name, attr_name) or callable
         else:
             self.actions = actions
 
@@ -413,15 +413,15 @@ class Experiment:
         """
         return self.add_executable_unit(name, src=generator, mode='generator', args=args, **kwargs)
 
-    def add_instance(self, name, namespace, root=False, **kwargs):
-        """ Add class as namespace.
+    def add_instance(self, name, creator, root=False, **kwargs):
+        """ Add instance of some class into research.
 
         Parameters
         ----------
         name : str
-            namespace name.
-        namespace : class
-            class which instance will be used as namespace to get attributes.
+            instance name.
+        creator : class
+            class which instance will be used to get attributes.
         root : bool, optional
             does instances is the same for all branches or not, by default False.
 
@@ -429,7 +429,7 @@ class Experiment:
         -------
         Experiment
         """
-        self.namespaces[name] = Namespace(name, namespace, root, **kwargs)
+        self.instance_creators[name] = InstanceCreator(name, creator, root, **kwargs)
         self.add_callable(f'init_{name}', _create_instance, experiments=E(all=root),
                           root=root, item_name=name, iterations_to_execute="%0")
         return self
@@ -527,9 +527,9 @@ class Experiment:
 
     def copy(self):
         """ Create copy of the experiment. Is needed to create experiments for branches. """
-        namespaces = copy(self.namespaces)
+        instance_creators = copy(self.instance_creators)
         actions = OrderedDict([(name, copy(unit)) for name, unit in self.actions.items()])
-        new_experiment = Experiment(namespaces=namespaces, actions=actions)
+        new_experiment = Experiment(instance_creators=instance_creators, actions=actions)
         new_experiment.has_dump = self.has_dump
         return new_experiment
 
@@ -640,10 +640,10 @@ class Experiment:
     def __str__(self):
         repr = "instances:\n"
         spacing = ' ' * 4
-        for name, namespace in self.namespaces.items():
+        for name, creator in self.instance_creators.items():
             repr += spacing + f"{name}(\n"
-            repr += 2 * spacing + f"root={namespace.root},\n"
-            repr += ''.join([spacing * 2 + f"{key}={value}\n" for key, value in namespace.kwargs.items()])
+            repr += 2 * spacing + f"root={creator.root},\n"
+            repr += ''.join([spacing * 2 + f"{key}={value}\n" for key, value in creator.kwargs.items()])
             repr += spacing + ")\n"
 
         repr += "\nunits:\n"
@@ -778,7 +778,7 @@ class Executor:
 def _create_instance(experiments, item_name):
     if not isinstance(experiments, list):
         experiments = [experiments]
-    instance = experiments[0].namespaces[item_name](experiments[0])
+    instance = experiments[0].instance_creators[item_name](experiments[0])
     for e in experiments:
         e.instances[item_name] = instance
 
