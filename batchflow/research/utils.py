@@ -91,6 +91,7 @@ def generate_id(config, random):
     return name
 
 def explicit_call(method, name, experiment):
+    """ Add unit into research by explicit call in research-pipeline. """
     def _method(*args, **kwargs):
         return experiment.add_executable_unit(name, src=method, args=args, **kwargs)
     return _method
