@@ -2,8 +2,10 @@
 """ Experiment and corresponding classes. """
 
 import os
+import sys
 from copy import copy, deepcopy
 import itertools
+from functools import partial
 import traceback
 from collections import OrderedDict
 import json
@@ -87,7 +89,8 @@ class PipelineWrapper:
         return PipelineWrapper(self.pipeline + Pipeline(), self.mode)
 
 class InstanceCreator:
-    """ Instance class to use in each experiment in research. Will be initialized at the start of the experiment execution.
+    """ Instance class to use in each experiment in research. Will be initialized at the start of
+    the experiment execution.
 
     Parameters
     ----------
@@ -174,7 +177,7 @@ class ExecutableUnit:
         self.config = config
         self.experiment = experiment
 
-    def get_method(self):
+    def transform_method(self):
         """ Transform `callable` or `generator` from tuples of str to instance attributes. """
         attr = 'callable' if self.callable is not None else 'generator'
         src = getattr(self, attr)
@@ -205,7 +208,7 @@ class ExecutableUnit:
             output of the wrapped unit
         """
         if iteration == 0:
-            self.get_method()
+            self.transform_method()
 
         if self.must_execute(iteration, n_iters, last):
             self.iteration = iteration
@@ -259,12 +262,14 @@ class Experiment:
 
     Parameters
     ----------
-     : list, optional
+    instance_creators : list, optional
         list of instance_creators, by default None. Can be extended by `:meth:.add_instance`.
     actions : list, optional
         list of actions, by default None.  Can be extended by `:meth:.add_executable_unit` and other methods.
+    namespaces : list, optional
+        list of namespaces, by default None. If None, then global namespace will be added.
     """
-    def __init__(self, instance_creators=None, actions=None):
+    def __init__(self, instance_creators=None, actions=None, namespaces=None):
         if instance_creators is not None:
             self.instance_creators = OrderedDict(instance_creators)
         else:
@@ -273,6 +278,8 @@ class Experiment:
             self.actions = OrderedDict() # unit_name : (instance_name, attr_name) or callable
         else:
             self.actions = actions
+        self._namespaces = namespaces if namespaces is not None else []
+
 
         self._is_alive = True # should experiment be executed or not. Becomes False when Exceptions was raised and all
                               # units for these iterations were executed.
@@ -472,6 +479,34 @@ class Experiment:
             self.add_callable(f'{name}_branch', func=branch_pipeline, config=EC(), batch=O(f'{name}_root'), **kwargs)
         return self
 
+    def add_namespace(self, namespace):
+        """ Add namespace to experiment. """
+        self._namespaces += [namespace]
+        return self
+
+    @property
+    def _all_namespaces(self):
+        common_namespaces = [sys.modules["__main__"], sys.modules["builtins"]]
+        namespaces = [sys.modules[namespace] if isinstance(namespace, str) else namespace
+                      for namespace in self._namespaces]
+
+        return common_namespaces + namespaces
+
+    def get_method(self, name):
+        """ Return a method by the name """
+        for namespace in self._all_namespaces:
+            if hasattr(namespace, name):
+                return getattr(namespace, name)
+            if isinstance(namespace, dict) and name in namespace:
+                return namespace[name]
+        return None
+
+    def __getattr__(self, name):
+        method = self.get_method(name)
+        if method is None:
+            raise ValueError(f'Method {name} was not found in any namespace.')
+        return partial(self.add_executable_unit, name=name, src=method)
+
     def save(self, src, dst, iterations_to_execute=1, copy=False): #pylint:disable=redefined-outer-name
         """ Save something to research results.
 
@@ -575,11 +610,18 @@ class Experiment:
         self.config = config.config()
 
         # Get attributes from research or kwargs of executor
-        for attr, default in [('dump_results', False), ('loglevel', 'debug'), ('name', 'executor'), ('monitor', None)]:
+        defaults = {
+            'dump_results': False,
+            'loglevel': 'debug',
+            'name': 'executor',
+            'monitor': None,
+            'debug': False
+        }
+        for attr in defaults:
             if self.research:
                 value = getattr(self.research, attr)
             else:
-                value = self.executor.kwargs.get(attr, default)
+                value = self.executor.kwargs.get(attr, defaults[attr])
             setattr(self, attr, value)
 
         if self.dump_results:
@@ -615,27 +657,30 @@ class Experiment:
             self.iteration = iteration
 
             self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
-            try:
+            if self.debug:
                 self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
-            except Exception as e: #pylint:disable=broad-except
-                self.is_failed = True
-                self.last = True
-                if isinstance(e, StopIteration):
-                    self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
-                    if self.monitor:
-                        self.monitor.stop_iteration(name, self)
-                else:
-                    self.exception = e
-                    ex_traceback = e.__traceback__
-                    msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
-                    self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
-                    if self.monitor:
-                        self.monitor.fail_item_execution(name, self, msg)
             else:
-                if self.monitor:
-                    self.monitor.execute_iteration(name, self)
-            if self.is_failed and (list(self.actions.keys())[-1] == name):
-                self.is_alive = False
+                try:
+                    self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
+                except Exception as e: #pylint:disable=broad-except
+                    self.is_failed = True
+                    self.last = True
+                    if isinstance(e, StopIteration):
+                        self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
+                        if self.monitor:
+                            self.monitor.stop_iteration(name, self)
+                    else:
+                        self.exception = e
+                        ex_traceback = e.__traceback__
+                        msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
+                        self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
+                        if self.monitor:
+                            self.monitor.fail_item_execution(name, self, msg)
+                else:
+                    if self.monitor:
+                        self.monitor.execute_iteration(name, self)
+                if self.is_failed and (list(self.actions.keys())[-1] == name):
+                    self.is_alive = False
 
     def __str__(self):
         repr = "instances:\n"
@@ -655,6 +700,12 @@ class Experiment:
             repr += spacing + ")\n"
 
         return repr
+
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
 
 class Executor:
     """ Executor of experiments in branches.
@@ -699,6 +750,7 @@ class Executor:
         self.experiment_template = experiment
         self.task_name = task_name or 'Task'
         self.target = target
+        self.debug = self.research.debug if self.research is not None else kwargs.get('debug', False)
 
         self.kwargs = kwargs
 
@@ -739,7 +791,7 @@ class Executor:
                 if unit.root:
                     self.call_root(iteration, unit_name)
                 else:
-                    self.parallel_call(iteration, unit_name, target=self.target) #pylint:disable=unexpected-keyword-arg
+                    self.parallel_call(iteration, unit_name, target=self.target, debug=self.debug) #pylint:disable=unexpected-keyword-arg
             if not any([experiment.is_alive for experiment in self.experiments]):
                 break
 

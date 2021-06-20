@@ -9,6 +9,15 @@ from batchflow.opensets import MNIST
 from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults
 
 @pytest.fixture
+def generator():
+    def _generator(n):
+        s = 0
+        for i in range(n):
+            s += i
+            yield s
+    return _generator
+
+@pytest.fixture
 def simple_research(tmp_path):
     def f(x, y):
         return x + y
@@ -138,13 +147,7 @@ class TestExecutor:
 
         assert executor.experiments[0].results['sum'][0] == sum(range(10))
 
-    def test_generator(self):
-        def generator(n):
-            s = 0
-            for i in range(n):
-                s += i
-                yield s
-
+    def test_generator(self, generator):
         experiment = (Experiment()
             .add_generator('sum', generator, n=10)
             .save(O('sum'), 'sum')
@@ -155,13 +158,28 @@ class TestExecutor:
 
         assert executor.experiments[0].results['sum'][9] == sum(range(10))
 
-    def test_units_without_name(self):
-        def generator(n):
-            s = 0
-            for i in range(n):
-                s += i
-                yield s
+    def test_direct_callable(self):
+        experiment = (Experiment()
+            .sum(args=[range(10)], save_to='sum')
+        )
+        executor = Executor(experiment, target='f', n_iters=1)
+        executor.run()
 
+        assert executor.experiments[0].results['sum'][0] == sum(range(10))
+
+    def test_direct_generator(self, generator): #pylint: disable=unused-argument
+        experiment = (Experiment()
+            .add_namespace(locals())
+            .generator(name='sum', mode='generator', n=10)
+            .save(O('sum'), 'sum')
+        )
+
+        executor = Executor(experiment, target='f', n_iters=10)
+        executor.run()
+
+        assert executor.experiments[0].results['sum'][9] == sum(range(10))
+
+    def test_units_without_name(self, generator):
         experiment = (Experiment()
             .add_callable(sum, args=[range(10)])
             .add_generator(generator, n=10)
@@ -259,13 +277,7 @@ class TestExecutor:
         assert executor.experiments[0].results['var'][9] == sum(range(10)) * 10
         assert executor.experiments[1].results['var'][9] == sum(range(10)) * 20
 
-    def test_stop_iteration(self):
-        def generator(n):
-            s = 0
-            for i in range(n):
-                s += i
-                yield s
-
+    def test_stop_iteration(self, generator):
         def inc(x):
             return x + 1
 

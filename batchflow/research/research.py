@@ -73,17 +73,17 @@ class Research:
         self.results = None
         self.logger = None
         self.process = None
+        self.debug = False
 
     def __getattr__(self, key):
-        if key in ['add_instance', 'add_callable', 'add_generator', 'add_pipeline', 'save', 'dump']:
-            def _method(*args, **kwargs):
-                getattr(self.experiment, key)(*args, **kwargs)
-                return self
-            _method.__doc__ = getattr(self.experiment, key).__doc__
-            return _method
-        if key in self.monitor.SHARED_VARIABLES:
+        if self.monitor is not None and key in self.monitor.SHARED_VARIABLES:
             return getattr(self.monitor, key)
-        raise AttributeError(f'Unknown attribute: {key}')
+
+        def _method(*args, **kwargs):
+            getattr(self.experiment, key)(*args, **kwargs)
+            return self
+        _method.__doc__ = getattr(self.experiment, key).__doc__
+        return _method
 
     def __getstate__(self):
         return self.__dict__
@@ -195,7 +195,8 @@ class Research:
 
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
-            dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False):
+            dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
+            debug=False):
         """ Run research.
 
         Parameters
@@ -229,6 +230,9 @@ class Research:
             use or not progress bar.
         detach : bool
             run research in separate process or not.
+        debug : bool
+            If False, continue research after exceptions. If True, raise Exception. Can be used only with
+            parallel=False.
 
         Returns
         -------
@@ -258,6 +262,7 @@ class Research:
         self.loglevel = loglevel
         self.bar = bar
         self.detach = detach
+        self.debug = (debug and not parallel)
 
         if n_iters is None and self.experiment.only_callables:
             self.n_iters = 1
