@@ -41,7 +41,7 @@ class ResearchResults:
 
     def load_configs(self):
         """ Load experiment configs. """
-        for path in glob.glob(os.path.join(self.name, 'experiments', '*', 'config')):
+        for path in glob.glob(os.path.join(self.name, 'experiments', '*', 'config.dill')):
             path = os.path.normpath(path)
             _experiment_id = path.split(os.sep)[-2]
             with open(path, 'rb') as f:
@@ -187,6 +187,7 @@ class ResearchResults:
             raise ValueError('Only one of `config`, `alias` and `domain` can be not None')
         filtered_ids = []
         if domain is not None:
+            domain.reset_iter()
             for _config in domain.iterator:
                 filtered_ids += self.filter_ids_by_configs(config=_config.config())
             return filtered_ids

@@ -124,6 +124,11 @@ class ConfigAlias:
     def __getitem__(self, key):
         return self.config()[key]
 
+    def __setitem__(self, key, value):
+        _key = key if isinstance(key, Alias) else Alias(key)
+        _value = value if isinstance(value, Alias) else Alias(value)
+        self._config.append((_key, _value))
+
     def __repr__(self):
         from pprint import pformat
         return pformat(self.alias().config)
@@ -381,7 +386,7 @@ class Domain:
                 for block in blocks:
                     weights = self.weights[block]
                     weights[np.isnan(weights)] = 1
-                    iterators = [self._cube_iterator(cube) for cube in np.array(self.cubes)[block]]
+                    iterators = [self._cube_iterator(cube) for cube in np.array(self.cubes, dtype=object)[block]]
                     while len(iterators) > 0:
                         index = np.random.choice(len(block), p=weights/weights.sum())
                         try:

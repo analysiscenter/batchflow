@@ -20,6 +20,8 @@ from .experiment import Experiment, Executor
 from .results import ResearchResults
 from .utils import create_logger
 
+from ..utils_random import make_seed_sequence
+
 class Research:
     """ Research is an instrument to run multiple parallel experiments with different combinations of
     parameters called experiment configs. Configs are produced by :class:`domain.Domain` (some kind of
@@ -191,7 +193,7 @@ class Research:
 
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
-            dump_results=True, parallel=True, executor_target='threads', loglevel='info', bar=True, detach=False):
+            dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False):
         """ Run research.
 
         Parameters
@@ -269,14 +271,18 @@ class Research:
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
                           stacklevel=2)
 
+        self.random_seed = make_seed_sequence(42)
+
         if self.dump_results:
             self.create_research_folder()
             self.experiment = self.experiment.dump() # add final dump of experiment results
             self.dump_research()
+            self.loglevel = loglevel or 'info'
+        else:
+            self.loglevel = loglevel or 'error'
+
         self.attach_env_meta()
-
         self.create_logger()
-
         self.logger.info("Research is starting")
 
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)

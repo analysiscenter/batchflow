@@ -1,10 +1,13 @@
 """ Classes for multiprocess job running. """
 
 import os
+import numpy as np
+import hashlib
 import multiprocess as mp
 
 from .. import Config
 from .domain import Domain
+from ..utils_random import make_rng, spawn_seed_sequence
 
 class DynamicQueue:
     """ Queue of tasks that can be changed depending on previous results. """
@@ -20,6 +23,10 @@ class DynamicQueue:
 
         self.finished_tasks = 0
         self.tasks_in_queue = 0
+
+        seed = spawn_seed_sequence(research)
+        self.random_seed = seed
+        self.random = make_rng(seed)
 
     @property
     def domain(self):
@@ -38,6 +45,11 @@ class DynamicQueue:
             self.configs_remains = self._domain.size
         return new_domain is not None
 
+    def generate_id(self, config):
+        id = hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8]
+        id += ''.join(str(i) for i in self.random.integers(10, size=8))
+        return id
+
     def next_tasks(self, n_tasks=1):
         """ Get next `n_tasks` elements of queue. """
         configs = []
@@ -45,7 +57,9 @@ class DynamicQueue:
             branch_tasks = [] # TODO: rename it
             try:
                 for _ in range(self.n_branches):
-                    branch_tasks.append(next(self.domain))
+                    config = next(self.domain)
+                    config['id'] = self.generate_id(config)
+                    branch_tasks.append(config)
                 configs.append(branch_tasks)
             except StopIteration:
                 if len(branch_tasks) > 0:

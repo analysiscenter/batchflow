@@ -5,13 +5,11 @@ import os
 from copy import copy, deepcopy
 import itertools
 import traceback
-import hashlib
-import random
 from collections import OrderedDict
 import json
 import dill
 
-from .. import Config, Pipeline, parallel, make_seed_sequence
+from .. import Config, Pipeline, parallel, spawn_seed_sequence, make_rng
 from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
@@ -543,10 +541,6 @@ class Experiment:
         _ = memo
         return self.copy()
 
-    def generate_id(self, alias):
-        """ Create unique name for trhe experiment. """
-        self.id = hashlib.md5(alias.encode('utf-8')).hexdigest()[:8] + str(random.getrandbits(16))
-
     def create_folder(self):
         """ Create folder for experiment results. """
         self.experiment_path = os.path.join('experiments', self.id)
@@ -564,10 +558,15 @@ class Experiment:
     def init(self, index, config, executor=None):
         """ Create all instances of units to start experiment. """
         self.index = index
+        self.id = config.pop_config('id').config()['id']
         self.config_alias = config
         self.config = config.config()
         self.executor = executor
         self.research = executor.research
+
+        seed = spawn_seed_sequence(self.research)
+        self.random_seed = seed
+        self.random = make_rng(seed)
 
         # Get attributes from research or kwargs of executor
         for attr, default in [('dump_results', False), ('loglevel', 'debug'), ('name', 'executor'), ('monitor', None)]:
@@ -577,7 +576,6 @@ class Experiment:
                 value = self.executor.kwargs.get(attr, default)
             setattr(self, attr, value)
 
-        self.generate_id(config.alias(as_string=True))
         if self.dump_results:
             self.create_folder()
             self.dump_config()
@@ -698,7 +696,6 @@ class Executor:
 
         self.kwargs = kwargs
 
-        self.random_seed = make_seed_sequence()
         self.create_experiments()
 
         self.worker = None
