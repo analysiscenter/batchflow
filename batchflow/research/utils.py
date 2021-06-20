@@ -3,6 +3,7 @@ import os
 import glob
 import shutil
 import logging
+import hashlib
 
 
 def to_list(value):
@@ -82,3 +83,9 @@ def parse_name(name):
     if len(name_components) > 2:
         raise ValueError(f'name must be "namespace_name.unit_name" but {name} were given')
     return name_components
+
+def generate_id(config, random):
+    """ Generate id for experiment. """
+    name = hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8]
+    name += ''.join(str(i) for i in random.integers(10, size=8))
+    return name

@@ -9,12 +9,12 @@ from collections import OrderedDict
 import json
 import dill
 
-from .. import Config, Pipeline, parallel, spawn_seed_sequence, make_rng
+from .. import Config, Pipeline, parallel, spawn_seed_sequence, make_rng, make_seed_sequence
 from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import create_logger, must_execute, to_list, parse_name
+from .utils import create_logger, generate_id, must_execute, to_list, parse_name
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -300,6 +300,8 @@ class Experiment:
         self.logger = None
         self.iteration = None
         self.exception = None
+        self.random_seed = None
+        self.random = None
 
     @property
     def is_alive(self):
@@ -558,15 +560,19 @@ class Experiment:
     def init(self, index, config, executor=None):
         """ Create all instances of units to start experiment. """
         self.index = index
-        self.id = config.pop_config('id').config()['id']
-        self.config_alias = config
-        self.config = config.config()
         self.executor = executor
         self.research = executor.research
 
-        seed = spawn_seed_sequence(self.research)
+        seed = spawn_seed_sequence(self.executor)
         self.random_seed = seed
         self.random = make_rng(seed)
+
+        if self.research is not None:
+            self.id = config.pop_config('id').config()['id']
+        else:
+            self.id = generate_id(config, self.random)
+        self.config_alias = config
+        self.config = config.config()
 
         # Get attributes from research or kwargs of executor
         for attr, default in [('dump_results', False), ('loglevel', 'debug'), ('name', 'executor'), ('monitor', None)]:
@@ -695,6 +701,13 @@ class Executor:
         self.target = target
 
         self.kwargs = kwargs
+
+        if research is not None:
+            seed = spawn_seed_sequence(research)
+        else:
+            seed = make_seed_sequence()
+        self.random_seed = seed
+        self.random = make_rng(seed)
 
         self.create_experiments()
 

@@ -1,12 +1,11 @@
 """ Classes for multiprocess job running. """
 
 import os
-import numpy as np
-import hashlib
 import multiprocess as mp
 
 from .. import Config
 from .domain import Domain
+from .utils import generate_id
 from ..utils_random import make_rng, spawn_seed_sequence
 
 class DynamicQueue:
@@ -45,11 +44,6 @@ class DynamicQueue:
             self.configs_remains = self._domain.size
         return new_domain is not None
 
-    def generate_id(self, config):
-        id = hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8]
-        id += ''.join(str(i) for i in self.random.integers(10, size=8))
-        return id
-
     def next_tasks(self, n_tasks=1):
         """ Get next `n_tasks` elements of queue. """
         configs = []
@@ -58,7 +52,7 @@ class DynamicQueue:
             try:
                 for _ in range(self.n_branches):
                     config = next(self.domain)
-                    config['id'] = self.generate_id(config)
+                    config['id'] = generate_id(config, self.random)
                     branch_tasks.append(config)
                 configs.append(branch_tasks)
             except StopIteration:

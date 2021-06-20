@@ -53,6 +53,7 @@ class Research:
         self.repeat_each = repeat_each
 
         self._env = dict() # current state of git repo and other environment information.
+        self.random_seed = make_seed_sequence(42)
 
         self.workers = 1
         self.branches = 1
@@ -270,8 +271,6 @@ class Research:
         if self.domain.size is None and (self.domain.update_func is None or self.domain.update_each == 'last'):
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
                           stacklevel=2)
-
-        self.random_seed = make_seed_sequence(42)
 
         if self.dump_results:
             self.create_research_folder()
