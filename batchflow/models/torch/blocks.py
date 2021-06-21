@@ -103,7 +103,7 @@ class ResBlock(ConvBlock):
     """
     def __init__(self, inputs=None, layout='cnacn', filters='same', kernel_size=3, strides=1,
                  downsample=False, bottleneck=False, attention=None, groups=1, op='+a', n_reps=1, **kwargs):
-        num_convs = sum(letter in CONV_LETTERS for letter in layout) + sum(letter in CONV_LETTERS for letter in op)
+        num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
         filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
         filters = [safe_eval(item, get_num_channels(inputs)) if isinstance(item, str) else item
