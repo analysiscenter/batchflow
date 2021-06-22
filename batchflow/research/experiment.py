@@ -136,28 +136,28 @@ class ExecutableUnit:
         `func` and `generator` can't be defined simultaneously.
     root : bool, optional
         does unit is the same for all branches or not, by default False.
-    iterations_to_execute : str, int or list of ints, optional
+    when : str, int or list of ints, optional
         iterations of the experiment to execute unit, by default 1.
             - If `'last'`, unit will be executed just at last iteration (if `iteration + 1 == n_iters` or
               `StopIteration` was raised).
-            - If positive int, pipeline will be executed each `iterations_to_execute` iterations.
+            - If positive int, pipeline will be executed each `when` iterations.
             - If str, must be `'#{it}'` or `'last'` where it is int, the pipeline will be executed at this
               iteration (zero-based).
             - If list, must be list of int or str described above.
     args, kwargs : optional
         args and kwargs for unit call, by default None.
     """
-    def __init__(self, name, func=None, generator=None, root=False, iterations_to_execute=1,
+    def __init__(self, name, func=None, generator=None, root=False, when=1,
                  args=None, kwargs=None, **other_kwargs):
         self.name = name
         self.callable = func
         self.generator = generator
 
         self.root = root
-        self.iterations_to_execute = iterations_to_execute
+        self.when = when
 
-        if isinstance(self.iterations_to_execute, (int, str)):
-            self.iterations_to_execute = [self.iterations_to_execute]
+        if isinstance(self.when, (int, str)):
+            self.when = [self.when]
 
         self.args = [] if args is None else args
         self.kwargs = {} if kwargs is None else kwargs
@@ -226,7 +226,7 @@ class ExecutableUnit:
 
     def must_execute(self, iteration, n_iters=None, last=False):
         """ Returns does unit must be executed for the current iteration. """
-        return must_execute(iteration, self.iterations_to_execute, n_iters, last)
+        return must_execute(iteration, self.when, n_iters, last)
 
     @property
     def src(self):
@@ -236,7 +236,7 @@ class ExecutableUnit:
 
     def __copy__(self):
         """ Create copy of the unit. """
-        attrs = ['name', 'callable', 'generator', 'root', 'iterations_to_execute', 'args', 'kwargs']
+        attrs = ['name', 'callable', 'generator', 'root', 'when', 'args', 'kwargs']
         params = {attr if attr !='callable' else 'func': copy(getattr(self, attr)) for attr in attrs}
         new_unit = ExecutableUnit(**params, **copy(self.other_kwargs))
         return new_unit
@@ -254,8 +254,8 @@ class ExecutableUnit:
         self.__dict__.update(d)
 
 class Experiment:
-    """ Experiment description which consists of lists of instances and actions to execute. Each action defines
-    executable unit (callable or generator) and corresponding execution parameters. Actions will be executed in
+    """ Experiment description which consists of lists of instances to create and actions to execute. Each action
+    defines executable unit (callable or generator) and corresponding execution parameters. Actions will be executed in
     the order defined by list. Actions can be defined as attributes of some instance (e.g., see `name` of
     `:meth:.add_callable`).
 
@@ -325,7 +325,7 @@ class Experiment:
     def is_failed(self, value):
         self._is_failed = self._is_failed or value
 
-    def add_executable_unit(self, name, src=None, mode='func', iterations_to_execute=1,
+    def add_executable_unit(self, name, src=None, mode='func', when=1,
                             save_to=None, args=None, **kwargs):
         """ Add executable unit to experiment.
 
@@ -337,8 +337,8 @@ class Experiment:
             callable or generator to wrap into ExecutableUnit, by default None.
         mode : str, optional
             type of src ('func' or 'generator'), by default 'func'
-        iterations_to_execute : int, str or list, optional
-            iterations to execute callable (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+        when : int, str or list, optional
+            iterations to execute callable (see `when` of `:class:ExecutableUnit`), by default 1.
         save_to : NamedExpression, optional
             dst to save output of the unit (if needed), by default None.
         args : list, optional
@@ -359,12 +359,12 @@ class Experiment:
         else:
             kwargs[mode] = src
 
-        self.actions[name] = ExecutableUnit(name=name, args=args, iterations_to_execute=iterations_to_execute, **kwargs)
+        self.actions[name] = ExecutableUnit(name=name, args=args, when=when, **kwargs)
         if save_to is not None:
-            self.save(src=O(name), dst=save_to, iterations_to_execute=iterations_to_execute, copy=False)
+            self.save(src=O(name), dst=save_to, when=when, copy=False)
         return self
 
-    def add_callable(self, name, func=None, args=None, iterations_to_execute=1, save_to=None, **kwargs):
+    def add_callable(self, name, func=None, args=None, when=1, save_to=None, **kwargs):
         """ Add callable to experiment.
 
         Parameters
@@ -375,8 +375,8 @@ class Experiment:
             callable to add into experiment, by default None.
         args : list, optional
             args to execute callable, by default None.
-        iterations_to_execute : int, str or list, optional
-            iterations to execute callable (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+        when : int, str or list, optional
+            iterations to execute callable (see `when` of `:class:ExecutableUnit`), by default 1.
         save_to : NamedExpression, optional
             dst to save output of the callable (if needed), by default None.
         root : bool, optional
@@ -388,7 +388,7 @@ class Experiment:
         -------
         Research
         """
-        return self.add_executable_unit(name, src=func, mode='func', iterations_to_execute=iterations_to_execute,
+        return self.add_executable_unit(name, src=func, mode='func', when=when,
                                         save_to=save_to, args=args, **kwargs)
 
     def add_generator(self, name, generator=None, args=None, **kwargs):
@@ -403,8 +403,8 @@ class Experiment:
             generator to add into experiment, by default None.
         args : list, optional
             args to create iterator, by default None.
-        iterations_to_execute : int, str or list, optional
-            iterations to get item from generator (see `iterations_to_execute` of `:class:ExecutableUnit`),
+        when : int, str or list, optional
+            iterations to get item from generator (see `when` of `:class:ExecutableUnit`),
             by default 1.
         save_to : NamedExpression, optional
             dst to save generated item (if needed), by default None.
@@ -437,7 +437,7 @@ class Experiment:
         """
         self.instance_creators[name] = InstanceCreator(name, creator, root, **kwargs)
         self.add_callable(f'init_{name}', _create_instance, experiments=E(all=root),
-                          root=root, item_name=name, iterations_to_execute="%0")
+                          root=root, item_name=name, when="%0")
         return self
 
     def add_pipeline(self, name, root_pipeline=None, branch_pipeline=None, run=False, **kwargs):
@@ -459,8 +459,8 @@ class Experiment:
             different configs from domain.
         run : bool, optional
             if False then `.next_batch()` will be applied to pipeline, else `.run()` , by default False.
-        iterations_to_execute : int, str or list, optional
-            iterations to execute (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+        when : int, str or list, optional
+            iterations to execute (see `when` of `:class:ExecutableUnit`), by default 1.
 
         Returns
         -------
@@ -506,7 +506,7 @@ class Experiment:
             raise ValueError(f'Method {name} was not found in any namespace.')
         return explicit_call(method, name, self)
 
-    def save(self, src, dst, iterations_to_execute=1, copy=False): #pylint:disable=redefined-outer-name
+    def save(self, src, dst, when=1, copy=False): #pylint:disable=redefined-outer-name
         """ Save something to research results.
 
         Parameters
@@ -515,26 +515,24 @@ class Experiment:
             value to save.
         dst : str
             name in the results.
-        iterations_to_execute : int, str or list, optional
-            iterations to execute (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+        when : int, str or list, optional
+            iterations to execute (see `when` of `:class:ExecutableUnit`), by default 1.
         copy : bool, optional
             copy value or not, by default False
         """
         name = self.add_postfix('save_results')
-        self.add_callable(name, _save_results,
-                          iterations_to_execute=iterations_to_execute,
-                          _src=src, _dst=dst, experiment=E(), copy=copy)
+        self.add_callable(name, _save_results, when=when, _src=src, _dst=dst, experiment=E(), copy=copy)
         return self
 
-    def dump(self, variable=None, iterations_to_execute='last'):
+    def dump(self, variable=None, when='last'):
         """ Dump current results to the storage and clear it.
 
         Parameters
         ----------
         variable : str, optional
             names in results to dump, by default None. None means that all results will be dumped.
-        iterations_to_execute : int, str or list, optional
-            iterations to execute (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+        when : int, str or list, optional
+            iterations to execute (see `when` of `:class:ExecutableUnit`), by default 1.
 
         Returns
         -------
@@ -543,7 +541,7 @@ class Experiment:
         self.has_dump = True
         name = self.add_postfix('dump_results')
         self.add_callable(name, _dump_results,
-                          iterations_to_execute=iterations_to_execute,
+                          when=when,
                           variable=variable, experiment=E())
         return self
 
@@ -691,7 +689,7 @@ class Experiment:
             repr += spacing + ")\n"
 
         repr += "\nunits:\n"
-        attrs = ['callable', 'generator', 'root', 'iterations_to_execute', 'args']
+        attrs = ['callable', 'generator', 'root', 'when', 'args']
         for name, action in self.actions.items():
             repr += spacing + f"{name}(\n"
             repr += ''.join([spacing * 2 + f"{key}={getattr(action, key)}\n" for key in attrs])

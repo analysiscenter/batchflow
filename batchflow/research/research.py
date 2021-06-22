@@ -100,7 +100,7 @@ class Research:
         function : callable or None
             function to update domain, returns new domain.
         when : int, str or list, optional
-            iterations to update (see `iterations_to_execute` of `:class:ExecutableUnit`), by default 1.
+            iterations to update (see `when` of `:class:ExecutableUnit`), by default 1.
         kwargs :
             update function parameters.
         """

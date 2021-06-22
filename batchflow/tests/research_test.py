@@ -3,7 +3,10 @@
 import os
 import pytest
 
+import numpy as np
+
 from batchflow import Dataset, Pipeline, B, V, C
+from batchflow import NumpySampler as NS
 from batchflow.models.torch import ResNet
 from batchflow.opensets import MNIST
 from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults
@@ -27,7 +30,7 @@ def simple_research(tmp_path):
         .save(O('sum'), 'sum')
     )
 
-    domain = Domain({'x': [1, 2], 'y': [2, 3, 4]})
+    domain = Domain(x=[1, 2], y=[2, 3, 4])
     research = Research(name=os.path.join(tmp_path, 'research'), experiment=experiment, domain=domain)
 
     return research
@@ -75,9 +78,9 @@ def complex_research():
     research = (Research(domain=domain, n_reps=2)
         .add_instance('controller', Model)
         .add_pipeline('controller.train_ppl')
-        .add_pipeline('controller.test_ppl', run=True, iterations_to_execute='last')
-        .add_callable('controller.eval_metrics', metrics='accuracy', iterations_to_execute='last')
-        .save(O('controller.eval_metrics'), 'accuracy', iterations_to_execute='last')
+        .add_pipeline('controller.test_ppl', run=True, when='last')
+        .add_callable('controller.eval_metrics', metrics='accuracy', when='last')
+        .save(O('controller.eval_metrics'), 'accuracy', when='last')
     )
 
     return research
@@ -94,7 +97,7 @@ class TestDomain:
     @pytest.mark.parametrize('n_reps', [1, 2])
     def test_operations(self, op, a, b, n_reps):
         option_1 = Domain({'a': a}) #pylint:disable=unused-variable
-        option_2 = Domain({'b': b}) #pylint:disable=unused-variable
+        option_2 = Domain(b=b) #pylint:disable=unused-variable
 
         if not (op == '@' and len(a) != len(b)):
             domain = eval(f'option_1 {op} option_2') # pylint:disable=eval-used
@@ -110,7 +113,7 @@ class TestDomain:
     @pytest.mark.parametrize('repeat_each', [None, 1, 2])
     @pytest.mark.parametrize('n_reps', [1, 2, 3])
     def test_repetitions_order(self, repeat_each, n_reps):
-        domain = Option('a', [1, 2]) * Option('b', [3, 4])
+        domain = Domain(a=[1, 2], b=[3, 4], c=NS('normal'))
         domain.set_iter_params(n_reps=n_reps, repeat_each=repeat_each)
         configs = list(domain.iterator)
 
@@ -136,6 +139,28 @@ class TestDomain:
         for i, config in enumerate(configs):
             assert config.config()['updates'] == (2 * i) // len(configs)
 
+    def test_sample_options(self):
+        domain = Domain({'a': NS('normal')})
+        domain.set_iter_params(n_items=3, n_reps=2, seed=42)
+
+        res = [config['a'] for config in domain.iterator]
+        exp_res = [0.03, 0.96, 0.73] * 2
+
+        assert np.allclose(res, exp_res, atol=0.01, rtol=0)
+
+    def test_weights(self):
+        domain = (
+            1. * Domain(a=[1,2]) +
+            1. * Domain(b=[3,4]) +
+            Domain(a=[5,6]) +
+            0.3 * Domain(a=NS('normal')) +
+            0.7 * Domain(b=NS('normal', loc=10))
+        )
+        domain.set_iter_params(n_items=8, n_reps=2, seed=41)
+        res = [config['a'] if 'a' in config.config() else config['b'] for config in domain.iterator]
+        exp_res = [1, 3, 4, 2, 5, 6, 9.87, -1.08] * 2
+
+        assert np.allclose(res, exp_res, atol=0.01, rtol=0)
 class TestExecutor:
     def test_callable(self):
         experiment = (Experiment()
@@ -251,7 +276,7 @@ class TestExecutor:
 
         experiment = (Experiment()
             .add_pipeline('ppl', ppl)
-            .save(E('ppl').v('var'), dst='var', iterations_to_execute=['last'])
+            .save(E('ppl').v('var'), dst='var', when=['last'])
         )
 
         executor = Executor(experiment, target='f', n_iters=10)
@@ -268,7 +293,7 @@ class TestExecutor:
 
         experiment = (Experiment()
             .add_pipeline('ppl', root, ppl)
-            .save(E('ppl_branch').v('var'), dst='var', iterations_to_execute=['last'])
+            .save(E('ppl_branch').v('var'), dst='var', when=['last'])
         )
 
         executor = Executor(experiment, target='f', n_iters=10, configs=[{'x': 10}, {'x': 20}], )
@@ -284,8 +309,8 @@ class TestExecutor:
         experiment = (Experiment()
             .add_generator('sum', generator, n=EC('n'))
             .add_callable('func', inc, x=O('sum'))
-            .save(O('sum'), 'sum', iterations_to_execute='last')
-            .save(O('func'), 'func', iterations_to_execute='last')
+            .save(O('sum'), 'sum', when='last')
+            .save(O('func'), 'func', when='last')
         )
 
         executor = Executor(experiment, target='f', configs=[{'n': 10}, {'n': 20}], n_iters=30, finalize=True)
