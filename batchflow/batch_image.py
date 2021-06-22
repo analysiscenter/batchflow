@@ -9,6 +9,8 @@ import PIL.ImageOps
 import PIL.ImageChops
 import PIL.ImageFilter
 import PIL.ImageEnhance
+from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage.interpolation import map_coordinates
 
 from .batch import Batch
 from .decorators import action, apply_parallel, inbatch_parallel
@@ -1097,14 +1099,14 @@ class ImagesBatch(BaseImagesBatch):
         kwargs.setdefault('mode', 'constant')
         kwargs.setdefault('cval', 0)
 
-        column_shift = self._sp_gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
-        row_shift = self._sp_gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
+        column_shift = gaussian_filter(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
+        row_shift = gaussian_filter(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
 
         row, column, channel = np.meshgrid(range(shape[0]), range(shape[1]), range(shape[2]))
 
         indices = (column + column_shift, row + row_shift, channel)
 
-        distored_image = self._sp_map_coordinates_(image, indices, order=1, mode='reflect')
+        distored_image = map_coordinates(image, indices, order=1, mode='reflect')
 
         if shape[-1] == 1:
             return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape))[..., 0])

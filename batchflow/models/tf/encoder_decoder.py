@@ -1,6 +1,6 @@
 """  Encoder-decoder """
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from . import TFModel
 from .layers import ConvBlock, Combine, Upsample

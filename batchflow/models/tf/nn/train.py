@@ -1,7 +1,7 @@
 """ Helpers for training """
 from math import pi
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 def piecewise_constant(global_step, *args, **kwargs):
     """ Constant learning rate decay (uses global_step param instead of x) """

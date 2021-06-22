@@ -31,6 +31,7 @@ from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, any_action_failed, apply_parallel as apply_parallel_
 from .components import create_item_class, BaseComponents
 from .named_expr import P, R
+from .utils_random import make_rng
 
 
 class MethodsTransformingMeta(type):
@@ -95,11 +96,12 @@ class Batch(metaclass=MethodsTransformingMeta):
         self._preloaded_lock = threading.Lock()
         self._preloaded = preloaded
         self._copy = copy
-        self._local = None
+        self._local = threading.local()
         self._data_named = None
         self._data = None
         self._dataset = dataset
-        self._pipeline = pipeline
+        self.pipeline = pipeline
+        self.iteration = None
         self._attrs = None
         self.create_attrs(**kwargs)
 
@@ -118,12 +120,17 @@ class Batch(metaclass=MethodsTransformingMeta):
     @property
     def data(self):
         """: tuple or named components - batch data """
-        if self._data is None and self._preloaded is not None:
-            # load data the first time it's requested
-            with self._preloaded_lock:
-                if self._data is None and self._preloaded is not None:
-                    self.load(src=self._preloaded)
-        res = self._data if self.components is None else self._data_named
+        try:
+            if self._data is None and self._preloaded is not None:
+                # load data the first time it's requested
+                with self._preloaded_lock:
+                    if self._data is None and self._preloaded is not None:
+                        self.load(src=self._preloaded)
+            res = self._data if self.components is None else self._data_named
+        except Exception as exc:
+            print("Exception:", exc)
+            traceback.print_tb(exc.__traceback__)
+            raise
         return res
 
     @data.setter
@@ -141,57 +148,72 @@ class Batch(metaclass=MethodsTransformingMeta):
     @property
     def pipeline(self):
         """: Pipeline - a pipeline the batch is being used in """
-        if self._local is not None and hasattr(self._local, 'pipeline'):
-            return self._local.pipeline
-        return self._pipeline
+        return self._local.pipeline
 
     @pipeline.setter
-    def pipeline(self, val):
-        """ Store pipeline in a thread-local storage """
-        if val is None:
-            self._local = None
-        else:
-            if self._local is None:
-                self._local = threading.local()
-            self._local.pipeline = val
-        self._pipeline = val
+    def pipeline(self, value):
+        """ Store the pipeline in a thread-local storage """
+        self._local.pipeline = value
+
+    @property
+    def random(self):
+        """ A random number generator :class:`numpy.random.Generator`.
+        Use it instead of `np.random` for reproducibility.
+
+        Examples
+        --------
+
+        ::
+
+            x = self.random.normal(0, 1)
+        """
+        # if RNG is set for the batch (e.g. in @inbatch_parallel), use it
+        if hasattr(self._local, 'random'):
+            return self._local.random
+        # otherwise use RNG from the pipeline
+        if self.pipeline is not None and self.pipeline.random is not None:
+            return self.pipeline.random
+
+        # if there is none (e.g. when the batch is created manually), make a random one
+        self._local.random = make_rng(self.random_seed)
+        return self._local.random
+
+    @property
+    def random_seed(self):
+        """ : SeedSequence for random number generation """
+        # if RNG is set for the batch (e.g. in @inbatch_parallel), use it
+        if hasattr(self._local, 'random_seed'):
+            return self._local.random_seed
+
+        if self.pipeline is not None and self.pipeline.random_seed is not None:
+            return self.pipeline.random_seed
+
+        # if there is none (e.g. when the batch is created manually), make a random seed
+        self._local.random_seed = np.random.SeedSequence()
+        return self._local.random_seed
+
+    @random_seed.setter
+    def random_seed(self, value):
+        """ : SeedSequence for random number generation """
+        self._local.random_seed = value
+        self._local.random = make_rng(value)
 
     def __copy__(self):
-        pipeline = self.pipeline
-        self.pipeline = None
         dump_batch = dill.dumps(self)
-        self.pipeline = pipeline
-
         restored_batch = dill.loads(dump_batch)
-        restored_batch.pipeline = pipeline
         return restored_batch
 
     def deepcopy(self):
-        """ Return a deep copy of the batch.
-
-        Constructs a new ``Batch`` instance and then recursively copies all
-        the objects found in the original batch, except the ``pipeline``,
-        which remains unchanged.
-
-        Returns
-        -------
-        Batch
-        """
-        return self.copy()
+        """ Return a deep copy of the batch. """
+        return self.__copy__()
 
     @classmethod
-    def from_data(cls, index, data):
+    def from_data(cls, index=None, data=None):
         """ Create a batch from data given """
         # this is roughly equivalent to self.data = data
         if index is None:
             index = np.arange(len(data))
         return cls(index, preloaded=data)
-
-    @classmethod
-    def from_batch(cls, batch):
-        """ Create batch from another batch """
-        return cls(batch.index, dataset=batch.dataset, pipeline=batch.pipeline, preloaded=batch.data,
-                   **batch.get_attrs())
 
     @classmethod
     def merge(cls, batches, batch_size=None, components=None, batch_class=None):
@@ -374,8 +396,7 @@ class Batch(metaclass=MethodsTransformingMeta):
 
     def __getattr__(self, name):
         if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
-            attr = getattr(self.data, name, None)
-            return attr
+            return getattr(self.data, name, None)
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def __setattr__(self, name, value):
@@ -401,14 +422,13 @@ class Batch(metaclass=MethodsTransformingMeta):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state.pop('_data_named')
         state['_local'] = state['_local'] is not None
         state['_preloaded_lock'] = True
         return state
 
     def __setstate__(self, state):
         state['_preloaded_lock'] = threading.Lock() if state['_preloaded_lock'] else None
-        state['_local'] = threading.Lock() if state['_local'] else None
+        state['_local'] = threading.local() if state['_local'] else None
 
         for k, v in state.items():
             # this warrants that all hidden objects are reconstructed upon unpickling
@@ -451,10 +471,6 @@ class Batch(metaclass=MethodsTransformingMeta):
         """
         _ = self.data, args, kwargs
         return [[]]
-
-    def get_model_by_name(self, model_name):
-        """ Return a model specification given its name """
-        return self.pipeline.get_model_by_name(model_name, batch=self)
 
     def get_errors(self, all_res):
         """ Return a list of errors from a parallel action """

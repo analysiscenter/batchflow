@@ -109,7 +109,8 @@ class Dataset(Baseset):
     def __getattr__(self, name):
         if name[:2] == 'cv' and name[2:].isdigit():
             raise AttributeError("To access cross-validation call cv_split() first.")
-        if self.batch_class.components is not None and name in self.batch_class.components:
+        if 'batch_class' in dir(self) and \
+           self.batch_class.components is not None and name in self.batch_class.components:
             return getattr(self.data, name)
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
@@ -303,18 +304,8 @@ class Dataset(Baseset):
         n_splits : int
             a number of folds
 
-        shuffle : bool, int, class:`numpy.random.RandomState` or callable
-            specifies the order of items, could be:
-
-            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
-                if `True`, items are shuffled randomly before each epoch.
-
-            - int - a seed number for a random shuffle.
-
-            - :class:`numpy.random.RandomState` instance.
-
-            - callable - a function which takes an array of item indices in the initial order
-                (as they appear in the index) and returns the order of items.
+        shuffle
+            specifies the order of items (see :meth:`~.DatasetIndex.shuffle`)
 
         Examples
         --------

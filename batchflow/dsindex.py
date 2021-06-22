@@ -8,6 +8,7 @@ import numpy as np
 
 from .base import Baseset
 from .notifier import Notifier
+from .utils_random import make_rng
 
 
 class DatasetIndex(Baseset):
@@ -192,18 +193,8 @@ class DatasetIndex(Baseset):
         shares : float or tuple of floats
             train, test and validation shares.
 
-        shuffle : bool, int, class:`numpy.random.RandomState` or callable
-            specifies the order of items, could be:
-
-            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
-                if `True`, items are shuffled randomly before each epoch.
-
-            - int - a seed number for a random shuffle.
-
-            - :class:`numpy.random.RandomState` instance.
-
-            - callable - a function which takes an array of item indices in the initial order
-                (as they appear in the index) and returns the order of items.
+        shuffle
+            specifies the order of items (see :meth:`~.DatasetIndex.shuffle`)
 
         Notes
         -----
@@ -230,10 +221,7 @@ class DatasetIndex(Baseset):
         """
         train_share, test_share, valid_share = self.calc_split(shares)
 
-        if shuffle:
-            order = self.shuffle(shuffle)
-        else:
-            order = np.arange(len(self))
+        order = self.shuffle(shuffle)
 
         # pylint: disable=attribute-defined-outside-init
         if valid_share > 0:
@@ -251,18 +239,14 @@ class DatasetIndex(Baseset):
 
         Parameters
         ----------
-        shuffle : bool, int, class:`numpy.random.RandomState` or callable
-            specifies the order of items, could be:
+        shuffle : bool or seed
+            specifies the order of items
 
-            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
-                if `True`, items are shuffled randomly before each epoch.
+            - if `False`, items go sequentially, one after another as they appear in the index.
 
-            - int - a seed number for a random shuffle.
+            - if `True`, items are shuffled randomly before each epoch.
 
-            - :class:`numpy.random.RandomState` instance.
-
-            - callable - a function which takes an array of item indices in the initial order
-                (as they appear in the index) and returns the order of items.
+            - see :func:`~.make_rng` for seed specifications.
 
         Returns
         -------
@@ -277,21 +261,11 @@ class DatasetIndex(Baseset):
         else:
             order = iter_params['_order']
 
-        if isinstance(shuffle, bool):
-            if shuffle:
-                order = np.random.permutation(order)
-        elif isinstance(shuffle, int):
-            if iter_params['_random_state'] is None or iter_params['_random_state'].seed != shuffle:
-                iter_params['_random_state'] = np.random.RandomState(shuffle)
-            order = iter_params['_random_state'].permutation(order)
-        elif isinstance(shuffle, np.random.RandomState):
-            if iter_params['_random_state'] != shuffle:
-                iter_params['_random_state'] = shuffle
-            order = iter_params['_random_state'].permutation(order)
-        elif callable(shuffle):
-            order = shuffle(self.indices)
-        else:
-            raise ValueError("shuffle could be bool, int, numpy.random.RandomState or callable", shuffle)
+        rng = make_rng(shuffle)
+        if rng is not None:
+            iter_params['_random_state'] = rng
+            order = rng.permutation(order)
+
         return order
 
     def next_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, iter_params=None):
@@ -302,22 +276,8 @@ class DatasetIndex(Baseset):
         batch_size : int
             Desired number of items in the batch (the actual batch could contain fewer items)
 
-        shuffle : bool, int, class:`numpy.random.RandomState` or callable
-            Specifies the order of items, could be:
-
-            - bool
-                If `False`, items go sequentionally, one after another as they appear in the index.
-                If `True`, items are shuffled randomly before each epoch.
-
-            - int
-                A seed number for a random shuffle.
-
-            - :class:`numpy.random.RandomState` instance
-                Class for a reproducible random shuffle.
-
-            - callable
-                A function which takes an array of item indices in the initial order
-                (as they appear in the index) and returns the order of items.
+        shuffle
+            Specifies the order of items (see :meth:`~.DatasetIndex.shuffle`)
 
         n_iters : int
             Number of iterations to make (only one of `n_iters` and `n_epochs` should be specified).
@@ -420,22 +380,8 @@ class DatasetIndex(Baseset):
         batch_size : int
             Desired number of items in the batch (the actual batch could contain fewer items).
 
-        shuffle : bool, int, class:`numpy.random.RandomState` or callable
-            Specifies the order of items, could be:
-
-            - bool
-                If `False`, items go sequentionally, one after another as they appear in the index.
-                If `True`, items are shuffled randomly before each epoch.
-
-            - int
-                A seed number for a random shuffle.
-
-            - :class:`numpy.random.RandomState` instance
-                Class for a reproducible random shuffle.
-
-            - callable
-                A function which takes an array of item indices in the initial order
-                (as they appear in the index) and returns the order of items.
+        shuffle
+            specifies the order of items (see :meth:`~.DatasetIndex.shuffle`)
 
         n_iters : int
             Number of iterations to make (only one of `n_iters` and `n_epochs` should be specified).

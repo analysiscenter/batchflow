@@ -1,7 +1,7 @@
 """ Simonyan K., Zisserman A. "`Very Deep Convolutional Networks for Large-Scale Image Recognition
 <https://arxiv.org/abs/1409.1556>`_"
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from . import TFModel
 from .layers import conv_block

@@ -9,6 +9,9 @@ try:
 except ImportError:
     pass
 
+from .utils_random import make_rng
+
+
 # aliases for Numpy, Scipy-Stats, TensorFlow-samplers
 ALIASES = {
     'n': {'np': 'normal', 'ss': 'norm', 'tf': 'Normal'},
@@ -437,22 +440,24 @@ class ConstantSampler(Sampler):
 
 
 class NumpySampler(Sampler):
-    """ Sampler based on a distribution from np.random.
+    """ Sampler based on a distribution from `numpy random`.
 
     Parameters
     ----------
     name : str
-        name of a distribution (method from np.random) or its alias.
+        a distribution name (a method from `numpy random`) or its alias.
     seed : int
-        random seed for setting up sampler's state.
+        random seed for setting up sampler's state (see :func:`~.make_rng`).
     **kwargs
         additional keyword-arguments defining properties of specific
-        distribution. E.g., ``loc`` for name='normal'.
+        distribution (e.g. ``loc`` for 'normal').
 
     Attributes
     ----------
     name : str
-        name of a distribution (method from np.random).
+        a distribution name (a method from `numpy random`).
+    state : numpy.random.Generator
+        a random number generator
     _params : dict
         dict of args for Sampler's distribution.
     """
@@ -461,13 +466,11 @@ class NumpySampler(Sampler):
         name = _get_method_by_alias(name, 'np')
         self.name = name
         self._params = copy(kwargs)
-        self.state = np.random.RandomState(seed=seed)
+        self.state = make_rng(seed)
 
 
     def sample(self, size):
-        """ Sampling method of ``NumpySampler``.
-
-        Generates random samples from distribution ``self.name``.
+        """ Generates random samples from distribution ``self.name``.
 
         Parameters
         ----------
@@ -488,36 +491,42 @@ class NumpySampler(Sampler):
 
 class ScipySampler(Sampler):
     """ Sampler based on a distribution from `scipy.stats`.
+
     Parameters
     ----------
     name : str
-        name of a distribution, class from `scipy.stats`, or its alias.
+        a distribution name, a class from `scipy.stats`, or its alias.
     seed : int
-        random seed for setting up sampler's state.
+        random seed for setting up sampler's state (see :func:`~.make_rng`).
     **kwargs
         additional parameters for specification of the distribution.
         For instance, `scale` for name='gamma'.
+
     Attributes
     ----------
     name : str
-        name of a distribution (class from `scipy.stats`).
-    state : int
-        sampler's random state.
+        a distribution name (a class from `scipy.stats`).
+    state : numpy.random.Generator
+        a random number generator
+    distr
+        a distribution class
     """
     def __init__(self, name, seed=None, **kwargs):
         super().__init__(name, seed, **kwargs)
         name = _get_method_by_alias(name, 'ss')
         self.name = name
-        self.state = np.random.RandomState(seed=seed)
+        self.state = make_rng(seed)
         self.distr = getattr(ss, self.name)(**kwargs)
 
     def sample(self, size):
         """ Sampling method of ``ScipySampler``.
         Generates random samples from distribution ``self.name``.
+
         Parameters
         ----------
         size : int
             the size of sample to be generated.
+
         Returns
         -------
         np.ndarray
@@ -532,6 +541,7 @@ class ScipySampler(Sampler):
 
 class HistoSampler(Sampler):
     """ Sampler based on a histogram, output of `np.histogramdd`.
+
     Parameters
     ----------
     histo : tuple
@@ -540,13 +550,15 @@ class HistoSampler(Sampler):
     edges : list
         list of len=histo_dimension, contains edges of bins along axes.
     seed : int
-        random seed for setting up sampler's state.
+        random seed for setting up sampler's state (see :func:`~.make_rng`).
+
     Attributes
     ----------
     bins : np.ndarray
         bins of base-histogram (see `np.histogramdd`).
     edges : list
         edges of base-histogram.
+
     Notes
     -----
         The sampler should be based on unnormalized histogram.
@@ -572,24 +584,26 @@ class HistoSampler(Sampler):
         self.nonzero_probs_idx = np.asarray(self.probs != 0.0).nonzero()[0]
         self.nonzero_probs = self.probs[self.nonzero_probs_idx]
 
-        self.state = np.random.RandomState(seed=seed)
+        self.state = make_rng(seed)
         self.state_sampler = self.state.uniform
 
     def sample(self, size):
         """ Sampling method of ``HistoSampler``.
         Generates random samples from distribution, represented by
         histogram (self.bins, self.edges).
+
         Parameters
         ----------
         size : int
             the size of sample to be generated.
+
         Returns
         -------
         np.ndarray
             array of shape (size, histo dimension).
         """
         # Choose bins to use according to non-zero probabilities
-        bin_nums = np.random.choice(self.nonzero_probs_idx, p=self.nonzero_probs, size=size)
+        bin_nums = self.state.choice(self.nonzero_probs_idx, p=self.nonzero_probs, size=size)
 
         # uniformly generate samples from selected boxes
         low, high = self.l_all[bin_nums], self.h_all[bin_nums]
@@ -597,6 +611,7 @@ class HistoSampler(Sampler):
 
     def update(self, points):
         """ Update bins of sampler's histogram by throwing in additional points.
+
         Parameters
         ----------
         points : np.ndarray
@@ -609,10 +624,12 @@ class HistoSampler(Sampler):
 def cart_prod(*arrs):
     """ Get array of cartesian tuples from arbitrary number of arrays.
     Faster version of itertools.product. The order of tuples is lexicographic.
+
     Parameters
     ----------
     arrs : tuple, list or ndarray.
         Any sequence of ndarrays.
+
     Returns
     -------
     ndarray
