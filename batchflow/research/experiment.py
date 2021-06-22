@@ -39,7 +39,7 @@ class PipelineWrapper:
         self.mode = mode
         self.config = None
 
-    def __call__(self, config, batch=None):
+    def __call__(self, config, batch=None, **kwargs):
         """ Execute pipeline.
 
         Parameters
@@ -58,7 +58,7 @@ class PipelineWrapper:
                 - 'execute_for': processed batch
         """
         if self.config is None:
-            self.config = config
+            self.config = {**config, **kwargs}
             self.pipeline.set_config(self.config)
 
         if self.mode == 'generator':
@@ -440,7 +440,7 @@ class Experiment:
                           root=root, item_name=name, when="%0")
         return self
 
-    def add_pipeline(self, name, root_pipeline=None, branch_pipeline=None, run=False, **kwargs):
+    def add_pipeline(self, name, root_pipeline=None, branch_pipeline=None, run=False, variables=None, **kwargs):
         """ Add pipeline to experiment.
 
         Parameters
@@ -459,6 +459,8 @@ class Experiment:
             different configs from domain.
         run : bool, optional
             if False then `.next_batch()` will be applied to pipeline, else `.run()` , by default False.
+        variables : str, list or None, optional
+            variables of pipeline to save.
         when : int, str or list, optional
             iterations to execute (see `when` of `:class:ExecutableUnit`), by default 1.
 
@@ -476,6 +478,10 @@ class Experiment:
 
             self.add_generator(f'{name}_root', generator=root_pipeline, config=EC(), **kwargs)
             self.add_callable(f'{name}_branch', func=branch_pipeline, config=EC(), batch=O(f'{name}_root'), **kwargs)
+        if variables is not None:
+            ppl_name = name if branch_pipeline is None else f'{name}_branch'
+            for var in to_list(variables):
+                self.save(E(ppl_name).pipeline.v(var), var)
         return self
 
     def add_namespace(self, namespace):

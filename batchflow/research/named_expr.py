@@ -86,3 +86,12 @@ class EP(E):
     """ NamedExpression for the experiment path. """
     def _transform(self, experiments):
         return [exp.full_path for exp in experiments]
+
+class R(E):
+    """ Research results. """
+    def _get(self, **kwargs):
+        return kwargs['research']
+
+    def get(self, **kwargs):
+        research = self._get(**kwargs)
+        return research.results

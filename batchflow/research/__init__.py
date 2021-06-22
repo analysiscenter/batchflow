@@ -4,8 +4,8 @@
     This module requries multiprocess package <http://multiprocess.rtfd.io/>`_.
 """
 from .domain import Alias, Domain, Option, ConfigAlias
-from .named_expr import E, EC, O, EP
+from .named_expr import E, EC, O, EP, R
 from .research import Research
 from .results import ResearchResults
 from .experiment import Experiment, Executor
-from .utils import transform_research_results
+from .utils import get_metrics, transform_research_results

@@ -156,7 +156,9 @@ class ResearchResults:
                     config.pop_config(key)
             if use_alias:
                 if concat_config:
-                    config = {'config': config.alias(as_string=concat_config)}
+                    popped = config.pop_config(['repetition', 'device', 'updates'])
+                    popped = {} if popped is None else popped.alias()
+                    config = {'config': config.alias(as_string=concat_config), **popped}
                 else:
                     config = config.alias()
             else:

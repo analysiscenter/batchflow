@@ -324,7 +324,7 @@ class Domain:
 
     @property
     def len(self):
-        """ Return the number of configs that will be produced from domain without repetitions. """
+        """ Return the number of configs that will be produced from domain without repetitions. None if infinite. """
         size = 0
         for cube in self.cubes:
             lengthes = [len(values) for _, values in cube if isinstance(values, (list, tuple, np.ndarray))]
@@ -334,6 +334,7 @@ class Domain:
         return size
 
     def __len__(self):
+        """ __len__ can't return None so we have to separate functions. """
         cube_sizes = [
             np.prod([len(values) for _, values in cube if isinstance(values, (list, tuple, np.ndarray))], dtype='int')
             for cube in self.cubes
