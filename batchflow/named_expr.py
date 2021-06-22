@@ -39,7 +39,7 @@ def eval_expr(expr, no_eval=None, **kwargs):
             else:
                 expr = _expr
         except Exception as e:
-            raise Exception(f"Can't evaluate expression: {expr} because \n {str(e)}") from e
+            raise type(e)(f"Can't evaluate expression: {expr} because \n {str(e)}") from e
     elif isinstance(expr, (list, tuple)):
         _expr = []
         for val in expr:
