@@ -607,3 +607,5 @@ class Option(Domain):
     """ Alias for Domain({name: values}). """
     def __init__(self, name, values):
         super().__init__({name: values})
+
+KV = Alias # is needed to load and transform old researches
