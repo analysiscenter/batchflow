@@ -4,6 +4,9 @@ import glob
 import shutil
 import logging
 import hashlib
+import dill
+import json
+from collections import OrderedDict
 
 
 def to_list(value):
@@ -22,16 +25,31 @@ def get_metrics(pipeline, metrics_var, metrics_name, *args, agg='mean', **kwargs
     return values
 
 def transform_research_results(research_name):
-    """ Transform old research format (with additional nesting level) to the new. """
+    """ Transform old research format to the new. """
+    # Move configs from separate folder to experiment folders
     configs = {}
     for config in glob.glob(f'{research_name}/configs/*'):
         for experiment_folder in glob.glob(f'{research_name}/results/{os.path.basename(config)}/*'):
             exp_id = os.path.basename(experiment_folder)
-            configs[exp_id] = config
-    for exp_id, path in configs.items():
-        dst = os.path.join(os.path.dirname(path), exp_id)
-        shutil.move(path, dst)
+            configs[exp_id] = os.path.basename(config)
 
+    for exp_id, config in configs.items():
+        src = f'{research_name}/configs/{config}'
+        dst = f'{research_name}/results/{config}/{exp_id}/config.dill'
+        with open(src, 'rb') as f:
+            content = dill.load(f)
+            content['updates'] = content['update'] # Rename column for the new format
+            content.pop_config('update')
+            content['device'] = None # Add column
+        with open(dst, 'wb') as f:
+            dill.dump(content, f)
+        with open(f'{research_name}/results/{config}/{exp_id}/config.json', 'w') as f:
+            json.dump(content.config().config, f)
+
+    # Remove folder with configs
+    shutil.rmtree(f'{research_name}/configs')
+
+    # Remove one nested level
     initial_results = glob.glob(f'{research_name}/results/*')
     for exp_path in initial_results:
         for path in os.listdir(exp_path):
@@ -40,6 +58,32 @@ def transform_research_results(research_name):
             shutil.move(src, dst)
     for path in initial_results:
         shutil.rmtree(path)
+
+    # Rename results to experiments
+    shutil.move(f'{research_name}/results', f'{research_name}/experiments')
+
+    # Move files from experiment folder to subfodlers
+    for results_file in glob.glob(f'{research_name}/experiments/*/*'):
+        filename = os.path.basename(results_file)
+        if len(filename.split('_')) == 2:
+            unit_name, iteration_in_name = filename.split('_')
+            iteration_in_name = int(iteration_in_name) - 1
+            dirname = os.path.dirname(results_file)
+            with open(results_file, 'rb') as f:
+                content = dill.load(f)
+            content.pop('sample_index')
+            iterations = content.pop('iteration')
+            for var in content:
+                new_dict = OrderedDict()
+                for it, val in zip(iterations, content[var]):
+                    new_dict[it] = val
+                folder_for_var = f'{dirname}/results/{unit_name}_{var}'
+                if not os.path.exists(folder_for_var):
+                    os.makedirs(folder_for_var)
+                dst = f'{folder_for_var}/{iteration_in_name}'
+                with open(dst, 'wb') as f:
+                    dill.dump(new_dict, f)
+            os.remove(results_file)
 
 def create_logger(name, path=None, loglevel='info'):
     """ Create logger. """

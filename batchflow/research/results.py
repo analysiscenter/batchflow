@@ -68,16 +68,16 @@ class ResearchResults:
                     experiment_results[_name] = OrderedDict([*name_results.items(), *new_values.items()])
         self.results = mp.Manager().dict(**results)
 
-    def filter(self, experiment_id=None, name=None, iteration=None, config=None, alias=None, domain=None, **kwargs):
+    def filter(self, experiment_id=None, name=None, iterations=None, config=None, alias=None, domain=None, **kwargs):
         """ Filter results by specified parameters. """
         experiment_id = experiment_id if experiment_id is None else to_list(experiment_id)
         name = name if name is None else to_list(name)
-        iteration = iteration if iteration is None else to_list(iteration)
+        iterations = iterations if iterations is None else to_list(iterations)
 
         filtered_ids = self.filter_ids_by_configs(config, alias, domain, **kwargs)
         experiment_id = np.intersect1d(experiment_id, filtered_ids) if experiment_id is not None else filtered_ids
 
-        return experiment_id, name, iteration
+        return experiment_id, name, iterations
 
     @property
     def df(self):
