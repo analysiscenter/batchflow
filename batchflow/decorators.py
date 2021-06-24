@@ -339,7 +339,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
         def make_random_seed(self):
             if getattr(self, 'random_state', None) is None:
                 return make_seed_sequence()
-            return self.random_stat
+            return self.random_state
 
         def wrap_with_threads(self, args, kwargs):
             """ Run a method in parallel threads """
