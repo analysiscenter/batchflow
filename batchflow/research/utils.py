@@ -4,10 +4,10 @@ import glob
 import shutil
 import logging
 import hashlib
-import dill
 import json
 from collections import OrderedDict
-
+import dill
+from tqdm import tqdm_notebook
 
 def to_list(value):
     return value if isinstance(value, list) else [value]
@@ -16,7 +16,7 @@ def count_startswith(seq, name):
     return sum(1 for item in seq if item.startswith(name))
 
 def get_metrics(pipeline, metrics_var, metrics_name, *args, agg='mean', **kwargs):
-    """ Function to evaluate metrics """
+    """ Function to evaluate metrics. """
     metrics_name = metrics_name if isinstance(metrics_name, list) else [metrics_name]
     metrics = pipeline.get_variable(metrics_var).evaluate(metrics_name, *args, agg=agg, **kwargs)
     values = [metrics[name] for name in metrics_name]
@@ -24,12 +24,18 @@ def get_metrics(pipeline, metrics_var, metrics_name, *args, agg='mean', **kwargs
         return values[0]
     return values
 
-def transform_research_results(research_name):
-    """ Transform old research format to the new. """
+def transform_research_results(research_name, new_name=None, bar=True):
+    """ Transform old research format to the new. Only results will be transformed, old research can not be
+    transformed to load. """
+    # Copy research if needed
+    if new_name is not None:
+        shutil.copytree(research_name, new_name)
+        research_name = new_name
+
     # Move configs from separate folder to experiment folders
     configs = {}
     for config in glob.glob(f'{research_name}/configs/*'):
-        for experiment_folder in glob.glob(f'{research_name}/results/{os.path.basename(config)}/*'):
+        for experiment_folder in glob.glob(f'{research_name}/results/{glob.escape(os.path.basename(config))}/*'):
             exp_id = os.path.basename(experiment_folder)
             configs[exp_id] = os.path.basename(config)
 
@@ -37,7 +43,7 @@ def transform_research_results(research_name):
         src = f'{research_name}/configs/{config}'
         dst = f'{research_name}/results/{config}/{exp_id}/config.dill'
         with open(src, 'rb') as f:
-            content = dill.load(f)
+            content = dill.load(f) # content is a ConfigAlias instance
             content['updates'] = content['update'] # Rename column for the new format
             content.pop_config('update')
             content['device'] = None # Add column
@@ -59,24 +65,24 @@ def transform_research_results(research_name):
     for path in initial_results:
         shutil.rmtree(path)
 
-    # Rename results to experiments
+    # Rename 'results' folder to 'experiments'
     shutil.move(f'{research_name}/results', f'{research_name}/experiments')
 
     # Move files from experiment folder to subfodlers
-    for results_file in glob.glob(f'{research_name}/experiments/*/*'):
+    for results_file in tqdm_notebook(glob.glob(f'{research_name}/experiments/*/*'), disable=(not bar)):
         filename = os.path.basename(results_file)
-        if len(filename.split('_')) == 2:
+        content = get_content(results_file)
+        if content is not None:
+            content.pop('sample_index')
+            iterations = content.pop('iteration')
+
             unit_name, iteration_in_name = filename.split('_')
             iteration_in_name = int(iteration_in_name) - 1
             dirname = os.path.dirname(results_file)
-            with open(results_file, 'rb') as f:
-                content = dill.load(f)
-            content.pop('sample_index')
-            iterations = content.pop('iteration')
             for var in content:
                 new_dict = OrderedDict()
-                for it, val in zip(iterations, content[var]):
-                    new_dict[it] = val
+                for i, val in zip(iterations, content[var]):
+                    new_dict[i] = val
                 folder_for_var = f'{dirname}/results/{unit_name}_{var}'
                 if not os.path.exists(folder_for_var):
                     os.makedirs(folder_for_var)
@@ -84,6 +90,25 @@ def transform_research_results(research_name):
                 with open(dst, 'wb') as f:
                     dill.dump(new_dict, f)
             os.remove(results_file)
+
+def get_content(path):
+    """ Open research results file (if it is). """
+    filename = os.path.basename(path)
+    if len(filename.split('_')) != 2:
+        return None
+    _, iteration_in_name = filename.split('_')
+    if not iteration_in_name.isdigit():
+        return None
+    try:
+        with open(path, 'rb') as f:
+            content = dill.load(f)
+    except dill.UnpicklingError:
+        return None
+    if not isinstance(content, dict):
+        return None
+    if 'sample_index' not in content or 'iteration' not in content:
+        return None
+    return content
 
 def create_logger(name, path=None, loglevel='info'):
     """ Create logger. """
