@@ -15,7 +15,7 @@ from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import create_logger, generate_id, must_execute, to_list, parse_name, explicit_call
+from .utils import create_logger, generate_id, must_execute, to_list, parse_name, explicit_call, jsonify
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -593,7 +593,7 @@ class Experiment:
         with open(os.path.join(self.name, self.experiment_path, 'config.dill'), 'wb') as file:
             dill.dump(self.config_alias, file)
         with open(os.path.join(self.name, self.experiment_path, 'config.json'), 'w') as file:
-            json.dump(self.config.config, file)
+            json.dump(jsonify(self.config.config), file)
 
     def init(self, index, config, executor=None):
         """ Create all instances of units to start experiment. """
