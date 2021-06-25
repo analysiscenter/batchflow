@@ -25,6 +25,7 @@ class ResearchResults:
         self.dump_results = dump_results
         self.results = mp.Manager().dict()
         self.configs = mp.Manager().dict()
+        self.arifactes = mp.Manager().dict()
 
         self.kwargs = kwargs
 
@@ -33,14 +34,15 @@ class ResearchResults:
         self.configs[experiment_id] = config
 
     def load(self, **kwargs):
-        """ Load (filtered if needed) results and configs if they was dumped. """
+        """ Load (filtered if needed) results, configs and artifactes paths if they was dumped. """
         self.kwargs = {**self.kwargs, **kwargs}
         if self.dump_results:
             self.load_configs()
             self.load_results(**self.kwargs)
+            self.load_artifactes(**self.kwargs)
 
     def load_configs(self):
-        """ Load experiment configs. """
+        """ Load all experiment configs. """
         for path in glob.glob(os.path.join(self.name, 'experiments', '*', 'config.dill')):
             path = os.path.normpath(path)
             _experiment_id = path.split(os.sep)[-2]
@@ -49,7 +51,25 @@ class ResearchResults:
 
     def load_results(self, experiment_id=None, name=None, iterations=None,
                      config=None, alias=None, domain=None, **kwargs):
-        """ Load and filter experiment results. """
+        """ Load and filter experiment results.
+
+        Parameters
+        ----------
+        experiment_id : int str, or list, optional
+            exepriments to load, by default None
+        name : str or list, optional
+            keys of results to load, by default None
+        iterations : int or list, optional
+            iterations to load, by default None
+        config : Config, optional
+            config with parameters values to load, by default None
+        alias : Config, optional
+            the same as config but with aliased values, by default None
+        domain : Domain, optional
+            domain with parameters values to load, by default None
+        kwargs : dict
+            is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.
+        """
         experiment_id, name, iterations = self.filter(experiment_id, name, iterations, config, alias, domain, **kwargs)
         results = dict()
         for path in glob.glob(os.path.join(self.name, 'experiments', '*', 'results', '*')):
@@ -68,8 +88,63 @@ class ResearchResults:
                     experiment_results[_name] = OrderedDict([*name_results.items(), *new_values.items()])
         self.results = mp.Manager().dict(**results)
 
+    def load_artifacts(self, experiment_id=None, name=None, iterations=None,
+                    config=None, alias=None, domain=None, **kwargs):
+        """ Load and filter experiment artifactes (all in experiment folder except standart
+        'results', 'config.dill', 'config.json', 'experiment.log').
+
+        Parameters
+        ----------
+        experiment_id : int str, or list, optional
+            exepriments to load, by default None
+        name : str or list, optional
+            keys of results to load, by default None
+        iterations : int or list, optional
+            iterations to load, by default None
+        config : Config, optional
+            config with parameters values to load, by default None
+        alias : Config, optional
+            the same as config but with aliased values, by default None
+        domain : Domain, optional
+            domain with parameters values to load, by default None
+        kwargs : dict
+            is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.
+        """
+        experiment_id, name, iterations = self.filter(experiment_id, name, iterations, config, alias, domain, **kwargs)
+        for path in glob.glob(os.path.join(self.name, 'experiments', '*', '*')):
+            if os.path.basename(path) not in ['results', 'config.dill', 'config.json', 'experiment.log']:
+                path = os.path.normpath(path)
+                _experiment_id, _name = path.split(os.sep)[-2:]
+                if experiment_id is None or _experiment_id in experiment_id:
+                    if _experiment_id not in self.artifactes:
+                        self.artifactes[_experiment_id] = []
+                    self.artifactes[_experiment_id] += [
+                        {'artifact_name': _name,
+                        'full_path': path,
+                        'relative_path': os.path.join(*path.split(os.sep)[-3:])
+                        }
+                    ]
+
     def filter(self, experiment_id=None, name=None, iterations=None, config=None, alias=None, domain=None, **kwargs):
-        """ Filter results by specified parameters. """
+        """ Filter experiment_id by specified parameters and make `name`, `iterations` lists.
+
+        Parameters
+        ----------
+        experiment_id : int str, or list, optional
+            exepriments to load, by default None
+        name : str or list, optional
+            keys of results to load, by default None
+        iterations : int or list, optional
+            iterations to load, by default None
+        config : Config, optional
+            config with parameters values to load, by default None
+        alias : Config, optional
+            the same as config but with aliased values, by default None
+        domain : Domain, optional
+            domain with parameters values to load, by default None
+        kwargs : dict
+            is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.
+        """
         experiment_id = experiment_id if experiment_id is None else to_list(experiment_id)
         name = name if name is None else to_list(name)
         iterations = iterations if iterations is None else to_list(iterations)
@@ -86,7 +161,27 @@ class ResearchResults:
 
     def to_df(self, pivot=False, include_config=True, use_alias=True, concat_config=False,
               remove_auxilary=True, **kwargs):
-        """ Create pandas.DataFrame from filtered results. """
+        """ Create pandas.DataFrame from filtered results.
+
+        Parameters
+        ----------
+        pivot : bool, optional
+            if True, two columns will be created: `name` (for results variavle) and `value`. If False, for each
+            variable separate column will be created. By default False
+        include_config : bool, optional
+            include config into dataframe or not, by default True
+        use_alias : bool, optional
+            use alias of config values or not, by default True
+        concat_config : bool, optional
+            create one column for config (it will be concated) or create columns for each config parameter,
+            by default False
+        remove_auxilary : bool, optional
+            remove columns 'repetition', 'device', 'updates' or not, by default True
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
         if self.dump_results:
             self.load(**kwargs)
 
@@ -126,7 +221,7 @@ class ResearchResults:
         return res
 
     def load_iteration_files(self, path, iterations):
-        """ Load files for specified iterations. """
+        """ Load files for specified iterations from specified path. """
         filenames = glob.glob(os.path.join(path, '*'))
         if iterations is None:
             files_to_load = {int(os.path.basename(filename)): filename for filename in filenames}
@@ -147,7 +242,22 @@ class ResearchResults:
         return results
 
     def configs_to_df(self, use_alias=True, concat_config=False, remove_auxilary=True):
-        """ Create pandas.DataFrame with configs. """
+        """ Create pandas.DataFrame with configs.
+
+        Parameters
+        ----------
+        use_alias : bool, optional
+            use alias of config values or not, by default True
+        concat_config : bool, optional
+            create one column for config (it will be concated) or create columns for each config parameter,
+            by default False
+        remove_auxilary : bool, optional
+            remove columns 'repetition', 'device', 'updates' or not, by default True
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
         df = []
         for experiment_id in self.configs:
             config = self.configs[experiment_id]
@@ -165,6 +275,32 @@ class ResearchResults:
                 config = config.config()
             df += [pd.DataFrame({'id': [experiment_id], **config})]
         return pd.concat(df)
+
+    def artifactes_to_df(self, configs=False, **kwargs):
+        """ Create pandas.DataFrame with experiment artifactes (all in experiment folder except standart
+        'results', 'config.dill', 'config.json', 'experiment.log').
+
+        Parameters
+        ----------
+        configs : bool, optional
+            include config into dataframe or not, by default False
+        kwargs : dict, optional
+            kwargs for :meth:`~.configs_to_df`.
+
+        Returns
+        -------
+        pandas.DataFrame
+            dataframe with name of the id of the experiment, artifact full path (with path to research folder)
+            and relative path (inner path in research folder). Also can include experiment config.
+        """
+        df = []
+        for experiment_id in self.artifactes:
+            artifactes = self.artifactes[experiment_id]
+            df += [pd.DataFrame({'id': [experiment_id], **artifact}) for artifact in artifactes]
+        df = pd.concat(df)
+        if configs:
+            df = pd.merge(self.configs_to_df(**kwargs), df, how='inner', on='id')
+        return df
 
     def filter_ids_by_configs(self, config=None, alias=None, domain=None, **kwargs):
         """ Filter configs.
