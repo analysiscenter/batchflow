@@ -2,6 +2,7 @@
 # pylint: disable=no-name-in-module, missing-docstring, redefined-outer-name
 import os
 import pytest
+from contextlib import ExitStack as does_not_raise
 
 import numpy as np
 
@@ -325,6 +326,7 @@ class TestExecutor:
         executor = Executor(experiment, target='f', configs=[{'n': 10}, {'n': 20}], n_iters=None)
         executor.run()
 
+
 class TestResearch:
     @pytest.mark.parametrize('parallel', [False, True])
     @pytest.mark.parametrize('dump_results', [False, True])
@@ -376,6 +378,23 @@ class TestResearch:
         assert len(complex_research.monitor.exceptions) == 0
         assert len(complex_research.results.df) == 4
 
+    def test_remove(self, simple_research):
+        simple_research.run(n_iters=1)
+        assert os.path.exists(simple_research.name)
+
+        Research.remove(simple_research.name, ask=False)
+        assert not os.path.exists(simple_research.name)
+
+    @pytest.mark.parametrize('debug,expectation',
+                             list(zip([False, True], [does_not_raise(), pytest.raises(NotImplementedError)])))
+    def test_debug(self, debug, expectation):
+        def func():
+            raise NotImplementedError
+
+        with expectation:
+            research = Research().add_callable(func)
+            research.run(dump_results=False, executor_target='f', parallel=False, debug=debug)
+
 
 class TestResults:
     @pytest.mark.parametrize('parallel', [False, True])
@@ -411,5 +430,5 @@ class TestResults:
         assert len(df) == 12
 
 
-#TODO: logging tests, samplers in domain, test that exceptions in one branch don't affect other bracnhes,
+#TODO: logging tests, test that exceptions in one branch don't affect other bracnhes,
 #      divices splitting, ...

@@ -48,16 +48,16 @@ class DynamicQueue:
         """ Get next `n_tasks` elements of queue. """
         configs = []
         for i in range(n_tasks):
-            branch_tasks = [] # TODO: rename it
+            branches_tasks = [] # TODO: rename it
             try:
                 for _ in range(self.n_branches):
                     config = next(self.domain)
                     config['id'] = generate_id(config, self.random)
-                    branch_tasks.append(config)
-                configs.append(branch_tasks)
+                    branches_tasks.append(config)
+                configs.append(branches_tasks)
             except StopIteration:
-                if len(branch_tasks) > 0:
-                    configs.append(branch_tasks)
+                if len(branches_tasks) > 0:
+                    configs.append(branches_tasks)
                 break
         for i, executor_configs in enumerate(configs):
             self.put((self.configs_generated + i, executor_configs))

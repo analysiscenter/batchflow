@@ -15,7 +15,7 @@ from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import create_logger, generate_id, must_execute, to_list, parse_name, explicit_call, jsonify
+from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -510,7 +510,7 @@ class Experiment:
         method = self.get_method(name)
         if method is None:
             raise ValueError(f'Method {name} was not found in any namespace.')
-        return explicit_call(method, name, self)
+        return _explicit_call(method, name, self)
 
     def save(self, src, dst, when=1, copy=False): #pylint:disable=redefined-outer-name
         """ Save something to research results.
@@ -859,3 +859,9 @@ def _dump_results(variable, experiment):
             with open(filename, 'wb') as file:
                 dill.dump(values, file)
             experiment.results[var] = OrderedDict()
+
+def _explicit_call(method, name, experiment):
+    """ Add unit into research by explicit call in research-pipeline. """
+    def _method(*args, **kwargs):
+        return experiment.add_executable_unit(name, src=method, args=args, **kwargs)
+    return _method

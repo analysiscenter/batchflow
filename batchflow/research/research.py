@@ -19,7 +19,7 @@ from .domain import Domain
 from .distributor import Distributor, DynamicQueue
 from .experiment import Experiment, Executor
 from .results import ResearchResults
-from .utils import create_logger
+from .utils import create_logger, to_list
 
 from ..utils_random import make_seed_sequence
 
@@ -32,18 +32,19 @@ class Research:
     ----------
     name : str, optional
         name (relative path) of the research and corresponding folder to store results, by default 'research'.
-    domain : Domain or Option, optional
+    domain : Domain, optional
         grid of parameters (see :class:`domain.Domain`) to produce experiment configs, by default None.
     experiment : Experiment, optional
         description of the experiment (see :class:`experiment.Experiment`), by default None. Experiment can be
         defined explicitly as a parameter or constructed by Research methods (`:meth:.add_callable`,
         `:meth:.add_generator`, etc.).
     n_configs : int, optional
-        the number of configs to get from domain (see `n_items` of :meth:`domain.Domain.set_iter`), by default None.
+        the number of configs to get from domain (see `n_items` of :meth:`domain.Domain.set_iter_params`),
+        by default None.
     n_reps : int, optional
-        the number of repetitions for each config (see `n_reps` of :meth:`domain.Domain.set_iter`), by default 1.
+        the number of repetitions for each config (see `n_reps` of :meth:`domain.Domain.set_iter_params`), by default 1.
     repeat_each : int, optional
-        see `repeat_each` of :meth:`domain.Domain.set_iter`, by default 100.
+        see `repeat_each` of :meth:`domain.Domain.set_iter_params`, by default 100.
     """
     def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=None):
         self.name = name
@@ -54,7 +55,6 @@ class Research:
         self.repeat_each = repeat_each
 
         self._env = dict() # current state of git repo and other environment information.
-        self.random_seed = make_seed_sequence(42)
 
         self.workers = 1
         self.branches = 1
@@ -75,6 +75,7 @@ class Research:
         self.process = None
         self.debug = False
         self.finalize = False
+        self.random_seed = None
 
     def __getattr__(self, key):
         if self.monitor is not None and key in self.monitor.SHARED_VARIABLES:
@@ -98,10 +99,10 @@ class Research:
         Parameters
         ----------
         function : callable or None
-            function to update domain, returns new domain.
+            function to update domain, returns new domain or None (means not to update).
         when : int, str or list, optional
             iterations to update (see `when` of `:class:ExecutableUnit`), by default 1.
-        kwargs :
+        kwargs : dict
             update function parameters.
         """
         self.domain.set_update(function, when, **kwargs)
@@ -149,7 +150,32 @@ class Research:
         return self._env
 
     def get_devices(self, devices):
-        """ Return list if lists. Each sublist consists of devices for each branch. """ #TODO extend
+        """ Return list if lists. Each sublist consists of devices for each branch.
+
+        Parameters
+        ----------
+        devices : int, str, None or list of them
+            devices to split between workers and branches. (see Example below)
+        Returns
+        -------
+        list of lists of lists
+            The first nesting level corresponds to workers.
+            The second to branches.
+            The third is a list of devices for current branch.
+            For example, worker with index 2 and its branch with index 3 will get list of devices `devices[2][3]`.
+
+        Examples
+        --------
+        For 3 workers and 2 branches:
+
+            None -> [[[None], [None]], [[None], [None]], [[None], [None]]]
+            1 -> [[['1'], ['1']], [['1'], ['1']], [['1'], ['1']]]
+            [1, 2] -> [[['1'], ['1']], [['1'], ['2']], [['2'], ['2']]]
+            [1, 2, 3, 4, 5] -> [[['1'], ['2']], [['3'], ['4']], [['5'], ['1']]]
+            [0, 1, ..., 12] -> [[['0', '1'], ['2', '3']],
+                                [['4', '5'], ['6', '7']],
+                                [['8', '9'], ['10', '11']]]
+        """
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         total_n_branches = n_workers * n_branches
@@ -180,6 +206,7 @@ class Research:
                 ]
         if isinstance(devices[0], list):
             def _transform_item(x):
+                x = to_list(x)
                 values = [str(item) if isinstance(item, int) else item for item in x]
                 return values if x is not None else []
 
@@ -197,43 +224,49 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=False):
+            debug=False, finalize=False, env_meta=None, seed=None):
         """ Run research.
 
         Parameters
         ----------
         name : str, optional
-            redefine name of the research (if needed), by default None
+            redefine name of the research (if needed), by default None.
         workers : int or list of Config instances, optional
             number of parallel workers, by default 1. If int, number of parallel workers to execute experiments.
             If list of Configs, list of configs for each worker which will be appended to configs from domain. Each
             element corresponds to one worker.
         branches : int or list of Config instances, optional
-            number of different branches with different configs with the same root, by default 1. TODO: extend
+            number of different branches with different configs with the same root, by default 1.
             If list of Configs, list of configs for each branch which will be appended to configs from domain. Each
             element corresponds to one branch.
         n_iters : int, optional
             number of experiment iterations, by default None, None means that experiment will be executed until
             StopIteration exception.
         devices : str or list, optional
-            devices to split between workers and branches, by default None
+            devices to split between workers and branches, by default None.
         executor_class : Executor-inherited class, optional
             executor for experiments, by default None (means that Executor will be used).
         dump_results : bool, optional
-            dump results or not, by default True
+            dump results or not, by default True.
         parallel : bool, optional
-            execute experiments in parallel in separate processes or not, by default True
+            execute experiments in parallel in separate processes or not, by default True.
         executor_target : 'for' or 'threads', optional
-            how to execute branches, by default 'threads'
+            how to execute branches, by default 'threads'.
         loglevel : str, optional
-            logging level, by default 'debug'
+            logging level, by default 'debug'.
         bar : bool or class
             use or not progress bar.
-        detach : bool
-            run research in separate process or not.
-        debug : bool
+        detach : bool, optional
+            run research in separate process or not, by default False.
+        debug : bool, optional
             If False, continue research after exceptions. If True, raise Exception. Can be used only with
-            parallel=False.
+            `parallel=False` and `executor_target='for'`, by default False.
+        finalize : bool, optional
+            continue experiment iteration after exception in some unit or not, by default False.
+        env_meta : dict or None
+            kwargs for :meth:`.Research.attach_env_meta`.
+        seed : bool or int or object with a seed sequence attribute
+            see :meth:`~batchflow.utils_random.make_seed_sequence`.
 
         Returns
         -------
@@ -243,7 +276,7 @@ class Research:
 
         At each iteration all units of the experiment will be executed in the order in which were added.
         If `update_domain` callable is defined, domain will be updated with the corresponding function
-        accordingly to `each` parameter of `update_domain`.
+        accordingly to `when` parameter of :meth:`~.Research.update_domain`.
         """
         if not parallel:
             if isinstance(workers, int):
@@ -263,8 +296,13 @@ class Research:
         self.loglevel = loglevel
         self.bar = bar
         self.detach = detach
+
+        if debug and (parallel or executor_target not in ['f', 'for']):
+            raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")
+
         self.debug = (debug and not parallel)
         self.finalize = finalize
+        self.random_seed = make_seed_sequence(seed)
 
         if n_iters is None and self.experiment.only_callables:
             self.n_iters = 1
@@ -288,7 +326,7 @@ class Research:
         else:
             self.loglevel = loglevel or 'error'
 
-        self.attach_env_meta()
+        self.attach_env_meta(**(env_meta or {}))
         self.create_logger()
         self.logger.info("Research is starting")
 
@@ -336,30 +374,42 @@ class Research:
     @classmethod
     def load(cls, name):
         """ Load research object. """
+        if not cls.folder_is_research(name):
+            raise TypeError(f'Folder "{name}" is not research folder.')
+        return cls._load(name)
+
+    def _load(name):
         with open(os.path.join(name, 'research.dill'), 'rb') as f:
             research = dill.load(f)
         research.results = ResearchResults(research.name, research.dump_results)
         return research
 
-    def remove(self, name=None, ask=True):
-        """ Remove research folder. """
-        name = name or self.name
-        if self.dump_results:
-            if not os.path.exists(name):
-                warnings.warn(f"Folder {name} doesn't exist.")
-            if not self.folder_is_research(name):
-                raise ValueError(f'{name} is not a research folder.')
-            answer = True
-            if ask:
-                answer = 'yes'.startswith(input(f'Remove {name}? [y/n]').lower())
-            if answer:
-                shutil.rmtree(name)
+    @classmethod
+    def remove(cls, name, ask=True):
+        """ Remove research folder.
+
+        Parameters
+        ----------
+        name : str
+            research path to remove.
+        ask : bool, optional
+            display a dialogue with a question about removing or not, by default True.
+        """
+        if not os.path.exists(name):
+            warnings.warn(f"Folder {name} doesn't exist.")
+        if not cls.folder_is_research(name):
+            raise ValueError(f'{name} is not a research folder.')
+        answer = True
+        if ask:
+            answer = 'yes'.startswith(input(f'Remove {name}? [y/n]').lower())
+        if answer:
+            shutil.rmtree(name)
 
     @classmethod
     def folder_is_research(cls, name):
         """ Check if folder contains research."""
         try:
-            Research.load(name)
+            Research._load(name)
         except Exception: #pylint:disable=broad-except
             return False
         return True
@@ -397,7 +447,7 @@ class ResearchMonitor:
     path : str, optional
         path to save signals, by default None
     bar : bool or class
-        use or not progress bar.
+        use progress bar or not.
     """
     COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid',
                'finished', 'withdrawn', 'remains']

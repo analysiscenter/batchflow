@@ -56,17 +56,17 @@ class ResearchResults:
         Parameters
         ----------
         experiment_id : int str, or list, optional
-            exepriments to load, by default None
+            exepriments to load, by default None.
         name : str or list, optional
-            keys of results to load, by default None
+            keys of results to load, by default None.
         iterations : int or list, optional
-            iterations to load, by default None
+            iterations to load, by default None.
         config : Config, optional
-            config with parameters values to load, by default None
+            config with parameters values to load, by default None.
         alias : Config, optional
-            the same as config but with aliased values, by default None
+            the same as config but with aliased values, by default None.
         domain : Domain, optional
-            domain with parameters values to load, by default None
+            domain with parameters values to load, by default None.
         kwargs : dict
             is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.
         """
@@ -88,9 +88,9 @@ class ResearchResults:
                     experiment_results[_name] = OrderedDict([*name_results.items(), *new_values.items()])
         self.results = mp.Manager().dict(**results)
 
-    def load_artifacts(self, experiment_id=None, name=None, iterations=None,
+    def load_artifactes(self, experiment_id=None, name=None, iterations=None,
                     config=None, alias=None, domain=None, **kwargs):
-        """ Load and filter experiment artifactes (all in experiment folder except standart
+        """ Load and filter experiment artifactes (all files/folders in experiment folder except standart
         'results', 'config.dill', 'config.json', 'experiment.log').
 
         Parameters
@@ -126,7 +126,7 @@ class ResearchResults:
                     ]
 
     def filter(self, experiment_id=None, name=None, iterations=None, config=None, alias=None, domain=None, **kwargs):
-        """ Filter experiment_id by specified parameters and make `name`, `iterations` lists.
+        """ Filter experiment_id by specified parameters and convert `name`, `iterations` to lists.
 
         Parameters
         ----------
