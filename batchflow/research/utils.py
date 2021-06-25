@@ -6,8 +6,10 @@ import logging
 import hashlib
 import json
 from collections import OrderedDict
+from copy import deepcopy
 import dill
 from tqdm import tqdm_notebook
+import numpy as np
 
 def to_list(value):
     return value if isinstance(value, list) else [value]
@@ -50,7 +52,7 @@ def transform_research_results(research_name, new_name=None, bar=True):
         with open(dst, 'wb') as f:
             dill.dump(content, f)
         with open(f'{research_name}/results/{config}/{exp_id}/config.json', 'w') as f:
-            json.dump(content.config().config, f)
+            json.dump(jsonify(content.config().config), f)
 
     # Remove folder with configs
     shutil.rmtree(f'{research_name}/configs')
@@ -109,6 +111,14 @@ def get_content(path):
     if 'sample_index' not in content or 'iteration' not in content:
         return None
     return content
+
+def jsonify(src):
+    """ Transform np.arrays to lists to JSON serialize. """
+    src = deepcopy(src)
+    for key, value in src.items():
+        if isinstance(value, np.ndarray):
+            src[key] = value.tolist()
+    return src
 
 def create_logger(name, path=None, loglevel='info'):
     """ Create logger. """
