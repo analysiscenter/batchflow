@@ -477,12 +477,12 @@ class TorchModel(BaseModel, VisualizationMixin):
             config['common/data_format'] = config.get('common/data_format') or data_format
 
         config['head/target_shape'] = self.target_shape
-        config['head/classes'] = config.get('head/classes', self.classes)
+        config['head/classes'] = config.get('head/classes') or self.classes
 
         if config.get('head/units') is None:
-            config['head/units'] = config.get('head/classes', self.classes)
+            config['head/units'] = config.get('head/classes')
         if config.get('head/filters') is None:
-            config['head/filters'] = config.get('head/classes', self.classes)
+            config['head/filters'] = config.get('head/classes')
         return config
 
     def unpack(self, name):
