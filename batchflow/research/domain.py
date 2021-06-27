@@ -240,6 +240,7 @@ class Domain:
         self.n_reps = 1
         self.repeat_each = None
         self.n_updates = 0
+        self.additional = True
         self.random_state = None
 
     def create_aliases(self, options):
@@ -256,7 +257,7 @@ class Domain:
             aliases_options += [(parameter, values)]
         return aliases_options
 
-    def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=0, seed=None):
+    def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=0, additional=True, seed=None):
         """ Set parameters for iterator.
 
         Parameters
@@ -275,8 +276,12 @@ class Domain:
             elements will be repeated after producing `repeat_each` configs. Else
             `repeat_each` will be setted to the number of configs that can be produced
             from domain.
-        produced: int
+        produced : int
             how many configs was produced before (is needed to use after domain update).
+        additional : bool
+            append 'repetition' and 'updates' to config or not.
+        seed : bool or int or object with a seed sequence attribute
+            see :meth:`~batchflow.utils_random.make_seed_sequence`.
         """
         n_configs = self.len # None means that domain has samplers
         self.n_items = n_items or n_configs
@@ -286,6 +291,7 @@ class Domain:
         else:
             self.repeat_each = repeat_each or 100
         self.n_produced = produced
+        self.additional = additional
         self.random_state = make_rng(seed)
         self.reset_iter()
 
@@ -311,7 +317,8 @@ class Domain:
                 domain = update['function'](**kwargs)
                 domain.updates = self.updates
                 domain.n_updates = self.n_updates + 1
-                domain.set_iter_params(produced=generated, seed=self.random_state, **update['iter_kwargs'])
+                domain.set_iter_params(produced=generated, additional=self.additional,
+                                       seed=self.random_state, **update['iter_kwargs'])
                 return domain
         return None
 
@@ -445,7 +452,10 @@ class Domain:
             iterator = _iterator()
             if self.n_reps == 1:
                 i = 0
-                additional = ConfigAlias([('repetition', 0)]) + ConfigAlias([('updates', self.n_updates)])
+                if self.additional:
+                    additional = ConfigAlias([('repetition', 0)]) + ConfigAlias([('updates', self.n_updates)])
+                else:
+                    additional = ConfigAlias()
                 while self.n_items is None or i < self.n_items:
                     yield next(iterator) + additional # pylint: disable=stop-iteration-return
                     i += 1
@@ -453,8 +463,11 @@ class Domain:
                 i = 0
                 while self.n_items is None or i < self.n_items:
                     samples = list(islice(iterator, int(self.repeat_each)))
-                    for repetition in range(self.n_reps):
-                        additional = ConfigAlias({'repetition': repetition}) + ConfigAlias({'updates': self.n_updates})
+                    for rep in range(self.n_reps):
+                        if self.additional:
+                            additional = ConfigAlias({'repetition': rep}) + ConfigAlias({'updates': self.n_updates})
+                        else:
+                            additional = ConfigAlias()
                         for sample in samples:
                             yield sample + additional
                     i += self.repeat_each
@@ -471,7 +484,8 @@ class Domain:
     def iterator(self):
         """ Get domain iterator. """
         if self._iterator is None:
-            self.set_iter_params(self.n_items, self.n_reps, self.repeat_each, self.n_produced, self.random_state)
+            self.set_iter_params(self.n_items, self.n_reps, self.repeat_each, self.n_produced,
+                                 self.additional, self.random_state)
             self.create_iter()
         return self._iterator
 

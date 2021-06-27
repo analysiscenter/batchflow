@@ -326,7 +326,7 @@ class Experiment:
         self._is_failed = self._is_failed or value
 
     def add_executable_unit(self, name, src=None, mode='func', when=1,
-                            save_to=None, args=None, **kwargs):
+                            save_to=None, dump=None, args=None, **kwargs):
         """ Add executable unit to experiment.
 
         Parameters
@@ -341,6 +341,8 @@ class Experiment:
             iterations to execute callable (see `when` of `:class:ExecutableUnit`), by default 1.
         save_to : NamedExpression, optional
             dst to save output of the unit (if needed), by default None.
+        dump : int, str or list, optional
+            iterations to dump results (see `when` of `:class:ExecutableUnit`), by default 1.
         args : list, optional
             args to execute unit, by default None.
         kwargs : dict
@@ -362,9 +364,11 @@ class Experiment:
         self.actions[name] = ExecutableUnit(name=name, args=args, when=when, **kwargs)
         if save_to is not None:
             self.save(src=O(name), dst=save_to, when=when, copy=False)
+            if dump is not None:
+                self.dump(save_to, when=dump)
         return self
 
-    def add_callable(self, name, func=None, args=None, when=1, save_to=None, **kwargs):
+    def add_callable(self, name, func=None, args=None, when=1, save_to=None, dump=None, **kwargs):
         """ Add callable to experiment.
 
         Parameters
@@ -379,6 +383,8 @@ class Experiment:
             iterations to execute callable (see `when` of `:class:ExecutableUnit`), by default 1.
         save_to : NamedExpression, optional
             dst to save output of the callable (if needed), by default None.
+        dump : int, str or list, optional
+            iterations to dump results (see `when` of `:class:ExecutableUnit`), by default 1.
         root : bool, optional
             does unit is the same for all branches or not, by default False.
         kwargs : dict
@@ -389,7 +395,7 @@ class Experiment:
         Research
         """
         return self.add_executable_unit(name, src=func, mode='func', when=when,
-                                        save_to=save_to, args=args, **kwargs)
+                                        save_to=save_to, dump=dump, args=args, **kwargs)
 
     def add_generator(self, name, generator=None, args=None, **kwargs):
         """ Add generator to experiment.
@@ -440,7 +446,7 @@ class Experiment:
                           root=root, item_name=name, when="%0")
         return self
 
-    def add_pipeline(self, name, root_pipeline=None, branch_pipeline=None, run=False, variables=None, **kwargs):
+    def add_pipeline(self, name, root=None, branch=None, run=False, variables=None, dump=None, **kwargs):
         """ Add pipeline to experiment.
 
         Parameters
@@ -448,17 +454,19 @@ class Experiment:
         name : str
             name of pipeline to use inside of the research. Can be `'instance_name.attribute'` to refer to instance
             attribute.
-        root_pipeline : batchflow.Pipeline, optional
+        root : batchflow.Pipeline, optional
             a pipeline to execute, by default None. It must contain `run` action with `lazy=True` or `run_later`.
             Only if `branch` is None, `root` may contain parameters that can be defined by config.
             from domain.
-        branch_pipeline : Pipeline, optional
+        branch : Pipeline, optional
             a parallelized pipeline to execute, by default None. Several copies of branch pipeline will be executed
             in parallel per each batch received from the root pipeline. May contain parameters that can be
             defined by domain, all branch pipelines will correspond to different experiments and will have
             different configs from domain.
         run : bool, optional
             if False then `.next_batch()` will be applied to pipeline, else `.run()` , by default False.
+        dump : int, str or list, optional
+            iterations to dump results (see `when` of `:class:ExecutableUnit`), by default 1.
         variables : str, list or None, optional
             variables of pipeline to save.
         when : int, str or list, optional
@@ -468,20 +476,22 @@ class Experiment:
         -------
         Research
         """
-        if branch_pipeline is None:
+        if branch is None:
             mode = 'func' if run else 'generator'
-            pipeline = PipelineWrapper(root_pipeline if root_pipeline is not None else name, mode=mode)
+            pipeline = PipelineWrapper(root if root is not None else name, mode=mode)
             self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), **kwargs)
         else:
-            root_pipeline = PipelineWrapper(root_pipeline, mode='generator')
-            branch_pipeline = PipelineWrapper(branch_pipeline, mode='execute_for')
+            root = PipelineWrapper(root, mode='generator')
+            branch = PipelineWrapper(branch, mode='execute_for')
 
-            self.add_generator(f'{name}_root', generator=root_pipeline, config=EC(), **kwargs)
-            self.add_callable(f'{name}_branch', func=branch_pipeline, config=EC(), batch=O(f'{name}_root'), **kwargs)
+            self.add_generator(f'{name}_root', generator=root, config=EC(), **kwargs)
+            self.add_callable(f'{name}', func=branch, config=EC(), batch=O(f'{name}_root'), **kwargs)
         if variables is not None:
-            ppl_name = name if branch_pipeline is None else f'{name}_branch'
+            ppl_name = name if branch is None else f'{name}'
             for var in to_list(variables):
                 self.save(E(ppl_name).pipeline.v(var), var)
+            if dump is not None:
+                self.dump(variables, dump)
         return self
 
     def add_namespace(self, namespace):

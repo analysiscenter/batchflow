@@ -159,15 +159,15 @@ class ResearchResults:
         """ Create pandas.DataFrame from results. """
         return self.to_df()
 
-    def to_df(self, pivot=False, include_config=True, use_alias=True, concat_config=False,
-              remove_auxilary=True, **kwargs):
+    def to_df(self, pivot=True, include_config=True, use_alias=False, concat_config=False,
+              remove_auxilary=True, drop_columns=True, **kwargs):
         """ Create pandas.DataFrame from filtered results.
 
         Parameters
         ----------
         pivot : bool, optional
             if True, two columns will be created: `name` (for results variavle) and `value`. If False, for each
-            variable separate column will be created. By default False
+            variable separate column will be created. By default True
         include_config : bool, optional
             include config into dataframe or not, by default True
         use_alias : bool, optional
@@ -177,6 +177,10 @@ class ResearchResults:
             by default False
         remove_auxilary : bool, optional
             remove columns 'repetition', 'device', 'updates' or not, by default True
+        drop_columns : bool, optional
+            remove or not separate columns for config parametrs when `concat_config=True`.
+        kwargs : dict
+            kwargs for :meth:`~.filter`.
 
         Returns
         -------
@@ -217,7 +221,7 @@ class ResearchResults:
                 df += experiment_df
         res = pd.concat(df) if len(df) > 0 else pd.DataFrame()
         if include_config and len(res) > 0:
-            res = pd.merge(self.configs_to_df(use_alias, concat_config, remove_auxilary), res, how='inner', on='id')
+            res = pd.merge(self.configs_to_df(use_alias, concat_config, remove_auxilary, drop_columns), res, how='inner', on='id')
         return res
 
     def load_iteration_files(self, path, iterations):
@@ -241,7 +245,7 @@ class ResearchResults:
                         results[iteration] = values[iteration]
         return results
 
-    def configs_to_df(self, use_alias=True, concat_config=False, remove_auxilary=True):
+    def configs_to_df(self, use_alias=True, concat_config=False, remove_auxilary=True, drop_columns=True):
         """ Create pandas.DataFrame with configs.
 
         Parameters
@@ -253,6 +257,8 @@ class ResearchResults:
             by default False
         remove_auxilary : bool, optional
             remove columns 'repetition', 'device', 'updates' or not, by default True
+        drop_columns : bool, optional
+            remove or not separate columns for config parametrs when `concat_config=True`.
 
         Returns
         -------
@@ -264,16 +270,23 @@ class ResearchResults:
             if remove_auxilary:
                 for key in ['repetition', 'device', 'updates']:
                     config.pop_config(key)
-            if use_alias:
-                if concat_config:
-                    popped = config.pop_config(['repetition', 'device', 'updates'])
-                    popped = {} if popped is None else popped.alias()
-                    config = {'config': config.alias(as_string=concat_config), **popped}
+            if concat_config:
+                popped = config.pop_config(['repetition', 'device', 'updates'])
+                if popped is None:
+                    popped = {}
                 else:
-                    config = config.alias()
+                    popped = popped.alias() if use_alias else popped.config()
+                _config = {'config': config.alias(as_string=concat_config), **popped}
             else:
-                config = config.config()
-            df += [pd.DataFrame({'id': [experiment_id], **config})]
+                _config = {}
+
+            if not concat_config or not drop_columns:
+                if use_alias:
+                    _config = {**_config, **config.alias()}
+                else:
+                    _config = {**_config, **config.config()}
+
+            df += [pd.DataFrame({'id': [experiment_id], **_config})]
         return pd.concat(df)
 
     def artifactes_to_df(self, configs=False, **kwargs):
