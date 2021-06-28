@@ -5,12 +5,6 @@ on:
     types: [closed]
     branches:
     - master
-    paths:
-    - 'docs/**'
-
-  push:
-    paths:
-    - 'docs/**'
 
 jobs:
 
