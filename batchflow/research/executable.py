@@ -31,16 +31,29 @@ class Executable:
         or returns (for function) values are lists of variable values
     path : str
         path to the folder where results will be dumped
-    exec : int, list of ints or None
+    execute : int, list of ints or None
+        If `'last'`, function will be executed just at last iteration (if `iteration + 1 == n_iters`
+        or `StopIteration` was raised)
+
+        If positive int, function will be executed each `step` iterations.
+
+        If str, must be `'#{it}'` or `'last'` where it is int,
+        the function will be executed at this iteration (zero-based)
+
+        If list, must be list of int or str described above
     dump : int, list of ints or None
+        iteration when results will be dumped and cleared. Similar to execute
     to_run : bool
+        run pipeline or not
     variables : list
         variables (for pipeline) or returns (for function)
     on_root : bool
-
+        If True, each `ResearchExecutableUnit` in args and kwargs will be evaluated as a list of values for
+        each experiment. If False, will be evaluated as a single value for the current experiment
     args : list
-
-    kwargs : dict()
+        args for a callable. Can be :class:`~.ResearchNamedExpression`
+    kwargs : dict
+        kwargs for a callable. Can be :class:`~.ResearchNamedExpression`
     """
     def __init__(self):
         self.function = None

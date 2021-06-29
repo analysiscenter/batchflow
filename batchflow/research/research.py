@@ -149,6 +149,7 @@ class Research:
         kwargs : dict
             kwargs for the function. Can be :class:`~.ResearchNamedExpression`.
 
+
         **How to use experiment**
 
         Each pipeline and function added to Research is saved as an :class:`~.Executable`.
