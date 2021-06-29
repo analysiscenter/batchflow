@@ -17,13 +17,6 @@ ExecutableUnit
 
 .. autoclass:: batchflow.research.research.Executable
 
-Grid
-----
-
-.. autoclass:: batchflow.research.Grid
-    :members:
-    :undoc-members:
-
 Option
 ------
 
