@@ -30,13 +30,16 @@ def eval_expr(expr, no_eval=None, **kwargs):
     """
     no_eval = no_eval or []
     if isinstance(expr, NamedExpression):
-        _expr = expr.get(**kwargs)
-        if isinstance(expr, W):
-            expr = _expr
-        elif isinstance(_expr, (NamedExpression, list, tuple, dict, Config)):
-            expr = eval_expr(_expr, **kwargs)
-        else:
-            expr = _expr
+        try:
+            _expr = expr.get(**kwargs)
+            if isinstance(expr, W):
+                expr = _expr
+            elif isinstance(_expr, (NamedExpression, list, tuple, dict, Config)):
+                expr = eval_expr(_expr, **kwargs)
+            else:
+                expr = _expr
+        except Exception as e:
+            raise type(e)(f"Can't evaluate expression: {expr} because \n {str(e)}") from e
     elif isinstance(expr, (list, tuple)):
         _expr = []
         for val in expr:
