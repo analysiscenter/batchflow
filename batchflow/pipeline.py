@@ -1071,7 +1071,7 @@ class Pipeline:
         self.before.init_model(name, model_class, mode=mode, config=config)
         return self
 
-    def import_model(self, name, model):
+    def import_model(self, name, source):
         """ Import a model from another pipeline
 
         Parameters
@@ -1079,7 +1079,7 @@ class Pipeline:
         name : str
             a name with which the model is stored in this pipeline
 
-        model : model or pipeline
+        source
             a model or a pipeline to import from
 
         Examples
@@ -1096,7 +1096,7 @@ class Pipeline:
 
             pipeline.import_model('my-model', train_pipeline)
         """
-        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, model_name=name))
+        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=source, model_name=name))
 
     def _exec_import_model(self, batch, action):
         model_name = self._eval_expr(action['model_name'], batch=batch)
@@ -1599,7 +1599,7 @@ class Pipeline:
         target : 'threads' or 'mpc'
             batch parallelization engine used for prefetching (default='threads').
             'mpc' rarely works well due to complicated and slow python's inter-process communications.
-            Don't use pipeline variables and models in mpc-mode as each bach is being processed in
+            Don't use pipeline variables and models in mpc-mode as each batch is being processed in
             a separate copy of the pipeline.
 
         reset : list of str, str or bool
@@ -1645,22 +1645,25 @@ class Pipeline:
         batch_res = self.execute_for(batch)
         return batch_res
 
-    def next_batch(self, *args, **kwargs):
+    def next_batch(self, *args, n_epochs=None, **kwargs):
         """ Get the next batch and execute all lazy actions
+
+        Notes
+        -----
+        `n_epochs` is None by default to allow for infinite batch generation.
 
         See also
         --------
         :meth:`~.Pipeline.gen_batch`
         """
-        if len(args) == 0 and len(kwargs) == 0:
-            if self._lazy_run is None:
-                raise RuntimeError("next_batch without arguments requires a lazy run at the end of the pipeline")
+        if len(args) == 0 and len(kwargs) == 0 and self._lazy_run is not None:
             args, kwargs = self._lazy_run
-            batch = self.next_batch(*args, **kwargs)
         else:
-            if self._batch_generator is None:
-                self._batch_generator = self.gen_batch(*args, reset=None, **kwargs)
-            batch = next(self._batch_generator)
+            kwargs['n_epochs'] = n_epochs
+
+        if self._batch_generator is None:
+            self._batch_generator = self.gen_batch(*args, reset=None, **kwargs)
+        batch = next(self._batch_generator)
 
         return batch
 
@@ -1676,7 +1679,14 @@ class Pipeline:
             self._lazy_run = args, kwargs
             return self
 
+        if len(args) == 0 and len(kwargs) == 0 and self._lazy_run is not None:
+            args, kwargs = self._lazy_run
+
         args_value, kwargs_value = self._eval_run_args(args, kwargs)
+
+        if kwargs_value.get('n_epochs', None) is None and kwargs_value.get('n_iters', None) is None:
+            warnings.warn('Batch generation will never stop as ' \
+                          'n_epochs=None and n_iters=None', RuntimeWarning)
 
         return PipelineExecutor(self).run(*args_value, **kwargs_value)
 

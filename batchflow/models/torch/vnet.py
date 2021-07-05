@@ -65,6 +65,7 @@ class VNet(EncoderDecoder):
     """
     @classmethod
     def default_config(cls):
+        """ Define model's defaults. """
         config = super().default_config()
 
         config['body/encoder/num_stages'] = 4
