@@ -1071,7 +1071,7 @@ class Pipeline:
         self.before.init_model(name, model_class, mode=mode, config=config)
         return self
 
-    def import_model(self, name, model):
+    def import_model(self, name, source):
         """ Import a model from another pipeline
 
         Parameters
@@ -1079,7 +1079,7 @@ class Pipeline:
         name : str
             a name with which the model is stored in this pipeline
 
-        model : model or pipeline
+        source
             a model or a pipeline to import from
 
         Examples
@@ -1096,7 +1096,7 @@ class Pipeline:
 
             pipeline.import_model('my-model', train_pipeline)
         """
-        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, model_name=name))
+        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=source, model_name=name))
 
     def _exec_import_model(self, batch, action):
         model_name = self._eval_expr(action['model_name'], batch=batch)
