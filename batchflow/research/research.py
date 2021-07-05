@@ -74,7 +74,7 @@ class Research:
         self.logger = None
         self.process = None
         self.debug = False
-        self.finalize = False
+        self.finalize = True
         self.random_seed = None
 
     def __getattr__(self, key):
@@ -224,7 +224,7 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=False, env_meta=None, seed=None):
+            debug=False, finalize=True, env_meta=None, seed=None):
         """ Run research.
 
         Parameters

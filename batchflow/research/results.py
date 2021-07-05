@@ -35,11 +35,11 @@ class ResearchResults:
 
     def load(self, **kwargs):
         """ Load (filtered if needed) results, configs and artifactes paths if they was dumped. """
-        self.kwargs = {**self.kwargs, **kwargs}
+        kwargs = {**self.kwargs, **kwargs}
         if self.dump_results:
             self.load_configs()
-            self.load_results(**self.kwargs)
-            self.load_artifactes(**self.kwargs)
+            self.load_results(**kwargs)
+            self.load_artifactes(**kwargs)
 
     def load_configs(self):
         """ Load all experiment configs. """

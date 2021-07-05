@@ -536,7 +536,7 @@ class Experiment:
         copy : bool, optional
             copy value or not, by default False
         """
-        name = self.add_postfix('save_results')
+        name = self.add_postfix('__save_results')
         self.add_callable(name, _save_results, when=when, _src=src, _dst=dst, experiment=E(), copy=copy)
         return self
 
@@ -555,7 +555,7 @@ class Experiment:
         Research
         """
         self.has_dump = True
-        name = self.add_postfix('dump_results')
+        name = self.add_postfix('__dump_results')
         self.add_callable(name, _dump_results,
                           when=when,
                           variable=variable, experiment=E())
@@ -665,35 +665,33 @@ class Experiment:
 
     def call(self, name, iteration, n_iters=None):
         """ Execute one iteration of the experiment. """
-        if self.is_alive:
+        if self.is_alive or name.startswith('__'):
             self.last = self.last or (iteration + 1 == n_iters)
             self.iteration = iteration
 
             self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
-            if self.debug:
+            exception = StopIteration if self.debug else Exception
+            try:
                 self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
-            else:
-                try:
-                    self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
-                except Exception as e: #pylint:disable=broad-except
-                    self.is_failed = True
-                    self.last = True
-                    if isinstance(e, StopIteration):
-                        self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
-                        if self.monitor:
-                            self.monitor.stop_iteration(name, self)
-                    else:
-                        self.exception = e
-                        ex_traceback = e.__traceback__
-                        msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
-                        self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
-                        if self.monitor:
-                            self.monitor.fail_item_execution(name, self, msg)
-                else:
+            except exception as e: #pylint:disable=broad-except
+                self.is_failed = True
+                self.last = True
+                if isinstance(e, StopIteration):
+                    self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
                     if self.monitor:
-                        self.monitor.execute_iteration(name, self)
-                if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
-                    self.is_alive = False
+                        self.monitor.stop_iteration(name, self)
+                else:
+                    self.exception = e
+                    ex_traceback = e.__traceback__
+                    msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
+                    self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
+                    if self.monitor:
+                        self.monitor.fail_item_execution(name, self, msg)
+            else:
+                if self.monitor:
+                    self.monitor.execute_iteration(name, self)
+            if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
+                self.is_alive = False
 
     def __str__(self):
         repr = "instances:\n"
@@ -819,7 +817,7 @@ class Executor:
     @parallel(init='_parallel_init_call')
     def parallel_call(self, experiment, iteration, unit_name):
         """ Parallel call of the unit 'unit_name' """
-        if self.finalize or (not experiment.is_failed):
+        if self.finalize or (not experiment.is_failed) or unit_name.startswith('__'):
             experiment.call(unit_name, iteration, self.n_iters)
 
     def _parallel_init_call(self, iteration, unit_name):
@@ -832,7 +830,7 @@ class Executor:
         # TODO: experiment must be alive if error was in the branch after all roots
         self.experiments[0].call(unit_name, iteration, self.n_iters)
         for experiment in self.experiments[1:]:
-            if self.finalize or (not experiment.is_failed):
+            if self.finalize or (not experiment.is_failed) or unit_name.startswith('__'):
                 experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
             for attr in ['_is_alive', '_is_failed', 'iteration']:
                 setattr(experiment, attr, getattr(self.experiments[0], attr))
@@ -868,7 +866,7 @@ def _dump_results(variable, experiment):
             filename = os.path.join(variable_path, str(iteration))
             with open(filename, 'wb') as file:
                 dill.dump(values, file)
-            experiment.results[var] = OrderedDict()
+            del experiment.results[var]
 
 def _explicit_call(method, name, experiment):
     """ Add unit into research by explicit call in research-pipeline. """
