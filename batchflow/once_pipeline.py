@@ -172,15 +172,15 @@ class OncePipeline:
         self.pipeline.models.init_model(name, model_class, mode=mode, config=config)
         return self
 
-    def import_model(self, name, model):
-        """ Import a model from another pipeline
+    def import_model(self, name, source):
+        """ Import a model
 
         Parameters
         ----------
         name : str
             a name with which the model is stored in this pipeline
 
-        model : model
+        source
             a model or a pipeline to import from
 
         Examples
@@ -198,7 +198,7 @@ class OncePipeline:
 
             pipeline.before.import_model('my-model', train_pipeline.m('resnet'))
         """
-        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, model_name=name))
+        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=source, model_name=name))
 
     def _exec_import_model(self, action):
         self.pipeline._exec_import_model(None, action)      # pylint:disable=protected-access
@@ -214,7 +214,7 @@ class OncePipeline:
     def load_model(self, name, model_class=None, mode='dynamic', *args, **kwargs):
         """ Load a model """
         if mode == 'static':
-            self.pipeline.models.load_model(name, model_class, mode, *args, **kwargs)
+            self.pipeline.load_model_now(name, model_class, mode, *args, **kwargs)
             return self
         return self._add_action(LOAD_MODEL_ID, *args,
                                 _args=dict(mode=mode, model_class=model_class, model_name=name),
