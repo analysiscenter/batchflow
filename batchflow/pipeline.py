@@ -1656,7 +1656,7 @@ class Pipeline:
         --------
         :meth:`~.Pipeline.gen_batch`
         """
-        if len(args) == 0 and len(kwargs) == 0:
+        if len(args) == 0 and len(kwargs) == 0 and self._lazy_run is not None:
             args, kwargs = self._lazy_run
         else:
             kwargs['n_epochs'] = n_epochs
@@ -1678,6 +1678,9 @@ class Pipeline:
             # if lazy is passed, then store params for later execution
             self._lazy_run = args, kwargs
             return self
+
+        if len(args) == 0 and len(kwargs) == 0 and self._lazy_run is not None:
+            args, kwargs = self._lazy_run
 
         args_value, kwargs_value = self._eval_run_args(args, kwargs)
 
