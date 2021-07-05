@@ -59,6 +59,8 @@ class Imagenette(ImagesOpenset):
             """ Check whether archive member is a file.
             In case `drop_grayscale` set to `True` it verifies that the member is the RGB mode image as well.
             """
+            if (member.name.find('csv')!=-1) or (member.name.find('.DS_Store')!=-1):
+                return False
             if not self.drop_grayscale:
                 return member.isfile()
 
@@ -106,12 +108,26 @@ class Imagenette(ImagesOpenset):
         return preloaded, index, train_index, test_index
 
 
+class Imagenette2(Imagenette):
+    """ Imagenette dataset.
+    Contains 9296 train and 3856 test images. Total size 1.5GB.
+    """
+    SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagenette2.tgz'
+
+
 class Imagenette320(Imagenette):
     """ The '320px' version of Imagenette.
     The shortest size resized to that size with their aspect ratio maintained.
     Contains 12894 train and 500 test images. Total size 325MB.
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagenette-320.tgz'
+
+class Imagenette2_320(Imagenette):
+    """ The '320px' version of Imagenette.
+    The shortest size resized to that size with their aspect ratio maintained.
+    Contains 9296 train and 3856 test images. Total size 326MB.
+    """
+    SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-320.tgz'
 
 
 class Imagenette160(Imagenette):
@@ -121,12 +137,26 @@ class Imagenette160(Imagenette):
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagenette-160.tgz'
 
+class Imagenette2_160(Imagenette):
+    """ The '160px' version of Imagenette.
+    The shortest size resized to that size with their aspect ratio maintained.
+    Contains 9296 train and 3856 test images. Total size 94MB.
+    """
+    SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-160.tgz'
+
 
 class ImageWoof(Imagenette):
     """ Imagewoof dataset. See the https://github.com/fastai/imagenette for details.
-    Contains 12454 train and 500 test images. Total size 1.3GB
+    Contains 12454 train and 500 test images. Total size 1.3GB.
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof.tgz'
+
+
+class ImageWoof2(Imagenette):
+    """ Imagewoof dataset. See the https://github.com/fastai/imagenette for details.
+    Contains 8943 train and 3890 test images. Total size 1.25GB.
+    """
+    SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof2.tgz'
 
 
 class ImageWoof320(Imagenette):
@@ -137,9 +167,24 @@ class ImageWoof320(Imagenette):
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof-320.tgz'
 
 
+class ImageWoof2_320(Imagenette):
+    """ The '320px' version of Imagewoof.
+    The shortest size resized to that size with their aspect ratio maintained.
+    Contains 8943 train and 3890 test images. Total size 313MB.
+    """
+    SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof2-320.tgz'
+
+
 class ImageWoof160(Imagenette):
     """ The '160px' version of Imagewoof.
     The shortest size resized to that size with their aspect ratio maintained.
     Contains 12454 train and 500 test images. Total size 88MB
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof-160.tgz'
+
+class ImageWoof2_160(Imagenette):
+    """ The '160px' version of Imagewoof.
+    The shortest size resized to that size with their aspect ratio maintained.
+    Contains 8943 train and 3890 test images. Total size 88MB.
+    """
+    SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof2-160.tgz'
