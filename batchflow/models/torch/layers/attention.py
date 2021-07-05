@@ -242,12 +242,12 @@ class SimpleSelfAttention(nn.Module):
         batch_size, spatial = x.shape[0], x.shape[2:]
         num_features = np.prod(spatial)
 
-        phi = self.mid_branch(x).view(batch_size, -1, num_features) # (B, C/8, N)
-        theta = self.bot_branch(x).view(batch_size, num_features, -1) # (B, N, C)
+        phi = self.mid_branch(x).reshape(batch_size, -1, num_features) # (B, C/8, N)
+        theta = self.bot_branch(x).reshape(batch_size, num_features, -1) # (B, N, C)
         attention = torch.bmm(phi, theta) / num_features # (B, C/8, C)
 
-        out = self.top_branch(x).view(batch_size, num_features, -1) # (B, N, C/8)
-        out = torch.bmm(out, attention).view(batch_size, -1, *spatial)
+        out = self.top_branch(x).reshape(batch_size, num_features, -1) # (B, N, C/8)
+        out = torch.bmm(out, attention).reshape(batch_size, -1, *spatial)
         return self.gamma*out + x
 
     def __repr__(self):
