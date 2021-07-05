@@ -1,8 +1,8 @@
 """ Tests for Research and correspong classes. """
 # pylint: disable=no-name-in-module, missing-docstring, redefined-outer-name
 import os
-import pytest
 from contextlib import ExitStack as does_not_raise
+import pytest
 
 import numpy as np
 
@@ -162,6 +162,7 @@ class TestDomain:
         exp_res = [1, 3, 4, 2, 5, 6, 9.87, -1.08] * 2
 
         assert np.allclose(res, exp_res, atol=0.01, rtol=0)
+
 class TestExecutor:
     def test_callable(self):
         experiment = (Experiment()
@@ -294,7 +295,7 @@ class TestExecutor:
 
         experiment = (Experiment()
             .add_pipeline('ppl', root, ppl)
-            .save(E('ppl_branch').v('var'), dst='var', when=['last'])
+            .save(E('ppl').v('var'), dst='var', when=['last'])
         )
 
         executor = Executor(experiment, target='f', n_iters=10, configs=[{'x': 10}, {'x': 20}], )
@@ -385,6 +386,7 @@ class TestResearch:
         Research.remove(simple_research.name, ask=False)
         assert not os.path.exists(simple_research.name)
 
+    @pytest.mark.slow
     @pytest.mark.parametrize('debug,expectation',
                              list(zip([False, True], [does_not_raise(), pytest.raises(NotImplementedError)])))
     def test_debug(self, debug, expectation):
@@ -430,5 +432,5 @@ class TestResults:
         assert len(df) == 12
 
 
-#TODO: logging tests, test that exceptions in one branch don't affect other bracnhes,
-#      divices splitting, ...
+# #TODO: logging tests, test that exceptions in one branch don't affect other bracnhes,
+# #      divices splitting, ...

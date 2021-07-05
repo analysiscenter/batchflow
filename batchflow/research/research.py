@@ -262,7 +262,7 @@ class Research:
             If False, continue research after exceptions. If True, raise Exception. Can be used only with
             `parallel=False` and `executor_target='for'`, by default False.
         finalize : bool, optional
-            continue experiment iteration after exception in some unit or not, by default False.
+            continue experiment iteration after exception in some unit or not, by default True.
         env_meta : dict or None
             kwargs for :meth:`.Research.attach_env_meta`.
         seed : bool or int or object with a seed sequence attribute

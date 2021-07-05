@@ -221,7 +221,8 @@ class ResearchResults:
                 df += experiment_df
         res = pd.concat(df) if len(df) > 0 else pd.DataFrame()
         if include_config and len(res) > 0:
-            res = pd.merge(self.configs_to_df(use_alias, concat_config, remove_auxilary, drop_columns), res, how='inner', on='id')
+            left = self.configs_to_df(use_alias, concat_config, remove_auxilary, drop_columns)
+            res = pd.merge(left, res, how='inner', on='id')
         return res
 
     def load_iteration_files(self, path, iterations):
