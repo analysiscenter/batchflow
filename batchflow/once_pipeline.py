@@ -179,9 +179,7 @@ class OncePipeline:
               .init_variable('shape_name', 'images_shape')
               .init_model('my_model', C('model'), 'dynamic', config={V('shape_name)': B('images_shape')})
         """
-        if source is not None:
-            return self.import_model(name, source)
-        self.pipeline.models.init_model(name, model_class, mode=mode, config=config)
+        self.pipeline.models.init_model(name, model_class, mode=mode, config=config, source=source)
         return self
 
     def import_model(self, name, source):
