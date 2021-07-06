@@ -137,8 +137,8 @@ class OncePipeline:
         return self
 
 
-    def init_model(self, name, model_class=None, mode='dynamic', config=None):
-        """ Initialize a static or dynamic model
+    def init_model(self, name, model_class=None, mode='dynamic', config=None, source=None):
+        """ Initialize a static or dynamic model by building or importing it
 
         Parameters
         ----------
@@ -156,19 +156,31 @@ class OncePipeline:
         config : dict or Config
             (optional) model configurations parameters, where each key and value could be named expressions.
 
+        source
+            a model or a pipeline to import from
+
         Examples
         --------
-        >>> pipeline.before.init_model('my-model', MyModel, 'static')
+        Build a model::
 
-        >>> pipeline.before
+            pipeline.before.init_model('my-model', MyModel, 'static')
+
+        Import a model::
+
+            pipeline.before.init_model('my-model', source=train_pipeline)
+
+        Build a model with a config::
+
+            pipeline.before
               .init_variable('images_shape', [256, 256])
               .init_model('my_model', MyModel, 'static', config={'input_shape': V('images_shape')})
 
-        >>> pipeline.before
+            pipeline.before
               .init_variable('shape_name', 'images_shape')
               .init_model('my_model', C('model'), 'dynamic', config={V('shape_name)': B('images_shape')})
-
         """
+        if source is not None:
+            return self.import_model(name, source)
         self.pipeline.models.init_model(name, model_class, mode=mode, config=config)
         return self
 
