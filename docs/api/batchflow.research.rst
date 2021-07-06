@@ -12,35 +12,62 @@ Research
     :undoc-members:
     :member-order: bysource
 
-ExecutableUnit
---------------
+Domain
+--------
 
-.. autoclass:: batchflow.research.research.Executable
-
-Grid
-----
-
-.. autoclass:: batchflow.research.Grid
+.. autoclass:: batchflow.research.Domain
     :members:
     :undoc-members:
+    :member-order: bysource
 
-Option
-------
+Alias
+--------
 
-.. autoclass:: batchflow.research.Option
+.. autoclass:: batchflow.research.Alias
     :members:
     :undoc-members:
-
-KV
---
-
-.. autoclass:: batchflow.research.KV
-    :members:
-    :undoc-members:
+    :member-order: bysource
 
 ConfigAlias
------------
+--------
 
 .. autoclass:: batchflow.research.ConfigAlias
+    :members:
+    :undoc-members:
+    :member-order: bysource
+
+
+Experiment
+--------
+
+.. autoclass:: batchflow.research.Experiment
+    :members:
+    :undoc-members:
+    :member-order: bysource
+
+ResearchResults
+--------
+
+.. autoclass:: batchflow.research.ResearchResults
+    :members:
+    :undoc-members:
+    :member-order: bysource
+
+ResearchResults
+--------
+
+.. autoclass:: batchflow.research.ResearchResults
+    :members:
+    :undoc-members:
+    :member-order: bysource
+
+Named expressions
+-----------------
+
+.. toctree::
+   :maxdepth: 2
+
+.. automodule:: batchflow.research.named_expr
+    :member-order: bysource
     :members:
     :undoc-members:

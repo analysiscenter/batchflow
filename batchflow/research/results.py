@@ -287,7 +287,7 @@ class ResearchResults:
                 else:
                     _config = {**_config, **config.config()}
 
-            df += [pd.DataFrame({'id': [experiment_id], **_config})]
+            df += [pd.DataFrame({'id': [experiment_id], **{key: [val] for key, val in _config.items()}})]
         return pd.concat(df)
 
     def artifactes_to_df(self, configs=False, **kwargs):

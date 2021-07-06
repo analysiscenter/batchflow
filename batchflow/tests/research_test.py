@@ -10,7 +10,7 @@ from batchflow import Dataset, Pipeline, B, V, C
 from batchflow import NumpySampler as NS
 from batchflow.models.torch import ResNet
 from batchflow.opensets import MNIST
-from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults
+from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults, Alias
 
 @pytest.fixture
 def generator():
@@ -440,6 +440,18 @@ class TestResults:
         df = ResearchResults(simple_research.name, domain=Option('y', [2, 3])).df
         assert len(df) == 12
 
+    @pytest.mark.parametrize('use_alias', [False, True])
+    def test_lists_in_config(self, use_alias):
+        def dummy():
+            return 1
+
+        domain = Domain({'a': [Alias([1, 2, 3], 'list')]})
+        research = Research(domain=domain).add_callable(dummy, save_to='res')
+        research.run(dump_results=False)
+
+        df = research.results.to_df(use_alias=use_alias)
+
+        assert len(df) == 1
 
 # #TODO: logging tests, test that exceptions in one branch don't affect other bracnhes,
 # #      divices splitting, ...
