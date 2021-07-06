@@ -138,8 +138,9 @@ class ModelDirectory:
         if name in ['dynamic', 'static']:
             raise DeprecationWarning('Arguments order has changed to <model name>, <model class>, <mode>, <config>.')
 
-        model_class = model_class if model_class is not None else config.get('model_class')
-        if model_class is None:
+        if model_class is None and config is not None:
+            model_class = config.get('model_class')
+        if model_class is None and source is None:
             raise ValueError('model_class should be specified in the model config')
 
         if mode == 'static':
