@@ -1,181 +1,228 @@
 """ Classes for multiprocess job running. """
 
 import os
-import logging
 import multiprocess as mp
-from tqdm import tqdm
 
-class _DummyBar:
-    def __init__(self, *args, **kwargs):
-        _ = args, kwargs
-        self.n = 0
-        self.total = None
+from .. import Config
+from .domain import Domain
+from .utils import generate_id
+from ..utils_random import make_rng, spawn_seed_sequence
 
-    def set_description(self, *args, **kwargs):
-        pass
+class DynamicQueue:
+    """ Queue of tasks that can be changed depending on previous results. """
+    def __init__(self, domain, research, n_branches):
+        self._domain = domain
+        self.research = research
+        self.n_branches = n_branches
 
-    def refresh(self, *args, **kwargs):
-        pass
+        self.queue = mp.JoinableQueue()
 
-    def __call__(self, *args, **kwargs):
-        return self
+        self.configs_generated = 0
+        self.configs_remains = self.domain.size
 
-    def __enter__(self, *args, **kwargs):
-        return self
+        self.finished_tasks = 0
+        self.tasks_in_queue = 0
 
-    def __exit__(self, *args, **kwargs):
-        pass
+        seed = spawn_seed_sequence(research)
+        self.random_seed = seed
+        self.random = make_rng(seed)
+
+    @property
+    def domain(self):
+        """ Get (or create if needed) domain. """
+        if self._domain.size == 0:
+            domain = Domain({'repetition': [None]}) # the value of repetition will be rewritten
+            domain.set_iter_params(n_reps=self._domain.n_reps, produced=self._domain.n_produced)
+            self._domain = domain
+        return self._domain
+
+    def update_domain(self):
+        """ Update domain. """
+        new_domain = self.domain.update(self.configs_generated, self.research)
+        if new_domain is not None:
+            self._domain = new_domain
+            self.configs_remains = self._domain.size
+        return new_domain is not None
+
+    def next_tasks(self, n_tasks=1):
+        """ Get next `n_tasks` elements of queue. """
+        configs = []
+        for i in range(n_tasks):
+            branches_tasks = [] # TODO: rename it
+            try:
+                for _ in range(self.n_branches):
+                    config = next(self.domain)
+                    config['id'] = generate_id(config, self.random)
+                    branches_tasks.append(config)
+                configs.append(branches_tasks)
+            except StopIteration:
+                if len(branches_tasks) > 0:
+                    configs.append(branches_tasks)
+                break
+        for i, executor_configs in enumerate(configs):
+            self.put((self.configs_generated + i, executor_configs))
+
+        n_configs = sum([len(item) for item in configs])
+
+        self.configs_generated += n_configs
+        self.configs_remains -= n_configs
+        self.tasks_in_queue += len(configs)
+        self.research.logger.info(f'Get {n_tasks} tasks with {n_configs} configs, remains {self.configs_remains}')
+
+        return n_configs
+
+    def stop_workers(self, n_workers):
+        """ Stop all workers by putting `None` task into queue. """
+        for _ in range(n_workers):
+            self.put(None)
+
+    def __getattr__(self, key):
+        return getattr(self.queue, key)
+
+class Worker:
+    """ Worker to get tasks from queue and run executors.
+
+    Parameters
+    ----------
+    index : int
+        numerical index of the worker (from 0)
+    worker_config : Config
+        additional config for all experiments executed in Worker
+    tasks : DynamicQueue
+        tasks queue
+    responses : multiprocess.JoinableQueue
+        queue for responses aboute executed tasks
+    research : Research
+        research
+    """
+    def __init__(self, index, worker_config, tasks, responses, research):
+        self.index = index
+        self.worker_config = worker_config
+        self.tasks = tasks
+        self.responses = responses
+        self.research = research
+
+        self.pid = None
+
+    def __call__(self):
+        self.pid = os.getpid()
+        self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has started.")
+
+        executor_class = self.research.executor_class
+        n_iters = self.research.n_iters
+        self.research.monitor.send(status='START_WORKER', worker=self)
+        task = self.tasks.get()
+
+        if isinstance(self.research.branches, int):
+            branches_configs = [Config() for _ in range(self.research.branches)]
+        else:
+            branches_configs = self.research.branches
+        n_branches = len(branches_configs)
+        devices = self.research.devices[self.index]
+
+        all_devices = set(device for i in range(n_branches) for device in devices[i] if device is not None)
+
+        if len(all_devices) > 0:
+            os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+            os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(all_devices)
+
+        device_reindexation = {device: i for i, device in enumerate(all_devices)}
+        devices = [[device_reindexation.get(i) for i in item] for item in devices]
+        devices = [{'device': item[0] if len(item) == 1 else item} for item in devices]
+
+        while task is not None:
+            task_idx, configs = task
+
+            self.research.monitor.send(worker=self, status='GET_TASK', task_idx=task_idx)
+            self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] have got task {task_idx}.")
+            name = f"Task {task_idx}"
+
+            experiment = self.research.experiment
+            target = self.research.executor_target # 'for' or 'thread' for branches execution
+
+            branches_configs = [config + Config(_devices) for config, _devices in zip(branches_configs, devices)]
+            branches_configs = branches_configs[:len(configs)]
+
+            executor = executor_class(experiment, research=self.research, target=target, configs=configs,
+                                      branches_configs=branches_configs, executor_config=self.worker_config,
+                                      n_iters=n_iters, task_name=name)
+            if self.research.parallel:
+                process = mp.Process(target=executor.run, args=(self, ))
+                process.start()
+                process.join()
+            else:
+                executor.run(self)
+            self.research.monitor.send(worker=self, status='FINISH_TASK', task_idx=task_idx)
+            self.tasks.task_done()
+            self.responses.put((self.index, task_idx))
+            task = self.tasks.get()
+        self.tasks.task_done()
+        self.research.monitor.send(worker=self, status='STOP_WORKER')
+
+        self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has stopped.")
 
 class Distributor:
-    """ Distributor of jobs between workers. """
-    def __init__(self, n_iters, workers, devices, worker_class=None, timeout=None, trials=2, logger=None):
-        """
-        Parameters
-        ----------
-        workers : int or list of Worker configs
+    """ Distributor of jobs between workers.
 
-        worker_class : Worker subclass or None
-        """
-        self.n_iters = n_iters
-        self.workers = workers
-        self.devices = devices
-        self.worker_class = worker_class
-        self.timeout = timeout
-        self.trials = trials
-        self.logger = logger
+    Parameters
+    ----------
+    tasks : DynamicQueue
+        tasks queue
+    research : Research
+        research
+    """
+    def __init__(self, tasks, research):
+        self.tasks = tasks
+        self.research = research
+        self.responses = mp.JoinableQueue()
 
-        self.logfile = None
-        self.errorfile = None
-        self.results = None
-        self.finished_jobs = None
-        self.answers = None
-        self.jobs_queue = None
-
-    def run(self, jobs_queue, bar=False):
-        """ Run disributor and workers.
-
-        Parameters
-        ----------
-        jobs_queue : DynamicQueue of tasks
-
-        n_iters : int or None
-
-        logfile : str (default: 'research.log')
-
-        errorfile : str (default: 'errors.log')
-
-        bar : bool or callable
-
-        args, kwargs
-            will be used in worker
-        """
-        self.jobs_queue = jobs_queue
-
-        if isinstance(bar, bool):
-            bar = tqdm if bar else _DummyBar()
-
-        self.logger.info('Distributor [id:{}] is preparing workers'.format(os.getpid()))
-
-        if isinstance(self.workers, int):
-            workers = [self.worker_class(
-                devices=self.devices[i],
-                worker_name=i,
-                timeout=self.timeout,
-                trials=self.trials,
-                logger=self.logger
-                )
-                       for i in range(self.workers)]
+    def run(self):
+        """ Run disributor and all workers. """
+        workers = []
+        if isinstance(self.research.workers, int):
+            worker_configs = [Config() for _ in range(self.research.workers)]
         else:
-            workers = [
-                self.worker_class(
-                    devices=self.devices[i],
-                    worker_name=i,
-                    timeout=self.timeout,
-                    trials=self.trials,
-                    logger=self.logger,
-                    worker_config=worker_config
-                    )
-                for i, worker_config in enumerate(self.workers)
-            ]
-        try:
-            self.logger.info('Create queue of jobs')
-            self.results = mp.JoinableQueue()
-        except Exception as exception: #pylint:disable=broad-except
-            self.logger.error(exception)
-        else:
-            if len(workers) > 1:
-                msg = 'Run {} workers'
-            else:
-                msg = 'Run {} worker'
-            self.logger.info(msg.format(len(workers)))
+            worker_configs = self.research.workers
+        for i, worker_config in enumerate(worker_configs):
+            workers += [Worker(i, worker_config, self.tasks, self.responses, self.research)]
+
+        if not self.research.parallel:
+            workers = workers[:1]
+
+        self.tasks.next_tasks(len(workers))
+        self.research.logger.info(f'Start workers (parallel={self.research.parallel})')
+
+        if self.research.parallel:
             for worker in workers:
-                try:
-                    mp.Process(target=worker, args=(self.jobs_queue, self.results)).start()
-                except Exception as exception: #pylint:disable=broad-except
-                    self.logger.error(exception)
-            previous_domain_jobs = 0
-            n_updates = 0
-            finished_iterations = dict()
-            with bar(total=None) as progress:
-                while True:
-                    n_jobs = self.jobs_queue.next_jobs(len(workers)+1)
-                    jobs_in_queue = n_jobs
-                    finished_jobs = 0
-                    rest_of_generator = 0
-                    while finished_jobs != jobs_in_queue:
-                        progress.set_description('Domain updated: ' + str(n_updates))
+                mp.Process(target=worker).start()
 
-                        estimated_size = self.jobs_queue.total
-                        if estimated_size is not None:
-                            total = rest_of_generator + previous_domain_jobs + estimated_size
-                            if self.n_iters is not None:
-                                total *= self.n_iters
-                            progress.total = total
-                        signal = self.results.get()
-                        if self.n_iters is not None:
-                            finished_iterations[signal.job] = signal.iteration
-                        if signal.done:
-                            finished_jobs += 1
-                            finished_iterations[signal.job] = self.n_iters
-                            each = self.jobs_queue.domain.update_each
-                            if isinstance(each, int) and finished_jobs % each == 0:
-                                was_updated = self.jobs_queue.update()
-                                if was_updated:
-                                    rest_of_generator = jobs_in_queue
-                                n_updates += was_updated
-                            if n_jobs > 0:
-                                n_jobs = self.jobs_queue.next_jobs(1)
-                                jobs_in_queue += n_jobs
-                        if self.n_iters is not None:
-                            progress.n = sum(finished_iterations.values())
-                        else:
-                            progress.n += signal.done
-                        progress.refresh()
-                    if self.jobs_queue.domain.update_each == 'last':
-                        was_updated = self.jobs_queue.update()
-                        n_updates += 1
-                        if not was_updated:
-                            break
-                    else:
-                        self.jobs_queue.stop_workers(len(workers))
-                        self.jobs_queue.join()
-                        break
-                    previous_domain_jobs += finished_jobs
-        self.logger.info('All workers have finished the work')
-        logging.shutdown()
+            self.send_state()
+            while self.tasks.tasks_in_queue > 0:
+                self.responses.get()
+                self.tasks.finished_tasks += 1
+                self.tasks.tasks_in_queue -= 1
 
-class Signal:
-    """ Class for feedback from jobs and workers """
-    def __init__(self, worker, job, iteration, n_iters, trial, done, exception, exec_actions=None, dump_actions=None):
-        self.worker = worker
-        self.job = job
-        self.iteration = iteration
-        self.n_iters = n_iters
-        self.trial = trial
-        self.done = done
-        self.exception = exception
-        self.exec_actions = exec_actions
-        self.dump_actions = dump_actions
+                self.tasks.update_domain()
+                self.tasks.next_tasks(1)
+                self.send_state()
 
-    def __repr__(self):
-        return str(self.__dict__)
+            self.tasks.stop_workers(len(workers))
+            for _ in workers:
+                self.tasks.join()
+        else:
+            self.send_state()
+            while self.tasks.tasks_in_queue > 0:
+                self.tasks.stop_workers(1) # worker can't be in separate process so we restart it after each task
+                workers[0]()
+
+                self.tasks.finished_tasks += 1
+                self.tasks.tasks_in_queue -= 1
+
+                self.tasks.update_domain()
+                self.tasks.next_tasks(1)
+                self.send_state()
+
+        self.research.logger.info('All workers have finished the work')
+
+    def send_state(self):
+        self.research.monitor.send('TASKS', generated=self.tasks.configs_generated, remains=self.tasks.configs_remains)

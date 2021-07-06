@@ -184,7 +184,7 @@ def call_method(method, use_self, args, kwargs, seed=None):
         args[0].random_seed = seed
     return method(*args, **kwargs)
 
-def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kwargs):
+def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=False, **dec_kwargs):
     """ Decorator for parallel methods in :class:`~.Batch` classes
 
     Parameters
@@ -199,6 +199,8 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
         a parallelization engine
     _use_self : bool
         whether to pass `self` (i.e. whether a decorated callable is a method or a function)
+    debug : bool
+        If False then inbatch_parallel doesn't process exceptions. Works only with target='for'
 
     Notes
     -----
@@ -207,6 +209,9 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
     """
     if target not in ['nogil', 'threads', 'mpc', 'async', 'for', 't', 'm', 'a', 'f']:
         raise ValueError("target should be one of 'threads', 'mpc', 'async', 'for'")
+
+    if debug and target not in ['for', 'f']:
+        raise ValueError("target should be 'for' for debug=True")
 
     def inbatch_parallel_decorator(method):
         """ Return a decorator which run a method in parallel """
@@ -407,7 +412,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
-        def wrap_with_for(self, args, kwargs):
+        def wrap_with_for(self, debug, args, kwargs):
             """ Run a method sequentially (without parallelism) """
             init_fn, post_fn = _check_functions(self)
             _ = kwargs.pop('n_workers', _workers_count())
@@ -420,10 +425,13 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
 
                 seed = spawn_seed_sequence(random_seed)
-                try:
+                if debug:
                     one_ft = call_method(method, use_self, margs, mkwargs, seed=seed)
-                except Exception as e:   # pylint: disable=broad-except
-                    one_ft = e
+                else:
+                    try:
+                        one_ft = call_method(method, use_self, margs, mkwargs, seed=seed)
+                    except Exception as e:   # pylint: disable=broad-except
+                        one_ft = e
                 futures.append(one_ft)
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
@@ -440,6 +448,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 self = None
 
             _target = kwargs.pop('target', target)
+            _debug = kwargs.pop('debug', debug)
 
             if asyncio.iscoroutinefunction(method) or _target in ['async', 'a']:
                 x = wrap_with_async(self, args, kwargs)
@@ -451,7 +460,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 else:
                     raise ValueError('Cannot use MPC with this method', method)
             elif _target in ['for', 'f']:
-                x = wrap_with_for(self, args, kwargs)
+                x = wrap_with_for(self, _debug, args, kwargs)
             else:
                 raise ValueError('Wrong parallelization target:', _target)
             return x
