@@ -339,7 +339,7 @@ class Experiment:
             type of src ('func' or 'generator'), by default 'func'
         when : int, str or list, optional
             iterations to execute callable (see `when` of `:class:ExecutableUnit`), by default 1.
-        save_to : NamedExpression, optional
+        save_to : str or list, optional
             dst to save output of the unit (if needed), by default None.
         dump : int, str or list, optional
             iterations to dump results (see `when` of `:class:ExecutableUnit`), by default 1.
@@ -381,7 +381,7 @@ class Experiment:
             args to execute callable, by default None.
         when : int, str or list, optional
             iterations to execute callable (see `when` of `:class:ExecutableUnit`), by default 1.
-        save_to : NamedExpression, optional
+        save_to : str or list, optional
             dst to save output of the callable (if needed), by default None.
         dump : int, str or list, optional
             iterations to dump results (see `when` of `:class:ExecutableUnit`), by default 1.
@@ -849,9 +849,17 @@ def _create_instance(experiments, item_name):
         e.instances[item_name] = instance
 
 def _save_results(_src, _dst, experiment, copy): #pylint:disable=redefined-outer-name
-    previous_values = experiment.results.get(_dst, OrderedDict())
-    previous_values[experiment.iteration] = deepcopy(_src) if copy else _src
-    experiment.results[_dst] = previous_values
+    if not isinstance(_dst, (list, tuple)):
+        _dst = [_dst]
+        _src = [_src]
+
+    if len(_src) != len(_dst):
+        raise ValueError('Length of src and dst must be the same')
+
+    for src, dst in zip(_src, _dst):
+        previous_values = experiment.results.get(dst, OrderedDict())
+        previous_values[experiment.iteration] = deepcopy(src) if copy else src
+        experiment.results[dst] = previous_values
 
 def _dump_results(variable, experiment):
     """ Callable to dump results. """
