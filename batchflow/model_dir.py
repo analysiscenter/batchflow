@@ -97,6 +97,7 @@ class ModelDirectory:
                         self.models.update({name: model})
                     else:
                         self.import_model(name, source, lock=False)
+                        model = self.models[name]
         return model
 
     def create_model(self, model_class, config=None):
