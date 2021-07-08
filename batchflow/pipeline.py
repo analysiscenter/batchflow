@@ -1076,7 +1076,7 @@ class Pipeline:
 
             pipeline
               .init_variable('shape_name', 'images_shape')
-              .init_model('my_model', C('model'), 'dynamic', config={V('shape_name)': B('images_shape')})
+              .init_model('my_model', C('model'), 'dynamic', config={V('shape_name'): B('images_shape')})
 
         """
         self.before.init_model(name, model_class, mode=mode, config=config, source=source)
