@@ -1,139 +1,97 @@
 """ Contains named expression classes for Research """
 
-import os
+from ..named_expr import NamedExpression
 
-from .results import Results
-from ..named_expr import NamedExpression, eval_expr
+class E(NamedExpression):
+    """ NamedExpression for Experiment or its unit in Research.
 
-class ResearchNamedExpression(NamedExpression):
-    """ NamedExpression base class for Research objects """
+    Parameters
+    ----------
+    unit : str, optional
+        name of unit to, by default None. If None, experiment will be returned.
+    all : bool, optional
+        if True, return all experiments in executor, otherwise just one, by default False.
+    """
+    def __init__(self, unit=None, all=False, **kwargs):
+        _ = kwargs
+        self.name = None
+        self.unit = unit
+        self.all = all
+        super().__init__()
+
     def _get(self, **kwargs):
-        name = self._get_name(**kwargs)
-        return name, kwargs
-
-class REU(ResearchNamedExpression): # ResearchExecutableUnit
-    """ NamedExpression for ExecutableUnit """
-    def _get(self, **kwargs):
-        _, kwargs = super()._get(**kwargs)
         experiment = kwargs['experiment']
-        return experiment
+        if self.all:
+            return experiment.executor.experiments
+        return [experiment]
 
     def get(self, **kwargs):
-        experiment = self._get(**kwargs)
-        if isinstance(experiment, (list, tuple)):
-            _experiment = experiment
-        else:
-            _experiment = [experiment]
-        name = self.name if self.name is not None else list(_experiment[0].keys())[0]
-        res = [item[name] for item in _experiment]
-        if len(_experiment) == 1:
-            return res[0]
-        return res
+        """ Return a value. """
+        experiments = self._get(**kwargs)
+        results = self._transform(experiments)
+        if self.all:
+            return results
+        return results[0]
 
-class RP(REU): # ResearchPipeline
-    """ NamedExpression for Pipeline in Research """
-    def __init__(self, name=None, root=False):
-        super().__init__(name)
-        self.root = root
+    def _transform(self, experiments):
+        if self.unit is not None:
+            return [exp[self.unit] for exp in experiments]
+        return experiments
 
-    def get(self, **kwargs):
+    def __copy__(self):
+        return self
+
+class EC(E):
+    """ NamedExpression for Experiment config.
+
+    Parameters
+    ----------
+    name : str, optional
+        key of config to get, by default None. If None, return entire config.
+    full : bool, optional
+        return aixilary keys ('device', 'repetition', 'update') or not, by default False.
+    """
+    def __init__(self, name=None, full=False, **kwargs):
+        super().__init__(**kwargs)
+        self.name = name
+        self.full = full
+
+    def _transform(self, experiments):
         if self.name is None:
-            raise ValueError('`name` must be defined for RP expressions')
-        res = super().get(**kwargs)
-        attr = 'root_pipeline' if self.root else 'pipeline'
+            return [self.remove_keys(exp.config) for exp in experiments]
+        return [exp.config[self.name] for exp in experiments]
 
-        if isinstance(res, list):
-            return [getattr(item, attr) for item in res]
-        return getattr(res, attr)
+    def remove_keys(self, config):
+        """ Remove aixilary keys. """
+        if self.full:
+            return config
+        return {key: config[key] for key in config if key not in ['device', 'repetition', 'updates']}
 
-class RI(ResearchNamedExpression): # ResearchIteration
-    """ NamedExpression for iteration of Research """
+class O(E):
+    """ NamedExpression for ExecutableUnit output.
+
+    Parameters
+    ----------
+    name : str
+        name of the unit to get output.
+    """
+    def __init__(self, name, **kwargs):
+        super().__init__(**kwargs)
+        self.name = name
+
+    def _transform(self, experiments):
+        return [exp[self.name].output for exp in experiments]
+
+class EP(E):
+    """ NamedExpression for the experiment path. """
+    def _transform(self, experiments):
+        return [exp.full_path for exp in experiments]
+
+class R(E):
+    """ Research results. """
     def _get(self, **kwargs):
-        _, kwargs = super()._get(**kwargs)
-        return kwargs['iteration']
+        return kwargs['research']
 
     def get(self, **kwargs):
-        iteration = self._get(**kwargs)
-        return iteration
-
-class RC(REU): # ResearchConfig
-    """ NamedExpression for Config of the ExecutableUnit """
-    def __init__(self, name=None):
-        super().__init__(name=name)
-
-    def get(self, **kwargs):
-        res = super().get(**kwargs)
-
-        if isinstance(res, list):
-            return [getattr(item, 'config') for item in res]
-        return getattr(res, 'config')
-
-class RD(ResearchNamedExpression): # ResearchDir
-    """ NamedExpression for folder with the Research """
-    def _get(self, **kwargs):
-        _, kwargs = super()._get(**kwargs)
-        return kwargs['path']
-
-    def get(self, **kwargs):
-        path = self._get(**kwargs)
-        return path
-
-class RID(ResearchNamedExpression): # ResearchExperimentID
-    """ NamedExpression for id (sample_index) for the current experiment """
-    def _get(self, **kwargs):
-        _, kwargs = super()._get(**kwargs)
-        return kwargs['job'], kwargs['experiment']
-
-    def get(self, **kwargs):
-        job, experiment = self._get(**kwargs)
-        unit = list(experiment.values())[0]
-        return job.ids[unit.index]
-
-class REP(ResearchNamedExpression): # ResearchExperimentPath
-    """ NamedExpression for path to folder corresponding to the current config """
-    def __init__(self, name=None, relative=False):
-        """ NamedExpression for path inside to experiment folder.
-
-        Parameters
-        ----------
-        name : str or None
-            NamedExpression name
-        relative : bool
-            if False, absolute path including name of the root research folder,
-            if True, the path inside of the research folder.
-        """
-        super().__init__(name)
-        self.relative = relative
-
-    def _get(self, **kwargs):
-        _, kwargs = super()._get(**kwargs)
-        return kwargs['job'], kwargs['experiment'], kwargs['path']
-
-    def get(self, **kwargs):
-        job, experiment, path = self._get(**kwargs)
-        # unit to get attributes (each unit will have the same so we take the first)
-        unit = next(iter(experiment.values()))
-        experiment_path = unit.experiment_path # path to folder with current experiment
-        index = unit.index # index of the branch corresponding to the current experiment
-        if self.relative:
-            return os.path.join(experiment_path, job.ids[index])
-        return os.path.join(path, experiment_path, job.ids[index])
-
-class RR(ResearchNamedExpression): # ResearchResults
-    """ NamedExpression for Results of the Research """
-    def __init__(self, *args, name=None, **kwargs):
-        super().__init__(name)
-        self.args = args
-        self.kwargs = kwargs
-
-    def _get(self, **kwargs):
-        _, kwargs = super()._get(**kwargs)
-        if kwargs['path'] is None:
-            path = kwargs['job'].research_path
-        else:
-            path = kwargs['path']
-        return path
-
-    def get(self, **kwargs):
-        path = self._get(**kwargs)
-        return Results(path, *eval_expr(self.args, **kwargs), **eval_expr(self.kwargs, **kwargs))
+        research = self._get(**kwargs)
+        return research.results

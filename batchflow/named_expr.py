@@ -5,6 +5,8 @@ from collections import defaultdict
 import numpy as np
 
 from .config import Config
+from .utils import to_list
+from .utils_random import make_rng
 
 
 class _DummyBatch:
@@ -14,16 +16,30 @@ class _DummyBatch:
         self.dataset = pipeline.dataset if pipeline is not None else None
 
 
-def eval_expr(expr, **kwargs):
-    """ Evaluate a named expression recursively """
+def eval_expr(expr, no_eval=None, **kwargs):
+    """ Evaluate a named expression recursively
+
+    Parameters
+    ----------
+    expr
+        an expression to evaluate
+
+    no_eval : sequence of str
+        a list of arguments not to evalute.
+        Applicable only if expr is a dict which keys are checked against `no_eval` list.
+    """
+    no_eval = no_eval or []
     if isinstance(expr, NamedExpression):
-        _expr = expr.get(**kwargs)
-        if isinstance(expr, W):
-            expr = _expr
-        elif isinstance(_expr, (NamedExpression, list, tuple, dict, Config)):
-            expr = eval_expr(_expr, **kwargs)
-        else:
-            expr = _expr
+        try:
+            _expr = expr.get(**kwargs)
+            if isinstance(expr, W):
+                expr = _expr
+            elif isinstance(_expr, (NamedExpression, list, tuple, dict, Config)):
+                expr = eval_expr(_expr, **kwargs)
+            else:
+                expr = _expr
+        except Exception as e:
+            raise type(e)(f"Can't evaluate expression: {expr} because \n {str(e)}") from e
     elif isinstance(expr, (list, tuple)):
         _expr = []
         for val in expr:
@@ -36,7 +52,12 @@ def eval_expr(expr, **kwargs):
             _expr = type(expr)()
         for key, val in expr.items():
             key = eval_expr(key, **kwargs)
-            val = eval_expr(val, **kwargs)
+            if key in no_eval:
+                # save current params for later evaluation
+                if isinstance(val, NamedExpression):
+                    val.set_params(**kwargs)
+            else:
+                val = eval_expr(val, **kwargs)
             _expr.update({key: val})
         expr = _expr
     return expr
@@ -86,8 +107,8 @@ OPERATIONS_SIGNS = {
     '__add__': '+', '__radd__': '+',
     '__sub__': '-', '__rsub__': '-',
     '__mul__': '*', '__rmul__': '*',
-    '__floordiv__': '/', '__rfloordiv__': '/',
-    '__truediv__': '//', '__rtruediv__': '//',
+    '__floordiv__': '//', '__rfloordiv__': '//',
+    '__truediv__': '/', '__rtruediv__': '/',
     '__mod__': '%', '__rmod__': '%',
     '__pow__': '**', '__rpow__': '**',
     '__matmul__': '@', '__rmatmul__': '@',
@@ -148,11 +169,12 @@ class NamedExpression(metaclass=MetaNamedExpression):
     """
     __slots__ = ('__dict__', )
 
-    def __init__(self, name=None, mode='w'):
+    def __init__(self, name=None, mode='w', **kwargs):
         self.name = name
         self.mode = mode
         self.params = None
         self.eval = eval
+        self.set_params(**kwargs)
 
     def __getattr__(self, name):
         return AlgebraicNamedExpression(op='#attr', a=self, b=name)
@@ -183,15 +205,26 @@ class NamedExpression(metaclass=MetaNamedExpression):
 
     def _get_params(self, **kwargs):
         """ Return parameters needed to evaluate the expression """
-        if self.params is not None:
+        if self.params is None:
+            pkwargs = kwargs
+        else:
+            pkwargs = {}
             for arg in self.params.keys() | kwargs.keys():
-                kwargs[arg] = kwargs.get(arg) or self.params.get(arg)
-        if kwargs.get('batch') is None:
-            kwargs['batch'] = _DummyBatch(kwargs.get('pipeline'))
+                if self.params.get(arg) is None:
+                    pkwargs[arg] = kwargs.get(arg)
+                else:
+                    # pre-set parameters should prevail
+                    if isinstance(self.params.get(arg), NamedExpression):
+                        pkwargs[arg] = self.params.get(arg).get(**kwargs)
+                    else:
+                        pkwargs[arg] = self.params.get(arg)
 
-        name = self._get_name(**kwargs)
+        if pkwargs.get('batch') is None:
+            pkwargs['batch'] = _DummyBatch(pkwargs.get('pipeline'))
 
-        return name, kwargs
+        name = self._get_name(**pkwargs)
+
+        return name, pkwargs
 
     def set_params(self, **kwargs):
         self.params = kwargs
@@ -341,22 +374,23 @@ class AlgebraicNamedExpression(NamedExpression):
         if self.op == '#str':
             return 'str(' + repr(self.a) + ')'
         if self.op == '#attr':
-            return repr(self.a) + '.' + repr(self.b)
+            return repr(self.a) + '.' + repr(self.b)[1:-1]
         if self.op == '#item':
             return repr(self.a) + '[' + repr(self.b) +']'
         if self.op == '#format':
-            a = repr(self.a) if self.a else ''
-            b = repr(self.b) if self.b else ''
+            a = repr(self.a) if self.a is not None else ''
+            b = repr(self.b) if self.b is not None  else ''
             return 'f' + b + '.' + a
         if self.op == '#slice':
-            a = repr(self.a) if self.a else ''
-            b = repr(self.b) if self.b else ''
-            c = ':' + repr(self.c) if self.c else ''
+            a = repr(self.a) if self.a is not None else ''
+            b = repr(self.b) if self.b is not None else ''
+            c = ':' + repr(self.c) if self.c is not None else ''
             return a + ':' + b + c
 
         if self.op == '#call':
-            args = repr(self.b)[1:-1] if self.b else ''
-            if self.b:
+            args = ''
+            if self.b is not None:
+                args = repr(self.b)[1:-1]
                 kwargs = ','.join([repr(k) + '=' + repr(v) for k,v in self.c.items()])
                 args = args + ', ' + kwargs if args else kwargs
             return repr(self.a) + '(' + args + ')'
@@ -406,15 +440,53 @@ class B(NamedExpression):
         if name is not None:
             setattr(batch, name, value)
 
+class BA(B):
+    """ Array component to use when the batch component is an array of objects.
+
+    Note
+    ----
+    ``BA('obj').images`` equivalent to the list comprehension ``[val.images for val in batch.obj]``.
+    ``BA("obj")['labels']`` equivalent to the list comprehension ``[val['labels'] for val in batch.obj]``.
+    """
+    def get(self, **kwargs):
+        """ Returns an instance of the class that allows one to access attributes or items
+        stored in the batch component.
+        """
+        return Component(super().get(**kwargs))
+
+class Component:
+    """ Implements an interface for accessing attributes or items of all elements from an array of objects. """
+    def __init__(self, component):
+        self.component = component
+
+    def __getattr__(self, name):
+        return np.array([getattr(val, name) for val in self.component])
+
+    def __setattr__(self, name, value):
+        if name == 'component':
+            self.__dict__[name] = value
+        else:
+            if len(self.component) != len(value):
+                raise ValueError("Given `value`'s length must be equal to batch size.")
+            for item, val in zip(self.component, value):
+                setattr(item, name, val)
+
+    def __getitem__(self, key):
+        return np.array([val[key] for val in self.component])
+
+    def __setitem__(self, key, value):
+        key = to_list(key)
+        if len(self.component) != len(value):
+            raise ValueError("Given `value`'s length must be equal to batch size.")
+        for item, val in zip(self.component, value):
+            item[key] = val
 
 class PipelineNamedExpression(NamedExpression):
     #pylint: disable=abstract-method
     """ Base class for pipeline expressions """
     def _get_params(self, **kwargs):
         name, kwargs = super()._get_params(**kwargs)
-        batch = kwargs.get('batch')
-        pipeline = kwargs.get('pipeline')
-        pipeline = batch.pipeline if batch is not None else pipeline
+        pipeline = kwargs.get('pipeline') if kwargs.get('pipeline') is not None else kwargs.get('batch').pipeline
         return name, pipeline, kwargs
 
 class C(PipelineNamedExpression):
@@ -426,14 +498,21 @@ class C(PipelineNamedExpression):
 
     Examples
     --------
-    ::
+    Get a value from the current pipeline config::
 
         C('model_class', default=ResNet)
         C('GPU')
+
+    Get the whole config from the current pipeline::
+
         C()
+
+    Get a value from another pipeline config::
+
+        C('model_class', pipeline=train_pipeline)
     """
     def __init__(self, name=None, mode='w', **kwargs):
-        super().__init__(name, mode)
+        super().__init__(name, mode, **kwargs)
         self._has_default = 'default' in kwargs
         self.default = kwargs.get('default')
 
@@ -464,10 +543,13 @@ class V(PipelineNamedExpression):
 
     Examples
     --------
-    ::
+    Get a variable value from the current pipeline::
 
         V('model_name')
-        V('loss_history')
+
+    Get a variable value from another pipeline::
+
+        V('loss_history', pipeline=train_pipeline)
     """
     def get(self, **kwargs):
         """ Return a value of a pipeline variable """
@@ -486,9 +568,21 @@ class M(PipelineNamedExpression):
 
     Examples
     --------
-    ::
+    Get a model from the current pipeline::
 
         M('model_name')
+
+    Get a model from a given pipeline::
+
+        M('model_name', pipeline=train_pipeline)
+
+    Get a model from a pipeline specified in the current pipeline config::
+
+        M('model_name', pipeline=C('train_pipeline'))
+
+    Get a model from a pipeline specified in another pipeline config::
+
+        M('model_name', pipeline=C('train_pipeline', pipeline=test_template))
     """
     def get(self, **kwargs):
         """ Return a model from a pipeline """
@@ -510,7 +604,7 @@ class I(PipelineNamedExpression):
     name : str
         Determines returned value. One of:
             - 'current' or its substring - current iteration number, default.
-            - 'maximum' or its substring - total number of iterations to be performed.
+            - 'maximum' or 'total' or their substring - total number of iterations to be performed.
               If total number is not defined, raises an error.
             - 'ratio' or its substring - current iteration divided by a total number of iterations.
 
@@ -519,32 +613,39 @@ class I(PipelineNamedExpression):
     ValueError
     If `name` is not valid.
     If `name` is 'm' or 'r' and total number of iterations is not defined.
+
     Examples
     --------
     ::
 
         I('current')
         I('max')
+        I('max')
         R('normal', loc=0, scale=I('ratio')*100)
     """
-    def __init__(self, name='c'):
-        super().__init__(name, mode=None)
+    def __init__(self, name='c', mode='w', **kwargs):
+        super().__init__(name, mode=None, **kwargs)
 
-    def get(self, **kwargs):    # pylint:disable=inconsistent-return-statements
+    def get(self, **kwargs):
+        # pylint:disable=protected-access
         """ Return current or maximum iteration number or their ratio """
-        name, pipeline, _ = self._get_params(**kwargs)
+        name, pipeline, kwargs = self._get_params(**kwargs)
+
+        current_iter = kwargs['batch'].iteration or pipeline.iter_params.get('_n_iters')
 
         if 'current'.startswith(name):
-            return pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
+            return current_iter
 
-        total = pipeline._iter_params.get('_total')    # pylint:disable=protected-access
+        total = pipeline.iter_params.get('_total') # if pipeline.iter_params else None
 
-        if 'maximum'.startswith(name):
+        if 'maximum'.startswith(name) or 'total'.startswith(name):
             return total
+
+        if total is None:
+            raise ValueError('Total number of iterations is not defined!')
+
         if 'ratio'.startswith(name):
-            if total is None:
-                raise ValueError('Total number of iterations is not defined!')
-            ratio = pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
+            ratio = current_iter / total
             return ratio
 
         raise ValueError('Unknown key for named expresssion I: %s' % name)
@@ -553,6 +654,126 @@ class I(PipelineNamedExpression):
         """ Assign a value by calling a callable """
         _ = args, kwargs
         raise NotImplementedError("Assigning a value to an iteration number is not supported")
+
+
+class R(PipelineNamedExpression):
+    """ A random value
+
+    Parameters
+    ----------
+    name : str
+        a distribution name
+
+    seed : int, SeedSequence, Generator, BitGenerator, RandomState
+        a random state (see :func:`~.make_rng`)
+
+    args, kwargs
+        distribution parameters
+
+    Notes
+    -----
+    If `size` is needed, it should be specified as a named, not a positional argument.
+
+    Examples
+    --------
+    ::
+
+        R('normal', 0, 1)
+        R('poisson', lam=5.5, seed=42, size=3)
+        R(['metro', 'taxi', 'bike'], p=[.6, .1, .3], size=10)
+    """
+    def __init__(self, name, *args, seed=None, size=None, **kwargs):
+        super().__init__(name)
+        self.args = args
+        self.kwargs = kwargs
+        self.random = make_rng(seed)
+        self.default_random = seed is None
+
+        if not isinstance(size, (type(None), NamedExpression, int, tuple)):
+            raise TypeError('size is expected to be int or tuple of int or a named expression')
+        self.size = size
+
+    def _get_params(self, **kwargs):
+        name, pipeline, kwargs = super()._get_params(**kwargs)
+
+        # if seed was explicitly set in R(...), use it
+        # otherwise use the RNG from the pipeline if it exists
+        if self.default_random and pipeline is not None and pipeline.random is not None:
+            random = pipeline.random
+        else:
+            random = self.random
+
+        return name, random, kwargs
+
+    def get(self, size=None, **kwargs):
+        """ Return a value of a random variable
+
+        Parameters
+        ----------
+        size : int, tuple of int
+            Output shape. If the given shape is (m, n, k), then m * n * k samples are drawn
+            and returned as m x n x k array.
+            If size was also specified at instance creation, then output shape is extended from the beginning.
+            So `size` is treated like a batch size, while size specified at instantiation is an item size.
+
+        Examples
+        --------
+        ::
+
+            ne = R('normal', 0, 1, size=(10, 20)))
+            value = ne.get(batch)
+            # value.shape will be (10, 20)
+
+            value = ne.get(batch, size=30)
+            # value.shape will be (30, 10, 20)
+            # so size is treated like a batch size
+        """
+        if not isinstance(size, (type(None), int, tuple)):
+            raise TypeError('size is expected to be int or tuple of int')
+
+        name, random, kwargs = self._get_params(**kwargs)
+        args = self.args
+
+        if not isinstance(name, str):
+            args = (name,) + args
+            name = 'choice'
+        if isinstance(name, str) and hasattr(random, name):
+            name = getattr(random, name)
+        else:
+            raise TypeError('An expression should be an int, an iterable or a numpy distribution name',
+                            name, random)
+
+        args = eval_expr(args, **kwargs)
+
+        size, kwsize = eval_expr((self.size, size), **kwargs)
+        if kwsize is not None:
+            if size is None:
+                size = kwsize
+            else:
+                if isinstance(size, int):
+                    size = (size,)
+                if isinstance(kwsize, int):
+                    kwsize = (kwsize,)
+                size = kwsize + size
+
+        kwargs = {**self.kwargs, 'size': size}
+        kwargs = eval_expr(kwargs)
+
+        return name(*args, **kwargs)
+
+    def assign(self, *args, **kwargs):
+        """ Assign a value """
+        _ = args, kwargs
+        raise NotImplementedError("Assigning a value to a random variable is not supported")
+
+    def __repr__(self):
+        repr_str = 'R(' + str(self.name)
+        if self.args:
+            repr_str += ', ' + ', '.join(str(a) for a in self.args)
+        if self.kwargs:
+            repr_str += ', ' + str(self.kwargs)
+        return repr_str + (', size=' + str(self.size) + ')' if self.size else ')')
+
 
 
 class F(NamedExpression):
@@ -584,6 +805,7 @@ class F(NamedExpression):
         """ Assign a value by calling a callable """
         _ = args, kwargs
         raise NotImplementedError("Assigning a value to a callable is not supported")
+
 
 class D(NamedExpression):
     """ Dataset attribute or dataset itself
@@ -622,103 +844,6 @@ class D(NamedExpression):
         if name is None:
             raise ValueError('Assigning a value to D() is not possible.')
         setattr(dataset, name, value)
-
-
-class R(NamedExpression):
-    """ A random value
-
-    Notes
-    -----
-    If `size` is needed, it should be specified as a named, not a positional argument.
-
-    Examples
-    --------
-    ::
-
-        R('normal', 0, 1)
-        R('poisson', lam=5.5, seed=42, size=3)
-        R(['metro', 'taxi', 'bike'], p=[.6, .1, .3], size=10)
-    """
-    def __init__(self, name, *args, state=None, seed=None, size=None, **kwargs):
-        super().__init__(name)
-        if isinstance(state, np.random.RandomState):
-            self.random_state = state
-        else:
-            self.random_state = np.random.RandomState(seed)
-        self.args = args
-        self.kwargs = kwargs
-
-        if not isinstance(size, (type(None), NamedExpression, int, tuple)):
-            raise TypeError('size is expected to be int or tuple of int or a named expression')
-        self.size = size
-
-    def get(self, size=None, **kwargs):
-        """ Return a value of a random variable
-
-        Parameters
-        ----------
-        size : int, tuple of int
-            Output shape. If the given shape is (m, n, k), then m * n * k samples are drawn
-            and returned as m x n x k array.
-            If size was also specified at instance creation, then output shape is extended from the beginning.
-            So `size` is treated like a batch size, while size specified at instantiation is an item size.
-
-        Examples
-        --------
-        ::
-
-            ne = R('normal', 0, 1, size=(10, 20)))
-            value = ne.get(batch)
-            # value.shape will be (10, 20)
-
-            value = ne.get(batch, size=30)
-            # value.shape will be (30, 10, 20)
-            # so size is treated like a batch size
-        """
-        if not isinstance(size, (type(None), int, tuple)):
-            raise TypeError('size is expected to be int or tuple of int')
-
-        name, kwargs = self._get_params(**kwargs)
-        args = self.args
-
-        if not isinstance(name, str):
-            args = (name,) + args
-            name = 'choice'
-        if isinstance(name, str) and hasattr(self.random_state, name):
-            name = getattr(self.random_state, name)
-        else:
-            raise TypeError('An expression should be an int, an iterable or a numpy distribution name')
-
-        args = eval_expr(args, **kwargs)
-
-        size, kwsize = eval_expr((self.size, size), **kwargs)
-        if kwsize is not None:
-            if size is None:
-                size = kwsize
-            else:
-                if isinstance(size, int):
-                    size = (size,)
-                if isinstance(kwsize, int):
-                    kwsize = (kwsize,)
-                size = kwsize + size
-
-        kwargs = {**self.kwargs, 'size': size}
-        kwargs = eval_expr(kwargs)
-
-        return name(*args, **kwargs)
-
-    def assign(self, *args, **kwargs):
-        """ Assign a value """
-        _ = args, kwargs
-        raise NotImplementedError("Assigning a value to a random variable is not supported")
-
-    def __repr__(self):
-        repr_str = 'R(' + str(self.name)
-        if self.args:
-            repr_str += ', ' + ', '.join(str(a) for a in self.args)
-        if self.kwargs:
-            repr_str += ', ' + str(self.kwargs)
-        return repr_str + (', size=' + str(self.size) + ')' if self.size else ')')
 
 
 class W(NamedExpression):

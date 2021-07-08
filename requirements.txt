@@ -1,4 +1,1 @@
-numpy
-dill
-tqdm
-matplotlib
+.

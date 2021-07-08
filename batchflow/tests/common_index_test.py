@@ -9,7 +9,7 @@ import shutil
 import pytest
 import numpy as np
 
-from batchflow import DatasetIndex, FilesIndex
+from batchflow import DatasetIndex, FilesIndex, make_rng
 
 
 @pytest.fixture(scope='module')
@@ -112,37 +112,26 @@ def test_get_pos_iterable(index):
 def test_shuffle_bool_false(index):
     index, values = index
     right = np.arange(len(values))
-    np.random.seed(13)
     left = index.shuffle(shuffle=False)
     assert (left == right).all()
 
 def test_shuffle_bool_true(index):
     index, values = index
-    np.random.seed(13)
-    right = np.random.permutation(np.arange(len(values)))
-    np.random.seed(13)
+    right = np.arange(len(values))
     left = index.shuffle(shuffle=True)
-    assert (left == right).all()
+    assert (left != right).any()
 
 def test_shuffle_int(index):
     index, values = index
-    right = np.random.RandomState(13).permutation(np.arange(len(values)))
+    right = make_rng(13).permutation(np.arange(len(values)))
     left = index.shuffle(shuffle=13)
     assert (left == right).all()
 
 def test_shuffle_randomstate(index):
     index, values = index
-    right = np.random.RandomState(13).permutation(np.arange(len(values)))
+    right = make_rng(np.random.RandomState(13)).permutation(np.arange(len(values)))
     left = index.shuffle(shuffle=np.random.RandomState(13))
     assert (left == right).all()
-
-def test_shuffle_bool_callable(index):
-    """ Callable 'shuffle' should return order. """
-    index, values = index
-    right = np.arange(len(values))[::-1]
-    left = index.shuffle(shuffle=(lambda ind: np.arange(len(ind)-1, -1, -1)))
-    assert (left == right).all()
-
 
 def test_create_batch_pos_true(index):
     """ When 'pos' is True, method creates new batch by specified positions. """

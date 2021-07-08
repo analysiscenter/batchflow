@@ -7,13 +7,14 @@ import threading
 import numpy as np
 
 from .named_expr import NamedExpression, eval_expr
-from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID, UPDATE_ID
+from ._const import ACTIONS, IMPORT_MODEL_ID, LOAD_MODEL_ID, SAVE_MODEL_ID, UPDATE_ID
 
 
 class OncePipeline:
     """ Pipeline that runs only once before or after the main pipeline """
     def __init__(self, pipeline=None, *namespaces):
         self.pipeline = pipeline
+        self.main = self.pipeline
         self._namespaces = list(namespaces)
         self._actions = []
 
@@ -135,36 +136,82 @@ class OncePipeline:
         self.init_variable(name, default=threading.Lock(**kwargs))
         return self
 
-    def init_model(self, mode, name=None, model_class=None, config=None):
-        """ Initialize a static or dynamic model
+
+    def init_model(self, name, model_class=None, mode='dynamic', config=None, source=None):
+        """ Initialize a static or dynamic model by building or importing it
 
         Parameters
         ----------
-        mode : {'static', 'dynamic'}
         name : str
-            (optional) a name for the model. Default - a model class name.
+            a name for the model (to refer to it later when training or infering).
+
         model_class : class or named expression
-            (optional) a model class (if not specified in the config).
+            a model class (might also be specified in the config).
+
+        mode : {'static', 'dynamic'}
+            model creation mode:
+            - static - the model is created right now, during the pipeline definition
+            - dynamic - the model is created at the first iteration when the pipeline is run (default)
+
         config : dict or Config
             (optional) model configurations parameters, where each key and value could be named expressions.
 
+        source
+            a model or a pipeline to import from
+
         Examples
         --------
-        >>> pipeline.before.init_model('static', MyModel)
+        Build a model::
 
-        >>> pipeline.before
+            pipeline.before.init_model('my-model', MyModel, 'static')
+
+        Import a model::
+
+            pipeline.before.init_model('my-model', source=train_pipeline)
+
+        Build a model with a config::
+
+            pipeline.before
               .init_variable('images_shape', [256, 256])
-              .init_model('static', 'my_model', MyModel, config={'input_shape': V('images_shape')})
+              .init_model('my_model', MyModel, 'static', config={'input_shape': V('images_shape')})
 
-        >>> pipeline.before
+            pipeline.before
               .init_variable('shape_name', 'images_shape')
-              .init_model('dynamic', C('model'), config={V('shape_name)': B('images_shape')})
-
-        >>> pipeline.before
-              .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
+              .init_model('my_model', C('model'), 'dynamic', config={V('shape_name)': B('images_shape')})
         """
-        self.pipeline.models.init_model(mode, name, model_class, config=config)
+        self.pipeline.models.init_model(name, model_class, mode=mode, config=config, source=source)
         return self
+
+    def import_model(self, name, source):
+        """ Import a model
+
+        Parameters
+        ----------
+        name : str
+            a name with which the model is stored in this pipeline
+
+        source
+            a model or a pipeline to import from
+
+        Examples
+        --------
+
+        Import a given model instance::
+
+            pipeline.before.import_model('my-model', custom_resnet_model)
+
+        Import `my-model` from the pipeline::
+
+            pipeline.before.import_model('my-model', train_pipeline)
+
+        Import `resnet` model from `train_pipeline` and give it a name `my-model`::
+
+            pipeline.before.import_model('my-model', train_pipeline.m('resnet'))
+        """
+        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=source, model_name=name))
+
+    def _exec_import_model(self, action):
+        self.pipeline._exec_import_model(None, action)      # pylint:disable=protected-access
 
     def save_model(self, name, *args, **kwargs):
         """ Save a model """
@@ -173,10 +220,11 @@ class OncePipeline:
     def _exec_save_model(self, action):
         self.pipeline._exec_save_model(None, action)        # pylint:disable=protected-access
 
-    def load_model(self, mode, name=None, model_class=None, *args, **kwargs):
+
+    def load_model(self, name, model_class=None, mode='dynamic', *args, **kwargs):
         """ Load a model """
         if mode == 'static':
-            self.pipeline.models.load_model(mode, name, model_class, *args, **kwargs)
+            self.pipeline.load_model_now(name, model_class, mode, *args, **kwargs)
             return self
         return self._add_action(LOAD_MODEL_ID, *args,
                                 _args=dict(mode=mode, model_class=model_class, model_name=name),
@@ -185,6 +233,29 @@ class OncePipeline:
     def _exec_load_model(self, action):
         self.pipeline._exec_load_model(None, action)        # pylint:disable=protected-access
 
+
+    def save_to(self, dst, value=None):
+        """ Save a value of a given named expression lazily during pipeline execution
+
+        Parameters
+        ----------
+        dst : NamedExpression or any data container
+            destination
+
+        value
+            an updating value, could be a value of any type or a named expression
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Notes
+        -----
+        This method does not change a value of the variable until the pipeline is run.
+        So it should be used in pipeline definition chains only.
+        :func:`~.save_data_to` is imperative and may be used to change variable value within actions.
+        """
+        return self.update(dst, value)
 
     def update(self, expr, value=None):
         """ Update a value of a given named expression lazily during pipeline execution

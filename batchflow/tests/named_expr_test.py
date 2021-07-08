@@ -4,9 +4,11 @@ from contextlib import ExitStack as does_not_raise
 
 import pytest
 import numpy as np
+import pandas as pd
 
 sys.path.append('..')
-from batchflow import B, C, D, F, V, R, P, PP, I, Dataset, Pipeline, Batch, apply_parallel, inbatch_parallel, action
+from batchflow import (B, BA, C, D, F, V, R, P, PP, I, Dataset, Pipeline, Batch,
+                       apply_parallel, inbatch_parallel, action)
 
 
 #--------------------
@@ -195,3 +197,42 @@ def test_d(size, n_splits):
             pipeline.run(1)
 
             assert pipeline.v('indices') == result[:start] + result[end:]
+
+
+#--------------------
+#         BA
+#--------------------
+
+class SomeObject:
+    def __init__(self):
+        self.attr = 0
+        self.battr = 1
+        self.item = pd.DataFrame({'item_0': [1, 2, 3],
+                                  'item_1': [3, 2, 1],
+                                  'item_2': [-1, -1, -1],
+                                  'item_3': [-1, -1, -1]})
+
+    def __getitem__(self, key):
+        return self.item[key]
+
+    def __setitem__(self, key, value):
+        print(key, value)
+        self.item[key] = np.atleast_2d(value)
+
+@pytest.mark.parametrize('batch_length', [1, 2])
+def test_ba(batch_length):
+    """Test behaivour of BA named expression for all sorts of read-write options.
+
+    batch_length
+        The length of array with components.
+    """
+    pipeline = (Dataset(1).p
+        .add_components('object', [SomeObject()]*batch_length)
+        .update(BA('object').attr, BA('object').battr)
+        .update(BA('object')['item_0'], [10]*batch_length)
+        .update(BA('object')[['item_2', 'item_3']], BA('object')[['item_0', 'item_1']])
+    )
+    batch = pipeline.next_batch(1)
+    assert batch.object[0].attr == 1
+    assert sum(batch.object[0]['item_0'] == 10) == 3
+    assert np.allclose(batch.object[0][['item_2', 'item_3']], batch.object[0][['item_0', 'item_1']])

@@ -3,7 +3,7 @@ import numpy as np
 
 import pytest
 
-from batchflow import Dataset, Pipeline, Batch
+from batchflow import Dataset, Pipeline, Batch, B
 
 
 class MyBatch(Batch):
@@ -47,12 +47,12 @@ def test_rebatch(batch_size, rebatch_size):
         batch_lengths[dump].append(batch.size)
 
     p = (Pipeline()
-         .call(get_batch_len, 'before')
+         .call(get_batch_len, B(), 'before')
          .rebatch(rebatch_size)
-         .call(get_batch_len, 'after')
+         .call(get_batch_len, B(), 'after')
          ) << dataset
 
-    p.run(batch_size=batch_size, n_epochs=1, bar=True)
+    p.run(batch_size=batch_size, n_epochs=1, notifier=True)
 
     check_batch_lengths(batch_lengths['before'], batch_size)
     check_batch_lengths(batch_lengths['after'], rebatch_size)

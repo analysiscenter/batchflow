@@ -243,7 +243,7 @@ class BaseConvBlock(nn.ModuleDict):
         'D': 'd',
         'n': 'd',
         'N': 'b',
-        })
+    })
 
 
     BRANCH_LETTERS = ['R', 'B']
