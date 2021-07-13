@@ -111,6 +111,7 @@ class ResearchResults:
             is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.
         """
         experiment_id, name, iterations = self.filter(experiment_id, name, iterations, config, alias, domain, **kwargs)
+        self.artifactes = dict()
         for path in glob.glob(os.path.join(self.name, 'experiments', '*', '*')):
             if os.path.basename(path) not in ['results', 'config.dill', 'config.json', 'experiment.log']:
                 path = os.path.normpath(path)
