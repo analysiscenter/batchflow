@@ -385,7 +385,7 @@ class Research:
         return research
 
     @classmethod
-    def remove(cls, name, ask=True):
+    def remove(cls, name, ask=True, force=False):
         """ Remove research folder.
 
         Parameters
@@ -394,16 +394,20 @@ class Research:
             research path to remove.
         ask : bool, optional
             display a dialogue with a question about removing or not, by default True.
+        force : bool
+            Remove folder even if it is not research folder.
         """
         if not os.path.exists(name):
             warnings.warn(f"Folder {name} doesn't exist.")
-        if not cls.folder_is_research(name):
-            raise ValueError(f'{name} is not a research folder.')
-        answer = True
-        if ask:
-            answer = 'yes'.startswith(input(f'Remove {name}? [y/n]').lower())
-        if answer:
-            shutil.rmtree(name)
+        else:
+            if not cls.folder_is_research(name):
+                if not force:
+                    raise ValueError(f'{name} is not a research folder.')
+            answer = True
+            if ask:
+                answer = 'yes'.startswith(input(f'Remove {name}? [y/n]').lower())
+            if answer:
+                shutil.rmtree(name)
 
     @classmethod
     def folder_is_research(cls, name):
