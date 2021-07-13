@@ -25,7 +25,7 @@ class ResearchResults:
         self.dump_results = dump_results
         self.results = mp.Manager().dict()
         self.configs = mp.Manager().dict()
-        self.arifactes = mp.Manager().dict()
+        self.artifactes = mp.Manager().dict()
 
         self.kwargs = kwargs
 
@@ -89,7 +89,7 @@ class ResearchResults:
         self.results = mp.Manager().dict(**results)
 
     def load_artifactes(self, experiment_id=None, name=None, iterations=None,
-                    config=None, alias=None, domain=None, **kwargs):
+                        config=None, alias=None, domain=None, **kwargs):
         """ Load and filter experiment artifactes (all files/folders in experiment folder except standart
         'results', 'config.dill', 'config.json', 'experiment.log').
 
@@ -111,7 +111,6 @@ class ResearchResults:
             is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.
         """
         experiment_id, name, iterations = self.filter(experiment_id, name, iterations, config, alias, domain, **kwargs)
-        self.artifactes = dict()
         for path in glob.glob(os.path.join(self.name, 'experiments', '*', '*')):
             if os.path.basename(path) not in ['results', 'config.dill', 'config.json', 'experiment.log']:
                 path = os.path.normpath(path)
@@ -308,14 +307,16 @@ class ResearchResults:
             dataframe with name of the id of the experiment, artifact full path (with path to research folder)
             and relative path (inner path in research folder). Also can include experiment config.
         """
-        df = []
-        for experiment_id in self.artifactes:
-            artifactes = self.artifactes[experiment_id]
-            df += [pd.DataFrame({'id': [experiment_id], **artifact}) for artifact in artifactes]
-        df = pd.concat(df)
-        if configs:
-            df = pd.merge(self.configs_to_df(**kwargs), df, how='inner', on='id')
-        return df
+        if self.dump_results:
+            self.load_artifactes(**kwargs)
+            df = []
+            for experiment_id in self.artifactes:
+                artifactes = self.artifactes[experiment_id]
+                df += [pd.DataFrame({'id': [experiment_id], **artifact}) for artifact in artifactes]
+            df = pd.concat(df)
+            if configs:
+                df = pd.merge(self.configs_to_df(**kwargs), df, how='inner', on='id')
+            return df
 
     def filter_ids_by_configs(self, config=None, alias=None, domain=None, **kwargs):
         """ Filter configs.
