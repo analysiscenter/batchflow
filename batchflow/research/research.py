@@ -76,7 +76,7 @@ class Research:
         self.debug = False
         self.finalize = True
         self.random_seed = None
-        self.memory_ratio = 0.95
+        self.memory_ratio = None
         self.n_gpu_checks = 3
         self.gpu_check_delay = 5
 
@@ -227,7 +227,7 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=True, env_meta=None, seed=None, memory_ratio=0.95, n_gpu_checks=3, gpu_check_delay=5):
+            debug=False, finalize=True, env_meta=None, seed=None, memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5):
         """ Run research.
 
         Parameters
