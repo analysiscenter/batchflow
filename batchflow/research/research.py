@@ -224,7 +224,7 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=True, env_meta=None, seed=None):
+            debug=False, finalize=True, env_meta=None, seed=None, memory_ratio=0.95, n_gpu_checks=3, gpu_check_delay=5):
         """ Run research.
 
         Parameters
@@ -267,6 +267,12 @@ class Research:
             kwargs for :meth:`.Research.attach_env_meta`.
         seed : bool or int or object with a seed sequence attribute
             see :meth:`~batchflow.utils_random.make_seed_sequence`.
+        memory_ratio : float or None, optional
+            the ratio of free memory for all devices in worker to start experiment. If None, check will be skipped.
+        n_gpu_checks : int, optional
+            the number of such checks
+        gpu_check_delay : float, optional
+            time in seconds between checks.
 
         Returns
         -------
@@ -278,11 +284,6 @@ class Research:
         If `update_domain` callable is defined, domain will be updated with the corresponding function
         accordingly to `when` parameter of :meth:`~.Research.update_domain`.
         """
-        if not parallel:
-            if isinstance(workers, int):
-                workers = 1
-            else:
-                workers = [workers[0]]
 
         self.name = name or self.name
 
@@ -296,6 +297,10 @@ class Research:
         self.loglevel = loglevel
         self.bar = bar
         self.detach = detach
+
+        self.memory_ratio = memory_ratio
+        self.n_gpu_checks = n_gpu_checks
+        self.gpu_check_delay = gpu_check_delay
 
         if debug and (parallel or executor_target not in ['f', 'for']):
             raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")
