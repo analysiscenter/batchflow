@@ -196,10 +196,11 @@ class Worker:
             memory = self._devices_memory(devices)
             if (memory >= memory_ratio).all():
                 return [], []
-            else:
-                self.research.logger.info(f"Worker {self.index}[pid:{self.pid}]: memory check failed (times: {times+2}/{n_times})")
-                times += 1
-                time.sleep(delay)
+
+            msg = f"Worker {self.index}[pid:{self.pid}]: memory check failed (times: {times+2}/{n_times})"
+            self.research.logger.info(msg)
+            times += 1
+            time.sleep(delay)
 
         bad_devices = devices[memory < memory_ratio]
         bad_memory = memory[memory < memory_ratio]

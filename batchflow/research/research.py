@@ -76,6 +76,9 @@ class Research:
         self.debug = False
         self.finalize = True
         self.random_seed = None
+        self.memory_ratio = 0.95
+        self.n_gpu_checks = 3
+        self.gpu_check_delay = 5
 
     def __getattr__(self, key):
         if self.monitor is not None and key in self.monitor.SHARED_VARIABLES:

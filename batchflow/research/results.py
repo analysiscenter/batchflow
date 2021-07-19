@@ -110,8 +110,8 @@ class ResearchResults:
         self.artifactes = dict()
         names = to_list('*' if name is None else name)
         experiment_id, _, _ = self.filter(experiment_id, None, None, config, alias, domain, **kwargs)
-        for name in names:
-            for path in glob.glob(os.path.join(self.name, 'experiments', '*', name)):
+        for _name in names:
+            for path in glob.glob(os.path.join(self.name, 'experiments', '*', _name)):
                 if os.path.basename(path) not in ['results', 'config.dill', 'config.json', 'experiment.log']:
                     path = os.path.normpath(path)
                     _experiment_id, _name = path.split(os.sep)[-2:]
@@ -318,6 +318,7 @@ class ResearchResults:
             if configs:
                 df = pd.merge(self.configs_to_df(**kwargs), df, how='inner', on='id')
             return df
+        raise ValueError("Researc without dump can't have artifactes.")
 
     def filter_ids_by_configs(self, config=None, alias=None, domain=None, **kwargs):
         """ Filter configs.
