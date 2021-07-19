@@ -139,8 +139,8 @@ class Worker:
         while True:
             bad_devices, bad_memory = self._check_memory(all_devices)
             if len(bad_devices) > 0:
-                msg = f"""Worker {self.index}[pid:{self.pid}]: devices {bad_devices} \
-                don't have enough memory: {bad_memory}"""
+                msg = f"Worker {self.index}[pid:{self.pid}]: devices {bad_devices}" \
+                      f"don't have enough memory: {bad_memory}"
 
                 self.research.logger.info(msg)
                 self.research.monitor.send(worker=self, devices=all_devices, status='GPU_MEMORY_ERROR')
@@ -197,7 +197,7 @@ class Worker:
             if (memory >= memory_ratio).all():
                 return [], []
 
-            msg = f"Worker {self.index}[pid:{self.pid}]: memory check failed (times: {times+2}/{n_times})"
+            msg = f"Worker {self.index}[pid:{self.pid}]: memory check failed (times: {times+1}/{n_times})"
             self.research.logger.info(msg)
             times += 1
             time.sleep(delay)
