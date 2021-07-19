@@ -25,7 +25,7 @@ class ResearchResults:
         self.dump_results = dump_results
         self.results = mp.Manager().dict()
         self.configs = mp.Manager().dict()
-        self.artifactes = mp.Manager().dict()
+        self.artifactes = dict()
 
         self.kwargs = kwargs
 
@@ -88,8 +88,7 @@ class ResearchResults:
                     experiment_results[_name] = OrderedDict([*name_results.items(), *new_values.items()])
         self.results = mp.Manager().dict(**results)
 
-    def load_artifactes(self, experiment_id=None, name=None, iterations=None,
-                        config=None, alias=None, domain=None, **kwargs):
+    def load_artifactes(self, experiment_id=None, name=None, config=None, alias=None, domain=None, **kwargs):
         """ Load and filter experiment artifactes (all files/folders in experiment folder except standart
         'results', 'config.dill', 'config.json', 'experiment.log').
 
@@ -98,9 +97,7 @@ class ResearchResults:
         experiment_id : int str, or list, optional
             exepriments to load, by default None
         name : str or list, optional
-            keys of results to load, by default None
-        iterations : int or list, optional
-            iterations to load, by default None
+            names of artifactes to load into artifactes list, by default None
         config : Config, optional
             config with parameters values to load, by default None
         alias : Config, optional
@@ -110,20 +107,23 @@ class ResearchResults:
         kwargs : dict
             is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.
         """
-        experiment_id, name, iterations = self.filter(experiment_id, name, iterations, config, alias, domain, **kwargs)
-        for path in glob.glob(os.path.join(self.name, 'experiments', '*', '*')):
-            if os.path.basename(path) not in ['results', 'config.dill', 'config.json', 'experiment.log']:
-                path = os.path.normpath(path)
-                _experiment_id, _name = path.split(os.sep)[-2:]
-                if experiment_id is None or _experiment_id in experiment_id:
-                    if _experiment_id not in self.artifactes:
-                        self.artifactes[_experiment_id] = []
-                    self.artifactes[_experiment_id] += [
-                        {'artifact_name': _name,
-                        'full_path': path,
-                        'relative_path': os.path.join(*path.split(os.sep)[-3:])
-                        }
-                    ]
+        self.artifactes = dict()
+        names = to_list('*' if name is None else name)
+        experiment_id, _, _ = self.filter(experiment_id, None, None, config, alias, domain, **kwargs)
+        for name in names:
+            for path in glob.glob(os.path.join(self.name, 'experiments', '*', name)):
+                if os.path.basename(path) not in ['results', 'config.dill', 'config.json', 'experiment.log']:
+                    path = os.path.normpath(path)
+                    _experiment_id, _name = path.split(os.sep)[-2:]
+                    if experiment_id is None or _experiment_id in experiment_id:
+                        if _experiment_id not in self.artifactes:
+                            self.artifactes[_experiment_id] = []
+                        self.artifactes[_experiment_id] += [
+                            {'artifact_name': _name,
+                            'full_path': path,
+                            'relative_path': os.path.join(*path.split(os.sep)[-3:])
+                            }
+                        ]
 
     def filter(self, experiment_id=None, name=None, iterations=None, config=None, alias=None, domain=None, **kwargs):
         """ Filter experiment_id by specified parameters and convert `name`, `iterations` to lists.
@@ -308,6 +308,7 @@ class ResearchResults:
             and relative path (inner path in research folder). Also can include experiment config.
         """
         if self.dump_results:
+            self.load_configs()
             self.load_artifactes(**kwargs)
             df = []
             for experiment_id in self.artifactes:

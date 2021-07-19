@@ -363,6 +363,20 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False)
     available_devices = np.array(available_devices)[np.argsort(memory_usage)[::-1]]
     return sorted(available_devices[:n])
 
+def get_gpu_free_memory(index):
+    """ Get free memory of the gpu"""
+    try:
+        import nvidia_smi
+    except ImportError as exception:
+        raise ImportError('Install Python interface for nvidia_smi') from exception
+
+    nvidia_smi.nvmlInit()
+    nvidia_smi.nvmlDeviceGetCount()
+    handle = nvidia_smi.nvmlDeviceGetHandleByIndex(index)
+    info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+
+    return info.free / info.total
+
 def set_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False):
     """ Set the `CUDA_VISIBLE_DEVICES` variable to `n` available devices.
 

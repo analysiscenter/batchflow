@@ -1,12 +1,18 @@
 """ Classes for multiprocess job running. """
 
 import os
+import time
+import itertools
+
 import multiprocess as mp
+
+import numpy as np
 
 from .. import Config
 from .domain import Domain
 from .utils import generate_id
 from ..utils_random import make_rng, spawn_seed_sequence
+from ..utils_notebook import get_gpu_free_memory
 
 class DynamicQueue:
     """ Queue of tasks that can be changed depending on previous results. """
@@ -107,11 +113,11 @@ class Worker:
     def __call__(self):
         self.pid = os.getpid()
         self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has started.")
+        _return = True
 
         executor_class = self.research.executor_class
         n_iters = self.research.n_iters
         self.research.monitor.send(status='START_WORKER', worker=self)
-        task = self.tasks.get()
 
         if isinstance(self.research.branches, int):
             branches_configs = [Config() for _ in range(self.research.branches)]
@@ -120,7 +126,7 @@ class Worker:
         n_branches = len(branches_configs)
         devices = self.research.devices[self.index]
 
-        all_devices = set(device for i in range(n_branches) for device in devices[i] if device is not None)
+        all_devices = np.unique([device for i in range(n_branches) for device in devices[i] if device is not None])
 
         if len(all_devices) > 0:
             os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -130,7 +136,20 @@ class Worker:
         devices = [[device_reindexation.get(i) for i in item] for item in devices]
         devices = [{'device': item[0] if len(item) == 1 else item} for item in devices]
 
-        while task is not None:
+        while True:
+            bad_devices, bad_memory = self._check_memory(all_devices)
+            if len(bad_devices) > 0:
+                msg = f"""Worker {self.index}[pid:{self.pid}]: devices {bad_devices} \
+                don't have enough memory: {bad_memory}"""
+
+                self.research.logger.info(msg)
+                self.research.monitor.send(worker=self, devices=all_devices, status='GPU_MEMORY_ERROR')
+                _return = False
+                break
+            task = self.tasks.get()
+            if task is None:
+                self.tasks.task_done()
+                break
             task_idx, configs = task
 
             self.research.monitor.send(worker=self, status='GET_TASK', task_idx=task_idx)
@@ -155,11 +174,36 @@ class Worker:
             self.research.monitor.send(worker=self, status='FINISH_TASK', task_idx=task_idx)
             self.tasks.task_done()
             self.responses.put((self.index, task_idx))
-            task = self.tasks.get()
-        self.tasks.task_done()
         self.research.monitor.send(worker=self, status='STOP_WORKER')
 
         self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has stopped.")
+
+        return _return
+
+    def _devices_memory(self, devices):
+        return np.array([get_gpu_free_memory(int(device)) for device in devices])
+
+    def _check_memory(self, devices):
+        memory_ratio = self.research.memory_ratio
+        n_times = self.research.n_gpu_checks
+        delay = self.research.gpu_check_delay
+
+        if memory_ratio is None:
+            return [], []
+
+        times = 0
+        while times < n_times:
+            memory = self._devices_memory(devices)
+            if (memory >= memory_ratio).all():
+                return [], []
+            else:
+                self.research.logger.info(f"Worker {self.index}[pid:{self.pid}]: memory check failed (times: {times+2}/{n_times})")
+                times += 1
+                time.sleep(delay)
+
+        bad_devices = devices[memory < memory_ratio]
+        bad_memory = memory[memory < memory_ratio]
+        return bad_devices, bad_memory
 
 class Distributor:
     """ Distributor of jobs between workers.
@@ -186,9 +230,6 @@ class Distributor:
         for i, worker_config in enumerate(worker_configs):
             workers += [Worker(i, worker_config, self.tasks, self.responses, self.research)]
 
-        if not self.research.parallel:
-            workers = workers[:1]
-
         self.tasks.next_tasks(len(workers))
         self.research.logger.info(f'Start workers (parallel={self.research.parallel})')
 
@@ -211,16 +252,17 @@ class Distributor:
                 self.tasks.join()
         else:
             self.send_state()
+            _workers = itertools.cycle(workers)
             while self.tasks.tasks_in_queue > 0:
                 self.tasks.stop_workers(1) # worker can't be in separate process so we restart it after each task
-                workers[0]()
+                worker = next(_workers)
+                if worker():
+                    self.tasks.finished_tasks += 1
+                    self.tasks.tasks_in_queue -= 1
 
-                self.tasks.finished_tasks += 1
-                self.tasks.tasks_in_queue -= 1
-
-                self.tasks.update_domain()
-                self.tasks.next_tasks(1)
-                self.send_state()
+                    self.tasks.update_domain()
+                    self.tasks.next_tasks(1)
+                    self.send_state()
 
         self.research.logger.info('All workers have finished the work')
 
