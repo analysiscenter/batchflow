@@ -25,7 +25,7 @@ from .layers import ConvBlock
 from .losses import CrossEntropyLoss, BinaryLovaszLoss, LovaszLoss, SSIM, MSSIM
 from .losses import binary as binary_losses, multiclass as multiclass_losses
 from ..base import BaseModel
-from ... import Config
+from ...config import Config
 
 
 
