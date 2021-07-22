@@ -1,3 +1,5 @@
+""" Profiler for batchflow units """
+
 import time
 from pstats import Stats
 from cProfile import Profile
@@ -10,6 +12,13 @@ except ImportError:
     from . import _fake as pd
 
 class Profiler:
+    """ Profiler for batchflow units.
+
+    Parameters
+    ----------
+    profile : bool or {0, 1, 2} or 'detailed'
+        whether to use profiler
+    """
     def __init__(self, profile=True):
         if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
             self._profiler = Profile()
@@ -20,19 +29,22 @@ class Profiler:
 
         self.profile_info = None
         self._profile_info_lock = threading.Lock()
+        self.start_time = None
 
     def enable(self):
+        """ Enable profiling. """
         self.start_time = time.time()
         if isinstance(self._profiler, Profile):
             self._profiler.enable()
 
     def disable(self, iteration, name, **kwargs):
+        """ Disable profiling. """
         if isinstance(self._profiler, Profile):
             self._profiler.disable()
         exec_time = time.time() - self.start_time
         self._add_profile_info(iteration, name, start_time=self.start_time, exec_time=exec_time, **kwargs)
 
-    def _add_profile_info(self, iter_no, name, exec_time, **kwargs): # 'batch_id': id(batch),
+    def _add_profile_info(self, iter_no, name, exec_time, **kwargs):
         if isinstance(self._profiler, Profile):
             stats = Stats(self._profiler)
             self._profiler.clear()
@@ -62,6 +74,19 @@ class Profiler:
             else:
                 self.profile_info = self.profile_info.append(df)
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop('_profile_info_lock')
+        state['_profiler'] = None
+        return state
+
+    def __setstate__(self, state):
+        self._profile_info_lock = threading.Lock()
+        for k, v in state.items():
+            setattr(self, k, v)
+
+class PipelineProfiler(Profiler):
+    """ Profiler for batchflow pipelines. """
     def show_profile_info(self, per_iter=False, detailed=False,
                           groupby=None, columns=None, sortby=None, limit=10):
         """ Show stored profiling information with varying levels of details.
