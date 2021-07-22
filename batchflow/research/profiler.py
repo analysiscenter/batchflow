@@ -1,7 +1,8 @@
 #pylint: disable=super-init-not-called
 """ Research profilers. """
 
-from cProfile import Profile
+import os
+import glob
 import warnings
 import multiprocess as mp
 
@@ -96,7 +97,8 @@ class ExecutorProfiler(ExperimentProfiler):
 
 class ResearchProfiler(ExperimentProfiler):
     """ Profiler for Research. """
-    def __init__(self, detailed=True):
+    def __init__(self, research_name, detailed=True):
+        self.research_name = research_name
         self.detailed = detailed
         self.experiments_info = mp.Manager().dict()
 
@@ -106,3 +108,10 @@ class ResearchProfiler(ExperimentProfiler):
     @property
     def profile_info(self):
         return pd.concat([self.experiments_info[exp] for exp in self.experiments_info])
+
+    def load(self):
+        """ Load profiling. """
+        paths = os.path.join(self.research_name, 'experiments', '*', 'profiler.feather')
+        for path in glob.glob(paths):
+            experiment = os.path.basename(os.path.dirname(path))
+            self.experiments_info[experiment] = pd.read_feather(path).set_index(['action', 'id'])
