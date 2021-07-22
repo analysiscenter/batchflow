@@ -1395,7 +1395,12 @@ class Pipeline:
 
         self.random_seed = seed
 
-        self._profiler = PipelineProfiler(profile) if profile not in [False, None] else None
+        if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
+            self._profiler = PipelineProfiler(detailed=True)
+        elif profile == 1 or profile is True:
+            self._profiler = PipelineProfiler(detailed=False)
+        else: # 0, False, None
+            self._profiler = None
 
 
     def gen_rebatch(self, *args, **kwargs):
