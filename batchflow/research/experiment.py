@@ -8,6 +8,7 @@ import itertools
 import traceback
 from collections import OrderedDict
 import json
+import time
 import dill
 
 from .. import Config, Pipeline, parallel, spawn_seed_sequence, make_rng, make_seed_sequence
@@ -16,6 +17,7 @@ from ..named_expr import eval_expr
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
 from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify
+from ..profiler import Profiler
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -308,6 +310,8 @@ class Experiment:
         self.exception = None
         self.random_seed = None
         self.random = None
+
+        self._profiler = None
 
     @property
     def is_alive(self):
@@ -628,7 +632,8 @@ class Experiment:
             'loglevel': 'debug',
             'name': 'executor',
             'monitor': None,
-            'debug': False
+            'debug': False,
+            'profile': False
         }
         for attr in defaults:
             if self.research:
@@ -651,6 +656,9 @@ class Experiment:
             else:
                 self.actions[name].set_unit(config=config, experiment=self)
 
+        profile = self.profile
+        self._profiler = Profiler(profile) if profile not in [False, None] else None
+
     def create_logger(self):
         """ Create experiment logger. """
         name = f"{self.name}." if self.name else ""
@@ -666,6 +674,9 @@ class Experiment:
     def call(self, name, iteration, n_iters=None):
         """ Execute one iteration of the experiment. """
         if self.is_alive or name.startswith('__'):
+            if self._profiler:
+                self._profiler.enable()
+
             self.last = self.last or (iteration + 1 == n_iters)
             self.iteration = iteration
 
@@ -692,6 +703,9 @@ class Experiment:
                     self.monitor.execute_iteration(name, self)
             if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
                 self.is_alive = False
+
+        if self._profiler:
+            self._profiler.disable(iteration, name, experiment=self.id)
 
     def __str__(self):
         repr = "instances:\n"
@@ -778,6 +792,8 @@ class Executor:
         self.worker = None
         self.pid = None
 
+        self._profiler = None
+
     def create_experiments(self):
         """ Initialize experiments. """
         self.experiments = []
@@ -800,6 +816,7 @@ class Executor:
                 self.research.monitor.start_experiment(experiment)
         for iteration in iterations:
             for unit_name, unit in self.experiment_template.actions.items():
+                start_time = time.time()
                 if unit.root:
                     self.call_root(iteration, unit_name)
                 else:
