@@ -6,14 +6,7 @@ from functools import partial
 import threading
 import asyncio
 import logging
-from pstats import Stats
-from cProfile import Profile
 import warnings
-
-try:
-    import pandas as pd
-except ImportError:
-    from . import _fake as pd
 
 from .base import Baseset
 from .config import Config
@@ -31,6 +24,7 @@ from ._const import *       # pylint:disable=wildcard-import
 from .utils import save_data_to
 from .utils_random import make_rng
 from .pipeline_executor import PipelineExecutor
+from .profiler import Profiler
 
 
 METRICS = dict(
@@ -106,8 +100,6 @@ class Pipeline:
         self.random_seed = None
 
         self._profiler = None
-        self.profile_info = None
-        self._profile_info_lock = threading.Lock()
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -839,99 +831,6 @@ class Pipeline:
                 batch = self._exec_all_actions(batch, action['pipeline']._actions)  # pylint: disable=protected-access
         return batch
 
-    def _add_profile_info(self, batch, action, exec_time, **kwargs):
-        name = self.get_action_name(action, add_index=True)
-        iter_no = batch.iteration
-
-        if isinstance(self._profiler, Profile):
-            stats = Stats(self._profiler)
-            self._profiler.clear()
-
-            indices, values = [], []
-            for key, value in stats.stats.items():
-                for k, v in value[4].items():
-                    # action name, method_name, file_name, line_no, callee
-                    indices.append((name, '{}::{}::{}::{}'.format(key[2], *k)))
-                    row_dict = {
-                        'iter': iter_no, 'total_time': exec_time, 'pipeline_time': stats.total_tt, # base stats
-                        'ncalls': v[0], 'tottime': v[2], 'cumtime': v[3], # detailed stats
-                        'batch_id': id(batch), **kwargs
-                    }
-                    values.append(row_dict)
-        else:
-            indices = [(name, '')]
-            values = [{'iter': iter_no, 'total_time': exec_time, 'pipeline_time': exec_time, 'batch_id': id(batch),
-                       **kwargs}]
-
-        multiindex = pd.MultiIndex.from_tuples(indices, names=['action', 'id'])
-        df = pd.DataFrame(values, index=multiindex)
-
-        with self._profile_info_lock:
-            if self.profile_info is None:
-                self.profile_info = df
-            else:
-                self.profile_info = self.profile_info.append(df)
-
-    def show_profile_info(self, per_iter=False, detailed=False,
-                          groupby=None, columns=None, sortby=None, limit=10):
-        """ Show stored profiling information with varying levels of details.
-
-        Parameters
-        ----------
-        per_iter : bool
-            Whether to make an aggregation over iters or not.
-        detailed : bool
-            Whether to use information from :class:`cProfiler` or not.
-        groupby : str or sequence of str
-            Used only when `per_iter` is True, directly passed to pandas.
-        columns : sequence of str
-            Columns to show in resultining dataframe.
-        sortby : str or tuple of str
-            Column id to sort on. Note that if data is aggregated over iters (`per_iter` is False),
-            then it must be a full identificator of a column.
-        limit : int
-            Limits the length of resulting dataframe.
-        parse : bool
-            Allows to re-create underlying dataframe from scratches.
-        """
-        if self.profile_info is None:
-            warnings.warn("Profiling has not been enabled.")
-            return None
-
-        detailed = False if not isinstance(self._profiler, Profile) else detailed
-
-        if per_iter is False and detailed is False:
-            columns = columns or ['total_time', 'pipeline_time']
-            sortby = sortby or ('total_time', 'sum')
-            aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.groupby(['action', 'iter'])[columns].mean().groupby('action').agg(aggs)
-                      .sort_values(sortby, ascending=False))
-
-        elif per_iter is False and detailed is True:
-            columns = columns or ['ncalls', 'tottime', 'cumtime']
-            sortby = sortby or ('tottime', 'sum')
-            aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.reset_index().groupby(['action', 'id']).agg(aggs)
-                      .sort_values(['action', sortby], ascending=[True, False])
-                      .groupby(level=0).apply(lambda df: df[:limit]).droplevel(0))
-
-        elif per_iter is True and detailed is False:
-            groupby = groupby or ['iter', 'action']
-            columns = columns or ['action', 'total_time', 'pipeline_time', 'batch_id']
-            sortby = sortby or 'total_time'
-            result = (self.profile_info.reset_index().groupby(groupby)[columns].mean()
-                      .sort_values(['iter', sortby], ascending=[True, False]))
-
-        elif per_iter is True and detailed is True:
-            groupby = groupby or ['iter', 'action', 'id']
-            columns = columns or ['ncalls', 'tottime', 'cumtime']
-            sortby = sortby or 'tottime'
-            result = (self.profile_info.reset_index().set_index(groupby)[columns]
-                      .sort_values(['iter', 'action', sortby], ascending=[True, True, False])
-                      .groupby(level=[0, 1]).apply(lambda df: df[:limit]).droplevel([0, 1]))
-        return result
-
-
     def _exec_all_actions(self, batch, actions=None, iteration=None):
         join_batches = None
         actions = actions or self._actions
@@ -941,9 +840,7 @@ class Pipeline:
 
         for action in actions:
             if self._profiler:
-                start_time = time.time()
-                if isinstance(self._profiler, Profile):
-                    self._profiler.enable()
+                self._profiler.enable()
 
             if action.get('#dont_run', False):
                 pass
@@ -977,13 +874,18 @@ class Pipeline:
                 batch, eval_time = self._exec_one_action(batch, action, iteration=iteration)
 
             if self._profiler:
-                if isinstance(self._profiler, Profile):
-                    self._profiler.disable()
-                exec_time = time.time() - start_time
-                self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time,
-                                       eval_time=eval_time)
+                # if isinstance(self._profiler, Profile):
+                #     self._profiler.disable()
+                # exec_time = time.time() - start_time
+                # self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time,
+                #                        eval_time=eval_time)
+                name = self.get_action_name(action, add_index=True)
+                self._profiler.disable(batch.iteration, name, batch_id=id(batch), eval_time=eval_time)
 
         return batch
+
+    def show_profile_info(self, **kwargs):
+        return self._profiler.show_profile_info(**kwargs)
 
     def _needs_exec(self, batch, action):
         if action['proba'] is None:
@@ -1496,12 +1398,7 @@ class Pipeline:
 
         self.random_seed = seed
 
-        if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
-            self._profiler = Profile()
-        elif profile is True or profile == 1:
-            self._profiler = True
-        else:
-            self._profiler = None
+        self._profiler = Profiler(profile) if profile not in [False, None] else None
 
 
     def gen_rebatch(self, *args, **kwargs):

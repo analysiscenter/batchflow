@@ -139,7 +139,7 @@ class Worker:
         while True:
             bad_devices, bad_memory = self._check_memory(all_devices)
             if len(bad_devices) > 0:
-                msg = f"Worker {self.index}[pid:{self.pid}]: devices {bad_devices}" \
+                msg = f"Worker {self.index}[pid:{self.pid}]: devices {bad_devices} " \
                       f"don't have enough memory: {bad_memory}"
 
                 self.research.logger.info(msg)
