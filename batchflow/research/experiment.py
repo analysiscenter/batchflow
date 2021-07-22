@@ -896,7 +896,10 @@ class Executor:
 
     @property
     def profile_info(self):
-        return self._profiler.profile_info
+        if self._profiler:
+            return self._profiler.profile_info
+        else:
+            return None
 
     def show_profile_info(self, **kwargs):
         return self._profiler.show_profile_info(**kwargs)
