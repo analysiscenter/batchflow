@@ -1,4 +1,4 @@
-#pylint:disable=logging-fstring-interpolation
+#pylint:disable=logging-fstring-interpolation, too-many-arguments
 """ Research class for muliple parallel experiments. """
 
 import os
@@ -20,6 +20,7 @@ from .distributor import Distributor, DynamicQueue
 from .experiment import Experiment, Executor
 from .results import ResearchResults
 from .utils import create_logger, to_list
+from .profiler import ResearchProfiler
 
 from ..utils_random import make_seed_sequence
 
@@ -76,6 +77,8 @@ class Research:
         self.debug = False
         self.finalize = True
         self.random_seed = None
+        self.profile = False
+        self.profiler = None
         self.memory_ratio = None
         self.n_gpu_checks = 3
         self.gpu_check_delay = 5
@@ -227,7 +230,8 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=True, env_meta=None, seed=None, memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5):
+            debug=False, finalize=True, env_meta=None, seed=None, profile=False,
+            memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5):
         """ Run research.
 
         Parameters
@@ -270,6 +274,8 @@ class Research:
             kwargs for :meth:`.Research.attach_env_meta`.
         seed : bool or int or object with a seed sequence attribute
             see :meth:`~batchflow.utils_random.make_seed_sequence`.
+        profile : bool, optional
+            perform Research profiling or not, be default False.
         memory_ratio : float or None, optional
             the ratio of free memory for all devices in worker to start experiment. If None, check will be skipped.
         n_gpu_checks : int, optional
@@ -300,6 +306,7 @@ class Research:
         self.loglevel = loglevel
         self.bar = bar
         self.detach = detach
+        self.profile = profile
 
         self.memory_ratio = memory_ratio
         self.n_gpu_checks = n_gpu_checks
@@ -344,6 +351,7 @@ class Research:
 
         self.monitor = ResearchMonitor(self, self.name, bar=self.bar) # process execution signals
         self.results = ResearchResults(self.name, self.dump_results)
+        self.profiler = ResearchProfiler(self.profile)
 
         def _run():
             self.monitor.start(self.dump_results)

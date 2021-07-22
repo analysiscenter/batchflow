@@ -17,7 +17,7 @@ from ..named_expr import eval_expr
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
 from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify
-from ..profiler import Profiler
+from .profiler import ExperimentProfiler, ExecutorProfiler
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -217,14 +217,21 @@ class ExecutableUnit:
             kwargs = eval_expr(self.kwargs, experiment=self.experiment)
             other_kwargs = eval_expr(self.other_kwargs, experiment=self.experiment)
             if self.callable is not None:
+                start_time = time.time()
                 self.output = self.callable(*args, **kwargs, **other_kwargs)
+                eval_time = time.time() - start_time
             else:
+                start_time = time.time()
                 if self.iterator is None:
+                    start_time = time.time()
                     self.iterator = self.generator(*args, **kwargs, **other_kwargs)
+                else:
+                    start_time = time.time()
                 self.output = next(self.iterator)
-            return self.output
+                eval_time = time.time() - start_time
+            return self.output, eval_time
 
-        return None
+        return None, None
 
     def must_execute(self, iteration, n_iters=None, last=False):
         """ Returns does unit must be executed for the current iteration. """
@@ -657,7 +664,7 @@ class Experiment:
                 self.actions[name].set_unit(config=config, experiment=self)
 
         profile = self.profile
-        self._profiler = Profiler(profile) if profile not in [False, None] else None
+        self._profiler = ExperimentProfiler(profile) if profile not in [False, None] else None
 
     def create_logger(self):
         """ Create experiment logger. """
@@ -683,7 +690,7 @@ class Experiment:
             self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
             exception = StopIteration if self.debug else Exception
             try:
-                self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
+                self.outputs[name], eval_time = self.actions[name](iteration, n_iters, last=self.last)
             except exception as e: #pylint:disable=broad-except
                 self.is_failed = True
                 self.last = True
@@ -705,7 +712,14 @@ class Experiment:
                 self.is_alive = False
 
         if self._profiler:
-            self._profiler.disable(iteration, name, experiment=self.id)
+            self._profiler.disable(iteration, name, eval_time=eval_time, experiment=self.id)
+
+    def show_profile_info(self, **kwargs):
+        return self._profiler.show_profile_info(**kwargs)
+
+    @property
+    def profile_info(self):
+        return self._profiler.profile_info
 
     def __str__(self):
         repr = "instances:\n"
@@ -792,8 +806,6 @@ class Executor:
         self.worker = None
         self.pid = None
 
-        self._profiler = None
-
     def create_experiments(self):
         """ Initialize experiments. """
         self.experiments = []
@@ -816,7 +828,6 @@ class Executor:
                 self.research.monitor.start_experiment(experiment)
         for iteration in iterations:
             for unit_name, unit in self.experiment_template.actions.items():
-                start_time = time.time()
                 if unit.root:
                     self.call_root(iteration, unit_name)
                 else:
@@ -853,10 +864,22 @@ class Executor:
                 setattr(experiment, attr, getattr(self.experiments[0], attr))
 
     def send_results(self):
-        """ Put experiment results into research results. """
+        """ Put experiment results and profiling into research results. """
         if self.research is not None:
             for experiment in self.experiments:
                 self.research.results.put(experiment.id, experiment.results, experiment.config_alias)
+                self.research.profiler.put(experiment.id, self.profile_info)
+
+    @property
+    def _profiler(self):
+        return ExecutorProfiler(self.experiments)
+
+    @property
+    def profile_info(self):
+        return self._profiler.profile_info
+
+    def show_profile_info(self, **kwargs):
+        return self._profiler.show_profile_info(**kwargs)
 
 def _create_instance(experiments, item_name):
     if not isinstance(experiments, list):

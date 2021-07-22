@@ -24,7 +24,7 @@ from ._const import *       # pylint:disable=wildcard-import
 from .utils import save_data_to
 from .utils_random import make_rng
 from .pipeline_executor import PipelineExecutor
-from .profiler import Profiler
+from .profiler import PipelineProfiler
 
 
 METRICS = dict(
@@ -105,13 +105,11 @@ class Pipeline:
         state = self.__dict__.copy()
         state['random'] = getattr(self._local, 'random', None)
         state.pop('_local')
-        state.pop('_profile_info_lock')
         state['_profiler'] = None
         state['_batch_generator'] = None
         return state
 
     def __setstate__(self, state):
-        self._profile_info_lock = threading.Lock()
         self._local = threading.local()
         for k, v in state.items():
             setattr(self, k, v)
@@ -874,11 +872,6 @@ class Pipeline:
                 batch, eval_time = self._exec_one_action(batch, action, iteration=iteration)
 
             if self._profiler:
-                # if isinstance(self._profiler, Profile):
-                #     self._profiler.disable()
-                # exec_time = time.time() - start_time
-                # self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time,
-                #                        eval_time=eval_time)
                 name = self.get_action_name(action, add_index=True)
                 self._profiler.disable(batch.iteration, name, batch_id=id(batch), eval_time=eval_time)
 
@@ -886,6 +879,10 @@ class Pipeline:
 
     def show_profile_info(self, **kwargs):
         return self._profiler.show_profile_info(**kwargs)
+
+    @property
+    def profile_info(self):
+        return self._profiler.profile_info
 
     def _needs_exec(self, batch, action):
         if action['proba'] is None:
@@ -1398,7 +1395,7 @@ class Pipeline:
 
         self.random_seed = seed
 
-        self._profiler = Profiler(profile) if profile not in [False, None] else None
+        self._profiler = PipelineProfiler(profile) if profile not in [False, None] else None
 
 
     def gen_rebatch(self, *args, **kwargs):
