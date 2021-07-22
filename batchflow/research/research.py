@@ -351,7 +351,7 @@ class Research:
 
         self.monitor = ResearchMonitor(self, self.name, bar=self.bar) # process execution signals
         self.results = ResearchResults(self.name, self.dump_results)
-        self.profiler = ResearchProfiler(self.profile)
+        self.profiler = ResearchProfiler(self.name, self.profile)
 
         def _run():
             self.monitor.start(self.dump_results)
@@ -397,7 +397,11 @@ class Research:
     def _load(name):
         with open(os.path.join(name, 'research.dill'), 'rb') as f:
             research = dill.load(f)
-        research.results = ResearchResults(research.name, research.dump_results)
+        if research.dump_results:
+            research.results = ResearchResults(research.name, research.dump_results)
+            research.profiler = ResearchProfiler(research.name, research.profile)
+            research.results.load()
+            research.profiler.load()
         return research
 
     @classmethod
