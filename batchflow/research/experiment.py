@@ -608,6 +608,8 @@ class Experiment:
         self.full_path = os.path.join(self.name, self.experiment_path)
         if not os.path.exists(self.full_path):
             os.makedirs(self.full_path)
+        else:
+            raise ValueError(f'Experiment folder {self.full_path} already exists.')
 
     def dump_config(self):
         """ Dump config (as serialized ConfigAlias instance). """
@@ -664,7 +666,13 @@ class Experiment:
                 self.actions[name].set_unit(config=config, experiment=self)
 
         profile = self.profile
-        self._profiler = ExperimentProfiler(profile) if profile not in [False, None] else None
+
+        if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
+            self._profiler = ExperimentProfiler(detailed=True)
+        elif profile == 1 or profile is True:
+            self._profiler = ExperimentProfiler(detailed=False)
+        else: # 0, False, None
+            self._profiler = None
 
     def create_logger(self):
         """ Create experiment logger. """
@@ -720,6 +728,10 @@ class Experiment:
     @property
     def profile_info(self):
         return self._profiler.profile_info
+
+    def dump_profile_info(self):
+        if self.dump_results and self._profiler is not None:
+            self.profile_info.reset_index().to_feather(os.path.join(self.full_path, 'profiler.feather'))
 
     def __str__(self):
         repr = "instances:\n"
@@ -841,6 +853,7 @@ class Executor:
             experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
             experiment.close_logger()
         self.send_results()
+        self.dump_profile_info()
 
     @parallel(init='_parallel_init_call')
     def parallel_call(self, experiment, iteration, unit_name):
@@ -870,9 +883,16 @@ class Executor:
                 self.research.results.put(experiment.id, experiment.results, experiment.config_alias)
                 self.research.profiler.put(experiment.id, self.profile_info)
 
+    def dump_profile_info(self):
+        for experiment in self.experiments:
+            experiment.dump_profile_info()
+
     @property
     def _profiler(self):
-        return ExecutorProfiler(self.experiments)
+        if self.experiments[0].profile:
+            return ExecutorProfiler(self.experiments)
+        else:
+            return None
 
     @property
     def profile_info(self):

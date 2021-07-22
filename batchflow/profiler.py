@@ -19,12 +19,12 @@ class Profiler:
     profile : bool or {0, 1, 2} or 'detailed'
         whether to use profiler
     """
-    def __init__(self, profile=True):
-        if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
+    def __init__(self, detailed=True):
+        if detailed:
+            self.detailed = True
             self._profiler = Profile()
-        elif profile is True or profile == 1:
-            self._profiler = True
         else:
+            self.detailed = False
             self._profiler = None
 
         self.profile_info = None
@@ -34,18 +34,18 @@ class Profiler:
     def enable(self):
         """ Enable profiling. """
         self.start_time = time.time()
-        if isinstance(self._profiler, Profile):
+        if self.detailed:
             self._profiler.enable()
 
     def disable(self, iteration, name, **kwargs):
         """ Disable profiling. """
-        if isinstance(self._profiler, Profile):
+        if self.detailed:
             self._profiler.disable()
         exec_time = time.time() - self.start_time
         self._add_profile_info(iteration, name, start_time=self.start_time, exec_time=exec_time, **kwargs)
 
     def _add_profile_info(self, iter_no, name, exec_time, **kwargs):
-        if isinstance(self._profiler, Profile):
+        if self.detailed:
             stats = Stats(self._profiler)
             self._profiler.clear()
 
@@ -113,7 +113,7 @@ class PipelineProfiler(Profiler):
             warnings.warn("Profiling has not been enabled.")
             return None
 
-        detailed = False if not isinstance(self._profiler, Profile) else detailed
+        detailed = False if not self.detailed else detailed
 
         if per_iter is False and detailed is False:
             columns = columns or ['total_time', 'pipeline_time']

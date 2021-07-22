@@ -40,7 +40,7 @@ class ExperimentProfiler(Profiler):
             warnings.warn("Profiling has not been enabled.")
             return None
 
-        detailed = False if not isinstance(self._profiler, Profile) else detailed
+        detailed = False if not self.detailed else detailed
 
         if per_iter is False and detailed is False:
             groupby = ['experiment', 'action', 'iter'] if per_experiment else ['action', 'iter']
@@ -88,7 +88,7 @@ class ExecutorProfiler(ExperimentProfiler):
     """ Profiler for Executor experiments. """
     def __init__(self, experiments):
         self.profilers = [experiment._profiler for experiment in experiments]
-        self._profiler = experiments[0]._profiler._profiler
+        self.detailed = experiments[0]._profiler.detailed
 
     @property
     def profile_info(self):
@@ -96,14 +96,8 @@ class ExecutorProfiler(ExperimentProfiler):
 
 class ResearchProfiler(ExperimentProfiler):
     """ Profiler for Research. """
-    def __init__(self, profile):
-        if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
-            self._profiler = Profile()
-        elif profile is True or profile == 1:
-            self._profiler = True
-        else:
-            self._profiler = None
-
+    def __init__(self, detailed=True):
+        self.detailed = detailed
         self.experiments_info = mp.Manager().dict()
 
     def put(self, experiment, df):
