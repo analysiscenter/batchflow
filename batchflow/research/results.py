@@ -25,7 +25,7 @@ class ResearchResults:
         self.dump_results = dump_results
         self.results = mp.Manager().dict()
         self.configs = mp.Manager().dict()
-        self.artifactes = dict()
+        self.artifacts = dict()
 
         self.kwargs = kwargs
 
@@ -34,12 +34,12 @@ class ResearchResults:
         self.configs[experiment_id] = config
 
     def load(self, **kwargs):
-        """ Load (filtered if needed) results, configs and artifactes paths if they was dumped. """
+        """ Load (filtered if needed) results, configs and artifacts paths if they was dumped. """
         kwargs = {**self.kwargs, **kwargs}
         if self.dump_results:
             self.load_configs()
             self.load_results(**kwargs)
-            self.load_artifactes(**kwargs)
+            self.load_artifacts(**kwargs)
 
     def load_configs(self):
         """ Load all experiment configs. """
@@ -88,8 +88,8 @@ class ResearchResults:
                     experiment_results[_name] = OrderedDict([*name_results.items(), *new_values.items()])
         self.results = mp.Manager().dict(**results)
 
-    def load_artifactes(self, experiment_id=None, name=None, config=None, alias=None, domain=None, **kwargs):
-        """ Load and filter experiment artifactes (all files/folders in experiment folder except standart
+    def load_artifacts(self, experiment_id=None, name=None, config=None, alias=None, domain=None, **kwargs):
+        """ Load and filter experiment artifacts (all files/folders in experiment folder except standart
         'results', 'config.dill', 'config.json', 'experiment.log').
 
         Parameters
@@ -97,7 +97,7 @@ class ResearchResults:
         experiment_id : int str, or list, optional
             exepriments to load, by default None
         name : str or list, optional
-            names of artifactes to load into artifactes list, by default None
+            names of artifacts to load into artifacts list, by default None
         config : Config, optional
             config with parameters values to load, by default None
         alias : Config, optional
@@ -107,7 +107,7 @@ class ResearchResults:
         kwargs : dict
             is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.
         """
-        self.artifactes = dict()
+        self.artifacts = dict()
         names = to_list('*' if name is None else name)
         experiment_id, _, _ = self.filter(experiment_id, None, None, config, alias, domain, **kwargs)
         for _name in names:
@@ -116,9 +116,9 @@ class ResearchResults:
                     path = os.path.normpath(path)
                     _experiment_id, _name = path.split(os.sep)[-2:]
                     if experiment_id is None or _experiment_id in experiment_id:
-                        if _experiment_id not in self.artifactes:
-                            self.artifactes[_experiment_id] = []
-                        self.artifactes[_experiment_id] += [
+                        if _experiment_id not in self.artifacts:
+                            self.artifacts[_experiment_id] = []
+                        self.artifacts[_experiment_id] += [
                             {'artifact_name': _name,
                             'full_path': path,
                             'relative_path': os.path.join(*path.split(os.sep)[-3:])
@@ -290,8 +290,8 @@ class ResearchResults:
             df += [pd.DataFrame({'id': [experiment_id], **{key: [val] for key, val in _config.items()}})]
         return pd.concat(df)
 
-    def artifactes_to_df(self, configs=False, **kwargs):
-        """ Create pandas.DataFrame with experiment artifactes (all in experiment folder except standart
+    def artifacts_to_df(self, configs=False, **kwargs):
+        """ Create pandas.DataFrame with experiment artifacts (all in experiment folder except standart
         'results', 'config.dill', 'config.json', 'experiment.log').
 
         Parameters
@@ -309,16 +309,16 @@ class ResearchResults:
         """
         if self.dump_results:
             self.load_configs()
-            self.load_artifactes(**kwargs)
+            self.load_artifacts(**kwargs)
             df = []
-            for experiment_id in self.artifactes:
-                artifactes = self.artifactes[experiment_id]
-                df += [pd.DataFrame({'id': [experiment_id], **artifact}) for artifact in artifactes]
+            for experiment_id in self.artifacts:
+                artifacts = self.artifacts[experiment_id]
+                df += [pd.DataFrame({'id': [experiment_id], **artifact}) for artifact in artifacts]
             df = pd.concat(df)
             if configs:
                 df = pd.merge(self.configs_to_df(**kwargs), df, how='inner', on='id')
             return df
-        raise ValueError("Researc without dump can't have artifactes.")
+        raise ValueError("Researc without dump can't have artifacts.")
 
     def filter_ids_by_configs(self, config=None, alias=None, domain=None, **kwargs):
         """ Filter configs.
