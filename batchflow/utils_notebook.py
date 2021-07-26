@@ -120,9 +120,9 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
         raise FileNotFoundError(f'Path {path} not found.')
 
     if save_ipynb and out_path_ipynb is None:
-        out_path_ipynb = path.split('.')[0] + suffix + '.ipynb'
+        out_path_ipynb = os.path.splitext(path)[0] + suffix + '.ipynb'
     if save_html and out_path_html is None:
-        out_path_html = path.split('.')[0] + suffix + '.html'
+        out_path_html = os.path.splitext(path)[0] + suffix + '.html'
 
     # Execution arguments
     execute_kwargs = execute_kwargs or {}
