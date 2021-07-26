@@ -698,7 +698,7 @@ class Experiment:
             self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
             exception = StopIteration if self.debug else Exception
             try:
-                self.outputs[name], eval_time = self.actions[name](iteration, n_iters, last=self.last)
+                self.outputs[name], unit_time = self.actions[name](iteration, n_iters, last=self.last)
             except exception as e: #pylint:disable=broad-except
                 self.is_failed = True
                 self.last = True
@@ -720,7 +720,7 @@ class Experiment:
                 self.is_alive = False
 
         if self._profiler:
-            self._profiler.disable(iteration, name, eval_time=eval_time, experiment=self.id)
+            self._profiler.disable(iteration, name, unit_time=unit_time, experiment=self.id)
 
     def show_profile_info(self, **kwargs):
         return self._profiler.show_profile_info(**kwargs)

@@ -869,11 +869,11 @@ class Pipeline:
                     action['args'] = join_batches + action['args']
                     join_batches = None
 
-                batch, eval_time = self._exec_one_action(batch, action, iteration=iteration)
+                batch, action_time = self._exec_one_action(batch, action, iteration=iteration)
 
             if self._profiler:
                 name = self.get_action_name(action, add_index=True)
-                self._profiler.disable(batch.iteration, name, batch_id=id(batch), eval_time=eval_time)
+                self._profiler.disable(batch.iteration, name, batch_id=id(batch), action_time=action_time)
 
         return batch
 
