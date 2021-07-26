@@ -41,10 +41,10 @@ class Profiler:
         """ Disable profiling. """
         if self.detailed:
             self._profiler.disable()
-        exec_time = time.time() - self.start_time
-        self._add_profile_info(iteration, name, start_time=self.start_time, exec_time=exec_time, **kwargs)
+        total_time = time.time() - self.start_time
+        self._add_profile_info(iteration, name, start_time=self.start_time, total_time=total_time, **kwargs)
 
-    def _add_profile_info(self, iter_no, name, exec_time, **kwargs):
+    def _add_profile_info(self, iter_no, name, total_time, **kwargs):
         if self.detailed:
             stats = Stats(self._profiler)
             self._profiler.clear()
@@ -55,14 +55,14 @@ class Profiler:
                     # action name, method_name, file_name, line_no, callee
                     indices.append((name, '{}::{}::{}::{}'.format(key[2], *k)))
                     row_dict = {
-                        'iter': iter_no, 'total_time': exec_time, 'pipeline_time': stats.total_tt, # base stats
+                        'iter': iter_no, 'total_time': total_time, 'eval_time': stats.total_tt, # base stats
                         'ncalls': v[0], 'tottime': v[2], 'cumtime': v[3], # detailed stats
                         **kwargs
                     }
                     values.append(row_dict)
         else:
             indices = [(name, '')]
-            values = [{'iter': iter_no, 'total_time': exec_time, 'pipeline_time': exec_time,
+            values = [{'iter': iter_no, 'total_time': total_time, 'eval_time': total_time,
                     **kwargs}]
 
         multiindex = pd.MultiIndex.from_tuples(indices, names=['action', 'id'])
@@ -116,7 +116,7 @@ class PipelineProfiler(Profiler):
         detailed = False if not self.detailed else detailed
 
         if per_iter is False and detailed is False:
-            columns = columns or ['total_time', 'pipeline_time']
+            columns = columns or ['total_time', 'eval_time']
             sortby = sortby or ('total_time', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
             result = (self.profile_info.groupby(['action', 'iter'])[columns].mean().groupby('action').agg(aggs)
@@ -132,7 +132,7 @@ class PipelineProfiler(Profiler):
 
         elif per_iter is True and detailed is False:
             groupby = groupby or ['iter', 'action']
-            columns = columns or ['action', 'total_time', 'pipeline_time', 'batch_id']
+            columns = columns or ['action', 'total_time', 'eval_time', 'batch_id']
             sortby = sortby or 'total_time'
             result = (self.profile_info.reset_index().groupby(groupby)[columns].mean()
                       .sort_values(['iter', sortby], ascending=[True, False]))
