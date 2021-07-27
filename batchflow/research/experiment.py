@@ -582,7 +582,7 @@ class Experiment:
 
     def _is_postifixed(self, base_name, name):
         postfix = name[len(base_name):]
-        return (len(postfix) > 2 and postfix[0] == '_' and postfix[1:].isdigit())
+        return (name == base_name) or (len(postfix) > 2 and postfix[0] == '_' and postfix[1:].isdigit())
 
     @property
     def only_callables(self):
