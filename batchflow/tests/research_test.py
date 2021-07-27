@@ -12,6 +12,43 @@ from batchflow.models.torch import ResNet
 from batchflow.opensets import MNIST
 from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults, Alias
 
+class Model:
+    def __init__(self):
+        self.dataset = MNIST()
+        self.model_config = {
+            'head/layout': C('layout'),
+            'head/units': C('units'),
+            'loss': 'ce',
+            'device': 'cpu',
+            'amp': False
+        }
+        self.create_train_ppl()
+        self.create_test_ppl()
+
+    def create_train_ppl(self):
+        ppl = (Pipeline()
+            .init_model('model', ResNet, 'dynamic', config=self.model_config)
+            .to_array(channels='first', src='images', dst='images')
+            .train_model('model', B('images'), B('labels'))
+            .run_later(batch_size=8, n_iters=1, shuffle=True, drop_last=True)
+        )
+        self.train_ppl = ppl << self.dataset.train
+
+    def create_test_ppl(self):
+        test_ppl = (Pipeline()
+            .import_model('model', self.train_ppl)
+            .init_variable('metrics', None)
+            .to_array(channels='first', src='images', dst='images')
+            .predict_model('model', B('images'), fetches='predictions', save_to=B('predictions'))
+            .gather_metrics('classification', B('labels'), B('predictions'), fmt='logits', axis=-1,
+                            num_classes=10, save_to=V('metrics', mode='update'))
+            .run_later(batch_size=8, n_iters=2, shuffle=False, drop_last=False)
+        )
+        self.test_ppl = test_ppl << self.dataset.test
+
+    def eval_metrics(self, metrics, **kwargs):
+        return self.test_ppl.v('metrics').evaluate(metrics, **kwargs)
+
 @pytest.fixture
 def generator():
     def _generator(n):
@@ -37,46 +74,9 @@ def simple_research(tmp_path):
     return research
 
 @pytest.fixture
-def complex_research():
-    class Model:
-        def __init__(self):
-            self.dataset = MNIST()
-            self.model_config = {
-                'head/layout': C('layout'),
-                'head/units': C('units'),
-                'loss': 'ce',
-                'device': 'cpu',
-                'amp': False
-            }
-            self.create_train_ppl()
-            self.create_test_ppl()
-
-        def create_train_ppl(self):
-            ppl = (Pipeline()
-                .init_model('model', ResNet, 'dynamic', config=self.model_config)
-                .to_array(channels='first', src='images', dst='images')
-                .train_model('model', B('images'), B('labels'))
-                .run_later(batch_size=8, n_iters=1, shuffle=True, drop_last=True)
-            )
-            self.train_ppl = ppl << self.dataset.train
-
-        def create_test_ppl(self):
-            test_ppl = (Pipeline()
-                .import_model('model', self.train_ppl)
-                .init_variable('metrics', None)
-                .to_array(channels='first', src='images', dst='images')
-                .predict_model('model', B('images'), fetches='predictions', save_to=B('predictions'))
-                .gather_metrics('classification', B('labels'), B('predictions'), fmt='logits', axis=-1,
-                                num_classes=10, save_to=V('metrics', mode='update'))
-                .run_later(batch_size=8, n_iters=2, shuffle=False, drop_last=False)
-            )
-            self.test_ppl = test_ppl << self.dataset.test
-
-        def eval_metrics(self, metrics, **kwargs):
-            return self.test_ppl.v('metrics').evaluate(metrics, **kwargs)
-
+def complex_research(tmp_path):
     domain = Domain({'layout': ['f', 'faf']}) @ Domain({'units': [[10], [100, 10]]})
-    research = (Research(domain=domain, n_reps=2)
+    research = (Research(name=os.path.join(tmp_path, 'research'), domain=domain, n_reps=2)
         .add_instance('controller', Model)
         .add_pipeline('controller.train_ppl')
         .add_pipeline('controller.test_ppl', run=True, when='last')
@@ -350,14 +350,9 @@ class TestResearch:
         assert len(simple_research.monitor.exceptions) == 0
         assert len(simple_research.results.df) == 18
 
-    @pytest.mark.parametrize('parallel', [False, True])
-    def test_load(self, parallel, simple_research):
-        n_iters = 3
-        simple_research.run(n_iters=n_iters, parallel=parallel, dump_results=True)
-
-        loaded_research = Research.load(simple_research.name)
-
-        assert len(loaded_research.results.df) == 18
+        if dump_results:
+            loaded_research = Research.load(simple_research.name)
+            assert len(loaded_research.results.df) == 18
 
     def test_empty_domain(self):
         research = Research().add_callable('func', lambda: 100).save(O('func'), 'sum')
@@ -383,10 +378,13 @@ class TestResearch:
     @pytest.mark.slow
     @pytest.mark.parametrize('workers', [1, 2])
     def test_complex_research(self, workers, complex_research):
-        complex_research.run(dump_results=False, parallel=True, workers=workers, bar=False, finalize=True)
+        complex_research.run(dump_results=True, parallel=True, workers=workers, bar=False, finalize=True)
 
         assert len(complex_research.monitor.exceptions) == 0
         assert len(complex_research.results.df) == 4
+
+        loaded_research = Research.load(complex_research.name)
+        assert len(loaded_research.results.df) == 4
 
     def test_remove(self, simple_research):
         simple_research.run(n_iters=1)

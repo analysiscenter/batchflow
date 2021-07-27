@@ -23,6 +23,8 @@ class ExperimentProfiler(Profiler):
         ----------
         per_iter : bool
             Whether to make an aggregation over iters or not.
+        per_experiment : bool
+            Whether to make an aggregation over experiments or not.
         detailed : bool
             Whether to use information from :class:`cProfiler` or not.
         groupby : str or sequence of str
@@ -34,8 +36,6 @@ class ExperimentProfiler(Profiler):
             then it must be a full identificator of a column.
         limit : int
             Limits the length of resulting dataframe.
-        parse : bool
-            Allows to re-create underlying dataframe from scratches.
         """
         if self.profile_info is None:
             warnings.warn("Profiling has not been enabled.")

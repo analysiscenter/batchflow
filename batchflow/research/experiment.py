@@ -89,6 +89,12 @@ class PipelineWrapper:
 
         return PipelineWrapper(self.pipeline + Pipeline(), self.mode)
 
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+
 class InstanceCreator:
     """ Instance class to use in each experiment in research. Will be initialized at the start of
     the experiment execution.
