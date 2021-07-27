@@ -577,8 +577,12 @@ class Experiment:
 
     def add_postfix(self, name):
         """ Add postfix for conincided unit name. """
-        n_actions = sum([item.startswith(name) for item in self.actions])
+        n_actions = sum([self._is_postifixed(name, item) for item in self.actions])
         return name if n_actions == 0 else f"{name}_{n_actions}"
+
+    def _is_postifixed(self, base_name, name):
+        postfix = name[len(base_name):]
+        return (len(postfix) > 2 and postfix[0] == '_' and postfix[1:].isdigit())
 
     @property
     def only_callables(self):
