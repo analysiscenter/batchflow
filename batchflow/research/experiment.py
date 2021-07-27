@@ -372,6 +372,7 @@ class Experiment:
         else:
             kwargs[mode] = src
 
+        name = self.add_postfix(name)
         self.actions[name] = ExecutableUnit(name=name, args=args, when=when, **kwargs)
         if save_to is not None:
             self.save(src=O(name), dst=save_to, when=when, copy=False)
@@ -457,7 +458,7 @@ class Experiment:
                           root=root, item_name=name, when="%0")
         return self
 
-    def add_pipeline(self, name, root=None, branch=None, run=False, variables=None, dump=None, **kwargs):
+    def add_pipeline(self, name, root=None, branch=None, run=False, variables=None, dump=None, when=1, **kwargs):
         """ Add pipeline to experiment.
 
         Parameters
@@ -490,17 +491,17 @@ class Experiment:
         if branch is None:
             mode = 'func' if run else 'generator'
             pipeline = PipelineWrapper(root if root is not None else name, mode=mode)
-            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), **kwargs)
+            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), when=when, **kwargs)
         else:
             root = PipelineWrapper(root, mode='generator')
             branch = PipelineWrapper(branch, mode='execute_for')
 
-            self.add_generator(f'{name}_root', generator=root, config=EC(), **kwargs)
-            self.add_callable(f'{name}', func=branch, config=EC(), batch=O(f'{name}_root'), **kwargs)
+            self.add_generator(f'{name}_root', generator=root, config=EC(), when=when, **kwargs)
+            self.add_callable(f'{name}', func=branch, config=EC(), batch=O(f'{name}_root'), when=when, **kwargs)
         if variables is not None:
             ppl_name = name if branch is None else f'{name}'
             for var in to_list(variables):
-                self.save(E(ppl_name).pipeline.v(var), var)
+                self.save(E(ppl_name).pipeline.v(var), var, when=when)
             if dump is not None:
                 self.dump(variables, dump)
         return self
@@ -547,7 +548,8 @@ class Experiment:
         copy : bool, optional
             copy value or not, by default False
         """
-        name = self.add_postfix('__save_results')
+        name = '__save_results' if dst is None else f'__save_results_{dst}'
+        name = self.add_postfix(name)
         self.add_callable(name, _save_results, when=when, _src=src, _dst=dst, experiment=E(), copy=copy)
         return self
 
@@ -566,7 +568,8 @@ class Experiment:
         Research
         """
         self.has_dump = True
-        name = self.add_postfix('__dump_results')
+        name = '__dump_results' if variable is None else f'__dump_results_{variable}'
+        name = self.add_postfix(name)
         self.add_callable(name, _dump_results,
                           when=when,
                           variable=variable, experiment=E())
@@ -574,7 +577,8 @@ class Experiment:
 
     def add_postfix(self, name):
         """ Add postfix for conincided unit name. """
-        return name + '_' + str(sum([item.startswith(name) for item in self.actions]))
+        n_actions = sum([item.startswith(name) for item in self.actions])
+        return name if n_actions == 0 else f"{name}_{n_actions}"
 
     @property
     def only_callables(self):
@@ -642,7 +646,7 @@ class Experiment:
             'name': 'executor',
             'monitor': None,
             'debug': False,
-            'profile': False
+            'profile': False,
         }
         for attr in defaults:
             if self.research:

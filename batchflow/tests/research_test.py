@@ -412,6 +412,22 @@ class TestResearch:
 
         assert simple_research.profiler.profile_info.shape[1] == shape
 
+    def test_coincided_names(self):
+        def f(a):
+            return a ** 10
+
+        research = (Research()
+            .add_callable(f, a=2, save_to='a')
+            .add_callable(f, a=3, save_to='b')
+        )
+
+        research.run(dump_results=False)
+
+        assert research.results.df.iloc[0].a == f(2)
+        assert research.results.df.iloc[0].b == f(3)
+
+
+
 class TestResults:
     @pytest.mark.parametrize('parallel', [False, True])
     @pytest.mark.parametrize('dump_results', [False, True])
