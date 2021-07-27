@@ -35,7 +35,7 @@ class DummyBar:
         _ = kwargs
         return f'{n}/{total} iterations done; elapsed time is {t:3.3} seconds'
 
-    def sp(self, *args, **kwargs):
+    def display(self, *args, **kwargs):
         _ = args, kwargs
 
     def set_description(self, description):
@@ -91,13 +91,21 @@ class Notifier:
         Total size of drawn figure.
     savepath : str
         Path to save image, created by tracking entities with `graphs`.
+    disable : bool
+        Whether to disable the notifier completely: progress bar, monitors and graphs.
     *args, **kwargs
         Positional and keyword arguments that are used to create underlying progress bar.
     """
     def __init__(self, bar=None, *args, update_total=True,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  frequency=1, monitors=None, graphs=None, file=None,
-                 window=None, layout='h', figsize=None, savepath=None, **kwargs):
+                 window=None, layout='h', figsize=None, savepath=None, disable=False, **kwargs):
+        # Turn off everything if `disable`
+        if disable:
+            bar = False
+            monitors = []
+            graphs = []
+            file = None
 
         # Prepare data containers like monitors and pipeline variables
         if monitors:
@@ -148,7 +156,7 @@ class Notifier:
         # Prepare file log
         self.file = file
         if self.file:
-            with open(self.file, 'w') as _:
+            with open(self.file, 'w'):
                 pass
 
         # Create bar; set the number of total iterations, if possible
@@ -202,7 +210,7 @@ class Notifier:
         if self.bar is not None:
             try:
                 # jupyter bar must be closed and reopened
-                self.bar.sp(close=True)
+                self.bar.display(close=True)
                 self.bar = self.bar_func(total=total)
             except TypeError:
                 # text bar can work with a simple reassigning of `total`
@@ -373,3 +381,9 @@ class Notifier:
         if not key in self.__dict__ and hasattr(self.bar, key):
             return getattr(self.bar, key)
         raise AttributeError(key)
+
+    @staticmethod
+    def clear():
+        """ Clear all the instances. Can help fix tqdm behaviour. """
+        # pylint: disable=protected-access
+        tqdm._instances.clear()

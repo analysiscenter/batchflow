@@ -2,6 +2,7 @@
 import os
 import time
 from math import ceil
+from ast import literal_eval
 from multiprocessing import Process, Manager, Queue
 
 import numpy as np
@@ -123,6 +124,13 @@ class ResourceMonitor:
         plt.plot(np.array(self.ticks) - self.ticks[0], self.data)
 
         name = self.__class__.__name__
+        if 'GPU' in name:
+            used_gpus = self.kwargs.get('gpu_list', get_current_gpus())
+            if len(used_gpus) == 1:
+                name = f'{name} on device `{used_gpus[0]}`'
+            else:
+                name = f'{name} on devices `{str(used_gpus)[1:-1]}`'
+
         title = f'{name}\nMEAN: {np.mean(self.data):4.4}    STD: {np.std(self.data):4.4}'
         plt.title(title)
         plt.xlabel('Time, s', fontsize=12)
@@ -190,6 +198,12 @@ class USSMonitor(ResourceMonitor):
         return process.memory_full_info().uss / (1024 ** 3) # gbytes
 
 
+def get_current_gpus():
+    """ If the `CUDA_VISIBLE_DEVICES` is set, check it and return device numbers. Otherwise, return [0]. """
+    env_variable = os.environ.get('CUDA_VISIBLE_DEVICES', '0')
+    env_variable = literal_eval(env_variable)
+    return list(env_variable) if isinstance(env_variable, tuple) else [env_variable]
+
 class GPUMonitor(ResourceMonitor):
     """ Track GPU usage. """
     UNIT = '%'
@@ -203,7 +217,7 @@ class GPUMonitor(ResourceMonitor):
     def get_usage(gpu_list=None, **kwargs):
         """ Track GPU usage. """
         _ = kwargs
-        gpu_list = gpu_list or [0]
+        gpu_list = gpu_list or get_current_gpus()
         nvidia_smi.nvmlInit()
         handle = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
         res = [nvidia_smi.nvmlDeviceGetUtilizationRates(item) for item in handle]
@@ -223,7 +237,7 @@ class GPUMemoryUtilizationMonitor(ResourceMonitor):
     def get_usage(gpu_list=None, **kwargs):
         """ Track GPU memory utilization. """
         _ = kwargs
-        gpu_list = gpu_list or [0]
+        gpu_list = gpu_list or get_current_gpus()
         nvidia_smi.nvmlInit()
         handle = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
         res = [nvidia_smi.nvmlDeviceGetUtilizationRates(item) for item in handle]
@@ -243,7 +257,7 @@ class GPUMemoryMonitor(ResourceMonitor):
     def get_usage(gpu_list=None, **kwargs):
         """ Track GPU memory usage. """
         _ = kwargs
-        gpu_list = gpu_list or [0]
+        gpu_list = gpu_list or get_current_gpus()
         nvidia_smi.nvmlInit()
         handle = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
         res = [nvidia_smi.nvmlDeviceGetMemoryInfo(item) for item in handle]
@@ -311,6 +325,13 @@ class Monitor(list):
 
         for i, monitor in enumerate(self):
             name = monitor.__class__.__name__
+            if 'GPU' in name:
+                used_gpus = monitor.kwargs.get('gpu_list', get_current_gpus())
+                if len(used_gpus) == 1:
+                    name = f'{name} on device `{used_gpus[0]}`'
+                else:
+                    name = f'{name} on devices `{str(used_gpus)[1:-1]}`'
+
             title = f'{name}\nMEAN: {np.mean(monitor.data):4.4}    STD: {np.std(monitor.data):4.4}'
 
             ax[i // layout[1], i % layout[1]].plot(np.array(monitor.ticks) - monitor.ticks[0], monitor.data)
