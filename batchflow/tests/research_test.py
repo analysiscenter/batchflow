@@ -427,7 +427,6 @@ class TestResearch:
         assert research.results.df.iloc[0].b == f(3)
 
 
-
 class TestResults:
     @pytest.mark.parametrize('parallel', [False, True])
     @pytest.mark.parametrize('dump_results', [False, True])

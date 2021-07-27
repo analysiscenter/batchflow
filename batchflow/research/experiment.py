@@ -650,7 +650,7 @@ class Experiment:
             'name': 'executor',
             'monitor': None,
             'debug': False,
-            'profile': False,
+            'profile': False
         }
         for attr in defaults:
             if self.research:
