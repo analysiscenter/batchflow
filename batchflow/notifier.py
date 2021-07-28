@@ -136,6 +136,8 @@ class Notifier:
                     container['name'] = source.name
                 elif isinstance(source, str):
                     container['name'] = source
+                else:
+                    container['name'] = None
 
             self.data_containers.append(container)
 
@@ -240,12 +242,12 @@ class Notifier:
                 source.fetch()
                 container['data'] = source.data
 
-            elif isinstance(source, NamedExpression):
-                value = eval_expr(source, pipeline=pipeline, batch=batch)
-                container['data'] = value
-
             elif isinstance(source, str):
                 value = pipeline.v(source)
+                container['data'] = value
+
+            else:
+                value = eval_expr(source, pipeline=pipeline, batch=batch)
                 container['data'] = value
 
     def update_description(self):
