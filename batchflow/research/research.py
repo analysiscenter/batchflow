@@ -425,7 +425,8 @@ class Research:
                     raise ValueError(f'{name} is not a research folder.')
             answer = True
             if ask:
-                answer = 'yes'.startswith(input(f'Remove {name}? [y/n]').lower())
+                answer = input(f'Remove {name}? [y/n]').lower()
+                answer = len(answer) > 0 and 'yes'.startswith(answer)
             if answer:
                 shutil.rmtree(name)
 
