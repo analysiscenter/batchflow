@@ -748,21 +748,26 @@ class Experiment:
             self.profile_info.reset_index().to_feather(os.path.join(self.full_path, 'profiler.feather'))
 
     def __str__(self):
-        repr = "instances:\n"
+        repr = ''
         spacing = ' ' * 4
-        for name, creator in self.instance_creators.items():
-            repr += spacing + f"{name}(\n"
-            repr += 2 * spacing + f"root={creator.root},\n"
-            repr += ''.join([spacing * 2 + f"{key}={value}\n" for key, value in creator.kwargs.items()])
-            repr += spacing + ")\n"
 
-        repr += "\nunits:\n"
-        attrs = ['callable', 'generator', 'root', 'when', 'args']
-        for name, action in self.actions.items():
-            repr += spacing + f"{name}(\n"
-            repr += ''.join([spacing * 2 + f"{key}={getattr(action, key)}\n" for key in attrs])
-            repr += ''.join([spacing * 2 + f"{key}={value}\n" for key, value in action.kwargs.items()])
-            repr += spacing + ")\n"
+        if len(self.instance_creators) > 0:
+            repr += "instances:\n"
+            for name, creator in self.instance_creators.items():
+                repr += spacing + f"{name}(\n"
+                repr += 2 * spacing + f"root={creator.root},\n"
+                repr += ''.join([spacing * 2 + f"{key}={value}\n" for key, value in creator.kwargs.items()])
+                repr += spacing + ")\n"
+            repr += '\n'
+
+        if len(self.actions) > 0:
+            repr += "units:\n"
+            attrs = ['callable', 'generator', 'root', 'when', 'args']
+            for name, action in self.actions.items():
+                repr += spacing + f"{name}(\n"
+                repr += ''.join([spacing * 2 + f"{key}={getattr(action, key)}\n" for key in attrs])
+                kwargs = {**action.kwargs, **action.other_kwargs}
+                repr += spacing * 2 + f"kwargs={kwargs}\n" + spacing + ")\n"
 
         return repr
 
