@@ -1,15 +1,15 @@
 """ Pipeline decorators """
 import threading
 
-from .models import BaseModel
 from .named_expr import NamedExpression, eval_expr
 
 
 class NonInitializedModel:
     """ Reference to a dynamic model that has not been created yet """
-    def __init__(self, model_class, config=None):
+    def __init__(self, model_class, config=None, source=None):
         self.model_class = model_class
         self.config = config
+        self.source = source
 
     @property
     def default_name(self):
@@ -89,10 +89,15 @@ class ModelDirectory:
             with self.lock:
                 model = self.get(name)
                 if isinstance(model, NonInitializedModel):
-                    config = self.eval_expr(model.config, batch=batch) or {}
-                    model_class = self.eval_expr(model.model_class, batch=batch)
-                    model = self.create_model(model_class, config)
-                    self.models[name] = model
+                    source = self.eval_expr(model.source, batch=batch)
+                    if source is None:
+                        config = self.eval_expr(model.config, batch=batch) or {}
+                        model_class = self.eval_expr(model.model_class, batch=batch)
+                        model = self.create_model(model_class, config)
+                        self.models.update({name: model})
+                    else:
+                        self.import_model(name, source, lock=False)
+                        model = self.models[name]
         return model
 
     def create_model(self, model_class, config=None):
@@ -107,7 +112,7 @@ class ModelDirectory:
         with self.lock:
             self.models.update({name: model})
 
-    def init_model(self, name=None, model_class=None, mode='dynamic', *args, config=None):
+    def init_model(self, name=None, model_class=None, mode='dynamic', *args, config=None, source=None):
         """ Initialize a static or dynamic model
 
         Parameters
@@ -125,30 +130,37 @@ class ModelDirectory:
 
         config : dict or Config
             model configurations parameters, where each key and value could be named expressions.
+
+        source
+            a model or a pipeline to import from
         """
         _ = args
         # workaround for a previous arg order
         if name in ['dynamic', 'static']:
             raise DeprecationWarning('Arguments order has changed to <model name>, <model class>, <mode>, <config>.')
 
-        model_class = model_class if model_class is not None else config.get('model_class')
-        if model_class is None:
+        if model_class is None and config is not None:
+            model_class = config.get('model_class')
+        if model_class is None and source is None:
             raise ValueError('model_class should be specified in the model config')
 
         if mode == 'static':
             model = self.create_model(model_class, config)
         else:
-            model = NonInitializedModel(model_class, config)
+            model = NonInitializedModel(model_class, config, source)
         self.add_model(name, model)
 
-    def import_model(self, name, source):
+    def import_model(self, name, source, lock=True):
         """ Import model from another pipeline or a model itself """
-        if isinstance(source, BaseModel):
-            model = source
-        else:
-            # than source is a pipeline (checking for it would cause cyclic import)
+        if isinstance(getattr(source, 'models', None), ModelDirectory):
+            # so source is a pipeline (checking for it would cause cyclic import)
             model = source.m(name)
-        self.add_model(name, model)
+        else:
+            model = source
+        if lock:
+            self.add_model(name, model)
+        else:
+            self.models.update({name: model})
 
     def save_model(self, name, *args, **kwargs):
         model = self.get_model_by_name(name)
