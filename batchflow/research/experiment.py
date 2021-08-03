@@ -70,7 +70,9 @@ class PipelineWrapper:
             return self.generator()
         if self.mode == 'func':
             return (self.pipeline.run(), *[self.pipeline.v(var) for var in self.variables])
-        return (self.pipeline.execute_for(batch), *[self.pipeline.v(var) for var in self.variables]) # if self.mode == 'execute_for'
+        batch = self.pipeline.execute_for(batch)
+        vars = [self.pipeline.v(var) for var in self.variables if var is not None]
+        return (batch, *vars) # if self.mode == 'execute_for'
 
     def generator(self):
         """ Generator returns batches from pipeline. Generator will stop when StopIteration will be raised. """
@@ -241,9 +243,10 @@ class ExecutableUnit:
                 self.output = next(self.iterator)
 
             for src, dst in zip(to_list(self.output), self.save_to):
-                results = self.experiment.results.get(dst, OrderedDict())
-                results[iteration] = src
-                self.experiment.results[dst] = results
+                if dst is not None:
+                    results = self.experiment.results.get(dst, OrderedDict())
+                    results[iteration] = src
+                    self.experiment.results[dst] = results
 
             eval_time = time.time() - start_time
             return self.output, eval_time
