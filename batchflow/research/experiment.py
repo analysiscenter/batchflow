@@ -185,7 +185,7 @@ class ExecutableUnit:
 
         self.iteration = 0
 
-        self.save_to = to_list(save_to or [])
+        self.save_to = save_to
 
 
     def set_unit(self, config, experiment):
@@ -242,11 +242,8 @@ class ExecutableUnit:
                     start_time = time.time()
                 self.output = next(self.iterator)
 
-            for src, dst in zip(to_list(self.output), self.save_to):
-                if dst is not None:
-                    results = self.experiment.results.get(dst, OrderedDict())
-                    results[iteration] = src
-                    self.experiment.results[dst] = results
+            if self.save_to:
+                self.save_output(iteration)
 
             eval_time = time.time() - start_time
             return self.output, eval_time
@@ -256,6 +253,24 @@ class ExecutableUnit:
     def must_execute(self, iteration, n_iters=None, last=False):
         """ Returns does unit must be executed for the current iteration. """
         return must_execute(iteration, self.when, n_iters, last)
+
+    def save_output(self, iteration):
+        """ Save output of the unit. """
+        if not isinstance(self.save_to, (list, tuple)):
+            src = [self.output]
+            dst = [self.save_to]
+        else:
+            src = self.output
+            dst = self.save_to
+
+        if len(src) != len(dst):
+            raise ValueError(f'Length of src and dst must be the same but src={src} and dst={dst}')
+
+        for _src, _dst in zip(src, dst):
+            if _dst is not None:
+                results = self.experiment.results.get(_dst, OrderedDict())
+                results[iteration] = _src
+                self.experiment.results[_dst] = results
 
     @property
     def src(self):

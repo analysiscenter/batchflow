@@ -327,7 +327,7 @@ class TestExecutor:
         executor = Executor(experiment, target='f', configs=[{'n': 10}, {'n': 20}], n_iters=None)
         executor.run()
 
-    @pytest.mark.parametrize('save_to', ['a', ['a', 'b', 'c']])
+    @pytest.mark.parametrize('save_to', ['a', ['a', 'b'], ['a', 'b', 'c']])
     def test_multiple_output(self, save_to):
         def func():
             return 1, 2, 3
@@ -335,7 +335,10 @@ class TestExecutor:
         research = Research().add_callable(func, save_to=save_to)
         research.run(dump_results=False)
 
-        assert len(research.monitor.exceptions) == 0
+        if isinstance(save_to, list) and len(save_to) != 3:
+            assert len(research.monitor.exceptions) != 0
+        else:
+            assert len(research.monitor.exceptions) == 0
 
 class TestResearch:
     @pytest.mark.parametrize('parallel', [False, True])
