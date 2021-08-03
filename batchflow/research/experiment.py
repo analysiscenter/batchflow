@@ -31,14 +31,17 @@ class PipelineWrapper:
             - 'generator': pipeline will be used as generator of batches
             - 'func': execute pipeline with `.run`
             - 'execute_for': execute pipeline with `.execute_for` with batch
+    variables : str, list, optional
+        variables to return from call
     """
-    def __init__(self, pipeline, mode='generator'):
+    def __init__(self, pipeline, mode='generator', variables=None):
         if mode not in['generator', 'func', 'execute_for']:
             raise ValueError(f'Unknown PipelineWrapper mode: {mode}')
         if isinstance(pipeline, str):
             pipeline = parse_name(pipeline)
         self.pipeline = pipeline
         self.mode = mode
+        self.variables = [None] + to_list(variables or [])
         self.config = None
 
     def __call__(self, config, batch=None, **kwargs):
@@ -53,11 +56,11 @@ class PipelineWrapper:
 
         Returns
         -------
-        generator, Pipeline or Batch
+        list or generator
             return depends on the mode:
                 - 'generator': generator
-                - 'func': Pipeline itself
-                - 'execute_for': processed batch
+                - 'func': Pipeline itself and variables values
+                - 'execute_for': processed batch and variables values
         """
         if self.config is None:
             self.config = {**config, **kwargs}
@@ -66,8 +69,8 @@ class PipelineWrapper:
         if self.mode == 'generator':
             return self.generator()
         if self.mode == 'func':
-            return self.pipeline.run()
-        return self.pipeline.execute_for(batch) # if self.mode == 'execute_for'
+            return (self.pipeline.run(), *[self.pipeline.v(var) for var in self.variables])
+        return (self.pipeline.execute_for(batch), *[self.pipeline.v(var) for var in self.variables]) # if self.mode == 'execute_for'
 
     def generator(self):
         """ Generator returns batches from pipeline. Generator will stop when StopIteration will be raised. """
@@ -154,9 +157,11 @@ class ExecutableUnit:
             - If list, must be list of int or str described above.
     args, kwargs : optional
         args and kwargs for unit call, by default None.
+    save_to : str or list, optional
+        names to save output from unit
     """
     def __init__(self, name, func=None, generator=None, root=False, when=1,
-                 args=None, kwargs=None, **other_kwargs):
+                 args=None, kwargs=None, save_to=None, **other_kwargs):
         self.name = name
         self.callable = func
         self.generator = generator
@@ -178,6 +183,8 @@ class ExecutableUnit:
 
         self.iteration = 0
 
+        self.save_to = to_list(save_to or [])
+
 
     def set_unit(self, config, experiment):
         """ Set config and experiment instance for the unit. """
@@ -193,7 +200,6 @@ class ExecutableUnit:
         if isinstance(src, PipelineWrapper) and isinstance(src.pipeline, (tuple, list)):
             pipeline = src.pipeline
             src.pipeline = getattr(self.experiment.instances[pipeline[0]], pipeline[1])
-            # setattr(self, attr, getattr(self.experiment.instances[pipeline[0]], pipeline[1]))
 
     def __call__(self, iteration, n_iters, last=False):
         """ Call unit: execute callable or get the next item from generator.
@@ -222,19 +228,24 @@ class ExecutableUnit:
             args = eval_expr(self.args, experiment=self.experiment)
             kwargs = eval_expr(self.kwargs, experiment=self.experiment)
             other_kwargs = eval_expr(self.other_kwargs, experiment=self.experiment)
+
+            start_time = time.time()
             if self.callable is not None:
-                start_time = time.time()
                 self.output = self.callable(*args, **kwargs, **other_kwargs)
-                eval_time = time.time() - start_time
             else:
-                start_time = time.time()
                 if self.iterator is None:
                     start_time = time.time()
                     self.iterator = self.generator(*args, **kwargs, **other_kwargs)
                 else:
                     start_time = time.time()
                 self.output = next(self.iterator)
-                eval_time = time.time() - start_time
+
+            for src, dst in zip(to_list(self.output), self.save_to):
+                results = self.experiment.results.get(dst, OrderedDict())
+                results[iteration] = src
+                self.experiment.results[dst] = results
+
+            eval_time = time.time() - start_time
             return self.output, eval_time
 
         return None, None
@@ -251,7 +262,7 @@ class ExecutableUnit:
 
     def __copy__(self):
         """ Create copy of the unit. """
-        attrs = ['name', 'callable', 'generator', 'root', 'when', 'args', 'kwargs']
+        attrs = ['name', 'callable', 'generator', 'root', 'when', 'args', 'kwargs', 'save_to']
         params = {attr if attr !='callable' else 'func': copy(getattr(self, attr)) for attr in attrs}
         new_unit = ExecutableUnit(**params, **copy(self.other_kwargs))
         return new_unit
@@ -379,11 +390,9 @@ class Experiment:
             kwargs[mode] = src
 
         name = self.add_postfix(name)
-        self.actions[name] = ExecutableUnit(name=name, args=args, when=when, **kwargs)
-        if save_to is not None:
-            self.save(src=O(name), dst=save_to, when=when, copy=False)
-            if dump is not None:
-                self.dump(save_to, when=dump)
+        self.actions[name] = ExecutableUnit(name=name, args=args, when=when, save_to=save_to, **kwargs)
+        if dump is not None:
+            self.dump(save_to, when=dump)
         return self
 
     def add_callable(self, name, func=None, args=None, when=1, save_to=None, dump=None, **kwargs):
@@ -496,18 +505,16 @@ class Experiment:
         """
         if branch is None:
             mode = 'func' if run else 'generator'
-            pipeline = PipelineWrapper(root if root is not None else name, mode=mode)
-            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), when=when, **kwargs)
+            pipeline = PipelineWrapper(root if root is not None else name, mode=mode, variables=variables)
+            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), when=when, save_to=variables, **kwargs)
         else:
             root = PipelineWrapper(root, mode='generator')
-            branch = PipelineWrapper(branch, mode='execute_for')
+            branch = PipelineWrapper(branch, mode='execute_for', variables=variables)
 
             self.add_generator(f'{name}_root', generator=root, config=EC(), when=when, **kwargs)
-            self.add_callable(f'{name}', func=branch, config=EC(), batch=O(f'{name}_root'), when=when, **kwargs)
+            self.add_callable(f'{name}', func=branch, config=EC(), batch=O(f'{name}_root'), save_to=variables,
+                              when=when, **kwargs)
         if variables is not None:
-            ppl_name = name if branch is None else f'{name}'
-            for var in to_list(variables):
-                self.save(E(ppl_name).pipeline.v(var), var, when=when)
             if dump is not None:
                 self.dump(variables, dump)
         return self
