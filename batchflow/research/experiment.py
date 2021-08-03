@@ -859,7 +859,7 @@ class Executor:
                 self.research.monitor.start_experiment(experiment)
         for iteration in iterations:
             for unit_name, unit in self.experiment_template.actions.items():
-                if unit.root:
+                if unit.root or len(self.experiments) == 1:
                     self.call_root(iteration, unit_name)
                 else:
                     self.parallel_call(iteration, unit_name, target=self.target, debug=self.debug) #pylint:disable=unexpected-keyword-arg
@@ -888,12 +888,14 @@ class Executor:
     def call_root(self, iteration, unit_name):
         """ Call root executable unit. """
         # TODO: experiment must be alive if error was in the branch after all roots
-        self.experiments[0].call(unit_name, iteration, self.n_iters)
-        for experiment in self.experiments[1:]:
-            if self.finalize or (not experiment.is_failed) or unit_name.startswith('__'):
-                experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
-            for attr in ['_is_alive', '_is_failed', 'iteration']:
-                setattr(experiment, attr, getattr(self.experiments[0], attr))
+        if self.finalize or (not self.experiments[0].is_failed) or unit_name.startswith('__'):
+            self.experiments[0].call(unit_name, iteration, self.n_iters)
+
+            for experiment in self.experiments[1:]:
+                if self.finalize or (not experiment.is_failed) or unit_name.startswith('__'):
+                    experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
+                for attr in ['_is_alive', '_is_failed', 'iteration']:
+                    setattr(experiment, attr, getattr(self.experiments[0], attr))
 
     def send_results(self):
         """ Put experiment results and profiling into research results. """
