@@ -1337,7 +1337,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         elif oper == 'softplus':
             output = torch.nn.functional.softplus(inputs)
         elif oper == 'sigmoid':
-            output = torch.nn.functional.sigmoid(inputs)
+            output = torch.sigmoid(inputs)
         elif oper == 'proba':
             output = torch.nn.functional.softmax(inputs, dim=1)
         elif oper == 'labels':
