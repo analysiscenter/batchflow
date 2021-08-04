@@ -15,6 +15,9 @@ from ..profiler import Profiler
 
 class ExperimentProfiler(Profiler):
     """ Profiler for Research experiments. """
+
+    UNIT_NAME = 'unit'
+
     def show_profile_info(self, per_iter=False, per_experiment=False, detailed=False,
                           groupby=None, columns=None, sortby=None, limit=10):
         """ Show stored profiling information with varying levels of details.
@@ -44,7 +47,7 @@ class ExperimentProfiler(Profiler):
         detailed = False if not self.detailed else detailed
 
         if per_iter is False and detailed is False:
-            groupby = ['experiment', 'action', 'iter'] if per_experiment else ['action', 'iter']
+            groupby = ['experiment', 'unit', 'iter'] if per_experiment else ['unit', 'iter']
             columns = columns or ['total_time', 'eval_time', 'unit_time']
             sortby = sortby or ('total_time', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
@@ -56,33 +59,34 @@ class ExperimentProfiler(Profiler):
                 result = result.sort_index(level=0)
 
         elif per_iter is False and detailed is True:
-            groupby = ['experiment', 'action', 'id'] if per_experiment else ['action', 'id']
+            groupby = ['experiment', 'unit', 'id'] if per_experiment else ['unit', 'id']
             columns = columns or ['ncalls', 'tottime', 'cumtime']
             sortby = sortby or ('tottime', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
             level = [0, 1] if per_experiment else 0
             result = (self.profile_info.reset_index().groupby(groupby).agg(aggs)
                     .sort_values([*groupby[:-1], sortby], ascending=[True] * (len(groupby)-1) + [False])
-                    .groupby(level=level).apply(lambda df: df[:limit]).droplevel(level))
+                    .groupby(level=level).apply(lambda df: df.iloc[:limit].reset_index(level)))
 
         elif per_iter is True and detailed is False:
-            groupby = groupby or ['iter', 'action']
+            groupby = groupby or ['iter', 'unit']
             groupby = ['experiment', *groupby] if per_experiment else groupby
 
-            columns = columns or ['action', 'total_time', 'eval_time', 'unit_time']
+            columns = columns or ['unit', 'total_time', 'eval_time', 'unit_time']
             sortby = sortby or 'total_time'
             result = (self.profile_info.reset_index().groupby(groupby)[columns].mean()
                       .sort_values([*groupby[:-1], sortby], ascending=[True] * (len(groupby)-1) + [False]))
 
         elif per_iter is True and detailed is True:
-            groupby = groupby or ['iter', 'action', 'id']
+            groupby = groupby or ['iter', 'unit', 'id']
             groupby = ['experiment', *groupby] if per_experiment else groupby
 
             columns = columns or ['ncalls', 'tottime', 'cumtime']
             sortby = sortby or 'tottime'
+            level = [0, 1] if per_experiment else 0
             result = (self.profile_info.reset_index().set_index(groupby)[columns]
-                      .sort_values([*groupby[:-1], sortby], ascending=[True] * (len(groupby)-1) + [False])
-                      .groupby(level=[0, 1]).apply(lambda df: df[:limit]).droplevel([0, 1]))
+                    .sort_values([*groupby[:-1], sortby], ascending=[True] * (len(groupby)-1) + [False])
+                    .groupby(level=level).apply(lambda df: df.iloc[:limit].reset_index(level)))
         return result
 
 class ExecutorProfiler(ExperimentProfiler):
@@ -114,4 +118,4 @@ class ResearchProfiler(ExperimentProfiler):
         paths = os.path.join(self.research_name, 'experiments', '*', 'profiler.feather')
         for path in glob.glob(paths):
             experiment = os.path.basename(os.path.dirname(path))
-            self.experiments_info[experiment] = pd.read_feather(path).set_index(['action', 'id'])
+            self.experiments_info[experiment] = pd.read_feather(path).set_index(['unit', 'id'])
