@@ -8,6 +8,7 @@ import itertools
 import traceback
 from collections import OrderedDict
 import json
+import time
 import dill
 
 from .. import Config, Pipeline, parallel, spawn_seed_sequence, make_rng, make_seed_sequence
@@ -16,6 +17,7 @@ from ..named_expr import eval_expr
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
 from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify
+from .profiler import ExperimentProfiler, ExecutorProfiler
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -215,14 +217,21 @@ class ExecutableUnit:
             kwargs = eval_expr(self.kwargs, experiment=self.experiment)
             other_kwargs = eval_expr(self.other_kwargs, experiment=self.experiment)
             if self.callable is not None:
+                start_time = time.time()
                 self.output = self.callable(*args, **kwargs, **other_kwargs)
+                eval_time = time.time() - start_time
             else:
+                start_time = time.time()
                 if self.iterator is None:
+                    start_time = time.time()
                     self.iterator = self.generator(*args, **kwargs, **other_kwargs)
+                else:
+                    start_time = time.time()
                 self.output = next(self.iterator)
-            return self.output
+                eval_time = time.time() - start_time
+            return self.output, eval_time
 
-        return None
+        return None, None
 
     def must_execute(self, iteration, n_iters=None, last=False):
         """ Returns does unit must be executed for the current iteration. """
@@ -308,6 +317,8 @@ class Experiment:
         self.exception = None
         self.random_seed = None
         self.random = None
+
+        self._profiler = None
 
     @property
     def is_alive(self):
@@ -597,6 +608,8 @@ class Experiment:
         self.full_path = os.path.join(self.name, self.experiment_path)
         if not os.path.exists(self.full_path):
             os.makedirs(self.full_path)
+        else:
+            raise ValueError(f'Experiment folder {self.full_path} already exists.')
 
     def dump_config(self):
         """ Dump config (as serialized ConfigAlias instance). """
@@ -628,7 +641,8 @@ class Experiment:
             'loglevel': 'debug',
             'name': 'executor',
             'monitor': None,
-            'debug': False
+            'debug': False,
+            'profile': False
         }
         for attr in defaults:
             if self.research:
@@ -651,6 +665,15 @@ class Experiment:
             else:
                 self.actions[name].set_unit(config=config, experiment=self)
 
+        profile = self.profile
+
+        if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
+            self._profiler = ExperimentProfiler(detailed=True)
+        elif profile == 1 or profile is True:
+            self._profiler = ExperimentProfiler(detailed=False)
+        else: # 0, False, None
+            self._profiler = None
+
     def create_logger(self):
         """ Create experiment logger. """
         name = f"{self.name}." if self.name else ""
@@ -666,13 +689,16 @@ class Experiment:
     def call(self, name, iteration, n_iters=None):
         """ Execute one iteration of the experiment. """
         if self.is_alive or name.startswith('__'):
+            if self._profiler:
+                self._profiler.enable()
+
             self.last = self.last or (iteration + 1 == n_iters)
             self.iteration = iteration
 
             self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
             exception = StopIteration if self.debug else Exception
             try:
-                self.outputs[name] = self.actions[name](iteration, n_iters, last=self.last)
+                self.outputs[name], unit_time = self.actions[name](iteration, n_iters, last=self.last)
             except exception as e: #pylint:disable=broad-except
                 self.is_failed = True
                 self.last = True
@@ -692,6 +718,20 @@ class Experiment:
                     self.monitor.execute_iteration(name, self)
             if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
                 self.is_alive = False
+
+        if self._profiler:
+            self._profiler.disable(iteration, name, unit_time=unit_time, experiment=self.id)
+
+    def show_profile_info(self, **kwargs):
+        return self._profiler.show_profile_info(**kwargs)
+
+    @property
+    def profile_info(self):
+        return self._profiler.profile_info
+
+    def dump_profile_info(self):
+        if self.dump_results and self._profiler is not None:
+            self.profile_info.reset_index().to_feather(os.path.join(self.full_path, 'profiler.feather'))
 
     def __str__(self):
         repr = "instances:\n"
@@ -813,6 +853,7 @@ class Executor:
             experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
             experiment.close_logger()
         self.send_results()
+        self.dump_profile_info()
 
     @parallel(init='_parallel_init_call')
     def parallel_call(self, experiment, iteration, unit_name):
@@ -836,10 +877,31 @@ class Executor:
                 setattr(experiment, attr, getattr(self.experiments[0], attr))
 
     def send_results(self):
-        """ Put experiment results into research results. """
+        """ Put experiment results and profiling into research results. """
         if self.research is not None:
             for experiment in self.experiments:
                 self.research.results.put(experiment.id, experiment.results, experiment.config_alias)
+                self.research.profiler.put(experiment.id, self.profile_info)
+
+    def dump_profile_info(self):
+        for experiment in self.experiments:
+            experiment.dump_profile_info()
+
+    @property
+    def _profiler(self):
+        if self.experiments[0].profile:
+            return ExecutorProfiler(self.experiments)
+        return None
+
+    @property
+    def profile_info(self):
+        """ Profile info. """
+        if self._profiler:
+            return self._profiler.profile_info
+        return None
+
+    def show_profile_info(self, **kwargs):
+        return self._profiler.show_profile_info(**kwargs)
 
 def _create_instance(experiments, item_name):
     if not isinstance(experiments, list):

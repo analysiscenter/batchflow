@@ -1,4 +1,4 @@
-#pylint:disable=logging-fstring-interpolation
+#pylint:disable=logging-fstring-interpolation, too-many-arguments
 """ Research class for muliple parallel experiments. """
 
 import os
@@ -20,6 +20,7 @@ from .distributor import Distributor, DynamicQueue
 from .experiment import Experiment, Executor
 from .results import ResearchResults
 from .utils import create_logger, to_list
+from .profiler import ResearchProfiler
 
 from ..utils_random import make_seed_sequence
 
@@ -76,6 +77,11 @@ class Research:
         self.debug = False
         self.finalize = True
         self.random_seed = None
+        self.profile = False
+        self.profiler = None
+        self.memory_ratio = None
+        self.n_gpu_checks = 3
+        self.gpu_check_delay = 5
 
     def __getattr__(self, key):
         if self.monitor is not None and key in self.monitor.SHARED_VARIABLES:
@@ -224,7 +230,8 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=True, env_meta=None, seed=None):
+            debug=False, finalize=True, env_meta=None, seed=None, profile=False,
+            memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5):
         """ Run research.
 
         Parameters
@@ -267,6 +274,14 @@ class Research:
             kwargs for :meth:`.Research.attach_env_meta`.
         seed : bool or int or object with a seed sequence attribute
             see :meth:`~batchflow.utils_random.make_seed_sequence`.
+        profile : bool, optional
+            perform Research profiling or not, be default False.
+        memory_ratio : float or None, optional
+            the ratio of free memory for all devices in worker to start experiment. If None, check will be skipped.
+        n_gpu_checks : int, optional
+            the number of such checks
+        gpu_check_delay : float, optional
+            time in seconds between checks.
 
         Returns
         -------
@@ -278,11 +293,6 @@ class Research:
         If `update_domain` callable is defined, domain will be updated with the corresponding function
         accordingly to `when` parameter of :meth:`~.Research.update_domain`.
         """
-        if not parallel:
-            if isinstance(workers, int):
-                workers = 1
-            else:
-                workers = [workers[0]]
 
         self.name = name or self.name
 
@@ -296,6 +306,11 @@ class Research:
         self.loglevel = loglevel
         self.bar = bar
         self.detach = detach
+        self.profile = profile
+
+        self.memory_ratio = memory_ratio
+        self.n_gpu_checks = n_gpu_checks
+        self.gpu_check_delay = gpu_check_delay
 
         if debug and (parallel or executor_target not in ['f', 'for']):
             raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")
@@ -336,6 +351,7 @@ class Research:
 
         self.monitor = ResearchMonitor(self, self.name, bar=self.bar) # process execution signals
         self.results = ResearchResults(self.name, self.dump_results)
+        self.profiler = ResearchProfiler(self.name, self.profile)
 
         def _run():
             self.monitor.start(self.dump_results)
@@ -381,11 +397,15 @@ class Research:
     def _load(name):
         with open(os.path.join(name, 'research.dill'), 'rb') as f:
             research = dill.load(f)
-        research.results = ResearchResults(research.name, research.dump_results)
+        if research.dump_results:
+            research.results = ResearchResults(research.name, research.dump_results)
+            research.profiler = ResearchProfiler(research.name, research.profile)
+            research.results.load()
+            research.profiler.load()
         return research
 
     @classmethod
-    def remove(cls, name, ask=True):
+    def remove(cls, name, ask=True, force=False):
         """ Remove research folder.
 
         Parameters
@@ -394,16 +414,20 @@ class Research:
             research path to remove.
         ask : bool, optional
             display a dialogue with a question about removing or not, by default True.
+        force : bool
+            Remove folder even if it is not research folder.
         """
         if not os.path.exists(name):
             warnings.warn(f"Folder {name} doesn't exist.")
-        if not cls.folder_is_research(name):
-            raise ValueError(f'{name} is not a research folder.')
-        answer = True
-        if ask:
-            answer = 'yes'.startswith(input(f'Remove {name}? [y/n]').lower())
-        if answer:
-            shutil.rmtree(name)
+        else:
+            if not cls.folder_is_research(name):
+                if not force:
+                    raise ValueError(f'{name} is not a research folder.')
+            answer = True
+            if ask:
+                answer = 'yes'.startswith(input(f'Remove {name}? [y/n]').lower())
+            if answer:
+                shutil.rmtree(name)
 
     @classmethod
     def folder_is_research(cls, name):

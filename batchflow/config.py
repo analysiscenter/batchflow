@@ -245,7 +245,9 @@ class Config:
     def __add__(self, other):
         if isinstance(other, dict):
             other = Config(other)
-        return Config([*self.flatten().items(), *other.flatten().items()])
+        if isinstance(other, Config):
+            return Config([*self.flatten().items(), *other.flatten().items()])
+        return NotImplemented
 
     def __radd__(self, other):
         if isinstance(other, dict):
