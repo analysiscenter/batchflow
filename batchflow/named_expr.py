@@ -14,6 +14,7 @@ class _DummyBatch:
     def __init__(self, pipeline):
         self.pipeline = pipeline
         self.dataset = pipeline.dataset if pipeline is not None else None
+        self.indices = [0, 1, 2]
 
 
 def eval_expr(expr, no_eval=None, **kwargs):
