@@ -29,7 +29,7 @@ Alias
     :member-order: bysource
 
 ConfigAlias
---------
+-----------
 
 .. autoclass:: batchflow.research.ConfigAlias
     :members:
@@ -38,7 +38,7 @@ ConfigAlias
 
 
 Experiment
---------
+----------
 
 .. autoclass:: batchflow.research.Experiment
     :members:
@@ -46,7 +46,7 @@ Experiment
     :member-order: bysource
 
 ResearchResults
---------
+---------------
 
 .. autoclass:: batchflow.research.ResearchResults
     :members:
@@ -54,7 +54,7 @@ ResearchResults
     :member-order: bysource
 
 ResearchResults
---------
+---------------
 
 .. autoclass:: batchflow.research.ResearchResults
     :members:

@@ -167,11 +167,13 @@ class TorchModel(BaseModel, VisualizationMixin):
         - ``{'decay': {'name: 'exp', 'frequency': 5, 'first_iter': 6, 'last_iter': 20}}``
         - ``{'decay': {'name': 'StepLR', 'steps_size': 10000, 'frequency': 5}}``
         - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5, 'frequency': 15, 'first_iter': 400}``
-        - ``{'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
-                       {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'first_iter': 901}]``
+        - .. code-block:: python
+
+            {'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
+                       {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'first_iter': 901}]
 
     device : str, torch.device or sequence
-        If str, a device name (e.g. 'cpu' or 'gpu:0'). Regular expressions are also allowed (e.g. 'gpu:*').
+        If str, a device name (e.g. ``'cpu'`` or ``'gpu:0'``). Regular expressions are also allowed (e.g. ``'gpu:*'``).
         If torch.device, then device to be used.
         If sequence, then each entry must be in one of previous formats, and batch data is paralleled across them.
         Default behaviour is to use one (and only one) device of the best available type (priority to GPU over CPU).

@@ -1,10 +1,6 @@
 name: docs
 
-on:
-  pull_request:
-    types: [closed]
-    branches:
-    - master
+on: [push, pull_request]
 
 jobs:
 
