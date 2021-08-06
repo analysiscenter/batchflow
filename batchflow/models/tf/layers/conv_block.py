@@ -553,7 +553,7 @@ class ConvBlock:
     Simple encoder that reduces spatial dimensions by 32 times and increases number
     of features to maintain the same tensor size::
 
-    layer = ConvBlock({layout='cnap', filters='same*2'}, inputs=inputs, n_repeats=5)
+        layer = ConvBlock({layout='cnap', filters='same*2'}, inputs=inputs, n_repeats=5)
     """
     def __init__(self, *args, base_block=BaseConvBlock, n_repeats=1, **kwargs):
         base_block = kwargs.pop('base', None) or base_block

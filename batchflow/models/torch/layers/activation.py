@@ -59,8 +59,10 @@ class Activation(nn.Module):
     activation : str, nn.Module, callable or None
         If None, then identity function `f(x) = x`.
         If str, then name from `torch.nn` or `rsoftmax`.
+
             `rsoftmax` is a RadixSortmax from the paper: Hang Zhang et al. "`ResNeSt: Split-Attention Networks
             <https://arxiv.org/abs/2004.08955>`_".
+
         Also can be an instance of activation module (e.g. `torch.nn.ReLU()` or `torch.nn.ELU(alpha=2.0)`),
         or a class of activation module (e.g. `torch.nn.ReLU` or `torch.nn.ELU`),
         or a callable (e.g. `F.relu` or your custom function).

@@ -1352,7 +1352,7 @@ class Pipeline:
             whether to use profiler
 
         random
-            a random state (see :fun:`~.make_rng`).
+            a random state (see :meth:`~.make_rng`).
             If not specified, RNG will be created with a random entropy.
 
         Examples

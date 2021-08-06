@@ -19,7 +19,7 @@ class Dataset(Baseset):
     Attributes
     ----------
     batch_class : Batch
-
+    
     index : DatasetIndex or FilesIndex
 
     indices : class:`numpy.ndarray`
