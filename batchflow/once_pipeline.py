@@ -137,8 +137,8 @@ class OncePipeline:
         return self
 
 
-    def init_model(self, name, model_class=None, mode='dynamic', config=None):
-        """ Initialize a static or dynamic model
+    def init_model(self, name, model_class=None, mode='dynamic', config=None, source=None):
+        """ Initialize a static or dynamic model by building or importing it
 
         Parameters
         ----------
@@ -156,31 +156,41 @@ class OncePipeline:
         config : dict or Config
             (optional) model configurations parameters, where each key and value could be named expressions.
 
+        source
+            a model or a pipeline to import from
+
         Examples
         --------
-        >>> pipeline.before.init_model('my-model', MyModel, 'static')
+        Build a model::
 
-        >>> pipeline.before
+            pipeline.before.init_model('my-model', MyModel, 'static')
+
+        Import a model::
+
+            pipeline.before.init_model('my-model', source=train_pipeline)
+
+        Build a model with a config::
+
+            pipeline.before
               .init_variable('images_shape', [256, 256])
               .init_model('my_model', MyModel, 'static', config={'input_shape': V('images_shape')})
 
-        >>> pipeline.before
+            pipeline.before
               .init_variable('shape_name', 'images_shape')
               .init_model('my_model', C('model'), 'dynamic', config={V('shape_name)': B('images_shape')})
-
         """
-        self.pipeline.models.init_model(name, model_class, mode=mode, config=config)
+        self.pipeline.models.init_model(name, model_class, mode=mode, config=config, source=source)
         return self
 
-    def import_model(self, name, model):
-        """ Import a model from another pipeline
+    def import_model(self, name, source):
+        """ Import a model
 
         Parameters
         ----------
         name : str
             a name with which the model is stored in this pipeline
 
-        model : model
+        source
             a model or a pipeline to import from
 
         Examples
@@ -198,7 +208,7 @@ class OncePipeline:
 
             pipeline.before.import_model('my-model', train_pipeline.m('resnet'))
         """
-        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, model_name=name))
+        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=source, model_name=name))
 
     def _exec_import_model(self, action):
         self.pipeline._exec_import_model(None, action)      # pylint:disable=protected-access
@@ -214,7 +224,7 @@ class OncePipeline:
     def load_model(self, name, model_class=None, mode='dynamic', *args, **kwargs):
         """ Load a model """
         if mode == 'static':
-            self.pipeline.models.load_model(name, model_class, mode, *args, **kwargs)
+            self.pipeline.load_model_now(name, model_class, mode, *args, **kwargs)
             return self
         return self._add_action(LOAD_MODEL_ID, *args,
                                 _args=dict(mode=mode, model_class=model_class, model_name=name),

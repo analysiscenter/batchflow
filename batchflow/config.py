@@ -245,7 +245,9 @@ class Config:
     def __add__(self, other):
         if isinstance(other, dict):
             other = Config(other)
-        return Config([*self.flatten().items(), *other.flatten().items()])
+        if isinstance(other, Config):
+            return Config([*self.flatten().items(), *other.flatten().items()])
+        return NotImplemented
 
     def __radd__(self, other):
         if isinstance(other, dict):
@@ -370,4 +372,5 @@ class Config:
         return iter(self.config)
 
     def __repr__(self):
-        return "Config(\n{}\n)".format(pformat(self.config))
+        lines = [4 * ' ' + line for line in pformat(self.config).split('\n')]
+        return "Config(\n{}\n)".format('\n'.join(lines), indent=4)

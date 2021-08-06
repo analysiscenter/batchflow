@@ -6,14 +6,7 @@ from functools import partial
 import threading
 import asyncio
 import logging
-from pstats import Stats
-from cProfile import Profile
 import warnings
-
-try:
-    import pandas as pd
-except ImportError:
-    from . import _fake as pd
 
 from .base import Baseset
 from .config import Config
@@ -31,6 +24,7 @@ from ._const import *       # pylint:disable=wildcard-import
 from .utils import save_data_to
 from .utils_random import make_rng
 from .pipeline_executor import PipelineExecutor
+from .profiler import PipelineProfiler
 
 
 METRICS = dict(
@@ -106,20 +100,16 @@ class Pipeline:
         self.random_seed = None
 
         self._profiler = None
-        self.profile_info = None
-        self._profile_info_lock = threading.Lock()
 
     def __getstate__(self):
         state = self.__dict__.copy()
         state['random'] = getattr(self._local, 'random', None)
         state.pop('_local')
-        state.pop('_profile_info_lock')
         state['_profiler'] = None
         state['_batch_generator'] = None
         return state
 
     def __setstate__(self, state):
-        self._profile_info_lock = threading.Lock()
         self._local = threading.local()
         for k, v in state.items():
             setattr(self, k, v)
@@ -839,99 +829,6 @@ class Pipeline:
                 batch = self._exec_all_actions(batch, action['pipeline']._actions)  # pylint: disable=protected-access
         return batch
 
-    def _add_profile_info(self, batch, action, exec_time, **kwargs):
-        name = self.get_action_name(action, add_index=True)
-        iter_no = batch.iteration
-
-        if isinstance(self._profiler, Profile):
-            stats = Stats(self._profiler)
-            self._profiler.clear()
-
-            indices, values = [], []
-            for key, value in stats.stats.items():
-                for k, v in value[4].items():
-                    # action name, method_name, file_name, line_no, callee
-                    indices.append((name, '{}::{}::{}::{}'.format(key[2], *k)))
-                    row_dict = {
-                        'iter': iter_no, 'total_time': exec_time, 'pipeline_time': stats.total_tt, # base stats
-                        'ncalls': v[0], 'tottime': v[2], 'cumtime': v[3], # detailed stats
-                        'batch_id': id(batch), **kwargs
-                    }
-                    values.append(row_dict)
-        else:
-            indices = [(name, '')]
-            values = [{'iter': iter_no, 'total_time': exec_time, 'pipeline_time': exec_time, 'batch_id': id(batch),
-                       **kwargs}]
-
-        multiindex = pd.MultiIndex.from_tuples(indices, names=['action', 'id'])
-        df = pd.DataFrame(values, index=multiindex)
-
-        with self._profile_info_lock:
-            if self.profile_info is None:
-                self.profile_info = df
-            else:
-                self.profile_info = self.profile_info.append(df)
-
-    def show_profile_info(self, per_iter=False, detailed=False,
-                          groupby=None, columns=None, sortby=None, limit=10):
-        """ Show stored profiling information with varying levels of details.
-
-        Parameters
-        ----------
-        per_iter : bool
-            Whether to make an aggregation over iters or not.
-        detailed : bool
-            Whether to use information from :class:`cProfiler` or not.
-        groupby : str or sequence of str
-            Used only when `per_iter` is True, directly passed to pandas.
-        columns : sequence of str
-            Columns to show in resultining dataframe.
-        sortby : str or tuple of str
-            Column id to sort on. Note that if data is aggregated over iters (`per_iter` is False),
-            then it must be a full identificator of a column.
-        limit : int
-            Limits the length of resulting dataframe.
-        parse : bool
-            Allows to re-create underlying dataframe from scratches.
-        """
-        if self.profile_info is None:
-            warnings.warn("Profiling has not been enabled.")
-            return None
-
-        detailed = False if not isinstance(self._profiler, Profile) else detailed
-
-        if per_iter is False and detailed is False:
-            columns = columns or ['total_time', 'pipeline_time']
-            sortby = sortby or ('total_time', 'sum')
-            aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.groupby(['action', 'iter'])[columns].mean().groupby('action').agg(aggs)
-                      .sort_values(sortby, ascending=False))
-
-        elif per_iter is False and detailed is True:
-            columns = columns or ['ncalls', 'tottime', 'cumtime']
-            sortby = sortby or ('tottime', 'sum')
-            aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.reset_index().groupby(['action', 'id']).agg(aggs)
-                      .sort_values(['action', sortby], ascending=[True, False])
-                      .groupby(level=0).apply(lambda df: df[:limit]).droplevel(0))
-
-        elif per_iter is True and detailed is False:
-            groupby = groupby or ['iter', 'action']
-            columns = columns or ['action', 'total_time', 'pipeline_time', 'batch_id']
-            sortby = sortby or 'total_time'
-            result = (self.profile_info.reset_index().groupby(groupby)[columns].mean()
-                      .sort_values(['iter', sortby], ascending=[True, False]))
-
-        elif per_iter is True and detailed is True:
-            groupby = groupby or ['iter', 'action', 'id']
-            columns = columns or ['ncalls', 'tottime', 'cumtime']
-            sortby = sortby or 'tottime'
-            result = (self.profile_info.reset_index().set_index(groupby)[columns]
-                      .sort_values(['iter', 'action', sortby], ascending=[True, True, False])
-                      .groupby(level=[0, 1]).apply(lambda df: df[:limit]).droplevel([0, 1]))
-        return result
-
-
     def _exec_all_actions(self, batch, actions=None, iteration=None):
         join_batches = None
         actions = actions or self._actions
@@ -941,9 +838,7 @@ class Pipeline:
 
         for action in actions:
             if self._profiler:
-                start_time = time.time()
-                if isinstance(self._profiler, Profile):
-                    self._profiler.enable()
+                self._profiler.enable()
 
             if action.get('#dont_run', False):
                 pass
@@ -974,16 +869,20 @@ class Pipeline:
                     action['args'] = join_batches + action['args']
                     join_batches = None
 
-                batch, eval_time = self._exec_one_action(batch, action, iteration=iteration)
+                batch, action_time = self._exec_one_action(batch, action, iteration=iteration)
 
             if self._profiler:
-                if isinstance(self._profiler, Profile):
-                    self._profiler.disable()
-                exec_time = time.time() - start_time
-                self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time,
-                                       eval_time=eval_time)
+                name = self.get_action_name(action, add_index=True)
+                self._profiler.disable(batch.iteration, name, batch_id=id(batch), action_time=action_time)
 
         return batch
+
+    def show_profile_info(self, **kwargs):
+        return self._profiler.show_profile_info(**kwargs)
+
+    @property
+    def profile_info(self):
+        return self._profiler.profile_info
 
     def _needs_exec(self, batch, action):
         if action['proba'] is None:
@@ -1036,8 +935,8 @@ class Pipeline:
         """ A shorter alias for get_model_by_name() """
         return self.get_model_by_name(name, batch=batch)
 
-    def init_model(self, name, model_class=None, mode='dynamic', config=None):
-        """ Initialize a static or dynamic model
+    def init_model(self, name, model_class=None, mode='dynamic', config=None, source=None):
+        """ Initialize a static or dynamic model by building or importing it
 
         Parameters
         ----------
@@ -1055,23 +954,34 @@ class Pipeline:
         config : dict or Config
             model configurations parameters, where each key and value could be named expressions.
 
+        source
+            a model or a pipeline to import from
+
         Examples
         --------
-        >>> pipeline.init_model('my-model', MyModel, 'static')
+        Build a model::
 
-        >>> pipeline
+            pipeline.init_model('my-model', MyModel, 'static')
+
+        Import a model::
+
+            pipeline.init_model('my-model', source=train_pipeline)
+
+        Build a model with a config::
+
+            pipeline
               .init_variable('images_shape', [256, 256])
               .init_model('my_model', MyModel, 'static', config={'input_shape': V('images_shape')})
 
-        >>> pipeline
+            pipeline
               .init_variable('shape_name', 'images_shape')
               .init_model('my_model', C('model'), 'dynamic', config={V('shape_name)': B('images_shape')})
 
         """
-        self.before.init_model(name, model_class, mode=mode, config=config)
+        self.before.init_model(name, model_class, mode=mode, config=config, source=source)
         return self
 
-    def import_model(self, name, model):
+    def import_model(self, name, source):
         """ Import a model from another pipeline
 
         Parameters
@@ -1079,7 +989,7 @@ class Pipeline:
         name : str
             a name with which the model is stored in this pipeline
 
-        model : model or pipeline
+        source
             a model or a pipeline to import from
 
         Examples
@@ -1096,7 +1006,7 @@ class Pipeline:
 
             pipeline.import_model('my-model', train_pipeline)
         """
-        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, model_name=name))
+        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=source, model_name=name))
 
     def _exec_import_model(self, batch, action):
         model_name = self._eval_expr(action['model_name'], batch=batch)
@@ -1486,10 +1396,10 @@ class Pipeline:
         self.random_seed = seed
 
         if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
-            self._profiler = Profile()
-        elif profile is True or profile == 1:
-            self._profiler = True
-        else:
+            self._profiler = PipelineProfiler(detailed=True)
+        elif profile == 1 or profile is True:
+            self._profiler = PipelineProfiler(detailed=False)
+        else: # 0, False, None
             self._profiler = None
 
 
@@ -1599,7 +1509,7 @@ class Pipeline:
         target : 'threads' or 'mpc'
             batch parallelization engine used for prefetching (default='threads').
             'mpc' rarely works well due to complicated and slow python's inter-process communications.
-            Don't use pipeline variables and models in mpc-mode as each bach is being processed in
+            Don't use pipeline variables and models in mpc-mode as each batch is being processed in
             a separate copy of the pipeline.
 
         reset : list of str, str or bool
@@ -1645,22 +1555,25 @@ class Pipeline:
         batch_res = self.execute_for(batch)
         return batch_res
 
-    def next_batch(self, *args, **kwargs):
+    def next_batch(self, *args, n_epochs=None, **kwargs):
         """ Get the next batch and execute all lazy actions
+
+        Notes
+        -----
+        `n_epochs` is None by default to allow for infinite batch generation.
 
         See also
         --------
         :meth:`~.Pipeline.gen_batch`
         """
-        if len(args) == 0 and len(kwargs) == 0:
-            if self._lazy_run is None:
-                raise RuntimeError("next_batch without arguments requires a lazy run at the end of the pipeline")
+        if len(args) == 0 and len(kwargs) == 0 and self._lazy_run is not None:
             args, kwargs = self._lazy_run
-            batch = self.next_batch(*args, **kwargs)
         else:
-            if self._batch_generator is None:
-                self._batch_generator = self.gen_batch(*args, reset=None, **kwargs)
-            batch = next(self._batch_generator)
+            kwargs['n_epochs'] = n_epochs
+
+        if self._batch_generator is None:
+            self._batch_generator = self.gen_batch(*args, reset=None, **kwargs)
+        batch = next(self._batch_generator)
 
         return batch
 
@@ -1676,7 +1589,14 @@ class Pipeline:
             self._lazy_run = args, kwargs
             return self
 
+        if len(args) == 0 and len(kwargs) == 0 and self._lazy_run is not None:
+            args, kwargs = self._lazy_run
+
         args_value, kwargs_value = self._eval_run_args(args, kwargs)
+
+        if kwargs_value.get('n_epochs', None) is None and kwargs_value.get('n_iters', None) is None:
+            warnings.warn('Batch generation will never stop as ' \
+                          'n_epochs=None and n_iters=None', RuntimeWarning)
 
         return PipelineExecutor(self).run(*args_value, **kwargs_value)
 
