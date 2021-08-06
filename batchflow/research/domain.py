@@ -614,7 +614,7 @@ class Domain:
 
         if isinstance(values, (list, tuple, np.ndarray)):
             values = [item.alias if not isinstance(item.value, str) else f"'{item.value}'" for item in values]
-            values = f'[{",".join(values)}]'
+            values = f'[{", ".join(values)}]'
         return '{0}: {1}'.format(alias, values)
 
 class Option(Domain):
