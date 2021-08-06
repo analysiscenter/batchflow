@@ -100,13 +100,6 @@ class Notifier:
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  frequency=1, monitors=None, graphs=None, file=None,
                  window=None, layout='h', figsize=None, savepath=None, disable=False, **kwargs):
-        # Turn off everything if `disable`
-        if disable:
-            bar = False
-            monitors = []
-            graphs = []
-            file = None
-
         # Prepare data containers like monitors and pipeline variables
         if monitors:
             monitors = monitors if isinstance(monitors, (tuple, list)) else [monitors]
@@ -183,6 +176,9 @@ class Notifier:
 
         self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
 
+        # Turn off everything if `disable`
+        self._disable = disable
+
         if update_total:
             self.update_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                               drop_last=drop_last, length=length)
@@ -215,6 +211,24 @@ class Notifier:
                 self.bar.total = total
         else:
             self.bar = self.bar_func(total=total)
+
+        if self._disable:
+            self.disable()
+
+    def disable(self):
+        """ Completely disable notifier: progress bar, monitors and graphs. """
+        if self.bar is not None:
+            try:
+                # jupyter bar must be closed and reopened
+                self.bar.display(close=True)
+            except TypeError:
+                pass
+            finally:
+                self.bar = DummyBar(total=self.total)
+
+        self.data_containers = []
+        self.has_graphs = False
+        self.file = None
 
 
     def update(self, n=1, pipeline=None, batch=None):
