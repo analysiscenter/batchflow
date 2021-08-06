@@ -3,6 +3,7 @@ import os
 import re
 import json
 import time
+import warnings
 
 import numpy as np
 
@@ -315,7 +316,7 @@ def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, 
     return 0
 
 
-def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False):
+def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False, raise_error=False):
     """ Select `n` gpus from available and free devices.
 
     Parameters
@@ -328,6 +329,8 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False)
         Maximum amount of computed processes on a device to consider it free.
     verbose : bool
         Whether to show individual device information.
+    raise_error : bool
+        Whether to raise an exception if not enough devices are available.
 
     Returns
     -------
@@ -358,8 +361,15 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False)
             print(f'Device {i} | Free memory: {fraction_free:4.2f} | '
                   f'Number of running processes: {num_processes:>2} | Free: {consider_available}')
 
+    if n.startswith('max'):
+        n = len(available_devices)
+
     if len(available_devices) < n:
-        raise ValueError(f'Not enough free devices: requested {n}, found {len(available_devices)}')
+        msg = f'Not enough free devices: requested {n}, found {len(available_devices)}'
+        if raise_error:
+            raise ValueError(msg)
+        warnings.warn(msg, RuntimeWarning)
+
     available_devices = np.array(available_devices)[np.argsort(memory_usage)[::-1]]
     return sorted(available_devices[:n])
 
@@ -377,7 +387,7 @@ def get_gpu_free_memory(index):
 
     return info.free / info.total
 
-def set_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False):
+def set_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False, raise_error=False):
     """ Set the `CUDA_VISIBLE_DEVICES` variable to `n` available devices.
 
     Parameters
@@ -393,11 +403,14 @@ def set_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False):
         If 0 or False, then no information is displayed.
         If 1 or True, then display the value assigned to `CUDA_VISIBLE_DEVICES` variable.
         If 2, then display memory and process information for each device.
+    raise_error : bool
+        Whether to raise an exception if not enough devices are available.
     """
     if 'CUDA_VISIBLE_DEVICES' in os.environ.keys():
         raise ValueError(f'`CUDA_VISIBLE_DEVICES` is already set to "{os.environ["CUDA_VISIBLE_DEVICES"]}"!')
 
-    devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes, verbose=verbose==2)
+    devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes,
+                                 verbose=(verbose==2), raise_error=raise_error)
     str_devices = ','.join(str(i) for i in devices)
     os.environ['CUDA_VISIBLE_DEVICES'] = str_devices
 
