@@ -321,8 +321,9 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False,
 
     Parameters
     ----------
-    n : int
-        Number of devices to select.
+    n : int, str
+        If `max`, then use maximum number of available devices.
+        If int, then number of devices to select.
     min_free_memory : float
         Minimum percentage of free memory on a device to consider it free.
     max_processes : int
@@ -392,8 +393,9 @@ def set_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False, raise_err
 
     Parameters
     ----------
-    n : int
-        Number of devices to select.
+    n : int, str
+        If `max`, then use maximum number of available devices.
+        If int, then number of devices to select.
     min_free_memory : float
         Minimum percentage of free memory on a device to consider it free.
     max_processes : int
