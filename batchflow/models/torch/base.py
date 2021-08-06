@@ -459,7 +459,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         config = self.full_config
 
         config['head/target_shape'] = self.target_shape
-        #
+        # As `build_config` can be called multiple times, and `head/classes` key can have value `None`,
+        # we need to use `or` insetad of `get`
         config['head/classes'] = config.get('head/classes') or self.classes
 
         if config.get('head/units') is None:
@@ -737,6 +738,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
     @classmethod
     def block(cls, inputs, name, **kwargs):
+        """ Model building block: either a :class:`~.torch.layers.ConvBlock` or a `base_block`. """
         kwargs = cls.get_defaults(name, kwargs)
         if kwargs.get('layout') or kwargs.get('base_block'):
             return ConvBlock(inputs=inputs, **kwargs)
@@ -754,11 +756,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         -------
         torch.nn.Module or None
         """
-        # return cls.block(inputs, name='initial_block', **kwargs)
-        kwargs = cls.get_defaults('initial_block', kwargs)
-        if kwargs.get('layout') or kwargs.get('base_block'):
-            return ConvBlock(inputs=inputs, **kwargs)
-        return None
+        return cls.block(inputs, name='initial_block', **kwargs)
 
     @classmethod
     def body(cls, inputs, **kwargs):
@@ -772,11 +770,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         -------
         torch.nn.Module or None
         """
-        # return cls.block(inputs, name='initial_block', **kwargs)
-        kwargs = cls.get_defaults('body', kwargs)
-        if kwargs.get('layout') or kwargs.get('base_block'):
-            return ConvBlock(inputs=inputs, **kwargs)
-        return None
+        return cls.block(inputs, name='body', **kwargs)
 
     @classmethod
     def head(cls, inputs, **kwargs):
@@ -791,11 +785,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         -------
         torch.nn.Module or None
         """
-        # return cls.block(inputs, name='head', **kwargs)
-        kwargs = cls.get_defaults('head', kwargs)
-        if kwargs.get('layout') or kwargs.get('base_block'):
-            return ConvBlock(inputs=inputs, **kwargs)
-        return None
+        return cls.block(inputs, name='head', **kwargs)
 
 
     # Transfer data to/from device(s)
