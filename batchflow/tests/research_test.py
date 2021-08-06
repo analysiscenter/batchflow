@@ -327,7 +327,7 @@ class TestExecutor:
         executor = Executor(experiment, target='f', configs=[{'n': 10}, {'n': 20}], n_iters=None)
         executor.run()
 
-    @pytest.mark.parametrize('save_to', ['a', ['a', 'b'], ['a', 'b', 'c']])
+    @pytest.mark.parametrize('save_to', ['a', ['a'], ['a', 'b'], ['a', 'b', 'c']])
     def test_multiple_output(self, save_to):
         def func():
             return 1, 2, 3

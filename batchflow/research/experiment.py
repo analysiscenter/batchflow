@@ -56,11 +56,11 @@ class PipelineWrapper:
 
         Returns
         -------
-        list or generator
+        tuple or generator
             return depends on the mode:
                 - 'generator': generator
-                - 'func': Pipeline itself and variables values
-                - 'execute_for': processed batch and variables values
+                - 'func': the pipeline object and its variables values
+                - 'execute_for': the processed batch and its variables values
         """
         if self.config is None:
             self.config = {**config, **kwargs}
@@ -608,7 +608,7 @@ class Experiment:
 
     def add_postfix(self, name):
         """ Add postfix for conincided unit name. """
-        n_actions = sum([self._is_postifixed(name, item) for item in self.actions])
+        n_actions = sum(self._is_postifixed(name, item) for item in self.actions)
         return name if n_actions == 0 else f"{name}_{n_actions}"
 
     def _is_postifixed(self, base_name, name):

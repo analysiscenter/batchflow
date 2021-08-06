@@ -90,9 +90,6 @@ class Profiler:
 
 class PipelineProfiler(Profiler):
     """ Profiler for batchflow pipelines. """
-    def __init__(self, detailed=True):
-        super().__init__(detailed=detailed)
-
     def show_profile_info(self, per_iter=False, detailed=False,
                           groupby=None, columns=None, sortby=None, limit=10):
         """ Show stored profiling information with varying levels of details.
