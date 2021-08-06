@@ -59,12 +59,14 @@ class Dice(nn.Module):
 
     Predictions are passed through a sigmoid function to obtain probabilities.
     """
-    def __init__(self, eps=1e-7):
+    def __init__(self, eps=1e-7, apply_sigmoid=True):
         super().__init__()
         self.eps = eps
+        self.apply_sigmoid = apply_sigmoid
 
     def forward(self, prediction, target):
-        prediction = torch.sigmoid(prediction)
+        if self.apply_sigmoid:
+            prediction = torch.sigmoid(prediction)
         dice_coeff = 2. * (prediction * target).sum() / (prediction.sum() + target.sum() + self.eps)
         return 1 - dice_coeff
 
@@ -125,13 +127,15 @@ class Tversky(nn.Module):
     beta : number
         Weight for false negative examples.
     """
-    def __init__(self, alpha=1., beta=1., eps=1e-7):
+    def __init__(self, alpha=1., beta=1., eps=1e-7, apply_sigmoid=True):
         super().__init__()
         self.alpha, self.beta = alpha, beta
         self.eps = eps
+        self.apply_sigmoid = apply_sigmoid
 
     def forward(self, prediction, target):
-        prediction = torch.sigmoid(prediction)
+        if self.apply_sigmoid:
+            prediction = torch.sigmoid(prediction)
 
         intersection = (prediction * target).sum()
         false_positive = (prediction * (1 - target)).sum()
@@ -171,13 +175,15 @@ class SSLoss(nn.Module):
     r : number
         Weight for specificity; weight for sensitivity is 1 - `r`.
     """
-    def __init__(self, r=0.1, eps=1e-7):
+    def __init__(self, r=0.1, eps=1e-7, apply_sigmoid=True):
         super().__init__()
         self.r = r
         self.eps = eps
+        self.apply_sigmoid = apply_sigmoid
 
     def forward(self, prediction, target):
-        prediction = torch.sigmoid(prediction)
+        if self.apply_sigmoid:
+            prediction = torch.sigmoid(prediction)
         inverse = 1 - target
 
         squared_error = (target - prediction)**2
