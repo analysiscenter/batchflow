@@ -362,7 +362,7 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False,
             print(f'Device {i} | Free memory: {fraction_free:4.2f} | '
                   f'Number of running processes: {num_processes:>2} | Free: {consider_available}')
 
-    if n.startswith('max'):
+    if isinstance(n, str) and n.startswith('max'):
         n = len(available_devices)
 
     if len(available_devices) < n:
