@@ -103,7 +103,7 @@ class EncoderDecoder(TFModel):
                     force_resize : None or bool
                         Whether to crop every tensor to the leading one.
                     kwargs : dict
-                        Arguments for :class:`.ConvBlock`.
+                        Arguments for :class:`~tf.layers.ConvBlock`.
 
     head : dict, optional
         parameters for the head layers, usually :func:`.conv_block` parameters
