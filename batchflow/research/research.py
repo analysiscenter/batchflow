@@ -387,6 +387,8 @@ class Research:
         """ Dump research object. """
         with open(os.path.join(self.name, 'research.dill'), 'wb') as f:
             dill.dump(self, f)
+        with open(os.path.join(self.name, 'research.txt'), 'w') as f:
+            f.write(str(self))
 
     @classmethod
     def load(cls, name):
@@ -421,23 +423,22 @@ class Research:
         if not os.path.exists(name):
             warnings.warn(f"Folder {name} doesn't exist.")
         else:
-            if not cls.folder_is_research(name):
-                if not force:
+            if not force:
+                if not cls.folder_is_research(name):
                     raise ValueError(f'{name} is not a research folder.')
             answer = True
             if ask:
-                answer = 'yes'.startswith(input(f'Remove {name}? [y/n]').lower())
+                answer = input(f'Remove {name}? [y/n]').lower()
+                answer = len(answer) > 0 and 'yes'.startswith(answer)
             if answer:
                 shutil.rmtree(name)
 
     @classmethod
     def folder_is_research(cls, name):
         """ Check if folder contains research."""
-        try:
-            Research._load(name)
-        except Exception: #pylint:disable=broad-except
-            return False
-        return True
+        if not os.path.exists(name):
+            raise FileNotFoundError(f"Folder {name} doesn't exist.")
+        return os.path.isfile(os.path.join(name, 'research.dill'))
 
     def __str__(self):
         spacing = ' ' * 4
@@ -454,7 +455,7 @@ class Research:
         for name in items:
             repr += f"{name}:\n"
             repr += '\n'.join([spacing + item for item in str(items[name]).split('\n')])
-            repr += '\n'
+            repr += 2 * '\n'
 
         return repr
 

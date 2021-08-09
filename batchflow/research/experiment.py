@@ -31,14 +31,17 @@ class PipelineWrapper:
             - 'generator': pipeline will be used as generator of batches
             - 'func': execute pipeline with `.run`
             - 'execute_for': execute pipeline with `.execute_for` with batch
+    variables : str, list, optional
+        variables to return from call
     """
-    def __init__(self, pipeline, mode='generator'):
+    def __init__(self, pipeline, mode='generator', variables=None):
         if mode not in['generator', 'func', 'execute_for']:
             raise ValueError(f'Unknown PipelineWrapper mode: {mode}')
         if isinstance(pipeline, str):
             pipeline = parse_name(pipeline)
         self.pipeline = pipeline
         self.mode = mode
+        self.variables = [None] + to_list(variables or [])
         self.config = None
 
     def __call__(self, config, batch=None, **kwargs):
@@ -53,11 +56,11 @@ class PipelineWrapper:
 
         Returns
         -------
-        generator, Pipeline or Batch
+        tuple or generator
             return depends on the mode:
                 - 'generator': generator
-                - 'func': Pipeline itself
-                - 'execute_for': processed batch
+                - 'func': the pipeline object and its variables values
+                - 'execute_for': the processed batch and its variables values
         """
         if self.config is None:
             self.config = {**config, **kwargs}
@@ -66,8 +69,10 @@ class PipelineWrapper:
         if self.mode == 'generator':
             return self.generator()
         if self.mode == 'func':
-            return self.pipeline.run()
-        return self.pipeline.execute_for(batch) # if self.mode == 'execute_for'
+            return (self.pipeline.run(), *[self.pipeline.v(var) for var in self.variables])
+        batch = self.pipeline.execute_for(batch)
+        vars = [self.pipeline.v(var) for var in self.variables if var is not None]
+        return (batch, *vars) # if self.mode == 'execute_for'
 
     def generator(self):
         """ Generator returns batches from pipeline. Generator will stop when StopIteration will be raised. """
@@ -88,6 +93,12 @@ class PipelineWrapper:
             return PipelineWrapper(self.pipeline, self.mode)
 
         return PipelineWrapper(self.pipeline + Pipeline(), self.mode)
+
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
 
 class InstanceCreator:
     """ Instance class to use in each experiment in research. Will be initialized at the start of
@@ -148,9 +159,11 @@ class ExecutableUnit:
             - If list, must be list of int or str described above.
     args, kwargs : optional
         args and kwargs for unit call, by default None.
+    save_to : str or list, optional
+        names to save output from unit
     """
     def __init__(self, name, func=None, generator=None, root=False, when=1,
-                 args=None, kwargs=None, **other_kwargs):
+                 args=None, kwargs=None, save_to=None, **other_kwargs):
         self.name = name
         self.callable = func
         self.generator = generator
@@ -172,6 +185,8 @@ class ExecutableUnit:
 
         self.iteration = 0
 
+        self.save_to = save_to
+
 
     def set_unit(self, config, experiment):
         """ Set config and experiment instance for the unit. """
@@ -187,7 +202,6 @@ class ExecutableUnit:
         if isinstance(src, PipelineWrapper) and isinstance(src.pipeline, (tuple, list)):
             pipeline = src.pipeline
             src.pipeline = getattr(self.experiment.instances[pipeline[0]], pipeline[1])
-            # setattr(self, attr, getattr(self.experiment.instances[pipeline[0]], pipeline[1]))
 
     def __call__(self, iteration, n_iters, last=False):
         """ Call unit: execute callable or get the next item from generator.
@@ -216,19 +230,22 @@ class ExecutableUnit:
             args = eval_expr(self.args, experiment=self.experiment)
             kwargs = eval_expr(self.kwargs, experiment=self.experiment)
             other_kwargs = eval_expr(self.other_kwargs, experiment=self.experiment)
+
+            start_time = time.time()
             if self.callable is not None:
-                start_time = time.time()
                 self.output = self.callable(*args, **kwargs, **other_kwargs)
-                eval_time = time.time() - start_time
             else:
-                start_time = time.time()
                 if self.iterator is None:
                     start_time = time.time()
                     self.iterator = self.generator(*args, **kwargs, **other_kwargs)
                 else:
                     start_time = time.time()
                 self.output = next(self.iterator)
-                eval_time = time.time() - start_time
+
+            if self.save_to:
+                self.save_output(iteration)
+
+            eval_time = time.time() - start_time
             return self.output, eval_time
 
         return None, None
@@ -236,6 +253,24 @@ class ExecutableUnit:
     def must_execute(self, iteration, n_iters=None, last=False):
         """ Returns does unit must be executed for the current iteration. """
         return must_execute(iteration, self.when, n_iters, last)
+
+    def save_output(self, iteration):
+        """ Save output of the unit. """
+        if not isinstance(self.save_to, (list, tuple)):
+            src = [self.output]
+            dst = [self.save_to]
+        else:
+            src = self.output
+            dst = self.save_to
+
+        if len(src) != len(dst):
+            raise ValueError(f'Length of src and dst must be the same but src={src} and dst={dst}')
+
+        for _src, _dst in zip(src, dst):
+            if _dst is not None:
+                results = self.experiment.results.get(_dst, OrderedDict())
+                results[iteration] = _src
+                self.experiment.results[_dst] = results
 
     @property
     def src(self):
@@ -245,7 +280,7 @@ class ExecutableUnit:
 
     def __copy__(self):
         """ Create copy of the unit. """
-        attrs = ['name', 'callable', 'generator', 'root', 'when', 'args', 'kwargs']
+        attrs = ['name', 'callable', 'generator', 'root', 'when', 'args', 'kwargs', 'save_to']
         params = {attr if attr !='callable' else 'func': copy(getattr(self, attr)) for attr in attrs}
         new_unit = ExecutableUnit(**params, **copy(self.other_kwargs))
         return new_unit
@@ -372,11 +407,10 @@ class Experiment:
         else:
             kwargs[mode] = src
 
-        self.actions[name] = ExecutableUnit(name=name, args=args, when=when, **kwargs)
-        if save_to is not None:
-            self.save(src=O(name), dst=save_to, when=when, copy=False)
-            if dump is not None:
-                self.dump(save_to, when=dump)
+        name = self.add_postfix(name)
+        self.actions[name] = ExecutableUnit(name=name, args=args, when=when, save_to=save_to, **kwargs)
+        if dump is not None:
+            self.dump(save_to, when=dump)
         return self
 
     def add_callable(self, name, func=None, args=None, when=1, save_to=None, dump=None, **kwargs):
@@ -457,7 +491,7 @@ class Experiment:
                           root=root, item_name=name, when="%0")
         return self
 
-    def add_pipeline(self, name, root=None, branch=None, run=False, variables=None, dump=None, **kwargs):
+    def add_pipeline(self, name, root=None, branch=None, run=False, variables=None, dump=None, when=1, **kwargs):
         """ Add pipeline to experiment.
 
         Parameters
@@ -489,18 +523,16 @@ class Experiment:
         """
         if branch is None:
             mode = 'func' if run else 'generator'
-            pipeline = PipelineWrapper(root if root is not None else name, mode=mode)
-            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), **kwargs)
+            pipeline = PipelineWrapper(root if root is not None else name, mode=mode, variables=variables)
+            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), when=when, save_to=variables, **kwargs)
         else:
             root = PipelineWrapper(root, mode='generator')
-            branch = PipelineWrapper(branch, mode='execute_for')
+            branch = PipelineWrapper(branch, mode='execute_for', variables=variables)
 
-            self.add_generator(f'{name}_root', generator=root, config=EC(), **kwargs)
-            self.add_callable(f'{name}', func=branch, config=EC(), batch=O(f'{name}_root'), **kwargs)
+            self.add_generator(f'{name}_root', generator=root, config=EC(), when=when, **kwargs)
+            self.add_callable(f'{name}', func=branch, config=EC(), batch=O(f'{name}_root'), save_to=variables,
+                              when=when, **kwargs)
         if variables is not None:
-            ppl_name = name if branch is None else f'{name}'
-            for var in to_list(variables):
-                self.save(E(ppl_name).pipeline.v(var), var)
             if dump is not None:
                 self.dump(variables, dump)
         return self
@@ -547,7 +579,8 @@ class Experiment:
         copy : bool, optional
             copy value or not, by default False
         """
-        name = self.add_postfix('__save_results')
+        name = '__save_results' if dst is None else f'__save_results_{dst}'
+        name = self.add_postfix(name)
         self.add_callable(name, _save_results, when=when, _src=src, _dst=dst, experiment=E(), copy=copy)
         return self
 
@@ -566,7 +599,8 @@ class Experiment:
         Research
         """
         self.has_dump = True
-        name = self.add_postfix('__dump_results')
+        name = '__dump_results' if variable is None else f'__dump_results_{variable}'
+        name = self.add_postfix(name)
         self.add_callable(name, _dump_results,
                           when=when,
                           variable=variable, experiment=E())
@@ -574,7 +608,12 @@ class Experiment:
 
     def add_postfix(self, name):
         """ Add postfix for conincided unit name. """
-        return name + '_' + str(sum([item.startswith(name) for item in self.actions]))
+        n_actions = sum(self._is_postifixed(name, item) for item in self.actions)
+        return name if n_actions == 0 else f"{name}_{n_actions}"
+
+    def _is_postifixed(self, base_name, name):
+        postfix = name[len(base_name):]
+        return (name == base_name) or (len(postfix) > 2 and postfix[0] == '_' and postfix[1:].isdigit())
 
     @property
     def only_callables(self):
@@ -734,21 +773,26 @@ class Experiment:
             self.profile_info.reset_index().to_feather(os.path.join(self.full_path, 'profiler.feather'))
 
     def __str__(self):
-        repr = "instances:\n"
+        repr = ''
         spacing = ' ' * 4
-        for name, creator in self.instance_creators.items():
-            repr += spacing + f"{name}(\n"
-            repr += 2 * spacing + f"root={creator.root},\n"
-            repr += ''.join([spacing * 2 + f"{key}={value}\n" for key, value in creator.kwargs.items()])
-            repr += spacing + ")\n"
 
-        repr += "\nunits:\n"
-        attrs = ['callable', 'generator', 'root', 'when', 'args']
-        for name, action in self.actions.items():
-            repr += spacing + f"{name}(\n"
-            repr += ''.join([spacing * 2 + f"{key}={getattr(action, key)}\n" for key in attrs])
-            repr += ''.join([spacing * 2 + f"{key}={value}\n" for key, value in action.kwargs.items()])
-            repr += spacing + ")\n"
+        if len(self.instance_creators) > 0:
+            repr += "instances:\n"
+            for name, creator in self.instance_creators.items():
+                repr += spacing + f"{name}(\n"
+                repr += 2 * spacing + f"root={creator.root},\n"
+                repr += ''.join([spacing * 2 + f"{key}={value}\n" for key, value in creator.kwargs.items()])
+                repr += spacing + ")\n"
+            repr += '\n'
+
+        if len(self.actions) > 0:
+            repr += "units:\n"
+            attrs = ['callable', 'generator', 'root', 'when', 'args']
+            for name, action in self.actions.items():
+                repr += spacing + f"{name}(\n"
+                repr += ''.join([spacing * 2 + f"{key}={getattr(action, key)}\n" for key in attrs])
+                kwargs = {**action.kwargs, **action.other_kwargs}
+                repr += spacing * 2 + f"kwargs={kwargs}\n" + spacing + ")\n"
 
         return repr
 
@@ -840,7 +884,7 @@ class Executor:
                 self.research.monitor.start_experiment(experiment)
         for iteration in iterations:
             for unit_name, unit in self.experiment_template.actions.items():
-                if unit.root:
+                if unit.root or len(self.experiments) == 1:
                     self.call_root(iteration, unit_name)
                 else:
                     self.parallel_call(iteration, unit_name, target=self.target, debug=self.debug) #pylint:disable=unexpected-keyword-arg
@@ -869,12 +913,14 @@ class Executor:
     def call_root(self, iteration, unit_name):
         """ Call root executable unit. """
         # TODO: experiment must be alive if error was in the branch after all roots
-        self.experiments[0].call(unit_name, iteration, self.n_iters)
-        for experiment in self.experiments[1:]:
-            if self.finalize or (not experiment.is_failed) or unit_name.startswith('__'):
-                experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
-            for attr in ['_is_alive', '_is_failed', 'iteration']:
-                setattr(experiment, attr, getattr(self.experiments[0], attr))
+        if self.finalize or (not self.experiments[0].is_failed) or unit_name.startswith('__'):
+            self.experiments[0].call(unit_name, iteration, self.n_iters)
+
+            for experiment in self.experiments[1:]:
+                if self.finalize or (not experiment.is_failed) or unit_name.startswith('__'):
+                    experiment.outputs[unit_name] = self.experiments[0].outputs[unit_name]
+                for attr in ['_is_alive', '_is_failed', 'iteration']:
+                    setattr(experiment, attr, getattr(self.experiments[0], attr))
 
     def send_results(self):
         """ Put experiment results and profiling into research results. """

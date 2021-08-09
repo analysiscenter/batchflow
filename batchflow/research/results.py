@@ -290,16 +290,24 @@ class ResearchResults:
             df += [pd.DataFrame({'id': [experiment_id], **{key: [val] for key, val in _config.items()}})]
         return pd.concat(df)
 
-    def artifacts_to_df(self, configs=False, **kwargs):
+    def artifacts_to_df(self, include_config=True, use_alias=False, concat_config=False,
+                        remove_auxilary=True, drop_columns=True, **kwargs):
         """ Create pandas.DataFrame with experiment artifacts (all in experiment folder except standart
         'results', 'config.dill', 'config.json', 'experiment.log').
 
         Parameters
         ----------
-        configs : bool, optional
-            include config into dataframe or not, by default False
+        use_alias : bool, optional
+            use alias of config values or not, by default True
+        concat_config : bool, optional
+            create one column for config (it will be concated) or create columns for each config parameter,
+            by default False
+        remove_auxilary : bool, optional
+            remove columns 'repetition', 'device', 'updates' or not, by default True
+        drop_columns : bool, optional
+            remove or not separate columns for config parametrs when `concat_config=True`.
         kwargs : dict, optional
-            kwargs for :meth:`~.configs_to_df`.
+            filtering kwargs for :meth:`~.load_artifacts`.
 
         Returns
         -------
@@ -315,10 +323,11 @@ class ResearchResults:
                 artifacts = self.artifacts[experiment_id]
                 df += [pd.DataFrame({'id': [experiment_id], **artifact}) for artifact in artifacts]
             df = pd.concat(df)
-            if configs:
-                df = pd.merge(self.configs_to_df(**kwargs), df, how='inner', on='id')
+            if include_config:
+                df = pd.merge(self.configs_to_df(use_alias, concat_config, remove_auxilary, drop_columns),
+                              df, how='inner', on='id')
             return df
-        raise ValueError("Researc without dump can't have artifacts.")
+        raise ValueError("Research without dump can't have artifacts.")
 
     def filter_ids_by_configs(self, config=None, alias=None, domain=None, **kwargs):
         """ Filter configs.

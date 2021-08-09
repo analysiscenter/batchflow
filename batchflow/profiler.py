@@ -19,6 +19,9 @@ class Profiler:
     profile : bool or {0, 1, 2} or 'detailed'
         whether to use profiler
     """
+
+    UNIT_NAME = 'action'
+
     def __init__(self, detailed=True):
         if detailed:
             self.detailed = True
@@ -65,7 +68,7 @@ class Profiler:
             values = [{'iter': iter_no, 'total_time': total_time, 'eval_time': total_time,
                     **kwargs}]
 
-        multiindex = pd.MultiIndex.from_tuples(indices, names=['action', 'id'])
+        multiindex = pd.MultiIndex.from_tuples(indices, names=[self.UNIT_NAME, 'id'])
         df = pd.DataFrame(values, index=multiindex)
 
         with self._profile_info_lock:

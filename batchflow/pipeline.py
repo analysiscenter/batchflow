@@ -1545,6 +1545,8 @@ class Pipeline:
         args_value, kwargs_value = self._eval_run_args(args, kwargs)
 
         rebatch = len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID
+        if rebatch:
+            _, self._actions[0] = self._eval_run_args([], self._actions[0])
 
         return PipelineExecutor(self).gen_batch(*args_value, dataset=self._dataset, rebatch=rebatch, **kwargs_value)
 

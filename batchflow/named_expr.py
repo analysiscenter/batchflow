@@ -520,7 +520,7 @@ class C(PipelineNamedExpression):
     def get(self, **kwargs):
         """ Return a value of a pipeline config """
         name, pipeline, _ = self._get_params(**kwargs)
-        config = pipeline.config or {}
+        config = pipeline.config or Config()
 
         if name is None:
             return config
