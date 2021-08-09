@@ -9,12 +9,12 @@ import numpy as np
 from batchflow import Dataset, Pipeline, B, V, C
 from batchflow import NumpySampler as NS
 from batchflow.models.torch import ResNet
-from batchflow.opensets import MNIST
+from batchflow.opensets import CIFAR10
 from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults, Alias
 
 class Model:
     def __init__(self):
-        self.dataset = MNIST()
+        self.dataset = CIFAR10()
         self.model_config = {
             'head/layout': C('layout'),
             'head/units': C('units'),
@@ -74,7 +74,7 @@ def simple_research(tmp_path):
     return research
 
 @pytest.fixture
-def complex_research(tmp_path):
+def research_with_controller(tmp_path):
     domain = Domain({'layout': ['f', 'faf']}) @ Domain({'units': [[10], [100, 10]]})
     research = (Research(name=os.path.join(tmp_path, 'research'), domain=domain, n_reps=2)
         .add_instance('controller', Model)
@@ -83,7 +83,6 @@ def complex_research(tmp_path):
         .add_callable('controller.eval_metrics', metrics='accuracy', when='last')
         .save(O('controller.eval_metrics'), 'accuracy', when='last')
     )
-
     return research
 
 SIZE_CALC = {
@@ -380,14 +379,67 @@ class TestResearch:
 
     @pytest.mark.slow
     @pytest.mark.parametrize('workers', [1, 2])
-    def test_complex_research(self, workers, complex_research):
-        complex_research.run(dump_results=True, parallel=True, workers=workers, bar=False, finalize=True)
+    def test_research_with_controller(self, workers, research_with_controller):
+        research_with_controller.run(dump_results=True, parallel=True, workers=workers, bar=False, finalize=True)
 
-        assert len(complex_research.monitor.exceptions) == 0
-        assert len(complex_research.results.df) == 4
+        assert len(research_with_controller.monitor.exceptions) == 0
+        assert len(research_with_controller.results.df) == 4
 
-        loaded_research = Research.load(complex_research.name)
+        loaded_research = Research.load(research_with_controller.name)
         assert len(loaded_research.results.df) == 4
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize('branches', [False, True])
+    def test_research_with_pipelines(self, branches):
+        dataset = CIFAR10()
+        model_config = {
+            'head/layout': C('layout'),
+            'head/units': C('units'),
+            'loss': 'ce',
+            'device': 'cpu',
+            'amp': False
+        }
+
+        root_ppl = (Pipeline()
+            .to_array(channels='first', src='images', dst='images')
+            .run_later(batch_size=8, n_iters=1, shuffle=True, drop_last=True)
+        ) << dataset.train
+
+        branch_ppl = (Pipeline()
+            .init_model('model', ResNet, 'dynamic', config=model_config)
+            .init_variable('loss', None)
+            .train_model('model', B('images'), B('labels'), fetches='loss', save_to=V('loss'))
+        )
+
+        test_ppl = (Pipeline()
+            .import_model('model', C('import_from'))
+            .init_variable('metrics', None)
+            .to_array(channels='first', src='images', dst='images')
+            .predict_model('model', B('images'), fetches='predictions', save_to=B('predictions'))
+            .gather_metrics('classification', B('labels'), B('predictions'), fmt='logits', axis=-1,
+                            num_classes=10, save_to=V('metrics', mode='update'))
+            .run_later(batch_size=8, n_iters=2, shuffle=False, drop_last=False)
+        ) << dataset.test
+
+        def eval_metrics(ppl, metrics, **kwargs):
+            return ppl.v('metrics').evaluate(metrics, **kwargs)
+
+        domain = Domain({'layout': ['f', 'faf']}) @ Domain({'units': [[10], [100, 10]]})
+
+        args = (root_ppl, branch_ppl) if branches else (root_ppl+branch_ppl, )
+
+        research = (Research(name='research', domain=domain, n_reps=2)
+            .add_pipeline('train_ppl', *args, variables='loss')
+            .add_pipeline('test_ppl', test_ppl, import_from=E('train_ppl'), run=True, when='last')
+            .add_callable(eval_metrics, ppl=E('test_ppl'), metrics='accuracy', when='last')
+            .save(O('eval_metrics'), 'accuracy', when='last')
+        )
+
+        research.run(dump_results=False)
+
+        results = research.results.df.dtypes.values
+
+        assert all(results == [np.dtype(i) for i in ['O', 'O', 'O', 'int64', 'float64', 'float64']])
 
     def test_remove(self, simple_research):
         simple_research.run(n_iters=1)

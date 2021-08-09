@@ -41,7 +41,7 @@ class PipelineWrapper:
             pipeline = parse_name(pipeline)
         self.pipeline = pipeline
         self.mode = mode
-        self.variables = [None] + to_list(variables or [])
+        self.variables = to_list(variables or [])
         self.config = None
 
     def __call__(self, config, batch=None, **kwargs):
@@ -69,16 +69,18 @@ class PipelineWrapper:
         if self.mode == 'generator':
             return self.generator()
         if self.mode == 'func':
-            return (self.pipeline.run(), *[self.pipeline.v(var) for var in self.variables])
+            return (self.pipeline.run(), *self._get_vars_values())
         batch = self.pipeline.execute_for(batch)
-        vars = [self.pipeline.v(var) for var in self.variables if var is not None]
-        return (batch, *vars) # if self.mode == 'execute_for'
+        return (batch, *self._get_vars_values()) # if self.mode == 'execute_for'
 
     def generator(self):
         """ Generator returns batches from pipeline. Generator will stop when StopIteration will be raised. """
         self.reset()
         while True:
-            yield self.pipeline.next_batch()
+            yield (self.pipeline.next_batch(), *self._get_vars_values())
+
+    def _get_vars_values(self):
+        return [self.pipeline.v(var) for var in self.variables if var is not None]
 
     def __getattr__(self, attr):
         return getattr(self.pipeline, attr)
@@ -90,9 +92,9 @@ class PipelineWrapper:
     def __copy__(self):
         """ Create copy of the pipeline with the same mode. """
         if isinstance(self.pipeline, (list, tuple)):
-            return PipelineWrapper(self.pipeline, self.mode)
+            return PipelineWrapper(self.pipeline, self.mode, self.variables)
 
-        return PipelineWrapper(self.pipeline + Pipeline(), self.mode)
+        return PipelineWrapper(self.pipeline + Pipeline(), self.mode, self.variables)
 
     def __getstate__(self):
         return self.__dict__
@@ -267,6 +269,7 @@ class ExecutableUnit:
             raise ValueError(f'Length of src and dst must be the same but src={src} and dst={dst}')
 
         for _src, _dst in zip(src, dst):
+            print(_src, _dst)
             if _dst is not None:
                 results = self.experiment.results.get(_dst, OrderedDict())
                 results[iteration] = _src
@@ -521,16 +524,17 @@ class Experiment:
         -------
         Research
         """
+        save_to = [None] + to_list(variables or [])
         if branch is None:
             mode = 'func' if run else 'generator'
             pipeline = PipelineWrapper(root if root is not None else name, mode=mode, variables=variables)
-            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), when=when, save_to=variables, **kwargs)
+            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), when=when, save_to=save_to, **kwargs)
         else:
             root = PipelineWrapper(root, mode='generator')
             branch = PipelineWrapper(branch, mode='execute_for', variables=variables)
 
             self.add_generator(f'{name}_root', generator=root, config=EC(), when=when, **kwargs)
-            self.add_callable(f'{name}', func=branch, config=EC(), batch=O(f'{name}_root'), save_to=variables,
+            self.add_callable(f'{name}', func=branch, config=EC(), batch=O(f'{name}_root')[0], save_to=save_to,
                               when=when, **kwargs)
         if variables is not None:
             if dump is not None:
