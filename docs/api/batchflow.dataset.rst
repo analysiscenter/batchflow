@@ -8,3 +8,4 @@ Dataset
     :members:
     :undoc-members:
     :inherited-members:
+    :noindex:

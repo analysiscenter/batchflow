@@ -204,14 +204,16 @@ class Domain:
        {'p3': 9.1302}, {'p3': 10.2611}, {'p1': -7.9388}, {'p2': 0.5455}, {'p1': -9.2497},
        {'p3': 9.9769}, {'p2': 0.3510}, {'p3': 8.8519}` (depends on seed).
 
-       If you sum options with and without weights, they are grouped into consequent groups where all options has or
-       not weights, for each group configs are generated consequently (for groups with weights) or sampled as described
-       above. For example, for `domain = domain1 + 1.2 * domain2 + 2.3 * domain3 + domain4 + 1. * domain5` we will get:
-          - all configs from domain1
-          - configs will be sampled from 1.2 * domain2 + 2.3 * domain3
-          - all configs from domain4
-          - configs will be sampled from 1. * domain4
-       If one of the domains here is a sampler-like domain, then samples from that domain will be generated endlessly.
+    If you sum options with and without weights, they are grouped into consequent groups where all options has or
+    not weights, for each group configs are generated consequently (for groups with weights) or sampled as described
+    above. For example, for `domain = domain1 + 1.2 * domain2 + 2.3 * domain3 + domain4 + 1. * domain5` we will get:
+
+        - all configs from domain1
+        - configs will be sampled from 1.2 * domain2 + 2.3 * domain3
+        - all configs from domain4
+        - configs will be sampled from 1. * domain4
+
+    If one of the domains here is a sampler-like domain, then samples from that domain will be generated endlessly.
     """
     def __init__(self, domain=None, **kwargs):
         if isinstance(domain, dict):

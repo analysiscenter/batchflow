@@ -21,6 +21,7 @@ class SelfAttention(nn.Module):
     attention_mode : str or callable
         If callable, then directly applied to the input tensor.
         If str, then one of predefined attention layers:
+
             If `se`, then squeeze and excitation.
             Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
 

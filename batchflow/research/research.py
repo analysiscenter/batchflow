@@ -172,7 +172,7 @@ class Research:
 
         Examples
         --------
-        For 3 workers and 2 branches:
+        For 3 workers and 2 branches::
 
             None -> [[[None], [None]], [[None], [None]], [[None], [None]]]
             1 -> [[['1'], ['1']], [['1'], ['1']], [['1'], ['1']]]
@@ -181,6 +181,7 @@ class Research:
             [0, 1, ..., 12] -> [[['0', '1'], ['2', '3']],
                                 [['4', '5'], ['6', '7']],
                                 [['8', '9'], ['10', '11']]]
+
         """
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)

@@ -12,7 +12,7 @@ Xie S. et al. "`Aggregated Residual Transformations for Deep Neural Networks
 <https://arxiv.org/abs/1611.05431>`_"
 
 Jie Hu. et al. "`Squeeze-and-Excitation Networks
-<https://arxiv.org/abs/1709.01507`_"
+<https://arxiv.org/abs/1709.01507>`_"
 """
 #pylint: disable=too-many-ancestors
 from .encoder_decoder import Encoder
