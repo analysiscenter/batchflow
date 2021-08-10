@@ -269,7 +269,6 @@ class ExecutableUnit:
             raise ValueError(f'Length of src and dst must be the same but src={src} and dst={dst}')
 
         for _src, _dst in zip(src, dst):
-            print(_src, _dst)
             if _dst is not None:
                 results = self.experiment.results.get(_dst, OrderedDict())
                 results[iteration] = _src
