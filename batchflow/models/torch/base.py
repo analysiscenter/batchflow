@@ -859,7 +859,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
 
     # Apply model to train/predict on given data
-    def train(self, *args, feed_dict=None, fetches=None, use_lock=True, profile=False,
+    def train(self, *args, feed_dict=None, fetches=None, lock=True, profile=False,
               sync_frequency=True, microbatch=True, sam_rho=None, sam_individual_norm=None, **kwargs):
         """ Train the model with the data provided
 
@@ -872,7 +872,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             with keys being names and values being actual data.
         fetches : tuple, list
             Sequence of tensor names to calculate and return.
-        use_lock : bool
+        lock : bool
             If True, then model, loss and gradient update operations are locked, thus allowing for multithreading.
         sync_frequency : int, bool or None
             If int, then how often to apply accumulated gradients to the weights.
@@ -912,7 +912,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Lock the entire method; release in any case
         try:
-            if use_lock:
+            if lock:
                 self.model_lock.acquire()
 
             # Parse arguments
@@ -1024,7 +1024,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 callback.on_iter_end()
 
         finally:
-            if use_lock:
+            if lock:
                 self.model_lock.release()
         return output
 
@@ -1138,7 +1138,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         return output
 
 
-    def predict(self, *args, targets=None, feed_dict=None, fetches=None, use_lock=True, **kwargs):
+    def predict(self, *args, targets=None, feed_dict=None, fetches=None, lock=True, **kwargs):
         """ Get predictions on the data provided.
 
         Parameters
@@ -1152,7 +1152,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             Targets to calculate loss.
         fetches : tuple, list
             Sequence of tensors to fetch from the model.
-        use_lock : bool
+        lock : bool
             If True, then model and loss computation operations are locked, thus allowing for multithreading.
         kwargs : dict
             Additional named arguments directly passed to `feed_dict`.
@@ -1171,7 +1171,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Acquire lock, release anyway
         try:
-            if use_lock:
+            if lock:
                 self.model_lock.acquire()
 
             self.model.eval()
@@ -1199,7 +1199,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             output = self.parse_output(fetches, output_container)
 
         finally:
-            if use_lock:
+            if lock:
                 self.model_lock.release()
         return output
 
