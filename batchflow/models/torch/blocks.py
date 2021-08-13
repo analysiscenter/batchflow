@@ -112,7 +112,7 @@ class ResBlock(ConvBlock):
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         strides = [strides] * num_convs if isinstance(strides, int) else strides
         groups = [groups] * num_convs
-        branch_params = kwargs.get('branch_params', {})
+        branch_params = kwargs.pop('branch', {})
         branch_stride = branch_params.get('stride', np.prod(strides))
         branch_layout = branch_params.get('layout', 'cn')
 
