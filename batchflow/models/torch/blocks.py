@@ -112,7 +112,9 @@ class ResBlock(ConvBlock):
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         strides = [strides] * num_convs if isinstance(strides, int) else strides
         groups = [groups] * num_convs
-        branch_stride = np.prod(strides)
+        branch_params = kwargs.get('branch_params', {})
+        branch_stride = branch_params.get('stride', np.prod(strides))
+        branch_layout = branch_params.get('layout', 'cn')
 
         # Used in the first repetition of the block.
         # Different from strides and branch_stride in other blocks if `downsample` is not ``False``.
@@ -140,7 +142,7 @@ class ResBlock(ConvBlock):
         if get_num_channels(inputs) != filters[-1]:
             # If main flow changes the number of filters, so must do the side branch.
             # No activation, because it will be applied after summation with the main flow
-            branch_params = {'layout': 'cn', 'filters': filters[-1],
+            branch_params = {'layout': branch_layout, 'filters': filters[-1],
                              'kernel_size': 1, 'strides': branch_stride_downsample}
         else:
             branch_params = {}
