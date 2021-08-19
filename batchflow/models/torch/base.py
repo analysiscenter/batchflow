@@ -167,11 +167,13 @@ class TorchModel(BaseModel, VisualizationMixin):
         - ``{'decay': {'name: 'exp', 'frequency': 5, 'first_iter': 6, 'last_iter': 20}}``
         - ``{'decay': {'name': 'StepLR', 'steps_size': 10000, 'frequency': 5}}``
         - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5, 'frequency': 15, 'first_iter': 400}``
-        - ``{'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
-                       {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'first_iter': 901}]``
+        - .. code-block:: python
+
+            {'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
+                       {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'first_iter': 901}]
 
     device : str, torch.device or sequence
-        If str, a device name (e.g. 'cpu' or 'gpu:0'). Regular expressions are also allowed (e.g. 'gpu:*').
+        If str, a device name (e.g. ``'cpu'`` or ``'gpu:0'``). Regular expressions are also allowed (e.g. ``'gpu:*'``).
         If torch.device, then device to be used.
         If sequence, then each entry must be in one of previous formats, and batch data is paralleled across them.
         Default behaviour is to use one (and only one) device of the best available type (priority to GPU over CPU).
@@ -294,6 +296,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         '_loss_list', 'loss_list',
     ]
 
+    LABELS_ALIASES = ['labels', 'masks', 'targets']
+
     def __init__(self, config=None):
         self.full_config = Config(config)
         self.model_lock = threading.Lock()
@@ -358,7 +362,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.full_config = self.combine_configs()
         self._get_devices()
         self._get_placeholder_shapes()
-        self.full_config = self.build_config()
+        self.build_config()
 
         # Store some of the config values
         self.microbatch = self.full_config.get('microbatch', None)
@@ -438,7 +442,7 @@ class TorchModel(BaseModel, VisualizationMixin):
     def build_config(self):
         """ Define model's architecture configuration.
 
-        * Don't forget to call ``super().build_config(names)`` in the beginning.
+        * Don't forget to call ``super().build_config()`` in the beginning.
 
         * Define parameters for :meth:`.TorchModel.initial_block`, :meth:`.TorchModel.body`, :meth:`.TorchModel.head`,
           which depend on inputs.
@@ -449,41 +453,22 @@ class TorchModel(BaseModel, VisualizationMixin):
         --------
         .. code-block:: python
 
-            def build_config(self, names=None):
-                config = super().build_config(names)
+            def build_config(self):
+                config = super().build_config()
                 config['head/filters'] = self.num_classes('targets')
                 return config
         """
         config = self.full_config
 
-        if config.get('inputs'):
-            inputs_config = config['inputs']
-
-            # Add default aliases
-            if 'targets' not in inputs_config:
-                if 'labels' in inputs_config:
-                    inputs_config['targets'] = inputs_config['labels']
-                elif 'masks' in inputs_config:
-                    inputs_config['targets'] = inputs_config['masks']
-
-            # Fetch default data format for all the parts of the network
-            inputs = config.get('initial_block/inputs')
-            if isinstance(inputs, str):
-                data_format = inputs_config.get(inputs, {}).get('data_format')
-            elif isinstance(inputs, (tuple, list)):
-                data_format = inputs_config.get(inputs[0], {}).get('data_format')
-            else:
-                data_format = 'channels_first'
-            config['common/data_format'] = config.get('common/data_format') or data_format
-
         config['head/target_shape'] = self.target_shape
-        config['head/classes'] = self.classes
+        # As `build_config` can be called multiple times, and `head/classes` key can have value `None`,
+        # we need to use `or` insetad of `get`
+        config['head/classes'] = config.get('head/classes') or self.classes
 
         if config.get('head/units') is None:
-            config['head/units'] = self.classes
+            config['head/units'] = config.get('head/classes')
         if config.get('head/filters') is None:
-            config['head/filters'] = self.classes
-        return config
+            config['head/filters'] = config.get('head/classes')
 
     def unpack(self, name):
         """ Get params from config. """
@@ -546,7 +531,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         if config.get('inputs'):
             classes, shapes = [], []
-            for name in ['labels', 'masks', 'targets']:
+            for name in self.LABELS_ALIASES:
                 cfg = config['inputs'].get(name, {})
                 if 'classes' in cfg:
                     classes.append(cfg['classes'])
@@ -754,6 +739,14 @@ class TorchModel(BaseModel, VisualizationMixin):
         return config
 
     @classmethod
+    def block(cls, inputs, name, **kwargs):
+        """ Model building block: either a :class:`~.torch.layers.ConvBlock` or a `base_block`. """
+        kwargs = cls.get_defaults(name, kwargs)
+        if kwargs.get('layout') or kwargs.get('base_block'):
+            return ConvBlock(inputs=inputs, **kwargs)
+        return None
+
+    @classmethod
     def initial_block(cls, inputs, **kwargs):
         """ Transform inputs. Usually used for initial preprocessing, e.g. reshaping, downsampling etc.
 
@@ -765,10 +758,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         -------
         torch.nn.Module or None
         """
-        kwargs = cls.get_defaults('initial_block', kwargs)
-        if kwargs.get('layout') or kwargs.get('base_block'):
-            return ConvBlock(inputs=inputs, **kwargs)
-        return None
+        return cls.block(inputs, name='initial_block', **kwargs)
 
     @classmethod
     def body(cls, inputs, **kwargs):
@@ -782,13 +772,10 @@ class TorchModel(BaseModel, VisualizationMixin):
         -------
         torch.nn.Module or None
         """
-        kwargs = cls.get_defaults('body', kwargs)
-        if kwargs.get('layout') or kwargs.get('base_block'):
-            return ConvBlock(inputs=inputs, **kwargs)
-        return None
+        return cls.block(inputs, name='body', **kwargs)
 
     @classmethod
-    def head(cls, inputs, target_shape, classes, **kwargs):
+    def head(cls, inputs, **kwargs):
         """ The last network layers which produce predictions. Usually used to make network output
         compatible with the `targets` tensor.
 
@@ -800,11 +787,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         -------
         torch.nn.Module or None
         """
-        _ = target_shape, classes
-        kwargs = cls.get_defaults('head', kwargs)
-        if kwargs.get('layout') or kwargs.get('base_block'):
-            return ConvBlock(inputs=inputs, **kwargs)
-        return None
+        return cls.block(inputs, name='head', **kwargs)
 
 
     # Transfer data to/from device(s)
@@ -878,7 +861,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
 
     # Apply model to train/predict on given data
-    def train(self, *args, feed_dict=None, fetches=None, use_lock=True, profile=False,
+    def train(self, *args, feed_dict=None, fetches=None, lock=True, profile=False,
               sync_frequency=True, microbatch=True, sam_rho=None, sam_individual_norm=None, **kwargs):
         """ Train the model with the data provided
 
@@ -891,7 +874,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             with keys being names and values being actual data.
         fetches : tuple, list
             Sequence of tensor names to calculate and return.
-        use_lock : bool
+        lock : bool
             If True, then model, loss and gradient update operations are locked, thus allowing for multithreading.
         sync_frequency : int, bool or None
             If int, then how often to apply accumulated gradients to the weights.
@@ -931,7 +914,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Lock the entire method; release in any case
         try:
-            if use_lock:
+            if lock:
                 self.model_lock.acquire()
 
             # Parse arguments
@@ -1043,7 +1026,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 callback.on_iter_end()
 
         finally:
-            if use_lock:
+            if lock:
                 self.model_lock.release()
         return output
 
@@ -1157,7 +1140,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         return output
 
 
-    def predict(self, *args, targets=None, feed_dict=None, fetches=None, use_lock=True, **kwargs):
+    def predict(self, *args, targets=None, feed_dict=None, fetches=None, lock=True, **kwargs):
         """ Get predictions on the data provided.
 
         Parameters
@@ -1171,7 +1154,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             Targets to calculate loss.
         fetches : tuple, list
             Sequence of tensors to fetch from the model.
-        use_lock : bool
+        lock : bool
             If True, then model and loss computation operations are locked, thus allowing for multithreading.
         kwargs : dict
             Additional named arguments directly passed to `feed_dict`.
@@ -1190,7 +1173,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Acquire lock, release anyway
         try:
-            if use_lock:
+            if lock:
                 self.model_lock.acquire()
 
             self.model.eval()
@@ -1218,7 +1201,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             output = self.parse_output(fetches, output_container)
 
         finally:
-            if use_lock:
+            if lock:
                 self.model_lock.release()
         return output
 

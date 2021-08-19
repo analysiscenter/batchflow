@@ -1022,7 +1022,7 @@ class TFModel(BaseModel):
 
         return output
 
-    def train(self, fetches=None, feed_dict=None, use_lock=True, train_mode='', microbatch=None, **kwargs):
+    def train(self, fetches=None, feed_dict=None, lock=True, train_mode='', microbatch=None, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -1031,7 +1031,7 @@ class TFModel(BaseModel):
             Sequence of `tf.Operation` and/or `tf.Tensor` to calculate.
         feed_dict : dict
             Input data, where key is a placeholder name and value is a numpy value.
-        use_lock : bool
+        lock : bool
             If True, the whole train step is locked, thus allowing for multithreading.
         train_mode : str or sequence of str
             Name(s) of train step(s) to optimize. Regular expressions are allowed.
@@ -1097,7 +1097,7 @@ class TFModel(BaseModel):
                 train_mode = [train_mode]
 
             # Acquire lock so only one `train` is active at a time
-            if use_lock:
+            if lock:
                 self._train_lock.acquire()
 
             if train_steps:
@@ -1129,7 +1129,7 @@ class TFModel(BaseModel):
             else:
                 output = None
 
-            if use_lock:
+            if lock:
                 self._train_lock.release()
             return self._fill_output(output, _fetches)
 

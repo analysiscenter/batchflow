@@ -1352,7 +1352,7 @@ class Pipeline:
             whether to use profiler
 
         random
-            a random state (see :fun:`~.make_rng`).
+            a random state (see :func:`~.make_rng`).
             If not specified, RNG will be created with a random entropy.
 
         Examples
@@ -1545,6 +1545,8 @@ class Pipeline:
         args_value, kwargs_value = self._eval_run_args(args, kwargs)
 
         rebatch = len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID
+        if rebatch:
+            _, self._actions[0] = self._eval_run_args([], self._actions[0])
 
         return PipelineExecutor(self).gen_batch(*args_value, dataset=self._dataset, rebatch=rebatch, **kwargs_value)
 

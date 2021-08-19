@@ -5,6 +5,7 @@ import inspect
 
 def add_as_function(cls):
     """ Decorator for classes. Automatically adds functional interface for `call` method of class.
+
     For example, `ConvBlock` class is transformed into `conv_block` function, while
     `Conv1DTranspose` class is transformed into `conv1d_transpose` function.
     """

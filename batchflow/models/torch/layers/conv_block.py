@@ -270,6 +270,11 @@ class BaseConvBlock(nn.ModuleDict):
 
         self._make_modules(inputs)
 
+        # ModuleDict uses not only the keys, manually put in it, but also every `nn.Module` attribute
+        # To combat that, we manually remove keys, corresponding to passed parameters that can be nn.Modules
+        if 'activation' in self._modules:
+            self._modules.pop('activation')
+
 
     def forward(self, x):
         branches = []
@@ -461,11 +466,11 @@ class ConvBlock(nn.Sequential):
     Simple encoder that reduces spatial dimensions by 32 times and increases number
     of features to maintain the same tensor size::
 
-    layer = ConvBlock({layout='cnap', filters='same*2'}, inputs=inputs, n_repeats=5)
+        layer = ConvBlock({layout='cnap', filters='same*2'}, inputs=inputs, n_repeats=5)
 
     Repeat the whole construction two times::
 
-    repeated = splitted * 2
+        repeated = splitted * 2
     """
     def __init__(self, *args, inputs=None, base_block=BaseConvBlock, n_repeats=1, **kwargs):
         base_block = kwargs.pop('base', None) or base_block

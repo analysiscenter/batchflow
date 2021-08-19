@@ -277,11 +277,11 @@ class Decoder(TorchModel):
         return nn.Sequential(OrderedDict(layers))
 
     @classmethod
-    def head(cls, inputs, target_shape, classes, **kwargs):
+    def head(cls, inputs, classes=None, **kwargs):
         """ Make network's head. If needed, apply 1x1 convolution to obtain correct output shape. """
         kwargs = cls.get_defaults('head', kwargs)
         layers = []
-        layer = super().head(inputs, target_shape, classes, **kwargs)
+        layer = super().head(inputs, classes=classes, **kwargs)
         if layer is not None:
             inputs = layer(inputs)
             layers.append(layer)

@@ -59,8 +59,10 @@ class Activation(nn.Module):
     activation : str, nn.Module, callable or None
         If None, then identity function `f(x) = x`.
         If str, then name from `torch.nn` or `rsoftmax`.
+
             `rsoftmax` is a RadixSortmax from the paper: Hang Zhang et al. "`ResNeSt: Split-Attention Networks
             <https://arxiv.org/abs/2004.08955>`_".
+
         Also can be an instance of activation module (e.g. `torch.nn.ReLU()` or `torch.nn.ELU(alpha=2.0)`),
         or a class of activation module (e.g. `torch.nn.ReLU` or `torch.nn.ELU`),
         or a callable (e.g. `F.relu` or your custom function).
@@ -76,6 +78,13 @@ class Activation(nn.Module):
     def __init__(self, activation, *args, **kwargs):
         super().__init__()
         self.args, self.kwargs = tuple(), {}
+
+        # Dictionary: activation and its parameters
+        if isinstance(activation, dict):
+            kwargs = {**kwargs, **activation}
+            activation = kwargs.pop('activation', None)
+
+        # String: get from list of available activations
         if isinstance(activation, str):
             name = activation.lower()
             if name in self.FUNCTIONS:
@@ -86,22 +95,26 @@ class Activation(nn.Module):
             else:
                 raise ValueError('Unknown activation', activation)
 
-        if activation is None:
-            self.activation = None
-        elif isinstance(activation, nn.Module):
-            self.activation = activation
-        elif isinstance(activation, type) and issubclass(activation, nn.Module):
+        # A class to make as activation module
+        if isinstance(activation, type) and issubclass(activation, nn.Module):
             # check if activation has `in_place` parameter
             has_inplace = 'inplace' in inspect.getfullargspec(activation).args
             if has_inplace:
                 kwargs['inplace'] = True
             self.activation = activation(*args, **kwargs)
+
+        # A ready to use nn.Module or callable
+        elif isinstance(activation, nn.Module):
+            self.activation = activation
         elif callable(activation):
             self.activation = activation
             self.args = args
             self.kwargs = kwargs
+        elif activation is None:
+            self.activation = None
         else:
-            raise ValueError("Activation can be str, nn.Module or a callable, but given", activation)
+            raise ValueError("Activation can be either dictionary with parameters, "
+                             "a string, type, nn.Module or a callable, but given", activation)
 
     def forward(self, x):
         if self.activation:

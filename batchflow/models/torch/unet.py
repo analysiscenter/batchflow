@@ -84,7 +84,8 @@ class UNet(EncoderDecoder):
 
     def build_config(self):
         """ Update architecture configuration, if needed. """
-        config = super().build_config()
+        super().build_config()
+        config = self.full_config
 
         if config.get('auto_build'):
             num_stages = config.get('auto_build/num_stages', 4)
@@ -102,8 +103,6 @@ class UNet(EncoderDecoder):
             warnings.warn("'decoder/upsample/filters' are not set and " +
                           "can be inconsistent with 'decoder/blocks/filters'! Please revise your model's config. " +
                           "In future, upsample filters can be made to match decoder block's filters by default.")
-
-        return config
 
 
 class ResUNet(UNet):

@@ -29,16 +29,15 @@ Alias
     :member-order: bysource
 
 ConfigAlias
---------
+-----------
 
 .. autoclass:: batchflow.research.ConfigAlias
     :members:
     :undoc-members:
     :member-order: bysource
 
-
 Experiment
---------
+----------
 
 .. autoclass:: batchflow.research.Experiment
     :members:
@@ -46,15 +45,7 @@ Experiment
     :member-order: bysource
 
 ResearchResults
---------
-
-.. autoclass:: batchflow.research.ResearchResults
-    :members:
-    :undoc-members:
-    :member-order: bysource
-
-ResearchResults
---------
+---------------
 
 .. autoclass:: batchflow.research.ResearchResults
     :members:

@@ -14,6 +14,7 @@ class _DummyBatch:
     def __init__(self, pipeline):
         self.pipeline = pipeline
         self.dataset = pipeline.dataset if pipeline is not None else None
+        self.indices = self.dataset.indices if self.dataset is not None else None
 
 
 def eval_expr(expr, no_eval=None, **kwargs):
@@ -519,7 +520,7 @@ class C(PipelineNamedExpression):
     def get(self, **kwargs):
         """ Return a value of a pipeline config """
         name, pipeline, _ = self._get_params(**kwargs)
-        config = pipeline.config or {}
+        config = pipeline.config or Config()
 
         if name is None:
             return config

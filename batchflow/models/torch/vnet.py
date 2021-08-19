@@ -86,7 +86,8 @@ class VNet(EncoderDecoder):
 
     def build_config(self):
         """ Update architecture configuration, if needed. """
-        config = super().build_config()
+        super().build_config()
+        config = self.full_config
 
         if config.get('auto_build'):
             num_stages = config.get('auto_build/num_stages', 4)
@@ -104,5 +105,3 @@ class VNet(EncoderDecoder):
             config['body/decoder/blocks/filters'] = downsample_filters[::-1]
             config['body/decoder/blocks/layout'] = encoder_layout[::-1]
             config['body/decoder/upsample/filters'] = encoder_filters[::-1]
-
-        return config
