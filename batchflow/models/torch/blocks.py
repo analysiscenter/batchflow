@@ -96,14 +96,16 @@ class ResBlock(ConvBlock):
     op : str or callable
         Operation for combination shortcut and residual.
         See more :class:`~.layers.Combine` documentation. Default is '+a'.
+    branch : dict
+        Side branch parameters.
     n_reps : int
         Number of times to repeat the whole block. Default is 1.
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
     def __init__(self, inputs=None, layout='cnacn', filters='same', kernel_size=3, strides=1,
-                 downsample=False, bottleneck=False, attention=None, groups=1, op='+a', n_reps=1,
-                 branch={}, **kwargs):
+                 downsample=False, bottleneck=False, attention=None, groups=1, op='+a', branch=None,
+                 n_reps=1, **kwargs):
         num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
         filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
@@ -113,6 +115,8 @@ class ResBlock(ConvBlock):
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         strides = [strides] * num_convs if isinstance(strides, int) else strides
         groups = [groups] * num_convs
+        if branch is None:
+            branch = {}
         branch_stride = branch.get('stride', np.prod(strides))
         branch_layout = branch.get('layout', 'cn')
 
