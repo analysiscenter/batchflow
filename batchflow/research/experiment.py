@@ -609,14 +609,14 @@ class Experiment:
                           variable=variable, experiment=E())
         return self
 
-    def add_postfix(self, name):
+    def add_postfix(self, new_name):
         """ Add postfix for conincided unit name. """
-        n_actions = sum(self._is_postifixed(name, item) for item in self.actions)
-        return name if n_actions == 0 else f"{name}_{n_actions}"
+        n_actions = sum(self._is_postifixed(new_name, unit_name) for unit_name in self.actions)
+        return new_name if n_actions == 0 else f"{new_name}_{n_actions}"
 
-    def _is_postifixed(self, base_name, name):
-        postfix = name[len(base_name):]
-        return (name == base_name) or (len(postfix) > 2 and postfix[0] == '_' and postfix[1:].isdigit())
+    def _is_postifixed(self, new_name, unit_item):
+        postfix = unit_item[len(new_name):]
+        return (unit_item == new_name) or (len(postfix) >= 2 and postfix[0] == '_' and postfix[1:].isdigit())
 
     @property
     def only_callables(self):
@@ -885,6 +885,7 @@ class Executor:
         for experiment in self.experiments:
             if self.research:
                 self.research.monitor.start_experiment(experiment)
+
         for iteration in iterations:
             for unit_name, unit in self.experiment_template.actions.items():
                 if unit.root or len(self.experiments) == 1:
