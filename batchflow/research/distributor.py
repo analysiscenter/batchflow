@@ -153,7 +153,6 @@ class Worker:
             task_idx, configs = task
 
             self.research.monitor.send(worker=self, status='GET_TASK', task_idx=task_idx)
-            self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] have got task {task_idx}.")
             name = f"Task {task_idx}"
 
             experiment = self.research.experiment
@@ -168,6 +167,9 @@ class Worker:
             if self.research.parallel:
                 process = mp.Process(target=executor.run, args=(self, ))
                 process.start()
+                self.research.logger.info(
+                    f"Worker {self.index}[pid:{self.pid}] has started task {task_idx}[pid:{process.pid}]."
+                )
                 process.join()
             else:
                 executor.run(self)
@@ -220,6 +222,7 @@ class Distributor:
         self.tasks = tasks
         self.research = research
         self.responses = mp.JoinableQueue()
+        self.worker_processes = []
 
     def run(self):
         """ Run disributor and all workers. """
@@ -236,7 +239,9 @@ class Distributor:
 
         if self.research.parallel:
             for worker in workers:
-                mp.Process(target=worker).start()
+                process = mp.Process(target=worker)
+                self.worker_processes += [process]
+                process.start()
 
             self.send_state()
             while self.tasks.tasks_in_queue > 0:

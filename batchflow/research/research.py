@@ -354,27 +354,59 @@ class Research:
         self.results = ResearchResults(self.name, self.dump_results)
         self.profiler = ResearchProfiler(self.name, self.profile)
 
-        def _run():
-            self.monitor.start(self.dump_results)
+        def _start_distributor():
+            self.monitor.start(self.dump_results and self.debug)
             self.distributor.run()
             self.monitor.stop()
 
-        if detach:
-            self.process = mp.Process(target=_run)
-            self.process.start()
-            self.logger.info(f"Detach research[pid:{self.process.pid}]")
-        else:
-            _run()
+        try:
+            if detach:
+                self.process = mp.Process(target=_start_distributor)
+                self.process.start()
+                self.logger.info(f"Detach research[pid:{self.process.pid}]")
+            else:
+                _start_distributor()
+                self.terminate()
+        except KeyboardInterrupt as e:
+            self.logger.info("Research has been stopped by KeyboardInterrupt.")
+            self.terminate()
+            raise e
         return self
 
     def terminate(self):
-        """ Kill detached process. """
+        """ Kill all research processes. """
+        self.logger.info("Terminate research processes")
+
+        if self.monitor is not None:
+            self.monitor.stop(wait=False)
+
         if self.process is not None:
-            self.logger.info(f"Terminate research process[pid:{self.process.pid}]")
-            parent = psutil.Process(self.process.pid)
+            processes_to_kill = [self.process]
+        elif self.distributor is not None:
+            processes_to_kill = self.distributor.worker_processes
+        else:
+            processes_to_kill = []
+
+        for parent in processes_to_kill:
+            parent = psutil.Process(parent.pid)
             for child in parent.children(recursive=True):
+                self.logger.info(f"Terminate process[pid:{child.pid}]")
                 child.kill()
+            self.logger.info(f"Terminate process[pid:{parent.pid}]")
             parent.kill()
+
+        self.process = None
+        if self.distributor is not None:
+            self.distributor.worker_processes = []
+
+        # if self.monitor is not None and self.monitor.process is not None:
+        #     self.logger.info(f"Terminate monitor process[pid:{self.monitor.process.pid}]")
+        #     psutil.Process(self.monitor.process.pid).kill()
+        #     self.monitor.process = None
+
+        # tqdm.tqdm._instances.clear() #pylint:disable=protected-access
+
+
 
     def create_logger(self):
         """ Create research logger. """
@@ -497,6 +529,8 @@ class ResearchMonitor:
         self.stop_signal = mp.JoinableQueue()
 
         self.dump = False
+        self.process = None
+        self.stopped = True
 
     def __getattr__(self, key):
         if key in self.SHARED_VARIABLES:
@@ -603,17 +637,23 @@ class ResearchMonitor:
 
     def start(self, dump):
         """ Start handler. """
-        self.dump = dump
-        if self.dump:
-            filename = os.path.join(self.path, 'monitor.csv')
-            if not os.path.exists(filename):
-                with open(filename, 'w') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(self.COLUMNS)
-        mp.Process(target=self.handler).start()
+        if self.stopped:
+            self.dump = dump
+            if self.dump:
+                filename = os.path.join(self.path, 'monitor.csv')
+                if not os.path.exists(filename):
+                    with open(filename, 'w') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(self.COLUMNS)
+            self.process = mp.Process(target=self.handler)
+            self.process.start()
+            self.stopped = False
 
-    def stop(self):
+    def stop(self, wait=True):
         """ Stop handler. """
-        self.queue.put(None)
-        self.stop_signal.get()
+        if not self.stopped:
+            self.queue.put(None)
+            if wait:
+                self.stop_signal.get()
+            self.stopped = True
         tqdm.tqdm._instances.clear() #pylint:disable=protected-access
