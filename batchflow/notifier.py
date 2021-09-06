@@ -38,8 +38,8 @@ class DummyBar:
     def display(self, *args, **kwargs):
         _ = args, kwargs
 
-    def set_description(self, description):
-        self.desc = description
+    def set_description(self, desc):
+        self.desc = desc
 
     def close(self):
         pass
@@ -93,6 +93,8 @@ class Notifier:
         Path to save image, created by tracking entities with `graphs`.
     disable : bool
         Whether to disable the notifier completely: progress bar, monitors and graphs.
+    desc : str
+        Prefix for created descriptions.
     *args, **kwargs
         Positional and keyword arguments that are used to create underlying progress bar.
     """
@@ -242,7 +244,7 @@ class Notifier:
         - update log file
         - increment underlying progress bar tracker
         """
-        if (self.bar.n + 1) % self.frequency == 0 or (self.bar.n == self.bar.total - 1):
+        if self.bar.n == 0 or (self.bar.n + 1) % self.frequency == 0 or (self.bar.n == self.bar.total - 1):
             self.timestamps.append(gmtime())
 
             if self.data_containers:
@@ -274,9 +276,12 @@ class Notifier:
                 container['data'] = value
 
     def update_description(self):
-        """ Set new bar description. """
+        """ Set the new bar description, if needed. """
         description = self.create_description(iteration=-1)
-        self.bar.set_description(description)
+
+        previous_description = self.bar.desc
+        if description and not previous_description.startswith(description):
+            self.bar.set_description(description)
 
     def update_plots(self, index=0, add_suptitle=False, savepath=None, clear_display=True):
         """ Draw plots anew. """
@@ -333,6 +338,12 @@ class Notifier:
         with open(self.file, 'a+') as f:
             print(self.create_message(self.bar.n, self.bar.desc[:-2]), file=f)
 
+
+    # Manual usage of notifier instance
+    def set_description(self, desc):
+        """ Change the description of a bar manually. """
+        self.desc = desc
+        self.update_description()
 
     def visualize(self):
         """ Convenient alias for working with an instance. """
