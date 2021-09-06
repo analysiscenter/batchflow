@@ -252,7 +252,7 @@ class Notifier:
             self.update_description()
 
             if self.has_graphs:
-                self.update_plots(self.n_monitors, True)
+                self.update_plots(index=self.n_monitors, add_suptitle=True)
 
             if self.file:
                 self.update_file()
@@ -386,7 +386,10 @@ class Notifier:
 
     def create_description(self, iteration):
         """ Create string description of a given iteration. """
-        description = [self.desc]
+        description = []
+        if self.desc:
+            description.append(self.desc)
+
         for container in self.data_containers:
             source = container['source']
             name = container['name']
