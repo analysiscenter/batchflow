@@ -99,7 +99,7 @@ class Notifier:
     def __init__(self, bar=None, *args, update_total=True,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  frequency=1, monitors=None, graphs=None, file=None,
-                 window=None, layout='h', figsize=None, savepath=None, disable=False, **kwargs):
+                 window=None, layout='h', figsize=None, savepath=None, disable=False, desc='', **kwargs):
         # Prepare data containers like monitors and pipeline variables
         if monitors:
             monitors = monitors if isinstance(monitors, (tuple, list)) else [monitors]
@@ -160,9 +160,9 @@ class Notifier:
             bar_func = bar
         elif bar in ['n', 'nb', 'notebook', 'j', 'jpn', 'jupyter']:
             bar_func = tqdm_notebook
-        elif bar in ['a', 'auto']:
+        elif bar in [True, 'a', 'auto']:
             bar_func = tqdm_auto
-        elif bar in [True, 't', 'tqdm']:
+        elif bar in ['t', 'tqdm']:
             bar_func = tqdm
         elif bar in [False, None]:
             bar_func = DummyBar
@@ -175,6 +175,7 @@ class Notifier:
                 kwargs['ncols'] = min(700 + 100 * len(monitors or []), 1000)
             elif bar_func == tqdm:
                 kwargs['ncols'] = min(80 + 10 * len(monitors or []), 120)
+        self.desc = desc
 
         self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
 
@@ -246,7 +247,7 @@ class Notifier:
 
             if self.data_containers:
                 self.update_data(pipeline=pipeline, batch=batch)
-                self.update_description()
+            self.update_description()
 
             if self.has_graphs:
                 self.update_plots(self.n_monitors, True)
@@ -374,7 +375,7 @@ class Notifier:
 
     def create_description(self, iteration):
         """ Create string description of a given iteration. """
-        description = []
+        description = [self.desc]
         for container in self.data_containers:
             source = container['source']
             name = container['name']
