@@ -1,6 +1,9 @@
 """ Progress notifier. """
+import os
 import math
+from io import BytesIO
 from time import time, gmtime, strftime
+from concurrent.futures import ThreadPoolExecutor
 
 from tqdm import tqdm
 from tqdm.notebook import tqdm as tqdm_notebook
@@ -12,6 +15,10 @@ try:
     from IPython import display
 except ImportError:
     pass
+try:
+    import telegram
+except ImportError:
+    telegram = None
 
 from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .named_expr import NamedExpression, eval_expr
@@ -166,6 +173,8 @@ class Notifier:
             bar_func = tqdm_auto
         elif bar in ['t', 'tqdm']:
             bar_func = tqdm
+        elif bar in ['telegram', 'tg']:
+            bar_func = TelegramBar
         elif bar in [False, None]:
             bar_func = DummyBar
         else:
@@ -312,7 +321,7 @@ class Notifier:
 
                 if plot_function is not None:
                     plot_function(fig=fig, ax=ax[i - index], i=i,
-                                  data_x=data_x, data_y=data_y, container=container)
+                                  data_x=data_x, data_y=data_y, container=container, notifier=self)
                 # Default plotting functionality
                 elif isinstance(data_y, (tuple, list)) or (isinstance(data_y, np.ndarray) and data_y.ndim == 1):
                     ax[i - index].plot(data_x, data_y)
@@ -325,13 +334,19 @@ class Notifier:
                     ax[i - index].set_title(name, fontsize=12)
 
         if add_suptitle:
-            title = self.format_meter(self.n+1, self.total, time()-self.start_t, ncols=80)
+            fmt = {**self.format_dict,
+                   'n': self.n + 1, 'total': self.total,
+                   'elapsed': time()-self.start_t, 'ncols': 80}
+            title = self.format_meter(**fmt)
             plt.suptitle(title, y=0.99, fontsize=14)
 
         savepath = savepath or (f'{self.savepath}_{self.bar.n}' if self.savepath is not None else None)
         if savepath:
             plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
         plt.show()
+
+        if hasattr(self.bar, 'update_figure'):
+            self.bar.update_figure(fig)
 
     def update_file(self):
         """ Update file on the fly. """
@@ -357,7 +372,7 @@ class Notifier:
                 print(self.create_message(i, description), file=f)
 
     def __call__(self, iterable):
-        if self.total is None:
+        if self.bar is not None and self.bar.total is None:
             self.update_total(0, 0, 0, 0, 0, total=len(iterable))
         for item in iterable:
             yield item
@@ -417,3 +432,145 @@ class Notifier:
         """ Clear all the instances. Can help fix tqdm behaviour. """
         # pylint: disable=protected-access
         tqdm._instances.clear()
+
+
+
+class TelegramBar(tqdm_auto):
+    """ Send updates to a telegram bot.
+    Works by keeping track of two messages:
+        - the first is used to display textual (string) bar, the same as vanilla tqdm.
+        - the second is present only if `update_figure` was called (i.e. by Notifier), and shows any passed figure.
+    Both messages are edited on updates. Message updates are performed in separate threads to avoid IO constraints.
+    By default, all messages and updates are silent (with no notifications).
+
+    One must supply telegram `token` and `chat_id` either by passing directly or setting environment variables.
+    To get them, one must:
+        - create a bot <https://core.telegram.org/bots#6-botfather> and copy its `{token}`
+        - add the bot to a chat and send it a message such as `/start`
+        - go to <https://api.telegram.org/bot`{token}`/getUpdates> to find out the `{chat_id}`
+    """
+    #pylint: disable=consider-using-with
+    def __init__(self, *args, token=None, chat_id=None, silent=True, **kwargs):
+        # Bot
+        self.token = token or os.environ['TELEGRAM_TOKEN']
+        self.chat_id = chat_id or os.environ['TELEGRAM_CHAT_ID']
+        self.bot = telegram.Bot(self.token)
+
+        # Worker
+        self.pool = ThreadPoolExecutor(max_workers=1)
+
+        # Message ids and contents
+        self.txt_id = None
+        self.txt_message = None
+        self.txt_queue = []
+
+        self.media_id = None
+        self.media_figure = None
+        self.media_queue = []
+
+        self.silent = silent
+        super().__init__(*args, **kwargs)
+
+    # Worker
+    def submit(self, queue, function, *args, **kwargs):
+        """ Run tasks in threads, keeping at most two tasks in a queue: one running, one waiting. """
+        if len(queue) == 2:
+            if queue[0].done():
+                # The first task is already done, means that the second is running
+                # Remove the first, make running the first, put new task as the second
+                queue.pop(0)
+            else:
+                # The first task is running, so we can replace the waiting task with the new one
+                queue.pop(1).cancel()
+        try:
+            waiting = self.pool.submit(function, *args, **kwargs)
+            queue.append(waiting)
+        except: #pylint: disable=bare-except
+            pass
+
+    # TQDM
+    def display(self, close=False, **kwargs):
+        """ Update displayed contents with option of force-closing the bar. """
+        super().display(close=close, **kwargs)
+
+        if close:
+            self.delete()
+        else:
+            self.submit(queue=self.txt_queue, function=self.update_txt)
+
+    # Telegram
+    def delete(self):
+        """ Cancel all message updates, remove messages. """
+        # Cancel the remaining tasks
+        for task in self.txt_queue + self.media_queue:
+            if not task.running():
+                task.cancel()
+        self.pool.shutdown(wait=True)
+
+        # Delete corresponding messages
+        if self.txt_id is not None:
+            self.bot.deleteMessage(chat_id=self.chat_id, message_id=self.txt_id)
+            self.txt_id, self.txt_message, self.txt_queue = None, None, []
+
+        if self.media_id is not None:
+            self.bot.deleteMessage(chat_id=self.chat_id, message_id=self.media_id)
+            self.media_id, self.media_figure, self.media_queue = None, None, []
+
+
+    def update_txt(self, msg=None):
+        """ Make or update txt message. """
+        # Default message: string progress bar
+        if msg is None:
+            msg = self.format_meter(**self.format_dict).strip()
+            msg = f'`{msg}`'
+
+        # No need to re-send the same text
+        if msg == self.txt_message:
+            return None
+
+        if self.txt_id is None:
+            response = self.bot.sendMessage(chat_id=self.chat_id, text=msg,
+                                            disable_notification=self.silent,
+                                            parse_mode='MarkdownV2')
+            self.txt_id = response.message_id
+        else:
+            response = self.bot.editMessageText(chat_id=self.chat_id, message_id=self.txt_id, text=msg,
+                                                parse_mode='MarkdownV2')
+        self.txt_message = msg
+        return response
+
+
+    def update_figure(self, figure):
+        """ Make or update figure message. """
+        self.submit(self.media_queue, function=self._update_figure, figure=figure)
+
+    def _update_figure(self, figure):
+        # No need to re-send the same figure
+        if id(figure) == self.media_figure:
+            return None
+
+        photo = self.figure_to_photo(figure)
+
+        if self.media_id is None:
+            response = self.bot.sendMediaGroup(self.chat_id, media=[photo], disable_notification=self.silent)[0]
+            self.media_id = response.message_id
+        else:
+            response = self.bot.editMessageMedia(self.chat_id, message_id=self.media_id, media=photo)
+
+        self.media_figure = id(figure)
+        return response
+
+
+    @staticmethod
+    def figure_to_photo(figure, **kwargs):
+        """ Convert a matplotlib figure to a telegram photo. """
+        kwargs = {'format': 'png', 'dpi': 100,
+                  'bbox_inches': 'tight', 'pad_inches': 0,
+                  **kwargs}
+
+        file = BytesIO()
+        figure.savefig(file, **kwargs)
+
+        file.seek(0)
+        photo = telegram.InputMediaPhoto(media=file)
+        return photo
