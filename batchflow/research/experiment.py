@@ -611,10 +611,10 @@ class Experiment:
 
     def add_postfix(self, new_name):
         """ Add postfix for conincided unit name. """
-        n_actions = sum(self._is_postifixed(new_name, unit_name) for unit_name in self.actions)
+        n_actions = sum(self._has_postfix(new_name, unit_name) for unit_name in self.actions)
         return new_name if n_actions == 0 else f"{new_name}_{n_actions}"
 
-    def _is_postifixed(self, new_name, unit_item):
+    def _has_postfix(self, new_name, unit_item):
         postfix = unit_item[len(new_name):]
         return (unit_item == new_name) or (len(postfix) >= 2 and postfix[0] == '_' and postfix[1:].isdigit())
 
@@ -879,7 +879,7 @@ class Executor:
     def run(self, worker=None):
         """ Run experiments. """
         self.worker = worker
-        self.pid = os.getpid()
+        self.pid = os.getpid() if self.research and self.research.parallel else None
 
         iterations = range(self.n_iters) if self.n_iters else itertools.count()
         for experiment in self.experiments:
