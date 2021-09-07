@@ -357,7 +357,8 @@ class Notifier:
                 print(self.create_message(i, description), file=f)
 
     def __call__(self, iterable):
-        self.update_total(0, 0, 0, 0, 0, total=len(iterable))
+        if self.total is None:
+            self.update_total(0, 0, 0, 0, 0, total=len(iterable))
         for item in iterable:
             yield item
             self.update()
