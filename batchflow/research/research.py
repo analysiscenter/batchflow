@@ -231,7 +231,7 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=True, env_meta=None, seed=None, profile=False,
+            debug=False, finalize=True, env_meta=None, seed=None, profile=False, dump_monitor=False,
             memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5):
         """ Run research.
 
@@ -313,10 +313,12 @@ class Research:
         self.n_gpu_checks = n_gpu_checks
         self.gpu_check_delay = gpu_check_delay
 
+        self.dump_monitor = dump_monitor
+
         if debug and (parallel or executor_target not in ['f', 'for']):
             raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")
 
-        self.debug = (debug and not parallel)
+        self.debug = debug
         self.finalize = finalize
         self.random_seed = make_seed_sequence(seed)
 
@@ -355,7 +357,7 @@ class Research:
         self.profiler = ResearchProfiler(self.name, self.profile)
 
         def _start_distributor():
-            self.monitor.start(self.dump_results and self.debug)
+            self.monitor.start(self.dump_results and self.dump_monitor)
             self.distributor.run()
             self.monitor.stop()
 
@@ -363,7 +365,8 @@ class Research:
             if detach:
                 self.process = mp.Process(target=_start_distributor)
                 self.process.start()
-                self.logger.info(f"Detach research[pid:{self.process.pid}]")
+                self.logger.info(f"Detach research [pid:{self.process.pid}]")
+                self.monitor.detach(self.process)
             else:
                 _start_distributor()
                 self.terminate()
@@ -380,32 +383,14 @@ class Research:
         if self.monitor is not None:
             self.monitor.stop(wait=False)
 
-        if self.process is not None:
-            processes_to_kill = [self.process]
-        elif self.distributor is not None:
-            processes_to_kill = self.distributor.worker_processes
-        else:
-            processes_to_kill = []
+        order = {'EXECUTOR': 0, 'WORKER': 1, 'DETACHED_PROCESS': 2}
+        processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
 
-        for parent in processes_to_kill:
-            parent = psutil.Process(parent.pid)
-            for child in parent.children(recursive=True):
-                self.logger.info(f"Terminate process[pid:{child.pid}]")
-                child.kill()
-            self.logger.info(f"Terminate process[pid:{parent.pid}]")
-            parent.kill()
-
-        self.process = None
-        if self.distributor is not None:
-            self.distributor.worker_processes = []
-
-        # if self.monitor is not None and self.monitor.process is not None:
-        #     self.logger.info(f"Terminate monitor process[pid:{self.monitor.process.pid}]")
-        #     psutil.Process(self.monitor.process.pid).kill()
-        #     self.monitor.process = None
-
-        # tqdm.tqdm._instances.clear() #pylint:disable=protected-access
-
+        for pid, process_type in processes_to_kill:
+            if pid is not None and psutil.pid_exists(pid):
+                process = psutil.Process(pid)
+                process.kill()
+                self.logger.info(f"Terminate {process_type} [pid:{pid}]")
 
 
     def create_logger(self):
@@ -508,7 +493,7 @@ class ResearchMonitor:
         use progress bar or not.
     """
     COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid',
-               'finished', 'withdrawn', 'remains']
+               'process_pid', 'finished', 'withdrawn', 'remains']
     SHARED_VARIABLES = ['finished_experiments', 'finished_iterations', 'remained_experiments',
                         'generated_experiments']
 
@@ -517,12 +502,13 @@ class ResearchMonitor:
         self.research = research
         self.path = path
         self.exceptions = mp.Manager().list()
-        self.bar = tqdm.tqdm(disable=(not bar), position = 0, leave = True) if isinstance(bar, bool) else bar
+        self.bar = tqdm.tqdm(disable=(not bar), position=0, leave=True) if isinstance(bar, bool) else bar
 
         self.shared_values = mp.Manager().dict()
         for key in self.SHARED_VARIABLES:
             self.shared_values[key] = 0
         self.current_iterations = mp.Manager().dict()
+        self.processes = mp.Manager().dict()
 
         self.n_iters = self.research.n_iters
 
@@ -581,6 +567,12 @@ class ResearchMonitor:
         if 'exception' in signal:
             self.exceptions.append(signal)
 
+    def detach(self, process):
+        self.send('DETACH_PROCESS', process_pid=process.pid)
+
+    def start_worker(self, worker):
+        self.send('START_WORKER', worker=worker)
+
     def start_experiment(self, experiment):
         """" Signal when experiment starts. """
         self.send('START_EXP', experiment, experiment.executor.worker)
@@ -608,10 +600,15 @@ class ResearchMonitor:
         with self.bar as progress:
             while signal is not None:
                 status = signal.get('status')
-                if status == 'TASKS':
+                if status == 'START_WORKER':
+                    self.processes[signal['worker_pid']] = 'WORKER'
+                elif status == 'DETACH_PROCESS':
+                    self.processes[signal['process_pid']] = 'DETACHED_PROCESS'
+                elif status == 'TASKS':
                     self.remained_experiments = signal['remains']
                     self.generated_experiments = signal['generated']
                 elif status == 'START_EXP':
+                    self.processes[signal['pid']] = 'EXECUTOR'
                     self.current_iterations[signal['id']] = 0
                 elif status == 'EXECUTE_IT':
                     self.current_iterations[signal['id']] = signal['it']
