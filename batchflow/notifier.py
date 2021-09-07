@@ -449,7 +449,6 @@ class TelegramBar(tqdm_auto):
         - add the bot to a chat and send it a message such as `/start`
         - go to <https://api.telegram.org/bot`{token}`/getUpdates> to find out the `{chat_id}`
     """
-    #pylint: disable=consider-using-with
     def __init__(self, *args, token=None, chat_id=None, silent=True, **kwargs):
         # Bot
         self.token = token or os.environ['TELEGRAM_TOKEN']
@@ -491,6 +490,7 @@ class TelegramBar(tqdm_auto):
     # TQDM
     def display(self, close=False, **kwargs):
         """ Update displayed contents with option of force-closing the bar. """
+        #pylint: disable=unexpected-keyword-arg
         super().display(close=close, **kwargs)
 
         if close:
