@@ -411,13 +411,23 @@ class Notifier:
     def __call__(self, iterable):
         if self.bar is not None and self.bar.total is None:
             self.update_total(0, 0, 0, 0, 0, total=len(iterable))
-        for item in iterable:
-            yield item
-            self.update()
-        self.close()
 
-    def close(self):
+        try:
+            for item in iterable:
+                yield item
+                self.update()
+            self.close(success=True)
+        except: #pylint: disable=bare-except
+            self.close(success=False)
+            raise
+
+    def close(self, success=True):
         """ Close the underlying progress bar. """
+        # pylint: disable=protected-access
+        _ = success
+
+        print(success, 'NTF')
+
         self.bar.close()
         self.stop_monitors()
 
