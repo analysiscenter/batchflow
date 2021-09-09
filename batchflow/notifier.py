@@ -1,4 +1,5 @@
 """ Progress notifier. """
+import sys
 import math
 from time import time, gmtime, strftime
 
@@ -87,7 +88,7 @@ class Notifier:
             Can be used to change the default way of displaying graphs.
     graphs : str, :class:`.Monitor`, :class:`.NamedExpression`, or sequence of them
         Same semantics, as `monitors`, but tracked entities are displayed in dynamically updated plots.
-    file : str
+    log_file : str
         If provided, a textual log is written into the supplied path.
 
     telegram : bool
@@ -112,9 +113,17 @@ class Notifier:
     *args, **kwargs
         Positional and keyword arguments that are used to create underlying progress bar.
     """
+    TQDM_DEFAULTS = {
+        'colour': 'GREEN',
+        'file': sys.stdout,
+    }
+    COLOUR_RUNNING = '#2196f3'
+    COLOUR_SUCCESS = '#4caf50'
+    COLOUR_FAILURE = '#f44336'
+
     def __init__(self, bar=None, *args, update_total=True, desc='', disable=False,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
-                 frequency=1, monitors=None, graphs=None, file=None,
+                 frequency=1, monitors=None, graphs=None, log_file=None,
                  telegram=False, token=None, chat_id=None, silent=True,
                  window=None, layout='h', figsize=None, savepath=None, **kwargs):
         # Prepare data containers like monitors and pipeline variables
@@ -164,9 +173,9 @@ class Notifier:
         self.start_monitors()
 
         # Prepare file log
-        self.file = file
-        if self.file:
-            with open(self.file, 'w'):
+        self.log_file = log_file
+        if self.log_file:
+            with open(self.log_file, 'w'):
                 pass
 
         # Create bar; set the number of total iterations, if possible
@@ -257,7 +266,7 @@ class Notifier:
 
         self.data_containers = []
         self.has_graphs = False
-        self.file = None
+        self.log_file = None
         self.telegram = False
 
 
@@ -266,7 +275,8 @@ class Notifier:
         - fetch up-to-date data from batch, pipeline and monitors
         - set bar description
         - draw plots anew
-        - update log file
+        - update log log_file
+        - send notifications to Telegram
         - increment underlying progress bar tracker
         """
         if self.bar.n == 0 or (self.bar.n + 1) % self.frequency == 0 or (self.bar.n == self.bar.total - 1):
@@ -279,8 +289,8 @@ class Notifier:
             if self.has_graphs:
                 self.update_plots(index=self.n_monitors, add_suptitle=True)
 
-            if self.file:
-                self.update_file()
+            if self.log_file:
+                self.update_log_file()
 
             if self.telegram:
                 self.update_telegram()
@@ -371,14 +381,18 @@ class Notifier:
         if self.telegram:
             self.telegram_media.send(fig)
 
-    def update_file(self):
-        """ Update file on the fly. """
-        with open(self.file, 'a+') as f:
+    def update_log_file(self):
+        """ Update log file on the fly. """
+        with open(self.log_file, 'a+') as f:
             print(self.create_message(self.bar.n, self.bar.desc[:-2]), file=f)
 
     def update_telegram(self):
         """ Send a textual notification to a Telegram. """
-        text = self.bar.format_meter(**self.bar.format_dict).strip()
+        fmt = {
+            **self.bar.format_dict,
+            'colour': None,
+        }
+        text = self.bar.format_meter(**fmt).strip()
         self.telegram_text.send(f'`{text}`')
 
     # Manual usage of notifier instance
@@ -456,6 +470,10 @@ class Notifier:
         if not key in self.__dict__ and hasattr(self.bar, key):
             return getattr(self.bar, key)
         raise AttributeError(key)
+
+    def __del__(self):
+        """ Extra safety measure to close the underlying bar: helps to prevent tqdm bug. """
+        self.close()
 
     @staticmethod
     def clear():
