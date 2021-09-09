@@ -1,5 +1,4 @@
 """ Progress notifier. """
-import sys
 import math
 from time import time, gmtime, strftime
 
@@ -113,10 +112,6 @@ class Notifier:
     *args, **kwargs
         Positional and keyword arguments that are used to create underlying progress bar.
     """
-    TQDM_DEFAULTS = {
-        'colour': 'GREEN',
-        'file': sys.stdout,
-    }
     COLOUR_RUNNING = '#2196f3'
     COLOUR_SUCCESS = '#4caf50'
     COLOUR_FAILURE = '#f44336'
