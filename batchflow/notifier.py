@@ -1,9 +1,6 @@
 """ Progress notifier. """
-import os
 import math
-from io import BytesIO
 from time import time, gmtime, strftime
-from concurrent.futures import ThreadPoolExecutor
 
 from tqdm import tqdm
 from tqdm.notebook import tqdm as tqdm_notebook
@@ -15,13 +12,10 @@ try:
     from IPython import display
 except ImportError:
     pass
-try:
-    import telegram
-except ImportError:
-    telegram = None
 
-from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .named_expr import NamedExpression, eval_expr
+from .monitor import ResourceMonitor, MONITOR_ALIASES
+from .utils_telegram import TelegramMessage
 
 
 class DummyBar:
@@ -105,10 +99,11 @@ class Notifier:
     *args, **kwargs
         Positional and keyword arguments that are used to create underlying progress bar.
     """
-    def __init__(self, bar=None, *args, update_total=True,
+    def __init__(self, bar=None, *args, update_total=True, desc='', disable=False,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  frequency=1, monitors=None, graphs=None, file=None,
-                 window=None, layout='h', figsize=None, savepath=None, disable=False, desc='', **kwargs):
+                 telegram=False, token=None, chat_id=None, silent=True,
+                 window=None, layout='h', figsize=None, savepath=None, **kwargs):
         # Prepare data containers like monitors and pipeline variables
         if monitors:
             monitors = monitors if isinstance(monitors, (tuple, list)) else [monitors]
@@ -174,7 +169,8 @@ class Notifier:
         elif bar in ['t', 'tqdm']:
             bar_func = tqdm
         elif bar in ['telegram', 'tg']:
-            bar_func = TelegramBar
+            bar_func = tqdm_auto
+            telegram = True
         elif bar in [False, None]:
             bar_func = DummyBar
         else:
@@ -201,6 +197,11 @@ class Notifier:
         #pylint: disable=invalid-unary-operand-type
         self.slice = slice(-window, None, None) if isinstance(window, int) else slice(None)
         self.layout, self.figsize, self.savepath = layout, figsize, savepath
+
+        # Prepare Telegram notifications
+        self.telegram = telegram
+        self.telegram_text = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
+        self.telegram_media = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
 
 
     def update_total(self, batch_size, n_iters, n_epochs, drop_last, length, total=None):
@@ -265,6 +266,9 @@ class Notifier:
 
             if self.file:
                 self.update_file()
+
+            if self.telegram:
+                self.update_telegram()
 
         self.bar.update(n)
 
@@ -345,14 +349,18 @@ class Notifier:
             plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
         plt.show()
 
-        if hasattr(self.bar, 'update_figure'):
-            self.bar.update_figure(fig)
+        if self.telegram:
+            self.telegram_media.send(fig)
 
     def update_file(self):
         """ Update file on the fly. """
         with open(self.file, 'a+') as f:
             print(self.create_message(self.bar.n, self.bar.desc[:-2]), file=f)
 
+    def update_telegram(self):
+        """ Send a textual notification to a Telegram. """
+        text = self.bar.format_meter(**self.bar.format_dict).strip()
+        self.telegram_text.send(f'`{text}`')
 
     # Manual usage of notifier instance
     def set_description(self, desc):
@@ -381,6 +389,9 @@ class Notifier:
 
     def close(self):
         """ Close the underlying progress bar. """
+        if self.telegram:
+            self.update_telegram()
+
         self.bar.close()
         self.stop_monitors()
 
@@ -432,145 +443,3 @@ class Notifier:
         """ Clear all the instances. Can help fix tqdm behaviour. """
         # pylint: disable=protected-access
         tqdm._instances.clear()
-
-
-
-class TelegramBar(tqdm_auto):
-    """ Send updates to a telegram bot.
-    Works by keeping track of two messages:
-        - the first is used to display textual (string) bar, the same as vanilla tqdm.
-        - the second is present only if `update_figure` was called (i.e. by Notifier), and shows any passed figure.
-    Both messages are edited on updates. Message updates are performed in separate threads to avoid IO constraints.
-    By default, all messages and updates are silent (with no notifications).
-
-    One must supply telegram `token` and `chat_id` either by passing directly or setting environment variables.
-    To get them, one must:
-        - create a bot <https://core.telegram.org/bots#6-botfather> and copy its `{token}`
-        - add the bot to a chat and send it a message such as `/start`
-        - go to <https://api.telegram.org/bot`{token}`/getUpdates> to find out the `{chat_id}`
-    """
-    def __init__(self, *args, token=None, chat_id=None, silent=True, **kwargs):
-        # Bot
-        self.token = token or os.environ['TELEGRAM_TOKEN']
-        self.chat_id = chat_id or os.environ['TELEGRAM_CHAT_ID']
-        self.bot = telegram.Bot(self.token)
-
-        # Worker
-        self.pool = ThreadPoolExecutor(max_workers=1)
-
-        # Message ids and contents
-        self.txt_id = None
-        self.txt_message = None
-        self.txt_queue = []
-
-        self.media_id = None
-        self.media_figure = None
-        self.media_queue = []
-
-        self.silent = silent
-        super().__init__(*args, **kwargs)
-
-    # Worker
-    def submit(self, queue, function, *args, **kwargs):
-        """ Run tasks in threads, keeping at most two tasks in a queue: one running, one waiting. """
-        if len(queue) == 2:
-            if queue[0].done():
-                # The first task is already done, means that the second is running
-                # Remove the first, make running the first, put new task as the second
-                queue.pop(0)
-            else:
-                # The first task is running, so we can replace the waiting task with the new one
-                queue.pop(1).cancel()
-        try:
-            waiting = self.pool.submit(function, *args, **kwargs)
-            queue.append(waiting)
-        except: #pylint: disable=bare-except
-            pass
-
-    # TQDM
-    def display(self, close=False, **kwargs):
-        """ Update displayed contents with option of force-closing the bar. """
-        #pylint: disable=unexpected-keyword-arg
-        super().display(close=close, **kwargs)
-
-        if close:
-            self.delete()
-        else:
-            self.submit(queue=self.txt_queue, function=self.update_txt)
-
-    # Telegram
-    def delete(self):
-        """ Cancel all message updates, remove messages. """
-        # Cancel the remaining tasks
-        for task in self.txt_queue + self.media_queue:
-            if not task.running():
-                task.cancel()
-        self.pool.shutdown(wait=True)
-
-        # Delete corresponding messages
-        if self.txt_id is not None:
-            self.bot.deleteMessage(chat_id=self.chat_id, message_id=self.txt_id)
-            self.txt_id, self.txt_message, self.txt_queue = None, None, []
-
-        if self.media_id is not None:
-            self.bot.deleteMessage(chat_id=self.chat_id, message_id=self.media_id)
-            self.media_id, self.media_figure, self.media_queue = None, None, []
-
-
-    def update_txt(self, msg=None):
-        """ Make or update txt message. """
-        # Default message: string progress bar
-        if msg is None:
-            msg = self.format_meter(**self.format_dict).strip()
-            msg = f'`{msg}`'
-
-        # No need to re-send the same text
-        if msg == self.txt_message:
-            return None
-
-        if self.txt_id is None:
-            response = self.bot.sendMessage(chat_id=self.chat_id, text=msg,
-                                            disable_notification=self.silent,
-                                            parse_mode='MarkdownV2')
-            self.txt_id = response.message_id
-        else:
-            response = self.bot.editMessageText(chat_id=self.chat_id, message_id=self.txt_id, text=msg,
-                                                parse_mode='MarkdownV2')
-        self.txt_message = msg
-        return response
-
-
-    def update_figure(self, figure):
-        """ Make or update figure message. """
-        self.submit(self.media_queue, function=self._update_figure, figure=figure)
-
-    def _update_figure(self, figure):
-        # No need to re-send the same figure
-        if id(figure) == self.media_figure:
-            return None
-
-        photo = self.figure_to_photo(figure)
-
-        if self.media_id is None:
-            response = self.bot.sendMediaGroup(self.chat_id, media=[photo], disable_notification=self.silent)[0]
-            self.media_id = response.message_id
-        else:
-            response = self.bot.editMessageMedia(self.chat_id, message_id=self.media_id, media=photo)
-
-        self.media_figure = id(figure)
-        return response
-
-
-    @staticmethod
-    def figure_to_photo(figure, **kwargs):
-        """ Convert a matplotlib figure to a telegram photo. """
-        kwargs = {'format': 'png', 'dpi': 100,
-                  'bbox_inches': 'tight', 'pad_inches': 0,
-                  **kwargs}
-
-        file = BytesIO()
-        figure.savefig(file, **kwargs)
-
-        file.seek(0)
-        photo = telegram.InputMediaPhoto(media=file)
-        return photo
