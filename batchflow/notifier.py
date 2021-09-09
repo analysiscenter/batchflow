@@ -27,6 +27,7 @@ class DummyBar:
 
         self.n = 0
         self.desc = ''
+        self.postfix = ''
         self.start_t = time()
 
     def update(self, n):
@@ -41,6 +42,9 @@ class DummyBar:
 
     def set_description(self, desc):
         self.desc = desc
+
+    def set_postfix(self, postfix):
+        self.postfix = postfix
 
     def close(self):
         pass
@@ -116,7 +120,7 @@ class Notifier:
     COLOUR_SUCCESS = '#4caf50'
     COLOUR_FAILURE = '#f44336'
 
-    def __init__(self, bar=None, *args, update_total=True, desc='', disable=False,
+    def __init__(self, bar=None, *args, update_total=True, disable=False,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  frequency=1, monitors=None, graphs=None, log_file=None,
                  telegram=False, token=None, chat_id=None, silent=True,
@@ -199,7 +203,6 @@ class Notifier:
                 kwargs['ncols'] = min(700 + 100 * len(monitors or []), 1000)
             elif bar_func == tqdm:
                 kwargs['ncols'] = min(80 + 10 * len(monitors or []), 120)
-        self.desc = desc
 
         self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
 
@@ -268,7 +271,7 @@ class Notifier:
     def update(self, n=1, pipeline=None, batch=None):
         """ Update Notifier with new info:
         - fetch up-to-date data from batch, pipeline and monitors
-        - set bar description
+        - set bar postfix
         - draw plots anew
         - update log log_file
         - send notifications to Telegram
@@ -279,7 +282,7 @@ class Notifier:
 
             if self.data_containers:
                 self.update_data(pipeline=pipeline, batch=batch)
-            self.update_description()
+            self.update_postfix()
 
             if self.has_graphs:
                 self.update_plots(index=self.n_monitors, add_suptitle=True)
@@ -308,13 +311,13 @@ class Notifier:
                 value = eval_expr(source, pipeline=pipeline, batch=batch)
                 container['data'] = value
 
-    def update_description(self):
+    def update_postfix(self):
         """ Set the new bar description, if needed. """
-        description = self.create_description(iteration=-1)
+        postfix = self.create_description(iteration=-1)
 
-        previous_description = self.bar.desc
-        if description and not previous_description.startswith(description):
-            self.bar.set_description(description)
+        previous_postfix = self.bar.postfix or ''
+        if postfix and not previous_postfix.startswith(postfix):
+            self.bar.set_postfix_str(postfix)
 
     def update_plots(self, index=0, add_suptitle=False, savepath=None, clear_display=True):
         """ Draw plots anew. """
@@ -378,7 +381,7 @@ class Notifier:
     def update_log_file(self):
         """ Update log file on the fly. """
         with open(self.log_file, 'a+') as f:
-            print(self.create_message(self.bar.n, self.bar.desc[:-2]), file=f)
+            print(self.create_message(self.bar.n, self.bar.postfix or ''), file=f)
 
     def update_telegram(self):
         """ Send a textual notification to a Telegram. """
@@ -394,11 +397,6 @@ class Notifier:
         self.telegram_text.send(f'`{text[:idx]}`\n`{text[idx:]}`')
 
     # Manual usage of notifier instance
-    def set_description(self, desc):
-        """ Change the description of a bar manually. """
-        self.desc = desc
-        self.update_description()
-
     def visualize(self):
         """ Convenient alias for working with an instance. """
         self.update_plots(clear_display=False)
@@ -442,8 +440,6 @@ class Notifier:
     def create_description(self, iteration):
         """ Create string description of a given iteration. """
         description = []
-        if self.desc:
-            description.append(self.desc)
 
         for container in self.data_containers:
             source = container['source']
