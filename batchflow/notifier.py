@@ -361,9 +361,8 @@ class Notifier:
             fmt = {
                 **self.bar.format_dict,
                 'n': self.bar.n + 1,
-                'total': self.bar.total,
-                'elapsed': time()-self.bar.start_t,
-                'ncols': 80
+                'ncols': 80,
+                'colour': None,
             }
             title = self.bar.format_meter(**fmt)
             plt.suptitle(title, y=0.99, fontsize=14)
@@ -385,10 +384,14 @@ class Notifier:
         """ Send a textual notification to a Telegram. """
         fmt = {
             **self.bar.format_dict,
+            'n': self.bar.n + 1,
+            'ncols': 80,
             'colour': None,
         }
         text = self.bar.format_meter(**fmt).strip()
-        self.telegram_text.send(f'`{text}`')
+        idx = text.find('[')
+
+        self.telegram_text.send(f'`{text[:idx]}`\n`{text[idx:]}`')
 
     # Manual usage of notifier instance
     def set_description(self, desc):
@@ -417,9 +420,6 @@ class Notifier:
 
     def close(self):
         """ Close the underlying progress bar. """
-        if self.telegram:
-            self.update_telegram()
-
         self.bar.close()
         self.stop_monitors()
 
