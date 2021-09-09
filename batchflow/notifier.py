@@ -426,8 +426,6 @@ class Notifier:
         # pylint: disable=protected-access
         _ = success
 
-        print(success, 'NTF')
-
         self.bar.close()
         self.stop_monitors()
 
