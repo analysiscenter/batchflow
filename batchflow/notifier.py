@@ -258,6 +258,7 @@ class Notifier:
         self.data_containers = []
         self.has_graphs = False
         self.file = None
+        self.telegram = False
 
 
     def update(self, n=1, pipeline=None, batch=None):
@@ -352,10 +353,14 @@ class Notifier:
                     ax[i - index].set_title(name, fontsize=12)
 
         if add_suptitle:
-            fmt = {**self.format_dict,
-                   'n': self.n + 1, 'total': self.total,
-                   'elapsed': time()-self.start_t, 'ncols': 80}
-            title = self.format_meter(**fmt)
+            fmt = {
+                **self.bar.format_dict,
+                'n': self.bar.n + 1,
+                'total': self.bar.total,
+                'elapsed': time()-self.bar.start_t,
+                'ncols': 80
+            }
+            title = self.bar.format_meter(**fmt)
             plt.suptitle(title, y=0.99, fontsize=14)
 
         savepath = savepath or (f'{self.savepath}_{self.bar.n}' if self.savepath is not None else None)
