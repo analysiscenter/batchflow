@@ -1,5 +1,6 @@
 """ Utility functions to work with Jupyter Notebooks. """
 import os
+import sys
 import re
 import json
 import time
@@ -134,6 +135,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
     # Read the master notebook, prepare and insert kwargs cell
     notebook = nbformat.read(path, as_version=4)
+    exec_info = 'Notebook executed correctly.'
     if hide_input:
         notebook["metadata"].update({"hide_input": True})
     if nb_kwargs:
@@ -156,6 +158,18 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
                (path, str(nb_kwargs), out_path_ipynb))
         print(msg)
 
+        exec_info = sys.exc_info()
+        notebook_cells = exec_info[2].tb_frame.f_locals['notebook']['cells']
+        error_cell_number = None
+        for cell in notebook_cells:
+            try:
+                if cell['outputs'][0]['output_type'] == 'error':
+                    error_cell_number = cell['execution_count']
+                    break
+            except:
+                pass
+        exec_info = f'Error in cell number {error_cell_number}.'
+        print(exec_info)
         if raise_exception:
             raise
     finally:
@@ -183,7 +197,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
         if return_nb:
             return notebook
-        return None
+        return exec_info
 
 
 def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, ignore_codes=None,
