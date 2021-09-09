@@ -29,8 +29,12 @@ class TelegramMessage:
 
     def __init__(self, token=None, chat_id=None, silent=True, content=None):
         # Connection
-        self.token = token or os.environ['TELEGRAM_TOKEN']
-        self.chat_id = chat_id or os.environ['TELEGRAM_CHAT_ID']
+        self.token = token or os.getenv('TELEGRAM_TOKEN')
+        self.chat_id = chat_id or os.getenv('TELEGRAM_CHAT_ID')
+        if self.token is None or self.chat_id is None:
+            raise ValueError('Supply `token` and `chat_id` or '
+                             'set `TELEGRAM_TOKEN` and `TELEGRAM_CHAT_ID` environment variables!')
+
         self.connection = PoolManager()
 
         # State

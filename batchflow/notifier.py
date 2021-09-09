@@ -213,8 +213,9 @@ class Notifier:
 
         # Prepare Telegram notifications
         self.telegram = telegram
-        self.telegram_text = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
-        self.telegram_media = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
+        if self.telegram:
+            self.telegram_text = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
+            self.telegram_media = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
 
 
     def update_total(self, batch_size, n_iters, n_epochs, drop_last, length, total=None):
