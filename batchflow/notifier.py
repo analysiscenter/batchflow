@@ -67,8 +67,13 @@ class Notifier:
             as well as everything else (monitors, variables, logs) are still tracked.
     update_total : bool
         Whether the total amount of iterations should be computed at initialization.
+    desc : str
+        Prefix for created descriptions.
+    disable : bool
+        Whether to disable the notifier completely: progress bar, monitors and graphs.
     total, batch_size, n_iters, n_epochs, drop_last, length
         Parameters to calculate total amount of iterations.
+
     frequency : int
         Frequency of notifier updates.
     monitors : str, :class:`.Monitor`, :class:`.NamedExpression`, dict or sequence of them
@@ -84,6 +89,18 @@ class Notifier:
         Same semantics, as `monitors`, but tracked entities are displayed in dynamically updated plots.
     file : str
         If provided, a textual log is written into the supplied path.
+
+    telegram : bool
+        Whether to send notifications to a Telegram Bot. Works with both textual bars and figures (from `graphs`).
+        Under the hood, keeps track of two messages - one with text, one with media, and edits them when needed.
+        `silent` parameters controls, whether messages are sent with notifications or not.
+
+        One must supply telegram `token` and `chat_id` either by passing directly or
+        setting environment variables `TELEGRAM_TOKEN` and `TELEGRAM_CHAT_ID`. To get them:
+            - create a bot <https://core.telegram.org/bots#6-botfather> and copy its `{token}`
+            - add the bot to a chat and send it a message such as `/start`
+            - go to <https://api.telegram.org/bot`{token}`/getUpdates> to find out the `{chat_id}`
+
     window : int
         Allows to plot only the last `window` values from every tracked container.
     layout : str
@@ -92,10 +109,6 @@ class Notifier:
         Total size of drawn figure.
     savepath : str
         Path to save image, created by tracking entities with `graphs`.
-    disable : bool
-        Whether to disable the notifier completely: progress bar, monitors and graphs.
-    desc : str
-        Prefix for created descriptions.
     *args, **kwargs
         Positional and keyword arguments that are used to create underlying progress bar.
     """

@@ -30,6 +30,7 @@ setup(
     zip_safe=False,
     platforms='any',
     install_requires=[
+        'urllib3>=1.25',
         'numpy>=1.10',
         'pandas>=0.24',
         'dill>=0.2.7',

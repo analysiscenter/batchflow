@@ -11,15 +11,15 @@ from urllib3 import PoolManager
 
 
 class TelegramMessage:
-    """ Class to send a message with text or matplotlib figure to a Telegram bot.
-    On subsequent updates, message is edited to avoid clutter in notifications.
-    By default, all message updates are silent (with no notifications).
+    """ Class to send a message with text or image (either a matplotlib figure or path to photo) to a Telegram bot.
+    On subsequent updates, the same message is edited to avoid clutter in notifications.
+    By default, all messages are silent (with no notifications).
 
-    All of Telegram updates are send with `urllib3`, with no usage of official Telegram Python Api.
+    All of Telegram updates are send with `urllib3`, with no usage of official Telegram Python API.
     Message updates are performed in a separate thread to avoid IO constraints.
 
-    One must supply telegram `token` and `chat_id` either by passing directly or setting environment variables.
-    To get them, one must:
+    One must supply telegram `token` and `chat_id` either by passing directly or
+    setting environment variables `TELEGRAM_TOKEN` and `TELEGRAM_CHAT_ID`. To get them:
         - create a bot <https://core.telegram.org/bots#6-botfather> and copy its `{token}`
         - add the bot to a chat and send it a message such as `/start`
         - go to <https://api.telegram.org/bot`{token}`/getUpdates> to find out the `{chat_id}`
@@ -33,6 +33,7 @@ class TelegramMessage:
         self.chat_id = chat_id or os.environ['TELEGRAM_CHAT_ID']
         self.connection = PoolManager()
 
+        # State
         self.deleted = False
         self.silent = silent
 
@@ -48,9 +49,8 @@ class TelegramMessage:
         if content is not None:
             self.send(content)
 
-    # Worker
     def submit(self, function, *args, **kwargs):
-        """ Run tasks in threads, keeping at most two tasks in a queue: one running, one waiting. """
+        """ Run tasks in a separate thread, keeping at most two tasks in a queue: one running, one waiting. """
         if len(self.queue) == 2:
             if self.queue[0].done():
                 # The first task is already done, means that the second is running
