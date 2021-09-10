@@ -1,10 +1,11 @@
 """ Progress notifier. """
+import sys
 import math
 from time import time, gmtime, strftime
 
 from tqdm import tqdm
 from tqdm.notebook import tqdm as tqdm_notebook
-from tqdm.auto import tqdm as tqdm_auto
+from tqdm.autonotebook import tqdm as tqdm_auto
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -33,6 +34,10 @@ class DummyBar:
     def update(self, n):
         self.n += n
 
+    @property
+    def format_dict(self):
+        return {'n': self.n, 'total': self.total, 't': time() - self.start_t}
+
     def format_meter(self, n, total, t, **kwargs):
         _ = kwargs
         return f'{n}/{total} iterations done; elapsed time is {t:3.3} seconds'
@@ -43,7 +48,7 @@ class DummyBar:
     def set_description(self, desc):
         self.desc = desc
 
-    def set_postfix(self, postfix):
+    def set_postfix_str(self, postfix):
         self.postfix = postfix
 
     def close(self):
@@ -198,11 +203,20 @@ class Notifier:
             raise ValueError('Unknown bar value:', bar)
 
         # Set default values for bars
-        if 'ncols' not in kwargs:
-            if bar_func == tqdm_notebook:
-                kwargs['ncols'] = min(700 + 100 * len(monitors or []), 1000)
-            elif bar_func == tqdm:
-                kwargs['ncols'] = min(80 + 10 * len(monitors or []), 120)
+        if bar_func is tqdm or bar_func is tqdm_notebook:
+            if bar_func is tqdm:
+                ncols = min(80 + 10 * self.n_monitors, 120)
+                colour = self.COLOUR_SUCCESS
+            elif bar_func is tqdm_notebook:
+                ncols = min(700 + 150 * self.n_monitors, 1000)
+                colour = None
+
+            kwargs = {
+                'ncols': ncols,
+                'colour': colour,
+                'file': sys.stdout,
+                **kwargs
+            }
 
         self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
 
@@ -423,8 +437,9 @@ class Notifier:
 
     def close(self, success=True):
         """ Close the underlying progress bar. """
-        # pylint: disable=protected-access
-        _ = success
+        #pylint: disable=attribute-defined-outside-init
+        if not success:
+            self.bar.colour = self.COLOUR_FAILURE
 
         self.bar.close()
         self.stop_monitors()
