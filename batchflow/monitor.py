@@ -105,9 +105,10 @@ class ResourceMonitor:
 
     def stop(self):
         """ Stop separate process. """
-        self.stop_queue.put(True)
-        self.process.join()
-        self.running = False
+        if self.running:
+            self.stop_queue.put(True)
+            self.process.join()
+            self.running = False
 
     def __enter__(self):
         self.start()
