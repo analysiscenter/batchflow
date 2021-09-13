@@ -154,6 +154,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
         # Execution failed, print a message with error location and re-raise
         # Find cell with a failure
         exec_info = sys.exc_info()
+
         # Get notebook cells from an execution traceback and iterate over them
         notebook_cells = exec_info[2].tb_frame.f_locals['notebook']['cells']
         error_cell_number = None
@@ -172,7 +173,9 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
                'See notebook "%s" (cell number %s) for the traceback.' %
                (path, str(nb_kwargs), out_path_ipynb, error_cell_number))
         print(msg)
+
         exec_info = error_cell_number
+
         if raise_exception:
             raise
     finally:
