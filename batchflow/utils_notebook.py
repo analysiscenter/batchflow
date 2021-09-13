@@ -135,7 +135,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
     # Read the master notebook, prepare and insert kwargs cell
     notebook = nbformat.read(path, as_version=4)
-    exec_info = 'Notebook executed correctly.'
+    exec_info = True
     if hide_input:
         notebook["metadata"].update({"hide_input": True})
     if nb_kwargs:
@@ -151,25 +151,28 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
     try:
         executor.preprocess(notebook, {'metadata': {'path': working_dir}})
     except:
-        # Execution failed, print a message and re-raise
-        msg = ('Error executing the notebook "%s".\n'
-               'Notebook arguments: %s\n\n'
-               'See notebook "%s" for the traceback.' %
-               (path, str(nb_kwargs), out_path_ipynb))
-        print(msg)
-
+        # Execution failed, print a message with error location and re-raise
+        # Find cell with a failure
         exec_info = sys.exc_info()
+        # Get notebook cells from an execution traceback and iterate over them
         notebook_cells = exec_info[2].tb_frame.f_locals['notebook']['cells']
         error_cell_number = None
         for cell in notebook_cells:
             try:
+                # A cell with a failure has 'output_type' equals to 'error', but cells have
+                # variable structure and some of them don't have these target fields
                 if cell['outputs'][0]['output_type'] == 'error':
                     error_cell_number = cell['execution_count']
                     break
             except:
                 pass
-        exec_info = f'Error in cell number {error_cell_number}.'
-        print(exec_info)
+
+        msg = ('Error executing the notebook "%s".\n'
+               'Notebook arguments: %s\n\n'
+               'See notebook "%s" (cell number %s) for the traceback.' %
+               (path, str(nb_kwargs), out_path_ipynb, error_cell_number))
+        print(msg)
+        exec_info = error_cell_number
         if raise_exception:
             raise
     finally:
