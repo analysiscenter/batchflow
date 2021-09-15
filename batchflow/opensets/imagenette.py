@@ -29,10 +29,12 @@ class Imagenette(ImagesOpenset):
 
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagenette.tgz'
+    CLASSES = ['tench', 'English springer', 'cassette player', 'chain saw', 'church',
+               'French horn', 'garbage truck', 'gas pump', 'golf ball', 'parachute']
     num_classes = 10
 
     def __init__(self, *args, drop_grayscale=True, bar=False, preloaded=None, train_test=True, **kwargs):
-        self.bar = tqdm.tqdm(total=2) if  bar else None
+        self.bar = tqdm.tqdm(total=2) if bar else None
         self.drop_grayscale = drop_grayscale
         super().__init__(*args, preloaded=preloaded, train_test=train_test, **kwargs)
         if self.bar:
@@ -150,16 +152,18 @@ class ImageWoof(Imagenette):
     Contains 12454 train and 500 test images. Total size 1.3GB.
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof.tgz'
+    CLASSES = ['Shih-Tzu', 'Rhodesian ridgeback', 'Beagle', 'English foxhound', 'Border terrier',
+               'Australian terrier', 'Golden retriever', 'Old English sheepdog', 'Samoyed', 'Dingo']
 
 
-class ImageWoof2(Imagenette):
+class ImageWoof2(ImageWoof):
     """ Imagewoof dataset. See the https://github.com/fastai/imagenette for details.
     Contains 8943 train and 3890 test images. Total size 1.25GB.
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof2.tgz'
 
 
-class ImageWoof320(Imagenette):
+class ImageWoof320(ImageWoof):
     """ The '320px' version of Imagewoof.
     The shortest size resized to that size with their aspect ratio maintained.
     Contains 12454 train and 500 test images. Total size 313MB.
@@ -167,7 +171,7 @@ class ImageWoof320(Imagenette):
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof-320.tgz'
 
 
-class ImageWoof2_320(Imagenette):
+class ImageWoof2_320(ImageWoof):
     """ The '320px' version of Imagewoof.
     The shortest size resized to that size with their aspect ratio maintained.
     Contains 8943 train and 3890 test images. Total size 313MB.
@@ -175,14 +179,14 @@ class ImageWoof2_320(Imagenette):
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof2-320.tgz'
 
 
-class ImageWoof160(Imagenette):
+class ImageWoof160(ImageWoof):
     """ The '160px' version of Imagewoof.
     The shortest size resized to that size with their aspect ratio maintained.
     Contains 12454 train and 500 test images. Total size 88MB
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof-160.tgz'
 
-class ImageWoof2_160(Imagenette):
+class ImageWoof2_160(ImageWoof):
     """ The '160px' version of Imagewoof.
     The shortest size resized to that size with their aspect ratio maintained.
     Contains 8943 train and 3890 test images. Total size 88MB.
