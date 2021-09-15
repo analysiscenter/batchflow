@@ -316,6 +316,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.devices = []
 
         # Train procedure and ifrastructure
+        self.init_model_weights = None
         self.loss = None
         self.optimizer = None
         self.decay = None
@@ -365,6 +366,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.build_config()
 
         # Store some of the config values
+        self.init_model_weights = self.full_config.get('init_model_weights', False)
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
         self.amp = self.full_config.get('amp', True)
@@ -584,6 +586,8 @@ class TorchModel(BaseModel, VisualizationMixin):
                 blocks.append((block_name, block))
 
         self.model = nn.Sequential(OrderedDict(blocks))
+        if self.init_model_weights:
+            self.init_weights()
         self._to_device()
 
         self.make_loss(**self.unpack('loss'))
@@ -720,6 +724,8 @@ class TorchModel(BaseModel, VisualizationMixin):
     def set_model(self, model):
         """ Set the underlying model to a supplied one and update training infrastructure. """
         self.model = model
+        if self.init_model_weights:
+            self.init_weights()
 
         self._to_device()
 
@@ -788,6 +794,16 @@ class TorchModel(BaseModel, VisualizationMixin):
         torch.nn.Module or None
         """
         return cls.block(inputs, name='head', **kwargs)
+
+    # Init model weights
+    def init_weights(self):
+        """ Initialize model weights as He initialization and initialize biases to 0. """
+        if self.model:
+            for module in self.model.modules():
+                if getattr(module, 'bias', None) is not None:
+                    nn.init.constant_(module.bias, 0)
+                if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+                    nn.init.kaiming_normal_(module.weight)
 
 
     # Transfer data to/from device(s)
