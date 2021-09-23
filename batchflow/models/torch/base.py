@@ -798,7 +798,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
     # Model weights initialization
     def init_kaiming_normal(self, init_weights=True, init_zero_bias=True):
-        """ Initialize model weights as He initialization (kaiming normal) and initialize biases to 0. 
+        """ Initialize model weights as He initialization (kaiming normal) and initialize biases to 0.
 
         Parameters
         ----------
