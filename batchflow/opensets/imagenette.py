@@ -61,7 +61,7 @@ class Imagenette(ImagesOpenset):
             """ Check whether archive member is a file.
             In case `drop_grayscale` set to `True` it verifies that the member is the RGB mode image as well.
             """
-            if (member.name.find('csv')!=-1) or (member.name.find('.DS_Store')!=-1):
+            if (member.name.find('csv') != -1) or (member.name.find('.DS_Store') != -1):
                 return False
             if not self.drop_grayscale:
                 return member.isfile()

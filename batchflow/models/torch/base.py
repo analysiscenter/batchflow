@@ -316,7 +316,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.devices = []
 
         # Train procedure and ifrastructure
-        self.init_model_weights = None
+        self.kaiming_normal_init = None
+        self.init_zero_bias = None
         self.loss = None
         self.optimizer = None
         self.decay = None
@@ -366,7 +367,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.build_config()
 
         # Store some of the config values
-        self.init_model_weights = self.full_config.get('init_model_weights', False)
+        self.kaiming_normal_init = self.full_config.get('kaiming_normal_init', False)
+        self.init_zero_bias = self.full_config.get('init_zero_bias', False)
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
         self.amp = self.full_config.get('amp', True)
@@ -586,8 +588,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 blocks.append((block_name, block))
 
         self.model = nn.Sequential(OrderedDict(blocks))
-        if self.init_model_weights:
-            self.init_weights()
+        self.init_kaiming_normal(init_weights=self.kaiming_normal_init, init_zero_bias=self.init_zero_bias)
         self._to_device()
 
         self.make_loss(**self.unpack('loss'))
@@ -724,8 +725,8 @@ class TorchModel(BaseModel, VisualizationMixin):
     def set_model(self, model):
         """ Set the underlying model to a supplied one and update training infrastructure. """
         self.model = model
-        if self.init_model_weights:
-            self.init_weights()
+        self.init_kaiming_normal(init_weights=self.kaiming_normal_init, init_zero_bias=self.init_zero_bias)
+
 
         self._to_device()
 
@@ -795,14 +796,22 @@ class TorchModel(BaseModel, VisualizationMixin):
         """
         return cls.block(inputs, name='head', **kwargs)
 
-    # Init model weights
-    def init_weights(self):
-        """ Initialize model weights as He initialization and initialize biases to 0. """
-        if self.model:
+    # Model weights initialization
+    def init_kaiming_normal(self, init_weights=True, init_zero_bias=True):
+        """ Initialize model weights as He initialization (kaiming normal) and initialize biases to 0. 
+
+        Parameters
+        ----------
+        init_weights : bool
+            Whether to initialize model weights as kaiming normal.
+        init_zero_bias : bool
+            Whether to initialize all biases to zero.
+        """
+        if self.model and (init_weights or init_zero_bias):
             for module in self.model.modules():
-                if getattr(module, 'bias', None) is not None:
+                if getattr(module, 'bias', None) is not None and init_zero_bias:
                     nn.init.constant_(module.bias, 0)
-                if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+                if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)) and init_weights:
                     nn.init.kaiming_normal_(module.weight)
 
 
