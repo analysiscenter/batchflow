@@ -418,6 +418,7 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
 
     n_items = len(images)
     nrows = (n_items // ncols) + 1
+    fontsize = kwargs.pop('fontsize', 28)
     fig, ax = plt.subplots(nrows, ncols, **kwargs)
     ax = ax.flatten()
     for i in range(n_items):
@@ -433,7 +434,7 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
                     title += '\n {} Prediction: {} with {:.2f}%'.format(models_names[j],
                                                                         pred_class_name, class_proba * 100)
             ax[i].title.set_text(title)
-            ax[i].title.set_size(28)
+            ax[i].title.set_size(fontsize)
         ax[i].grid(b=None)
 
     for i in range(n_items, nrows * ncols):
