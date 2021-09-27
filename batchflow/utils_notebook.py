@@ -65,7 +65,8 @@ def get_notebook_name():
 def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-1,
                  working_dir='./', execute_kwargs=None,
                  save_ipynb=True, out_path_ipynb=None, save_html=False, out_path_html=None, suffix='_out',
-                 add_timestamp=True, hide_input=False, display_links=True, raise_exception=False, return_nb=False):
+                 add_timestamp=True, hide_input=False, display_links=True,
+                 raise_exception=False, show_error_info=True, return_nb=False):
     """ Run a notebook and save the output.
     Additionally, allows to pass `nb_kwargs` arguments, that are used for notebook execution. Under the hood,
     we place all of them into a separate cell, inserted in the notebook; hence, all of the keys must be valid Python
@@ -106,9 +107,11 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
         Whether to hide the code cells in the output notebook.
     display_links : bool
         Whether to display links to the output notebook and html at execution.
-    raise_exception
+    raise_exception : bool
         Whether to re-raise exceptions from the notebook.
-    return_nb
+    show_error_info : bool
+        Whether to show a message with information about an error in the output notebook (if an error exists).
+    return_nb : bool
         Whether to return the notebook object from this function.
     """
     # pylint: disable=bare-except, lost-exception
@@ -168,11 +171,12 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
             except:
                 pass
 
-        msg = ('Error executing the notebook "%s".\n'
-               'Notebook arguments: %s\n\n'
-               'See notebook "%s" (cell number %s) for the traceback.' %
-               (path, str(nb_kwargs), out_path_ipynb, error_cell_number))
-        print(msg)
+        if show_error_info:
+            msg = ('Error executing the notebook "%s".\n'
+                   'Notebook arguments: %s\n\n'
+                   'See notebook "%s" (cell number %s) for the traceback.' %
+                   (path, str(nb_kwargs), out_path_ipynb, error_cell_number))
+            print(msg)
 
         exec_info = error_cell_number
 
