@@ -99,7 +99,7 @@ class Notifier:
     def __init__(self, bar=None, *args, update_total=True,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  frequency=1, monitors=None, graphs=None, file=None,
-                 window=None, layout='h', figsize=None, savepath=None, disable=False, **kwargs):
+                 window=None, layout='h', figsize=None, savepath=None, disable=False, clearml_logger=None, **kwargs):
         # Prepare data containers like monitors and pipeline variables
         if monitors:
             monitors = monitors if isinstance(monitors, (tuple, list)) else [monitors]
@@ -151,6 +151,8 @@ class Notifier:
         if self.file:
             with open(self.file, 'w'):
                 pass
+
+        self.clearml_logger = clearml_logger
 
         # Create bar; set the number of total iterations, if possible
         self.bar = None
@@ -254,6 +256,9 @@ class Notifier:
             if self.file:
                 self.update_file()
 
+            if self.clearml_logger:
+                self.update_clearml_logger()
+
         self.bar.update(n)
 
     def update_data(self, pipeline=None, batch=None):
@@ -331,6 +336,15 @@ class Notifier:
         """ Update file on the fly. """
         with open(self.file, 'a+') as f:
             print(self.create_message(self.bar.n, self.bar.desc[:-2]), file=f)
+
+    def update_clearml_logger(self):
+        for container in self.data_containers:
+            source = container['source']
+            if isinstance(source, (str, NamedExpression)):
+                it = self.bar.n
+                name = container['name']
+                value = container['data'][it]
+                self.clearml_logger.report_scalar(title=name, series=name, value=value, iteration=it)
 
 
     def visualize(self):
