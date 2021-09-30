@@ -99,7 +99,7 @@ class Notifier:
     def __init__(self, bar=None, *args, update_total=True,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  frequency=1, monitors=None, graphs=None, file=None,
-                 window=None, layout='h', figsize=None, savepath=None, disable=False, **kwargs):
+                 window=None, layout='h', figsize=None, savepath=None, disable=False, subsystems=(), **kwargs):
         # Prepare data containers like monitors and pipeline variables
         if monitors:
             monitors = monitors if isinstance(monitors, (tuple, list)) else [monitors]
@@ -190,6 +190,8 @@ class Notifier:
         self.slice = slice(-window, None, None) if isinstance(window, int) else slice(None)
         self.layout, self.figsize, self.savepath = layout, figsize, savepath
 
+        self.subsystems = subsystems
+
 
     def update_total(self, batch_size, n_iters, n_epochs, drop_last, length, total=None):
         """ Re-calculate total number of iterations. """
@@ -253,6 +255,9 @@ class Notifier:
 
             if self.file:
                 self.update_file()
+
+            for subsys in self.subsystems:
+                subsys.update(self.data_containers, self.bar.n)
 
         self.bar.update(n)
 
@@ -401,3 +406,14 @@ class Notifier:
         """ Clear all the instances. Can help fix tqdm behaviour. """
         # pylint: disable=protected-access
         tqdm._instances.clear()
+
+
+class NotifierSubsystem:
+    def __init__(self):
+        pass
+
+    def update(self, data_containers, iteration):
+        raise NotImplementedError
+
+    def close(self):
+        pass
