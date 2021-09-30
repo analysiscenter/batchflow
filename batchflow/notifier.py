@@ -244,17 +244,20 @@ class Notifier:
         if (self.bar.n + 1) % self.frequency == 0 or (self.bar.n == self.bar.total - 1):
             self.timestamps.append(gmtime())
 
-            if self.data_containers:
-                self.update_data(pipeline=pipeline, batch=batch)
-                self.update_description()
-
-            if self.has_graphs:
-                self.update_plots(self.n_monitors, True)
-
-            if self.file:
-                self.update_file()
+            self.update_subsystems(pipeline, batch)
 
         self.bar.update(n)
+
+    def update_subsystems(self, pipeline, batch):
+        if self.data_containers:
+            self.update_data(pipeline=pipeline, batch=batch)
+            self.update_description()
+
+        if self.has_graphs:
+            self.update_plots(self.n_monitors, True)
+
+        if self.file:
+            self.update_file()
 
     def update_data(self, pipeline=None, batch=None):
         """ Get data from monitor or pipeline. """
