@@ -22,6 +22,7 @@ from .utils import save_data_to, read_data_from
 from .utils_random import make_rng, make_seed_sequence, spawn_seed_sequence
 from .utils_notebook import in_notebook, get_notebook_path, get_notebook_name, run_notebook, pylint_notebook,\
                             get_available_gpus, set_gpus
+from .utils_telegram import TelegramMessage
 
 
 __version__ = '0.5.0'
