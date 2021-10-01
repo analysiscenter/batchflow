@@ -10,8 +10,6 @@ def unpack_args(args, layer_no, layers_max):
                 arg_value = args[arg][layer_no]
             else:
                 arg_value = args[arg]
-        elif isinstance(args[arg], dict): # for args with dict-like structure, e.g. branch in ResBlock
-            arg_value = unpack_args(args[arg], layer_no, layers_max)
         else:
             arg_value = args[arg]
         new_args.update({arg: arg_value})
