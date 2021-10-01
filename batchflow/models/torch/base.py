@@ -799,21 +799,22 @@ class TorchModel(BaseModel, VisualizationMixin):
     def init_weights(self, init_model_weights=None, init_zero_bias=False):
         """ Initialize model weights with specific distribution and initialize biases to 0.
 
-        About weighs initialization you can read here: `torch.nn.init <https://pytorch.org/docs/stable/nn.init.html>`_.
+        About weighs initialization, you can read here: `torch.nn.init <https://pytorch.org/docs/stable/nn.init.html>`_.
 
         Parameters
         ----------
         init_model_weights : dict, True, or None
             Model weights initilaization.
-            If None than default (kaiming_uniform) initialization is used.
-            If True than common used non-default initialization is used.
-            If dict in format {layer type: callable, kwargs: {...}} than callable with kwargs is applied to layers with the type.
+            If None, then default initialization is used.
+            If True, then common used non-default initialization is used.
+            If dict in format {layer type: callable, kwargs: {...}}, then callable with kwargs 
+            applied to layers with the type.
                 Valid layer types are:
                     - conv : convolutional layers.
                     - linear : dense layers.
                     - norm : normalization layers.
                 kwargs in dict contain kwargs for initialization functions and are a dict in format {layer type: kwargs}
-                Initialization are applied to module weights with a suitable type.
+                Initialization is applied to module weights with a suitable type.
                 The only exception is normalization layers: they can contain initialization instructions for biases.
 
                 Example:
@@ -828,8 +829,6 @@ class TorchModel(BaseModel, VisualizationMixin):
                 }
         init_zero_bias : bool
             Whether to initialize all biases to zero.
-        kwargs : dict
-            Keyword arguments for model weights initialization.
         """
         if self.model:
             # Parse model weights initilaization and kwargs
@@ -856,7 +855,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 linear_kwargs = kwargs.get('linear', {})
                 norm_kwargs = kwargs.get('norm', {})
 
-            elif init_model_weights==True:
+            elif init_model_weights is not None:
                 # The common used non-default weights initialization:
                 init_conv_weights = nn.init.kaiming_normal_
                 init_linear_weights = nn.init.kaiming_normal_
