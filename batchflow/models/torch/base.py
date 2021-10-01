@@ -68,23 +68,6 @@ DECAYS_DEFAULTS = {
     torch.optim.lr_scheduler.CosineAnnealingLR: dict(T_max=None)
 }
 
-WEIGHTS_INIT = {
-    'uniform': nn.init.uniform_,
-    'normal': nn.init.normal_,
-    'constant': nn.init.constant_,
-    'ones': nn.init.ones_,
-    'zeros': nn.init.zeros_,
-    'eye': nn.init.eye_,
-    'dirac': nn.init.dirac_,
-    'xavier_uniform': nn.init.xavier_uniform_,
-    'xavier_normal': nn.init.xavier_normal_,
-    'kaiming_uniform': nn.init.kaiming_uniform_,
-    'kaiming_normal': nn.init.kaiming_normal_,
-    'orthogonal': nn.init.orthogonal_,
-    'sparse': nn.init.sparse_
-}
-
-
 
 class TorchModel(BaseModel, VisualizationMixin):
     r""" Base class for eager Torch models.
@@ -333,7 +316,6 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Train procedure and ifrastructure
         self.init_model_weights = None
-        self.init_model_weights_kwargs = None
         self.init_zero_bias = None
         self.loss = None
         self.optimizer = None
@@ -385,7 +367,6 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Store some of the config values
         self.init_model_weights = self.full_config.get('init_model_weights', None)
-        self.init_model_weights_kwargs = self.full_config.get('init_model_weights_kwargs', {})
         self.init_zero_bias = self.full_config.get('init_zero_bias', False)
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
@@ -606,8 +587,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 blocks.append((block_name, block))
 
         self.model = nn.Sequential(OrderedDict(blocks))
-        self.init_weights(init_weights=self.init_model_weights, init_zero_bias=self.init_zero_bias,
-                          **self.init_model_weights_kwargs)
+        self.init_weights(init_model_weights=self.init_model_weights, init_zero_bias=self.init_zero_bias)
         self._to_device()
 
         self.make_loss(**self.unpack('loss'))
@@ -744,8 +724,7 @@ class TorchModel(BaseModel, VisualizationMixin):
     def set_model(self, model):
         """ Set the underlying model to a supplied one and update training infrastructure. """
         self.model = model
-        self.init_weights(init_weights=self.init_model_weights, init_zero_bias=self.init_zero_bias,
-                          **self.init_model_weights_kwargs)
+        self.init_weights(init_model_weights=self.init_model_weights, init_zero_bias=self.init_zero_bias)
 
 
         self._to_device()
@@ -817,30 +796,103 @@ class TorchModel(BaseModel, VisualizationMixin):
         return cls.block(inputs, name='head', **kwargs)
 
     # Model weights initialization
-    def init_weights(self, init_model_weights=None, init_zero_bias=False, **kwargs):
+    def init_weights(self, init_model_weights=None, init_zero_bias=False):
         """ Initialize model weights with specific distribution and initialize biases to 0.
 
         About weighs initialization you can read here: `torch.nn.init <https://pytorch.org/docs/stable/nn.init.html>`_.
 
         Parameters
         ----------
-        init_model_weights : str or None
-            Model weights initilaization. If None than default (kaiming_uniform) initialization is used.
+        init_model_weights : dict, True, or None
+            Model weights initilaization.
+            If None than default (kaiming_uniform) initialization is used.
+            If True than common used non-default initialization is used.
+            If dict in format {layer type: callable, kwargs: {...}} than callable with kwargs is applied to layers with the type.
+                Valid layer types are:
+                    - conv : convolutional layers.
+                    - linear : dense layers.
+                    - norm : normalization layers.
+                kwargs in dict contain kwargs for initialization functions and are a dict in format {layer type: kwargs}
+                Initialization are applied to module weights with a suitable type.
+                The only exception is normalization layers: they can contain initialization instructions for biases.
+
+                Example:
+                {
+                    'conv': nn.init.kaiming_uniform_,
+                    'linear': nn.init.kaiming_normal_,
+                    'norm': nn.constant_,
+                    'kwargs': {
+                        'conv': {'mode': 'fan_out'},
+                        'norm': {'weight': 1, 'bias': 0}
+                    }
+                }
         init_zero_bias : bool
             Whether to initialize all biases to zero.
         kwargs : dict
             Keyword arguments for model weights initialization.
         """
-        # parse model weights shortcuts
-        if isinstance(init_model_weights, str):
-            init_model_weights = WEIGHTS_INIT[init_model_weights]
+        if self.model:
+            # Parse model weights initilaization and kwargs
+            if isinstance(init_model_weights, dict):
+                init_conv_weights = init_model_weights.get('conv', None)
+                init_linear_weights = init_model_weights.get('linear', None)
+                init_norm = init_model_weights.get('norm', None)
 
-        if self.model and (init_model_weights or init_zero_bias):
-            for module in self.model.modules():
-                if getattr(module, 'bias', None) is not None and init_zero_bias:
-                    nn.init.constant_(module.bias, 0)
-                if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)) and init_model_weights:
-                    init_model_weights(module.weight, **kwargs)
+                # Parse weights and bias initialization for normalization layers
+                if isinstance(init_norm, dict):
+                    init_norm_weights = init_norm.pop('weight', None)
+                    init_norm_bias = init_norm.pop('bias', None)
+
+                    if (init_norm_weights is None) and (init_norm_bias is None):
+                        init_norm_weights = init_norm
+                        init_norm_bias = init_norm
+                else:
+                    init_norm_weights = init_norm
+                    init_norm_bias = init_norm
+
+                # Parse kwargs
+                kwargs = init_model_weights.get('kwargs', {})
+                conv_kwargs = kwargs.get('conv', {})
+                linear_kwargs = kwargs.get('linear', {})
+                norm_kwargs = kwargs.get('norm', {})
+
+            elif init_model_weights==True:
+                # The common used non-default weights initialization:
+                init_conv_weights = nn.init.kaiming_normal_
+                init_linear_weights = nn.init.kaiming_normal_
+
+                init_norm_weights = nn.init.constant_
+                init_norm_bias = nn.init.constant_
+
+                conv_kwargs = {}
+                linear_kwargs = {}
+                norm_kwargs = {'weight': 1, 'bias': 0}
+
+            if init_model_weights or init_zero_bias:
+                for module in self.model.modules():
+                    # Biases initialization
+                    if getattr(module, 'bias', None) is not None and init_zero_bias:
+                        nn.init.constant_(module.bias, 0)
+
+                    # Model weights initialization
+                    if init_model_weights is not None:
+                        # Conv layers
+                        if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d)) and (init_conv_weights is not None):
+                            init_conv_weights(module.weight, **conv_kwargs)
+
+                        # Linear layers
+                        if isinstance(module, nn.Linear) and (init_linear_weights is not None):
+                            init_linear_weights(module.weight, **linear_kwargs)
+
+                        # Normalization layers: weights and biases initialization
+                        if isinstance(module, (nn.BatchNorm2d, nn.GroupNorm)):
+                            if init_norm_weights is not None:
+                                norm_kwargs_weights = norm_kwargs.get('weight', norm_kwargs)
+                                init_norm_weights(module.weight, **norm_kwargs_weights)
+
+                            if init_norm_bias is not None:
+                                norm_kwargs_biases = norm_kwargs.get('bias', norm_kwargs.get('weight', norm_kwargs))
+                                init_norm_bias(module.bias, **norm_kwargs_biases)
 
 
     # Transfer data to/from device(s)
