@@ -807,7 +807,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             Model weights initilaization.
             If None, then default initialization is used.
             If True, then common used non-default initialization is used.
-            If dict in format {layer type: callable, kwargs: {...}}, then callable with kwargs 
+            If dict in format {layer type: callable, kwargs: {...}}, then callable with kwargs
             applied to layers with the type.
                 Valid layer types are:
                     - conv : convolutional layers.
