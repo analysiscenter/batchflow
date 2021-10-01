@@ -409,7 +409,9 @@ def set_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False, raise_err
         Whether to raise an exception if not enough devices are available.
     """
     if 'CUDA_VISIBLE_DEVICES' in os.environ.keys():
-        raise ValueError(f'`CUDA_VISIBLE_DEVICES` is already set to "{os.environ["CUDA_VISIBLE_DEVICES"]}"!')
+        str_devices = os.environ["CUDA_VISIBLE_DEVICES"]
+        warnings.warn(f'`CUDA_VISIBLE_DEVICES` is already set to "{str_devices}"!')
+        return [int(d) for d in str_devices.split(',')]
 
     devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes,
                                  verbose=(verbose==2), raise_error=raise_error)
