@@ -836,7 +836,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         if self.model and ((init_model_weights is not None) or init_zero_bias):
             # Parse model weights initilaization
             if isinstance(init_model_weights, str):
-                # We have only one variant of predefined init function, and we check that init arg is str for a typo case
+                # We have only one variant of predefined init function, so we check that init is str for a typo case
                 # The common used non-default weights initialization:
                 init_model_weights = common_used_weights_init
 
