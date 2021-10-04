@@ -100,6 +100,23 @@ class TorchModel(BaseModel, VisualizationMixin):
         If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
         placeholder (usually np.ndarrays with zeros) creation. Default value is 2.
 
+    init_weights : callable, 'common_used', or None
+        Model weights initilaization.
+        If None, then default initialization is used.
+        If 'common_used', then common used non-default initialization is used.
+        If callable, then callable applied to each layer.
+
+        Examples:
+
+        - ``{'init_weights': 'common_used'}``
+        - .. code-block:: python
+
+            def callable_init(module): # example of a callable for init
+                if isinstance(module, nn.Linear):
+                    nn.kaiming_normal_(module.weight)
+
+            config = {'init_weights': callable_init}
+
     loss : str, dict
         Loss function, might be defined in multiple formats.
 
@@ -316,7 +333,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.devices = []
 
         # Train procedure and ifrastructure
-        self.init_model_weights = None
+        self.init_weights = None
         self.loss = None
         self.optimizer = None
         self.decay = None
@@ -366,7 +383,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.build_config()
 
         # Store some of the config values
-        self.init_model_weights = self.full_config.get('init_model_weights', None)
+        self.init_weights = self.full_config.get('init_weights', None)
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
         self.amp = self.full_config.get('amp', True)
@@ -586,7 +603,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 blocks.append((block_name, block))
 
         self.model = nn.Sequential(OrderedDict(blocks))
-        self.init_weights(init_model_weights=self.init_model_weights)
+        self.initialize_weights()
         self._to_device()
 
         self.make_loss(**self.unpack('loss'))
@@ -723,7 +740,7 @@ class TorchModel(BaseModel, VisualizationMixin):
     def set_model(self, model):
         """ Set the underlying model to a supplied one and update training infrastructure. """
         self.model = model
-        self.init_weights(init_model_weights=self.init_model_weights)
+        self.initialize_weights()
 
 
         self._to_device()
@@ -795,38 +812,17 @@ class TorchModel(BaseModel, VisualizationMixin):
         return cls.block(inputs, name='head', **kwargs)
 
     # Model weights initialization
-    def init_weights(self, init_model_weights=None):
-        """ Initialize model weights with specific distribution and initialize biases to 0.
-
-        About weighs initialization, you can read here: `torch.nn.init <https://pytorch.org/docs/stable/nn.init.html>`_.
-
-        Parameters
-        ----------
-        init_model_weights : callable, 'common_used', or None
-            Model weights initilaization.
-            If None, then default initialization is used.
-            If 'common_used', then common used non-default initialization is used.
-            If callable, then callable applied to each layer.
-
-        Examples
-        --------
-            .. code-block:: python
-
-                def callable_init(module): # example of a callable for init
-                    if isinstance(module, nn.Linear):
-                        nn.kaiming_normal_(module.weight)
-
-                config = {'init_model_weights': callable_init}
-        """
-        if self.model and (init_model_weights is not None):
+    def initialize_weights(self):
+        """ Initialize model weights with a callable or use default."""
+        if self.model and (self.init_weights is not None):
             # Parse model weights initilaization
-            if isinstance(init_model_weights, str):
+            if isinstance(self.init_weights, str):
                 # We have only one variant of predefined init function, so we check that init is str for a typo case
                 # The common used non-default weights initialization:
-                init_model_weights = common_used_weights_init
+                self.init_weights = common_used_weights_init
 
             # Weights and biases initialization
-            self.model.apply(init_model_weights)
+            self.model.apply(self.init_weights)
 
 
     # Transfer data to/from device(s)
