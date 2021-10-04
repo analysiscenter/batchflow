@@ -317,7 +317,6 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Train procedure and ifrastructure
         self.init_model_weights = None
-        self.init_zero_bias = None
         self.loss = None
         self.optimizer = None
         self.decay = None
@@ -368,7 +367,6 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Store some of the config values
         self.init_model_weights = self.full_config.get('init_model_weights', None)
-        self.init_zero_bias = self.full_config.get('init_zero_bias', False)
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
         self.amp = self.full_config.get('amp', True)
@@ -588,7 +586,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 blocks.append((block_name, block))
 
         self.model = nn.Sequential(OrderedDict(blocks))
-        self.init_weights(init_model_weights=self.init_model_weights, init_zero_bias=self.init_zero_bias)
+        self.init_weights(init_model_weights=self.init_model_weights)
         self._to_device()
 
         self.make_loss(**self.unpack('loss'))
@@ -725,7 +723,7 @@ class TorchModel(BaseModel, VisualizationMixin):
     def set_model(self, model):
         """ Set the underlying model to a supplied one and update training infrastructure. """
         self.model = model
-        self.init_weights(init_model_weights=self.init_model_weights, init_zero_bias=self.init_zero_bias)
+        self.init_weights(init_model_weights=self.init_model_weights)
 
 
         self._to_device()
@@ -797,7 +795,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         return cls.block(inputs, name='head', **kwargs)
 
     # Model weights initialization
-    def init_weights(self, init_model_weights=None, init_zero_bias=False):
+    def init_weights(self, init_model_weights=None):
         """ Initialize model weights with specific distribution and initialize biases to 0.
 
         About weighs initialization, you can read here: `torch.nn.init <https://pytorch.org/docs/stable/nn.init.html>`_.
@@ -809,8 +807,6 @@ class TorchModel(BaseModel, VisualizationMixin):
             If None, then default initialization is used.
             If 'common_used', then common used non-default initialization is used.
             If callable, then callable applied to each layer.
-        init_zero_bias : bool
-            Whether to initialize all biases to zero.
 
         Examples
         --------
