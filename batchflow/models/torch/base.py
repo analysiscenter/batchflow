@@ -19,6 +19,7 @@ try:
 except ImportError:
     CUPY_AVAILABLE = False
 
+from .initialization import common_used_weights_init
 from .visualization import VisualizationMixin
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
@@ -821,19 +822,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
                 config = {'init_model_weights': callable_init}
         """
-        def common_used_weights_init(module):
-            """ Common used non-default model weights initialization."""
-            # Conv and linear layers
-            if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
-                nn.init.kaiming_normal_(module.weight)
-
-            # Normalization layers
-            elif isinstance(module, (nn.BatchNorm2d, nn.GroupNorm)):
-                nn.init.constant_(module.weight, 1)
-                nn.init.constant_(module.bias, 0)
-
-
-        if self.model and ((init_model_weights is not None) or init_zero_bias):
+        if self.model and (init_model_weights is not None):
             # Parse model weights initilaization
             if isinstance(init_model_weights, str):
                 # We have only one variant of predefined init function, so we check that init is str for a typo case
@@ -841,12 +830,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 init_model_weights = common_used_weights_init
 
             # Weights and biases initialization
-            for module in self.model.modules():
-                if getattr(module, 'bias', None) is not None and init_zero_bias:
-                    nn.init.constant_(module.bias, 0)
-
-                if init_model_weights is not None:
-                    init_model_weights(module)
+            self.model.apply(init_model_weights)
 
 
     # Transfer data to/from device(s)
