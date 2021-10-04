@@ -1,3 +1,4 @@
+""" Functions for model weights initialization."""
 import torch
 from torch import nn
 
@@ -14,4 +15,4 @@ def common_used_weights_init(module):
 
     # Biases
     if getattr(module, 'bias', None) is not None:
-            nn.init.constant_(module.bias, 0)
+        nn.init.constant_(module.bias, 0)
