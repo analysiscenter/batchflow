@@ -159,8 +159,8 @@ class ClassificationMetrics(Metrics):
     def confusion_matrix(self):
         return self._confusion_matrix.sum(axis=0)
 
-    def show_confusion_matrix(self, classes=None, normalize=False, figsize=(10, 10)):
-        """ Show confusion matrix.
+    def plot_confusion_matrix(self, classes=None, normalize=False, figsize=(10, 10)):
+        """ Plot confusion matrix.
 
         Parameters
         ----------
