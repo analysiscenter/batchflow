@@ -476,6 +476,7 @@ class Notifier:
 
     def create_message(self, iteration, description):
         """ Combine timestamp, iteration and description into one string message. """
+        iteration = iteration // self.frequency
         timestamp = strftime("%Y-%m-%d  %H:%M:%S", self.timestamps[iteration])
         return f'{timestamp}     Iteration {iteration:5};    {description}'
 

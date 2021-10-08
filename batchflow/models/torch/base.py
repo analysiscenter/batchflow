@@ -68,6 +68,22 @@ DECAYS_DEFAULTS = {
     torch.optim.lr_scheduler.CosineAnnealingLR: dict(T_max=None)
 }
 
+WEIGHTS_INIT = {
+    'uniform': nn.init.uniform_,
+    'normal': nn.init.normal_,
+    'constant': nn.init.constant_,
+    'ones': nn.init.ones_,
+    'zeros': nn.init.zeros_,
+    'eye': nn.init.eye_,
+    'dirac': nn.init.dirac_,
+    'xavier_uniform': nn.init.xavier_uniform_,
+    'xavier_normal': nn.init.xavier_normal_,
+    'kaiming_uniform': nn.init.kaiming_uniform_,
+    'kaiming_normal': nn.init.kaiming_normal_,
+    'orthogonal': nn.init.orthogonal_,
+    'sparse': nn.init.sparse_
+}
+
 
 
 class TorchModel(BaseModel, VisualizationMixin):
@@ -316,6 +332,9 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.devices = []
 
         # Train procedure and ifrastructure
+        self.init_model_weights = None
+        self.init_model_weights_kwargs = None
+        self.init_zero_bias = None
         self.loss = None
         self.optimizer = None
         self.decay = None
@@ -365,6 +384,9 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.build_config()
 
         # Store some of the config values
+        self.init_model_weights = self.full_config.get('init_model_weights', None)
+        self.init_model_weights_kwargs = self.full_config.get('init_model_weights_kwargs', {})
+        self.init_zero_bias = self.full_config.get('init_zero_bias', False)
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
         self.amp = self.full_config.get('amp', True)
@@ -584,6 +606,8 @@ class TorchModel(BaseModel, VisualizationMixin):
                 blocks.append((block_name, block))
 
         self.model = nn.Sequential(OrderedDict(blocks))
+        self.init_weights(init_weights=self.init_model_weights, init_zero_bias=self.init_zero_bias,
+                          **self.init_model_weights_kwargs)
         self._to_device()
 
         self.make_loss(**self.unpack('loss'))
@@ -720,6 +744,9 @@ class TorchModel(BaseModel, VisualizationMixin):
     def set_model(self, model):
         """ Set the underlying model to a supplied one and update training infrastructure. """
         self.model = model
+        self.init_weights(init_weights=self.init_model_weights, init_zero_bias=self.init_zero_bias,
+                          **self.init_model_weights_kwargs)
+
 
         self._to_device()
 
@@ -788,6 +815,32 @@ class TorchModel(BaseModel, VisualizationMixin):
         torch.nn.Module or None
         """
         return cls.block(inputs, name='head', **kwargs)
+
+    # Model weights initialization
+    def init_weights(self, init_model_weights=None, init_zero_bias=False, **kwargs):
+        """ Initialize model weights with specific distribution and initialize biases to 0.
+
+        About weighs initialization you can read here: `torch.nn.init <https://pytorch.org/docs/stable/nn.init.html>`_.
+
+        Parameters
+        ----------
+        init_model_weights : str or None
+            Model weights initilaization. If None than default (kaiming_uniform) initialization is used.
+        init_zero_bias : bool
+            Whether to initialize all biases to zero.
+        kwargs : dict
+            Keyword arguments for model weights initialization.
+        """
+        # parse model weights shortcuts
+        if isinstance(init_model_weights, str):
+            init_model_weights = WEIGHTS_INIT[init_model_weights]
+
+        if self.model and (init_model_weights or init_zero_bias):
+            for module in self.model.modules():
+                if getattr(module, 'bias', None) is not None and init_zero_bias:
+                    nn.init.constant_(module.bias, 0)
+                if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)) and init_model_weights:
+                    init_model_weights(module.weight, **kwargs)
 
 
     # Transfer data to/from device(s)

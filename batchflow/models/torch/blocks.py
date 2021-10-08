@@ -96,13 +96,16 @@ class ResBlock(ConvBlock):
     op : str or callable
         Operation for combination shortcut and residual.
         See more :class:`~.layers.Combine` documentation. Default is '+a'.
+    branch : dict
+        Side branch parameters.
     n_reps : int
         Number of times to repeat the whole block. Default is 1.
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
     def __init__(self, inputs=None, layout='cnacn', filters='same', kernel_size=3, strides=1,
-                 downsample=False, bottleneck=False, attention=None, groups=1, op='+a', n_reps=1, **kwargs):
+                 downsample=False, bottleneck=False, attention=None, groups=1, op='+a', branch=None,
+                 n_reps=1, **kwargs):
         num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
         filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
@@ -112,7 +115,10 @@ class ResBlock(ConvBlock):
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         strides = [strides] * num_convs if isinstance(strides, int) else strides
         groups = [groups] * num_convs
-        branch_stride = np.prod(strides)
+        if branch is None:
+            branch = {}
+        branch_stride = branch.get('stride', np.prod(strides))
+        branch_layout = branch.get('layout', 'cn')
 
         # Used in the first repetition of the block.
         # Different from strides and branch_stride in other blocks if `downsample` is not ``False``.
@@ -140,7 +146,7 @@ class ResBlock(ConvBlock):
         if get_num_channels(inputs) != filters[-1]:
             # If main flow changes the number of filters, so must do the side branch.
             # No activation, because it will be applied after summation with the main flow
-            branch_params = {'layout': 'cn', 'filters': filters[-1],
+            branch_params = {'layout': branch_layout, 'filters': filters[-1],
                              'kernel_size': 1, 'strides': branch_stride_downsample}
         else:
             branch_params = {}
