@@ -100,7 +100,7 @@ class Activation(nn.Module):
             # check if activation has `in_place` parameter
             has_inplace = 'inplace' in inspect.getfullargspec(activation).args
             if has_inplace:
-                kwargs['inplace'] = True
+                kwargs['inplace'] = kwargs.get('inplace', True)
             self.activation = activation(*args, **kwargs)
 
         # A ready to use nn.Module or callable
