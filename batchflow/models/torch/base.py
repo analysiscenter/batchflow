@@ -19,7 +19,7 @@ try:
 except ImportError:
     CUPY_AVAILABLE = False
 
-from .initialization import common_used_weights_init
+from .initialization import best_practice_resnet_init
 from .visualization import VisualizationMixin
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
@@ -100,15 +100,15 @@ class TorchModel(BaseModel, VisualizationMixin):
         If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
         placeholder (usually np.ndarrays with zeros) creation. Default value is 2.
 
-    init_weights : callable, 'common_used', or None
+    init_weights : callable, 'best_practice_resnet', or None
         Model weights initilaization.
         If None, then default initialization is used.
-        If 'common_used', then common used non-default initialization is used.
+        If 'best_practice_resnet', then common used non-default initialization is used.
         If callable, then callable applied to each layer.
 
         Examples:
 
-        - ``{'init_weights': 'common_used'}``
+        - ``{'init_weights': 'best_practice_resnet'}``
         - .. code-block:: python
 
             def callable_init(module): # example of a callable for init
@@ -819,7 +819,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             if isinstance(self.init_weights, str):
                 # We have only one variant of predefined init function, so we check that init is str for a typo case
                 # The common used non-default weights initialization:
-                self.init_weights = common_used_weights_init
+                self.init_weights = best_practice_resnet_init
 
             # Weights and biases initialization
             self.model.apply(self.init_weights)
