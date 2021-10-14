@@ -19,6 +19,7 @@ try:
 except ImportError:
     CUPY_AVAILABLE = False
 
+from .initialization import best_practice_resnet_init
 from .visualization import VisualizationMixin
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
@@ -68,23 +69,6 @@ DECAYS_DEFAULTS = {
     torch.optim.lr_scheduler.CosineAnnealingLR: dict(T_max=None)
 }
 
-WEIGHTS_INIT = {
-    'uniform': nn.init.uniform_,
-    'normal': nn.init.normal_,
-    'constant': nn.init.constant_,
-    'ones': nn.init.ones_,
-    'zeros': nn.init.zeros_,
-    'eye': nn.init.eye_,
-    'dirac': nn.init.dirac_,
-    'xavier_uniform': nn.init.xavier_uniform_,
-    'xavier_normal': nn.init.xavier_normal_,
-    'kaiming_uniform': nn.init.kaiming_uniform_,
-    'kaiming_normal': nn.init.kaiming_normal_,
-    'orthogonal': nn.init.orthogonal_,
-    'sparse': nn.init.sparse_
-}
-
-
 
 class TorchModel(BaseModel, VisualizationMixin):
     r""" Base class for eager Torch models.
@@ -115,6 +99,23 @@ class TorchModel(BaseModel, VisualizationMixin):
     placeholder_batch_size : int
         If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
         placeholder (usually np.ndarrays with zeros) creation. Default value is 2.
+
+    init_weights : callable, 'best_practice_resnet', or None
+        Model weights initilaization.
+        If None, then default initialization is used.
+        If 'best_practice_resnet', then common used non-default initialization is used.
+        If callable, then callable applied to each layer.
+
+        Examples:
+
+        - ``{'init_weights': 'best_practice_resnet'}``
+        - .. code-block:: python
+
+            def callable_init(module): # example of a callable for init
+                if isinstance(module, nn.Linear):
+                    nn.kaiming_normal_(module.weight)
+
+            config = {'init_weights': callable_init}
 
     loss : str, dict
         Loss function, might be defined in multiple formats.
@@ -332,9 +333,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.devices = []
 
         # Train procedure and ifrastructure
-        self.init_model_weights = None
-        self.init_model_weights_kwargs = None
-        self.init_zero_bias = None
+        self.init_weights = None
         self.loss = None
         self.optimizer = None
         self.decay = None
@@ -384,9 +383,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.build_config()
 
         # Store some of the config values
-        self.init_model_weights = self.full_config.get('init_model_weights', None)
-        self.init_model_weights_kwargs = self.full_config.get('init_model_weights_kwargs', {})
-        self.init_zero_bias = self.full_config.get('init_zero_bias', False)
+        self.init_weights = self.full_config.get('init_weights', None)
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
         self.amp = self.full_config.get('amp', True)
@@ -606,8 +603,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 blocks.append((block_name, block))
 
         self.model = nn.Sequential(OrderedDict(blocks))
-        self.init_weights(init_weights=self.init_model_weights, init_zero_bias=self.init_zero_bias,
-                          **self.init_model_weights_kwargs)
+        self.initialize_weights()
         self._to_device()
 
         self.make_loss(**self.unpack('loss'))
@@ -744,8 +740,7 @@ class TorchModel(BaseModel, VisualizationMixin):
     def set_model(self, model):
         """ Set the underlying model to a supplied one and update training infrastructure. """
         self.model = model
-        self.init_weights(init_weights=self.init_model_weights, init_zero_bias=self.init_zero_bias,
-                          **self.init_model_weights_kwargs)
+        self.initialize_weights()
 
 
         self._to_device()
@@ -817,30 +812,17 @@ class TorchModel(BaseModel, VisualizationMixin):
         return cls.block(inputs, name='head', **kwargs)
 
     # Model weights initialization
-    def init_weights(self, init_model_weights=None, init_zero_bias=False, **kwargs):
-        """ Initialize model weights with specific distribution and initialize biases to 0.
+    def initialize_weights(self):
+        """ Initialize model weights with a callable or use default."""
+        if self.model and (self.init_weights is not None):
+            # Parse model weights initilaization
+            if isinstance(self.init_weights, str):
+                # We have only one variant of predefined init function, so we check that init is str for a typo case
+                # The common used non-default weights initialization:
+                self.init_weights = best_practice_resnet_init
 
-        About weighs initialization you can read here: `torch.nn.init <https://pytorch.org/docs/stable/nn.init.html>`_.
-
-        Parameters
-        ----------
-        init_model_weights : str or None
-            Model weights initilaization. If None than default (kaiming_uniform) initialization is used.
-        init_zero_bias : bool
-            Whether to initialize all biases to zero.
-        kwargs : dict
-            Keyword arguments for model weights initialization.
-        """
-        # parse model weights shortcuts
-        if isinstance(init_model_weights, str):
-            init_model_weights = WEIGHTS_INIT[init_model_weights]
-
-        if self.model and (init_model_weights or init_zero_bias):
-            for module in self.model.modules():
-                if getattr(module, 'bias', None) is not None and init_zero_bias:
-                    nn.init.constant_(module.bias, 0)
-                if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)) and init_model_weights:
-                    init_model_weights(module.weight, **kwargs)
+            # Weights and biases initialization
+            self.model.apply(self.init_weights)
 
 
     # Transfer data to/from device(s)

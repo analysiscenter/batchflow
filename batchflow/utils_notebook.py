@@ -206,7 +206,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
                 display(FileLink(out_path_html))
 
         if return_nb:
-            return notebook
+            return (exec_info, notebook)
         return exec_info
 
 
