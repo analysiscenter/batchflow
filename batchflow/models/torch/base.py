@@ -1263,7 +1263,8 @@ class TorchModel(BaseModel, VisualizationMixin):
         if feed_dict:
             if targets is not None:
                 if 'targets' in feed_dict.keys():
-                    warnings.warn("`targets` already present in `feed_dict`, so those passed as keyword arg won't be used")
+                    warnings.warn("`targets` already present in `feed_dict`," +
+                                  " so those passed as keyword arg won't be used")
                 else:
                     feed_dict['targets'] = targets
             *inputs, targets = self.parse_inputs(*args, **feed_dict)
