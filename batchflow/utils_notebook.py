@@ -194,7 +194,9 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
         # Save the executed notebook/HTML to disk
         if save_ipynb:
-            nbformat.write(notebook, out_path_ipynb)
+            with open(out_path_ipynb, 'w', encoding='utf-8') as file:
+                nbformat.write(notebook, file)
+
             if display_links:
                 display(FileLink(out_path_ipynb))
         if save_html:
