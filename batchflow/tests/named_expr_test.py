@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.append('..')
-from batchflow import (B, BA, C, D, F, V, R, P, PP, I, Dataset, Pipeline, Batch,
+from batchflow import (B, L, C, D, F, V, R, P, PP, I, Dataset, Pipeline, Batch,
                        apply_parallel, inbatch_parallel, action)
 
 
@@ -200,7 +200,7 @@ def test_d(size, n_splits):
 
 
 #--------------------
-#         BA
+#         L
 #--------------------
 
 class SomeObject:
@@ -216,21 +216,20 @@ class SomeObject:
         return self.item[key]
 
     def __setitem__(self, key, value):
-        print(key, value)
         self.item[key] = np.atleast_2d(value)
 
 @pytest.mark.parametrize('batch_length', [1, 2])
-def test_ba(batch_length):
-    """Test behaivour of BA named expression for all sorts of read-write options.
+def test_l(batch_length):
+    """Test L expression for all sorts of read-write options.
 
     batch_length
         The length of array with components.
     """
     pipeline = (Dataset(1).p
         .add_components('object', [SomeObject()]*batch_length)
-        .update(BA('object').attr, BA('object').battr)
-        .update(BA('object')['item_0'], [10]*batch_length)
-        .update(BA('object')[['item_2', 'item_3']], BA('object')[['item_0', 'item_1']])
+        .update(L('object').attr, L('object').battr)
+        .update(L('object')['item_0'], [10]*batch_length)
+        .update(L('object')[['item_2', 'item_3']], L('object')[['item_0', 'item_1']])
     )
     batch = pipeline.next_batch(1)
     assert batch.object[0].attr == 1
