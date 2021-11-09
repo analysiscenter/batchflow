@@ -208,6 +208,7 @@ class DummyObject:
     def __init__(self):
         self.attr = 0
         self.battr = 1
+        self.cattr = np.array([-15])
         self.other = DummyChild()
         self.other_list = [DummyChild(), DummyChild()]
         self.item = pd.DataFrame({'item_0': [1, 2, 3],
@@ -221,6 +222,7 @@ class DummyChild():
     def __init__(self):
         self.attr_one = -1
         self.attr_two = 100
+        self.cattr = np.array([25])
         self.item = pd.DataFrame({'item_one': [4, 5],
                                   'item_two': [7, 6]})
 
@@ -231,19 +233,22 @@ def test_l(batch_size):
     batch_size
         The length of array with components.
     """
-    pipeline = (Dataset(batch_size).p
+    batch = (Dataset(batch_size).p
         .add_components('object', [DummyObject() for i in range(batch_size)])
         .add_components('object2', [None for i in range(batch_size)])
+        # single get/set attr/item
         .update(L('object2'), L('object'))
         .update(L('object').attr, L('object').battr)
         .update(L('object').item['item_0'], [[10, 10, 10]] * batch_size)
         .update(L('object').item[['item_3', 'item_4']], L('object').item[['item_1', 'item_2']])
-        # multiple getattr and getitem
+        # multiple get/set attr/item
         .update(L('object').other.attr_one, L('object').other.attr_two)
         .update(L('object').other.item['item_one'], L('object').other.item['item_two'])
         .update(L('object').other_list[0].item['item_one'], L('object').other_list[1].item['item_two'])
-    )
-    batch = pipeline.next_batch(batch_size)
+        # check that getitem evaluates correctly
+        .add_components('comp', 0)
+        .update(L('object').cattr[B('comp')], L('object').other.cattr[B('comp')])
+    ).next_batch(batch_size)
 
     for i in range(batch_size):
         assert isinstance(batch.object2[i], DummyObject)
@@ -254,3 +259,4 @@ def test_l(batch_size):
         assert np.allclose(batch.object[i].other.item['item_one'], batch.object[i].other.item['item_two'])
         assert np.allclose(batch.object[i].other_list[0].item['item_one'],
                            batch.object[i].other_list[1].item['item_two'])
+        assert np.allclose(batch.object[i].cattr, batch.object[i].other.cattr)

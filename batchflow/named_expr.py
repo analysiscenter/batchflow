@@ -117,7 +117,7 @@ OPERATIONS_SIGNS = {
     '__and__': '&', '__or__': ' |', '__xor__': '^',
     '__lt__': '<', '__le__': '<=', '__gt__': '>', '__ge__': '>=',
     '__eq__': '==', '__ne__': '!=',
-    '__is__': 'is', '__is_not__': 'is not',
+    '__is__': 'is', '__is_not__': 'is not', '__not__': 'not '
 }
 
 def add_ops(cls):
@@ -471,7 +471,7 @@ class L(B):
         if 'attr' in self.kwargs:
             return [getattr(v, self.kwargs['attr']) for v in name]
         if 'item' in self.kwargs:
-            return [v[self.kwargs['item']] for v in name]
+            return [v[eval_expr(self.kwargs['item'], **kwargs)] for v in name]
         return name
 
     def assign(self, value, **kwargs):
@@ -483,7 +483,7 @@ class L(B):
                 setattr(n, self.kwargs['attr'], v)
         elif 'item' in self.kwargs:
             for n, v in zip(name, value):
-                n[self.kwargs['item']] = v
+                n[eval_expr(self.kwargs['item'], **kwargs)] = v
         else:
             # If value is assigned to the object itself it will be rewritten with `value`.
             setattr(batch, name, value)
