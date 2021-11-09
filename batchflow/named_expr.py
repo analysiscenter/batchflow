@@ -448,8 +448,10 @@ class L(B):
 
     Note
     ----
-    ``L('comp').images`` is equivalent to the list comprehension ``[val.images for val in batch.comp]``.
+    ``L('comp').attr`` is equivalent to the list comprehension ``[val.attr for val in batch.comp]``.
     ``L('comp')[item]`` is equivalent to the list comprehension ``[val[item] for val in batch.comp]``.
+
+    Any chains of consecutive calls of items or attribures like ``L('comp').attr[item].attr2 ... `` are also allowed.
     """
     def __init__(self, name=None, mode='w', **kwargs):
         super().__init__(name, mode)
@@ -471,6 +473,19 @@ class L(B):
         if 'item' in self.kwargs:
             return [v[self.kwargs['item']] for v in name]
         return name
+
+    def assign(self, value, **kwargs):
+        """ Assign a value to batch component or item/attribute stored in the batch component """
+        name, batch, _ = self._get_params(**kwargs)
+
+        if 'attr' in self.kwargs:
+            [setattr(n, self.kwargs['attr'], v) for n, v in zip(name, value)]
+        elif 'item' in self.kwargs:
+            for n, v in zip(name, value):
+                n[self.kwargs['item']] = v
+        else:
+            # If value is assigned to the object itself it will be rewritten with `value`.
+            setattr(batch, name, value)
 
     def __getattr__(self, name):
         return L(self, attr=name)
