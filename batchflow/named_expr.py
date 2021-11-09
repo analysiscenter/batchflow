@@ -479,7 +479,8 @@ class L(B):
         name, batch, _ = self._get_params(**kwargs)
 
         if 'attr' in self.kwargs:
-            [setattr(n, self.kwargs['attr'], v) for n, v in zip(name, value)]
+            for n, v in zip(name ,value):
+                setattr(n, self.kwargs['attr'], v)
         elif 'item' in self.kwargs:
             for n, v in zip(name, value):
                 n[self.kwargs['item']] = v
