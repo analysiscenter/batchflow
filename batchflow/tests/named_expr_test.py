@@ -203,35 +203,54 @@ def test_d(size, n_splits):
 #         L
 #--------------------
 
-class SomeObject:
+class DummyObject:
+    """Dummy class for L expression test"""
     def __init__(self):
         self.attr = 0
         self.battr = 1
+        self.other = DummyChild()
+        self.other_list = [DummyChild(), DummyChild()]
         self.item = pd.DataFrame({'item_0': [1, 2, 3],
                                   'item_1': [3, 2, 1],
-                                  'item_2': [-1, -1, -1],
-                                  'item_3': [-1, -1, -1]})
+                                  'item_2': [-1, -2, -3],
+                                  'item_3': [-1, -1, -1],
+                                  'item_4': [-1, -1, -1]})
 
-    def __getitem__(self, key):
-        return self.item[key]
+class DummyChild():
+    """Another dummy class for L expression test"""
+    def __init__(self):
+        self.attr_one = -1
+        self.attr_two = 100
+        self.item = pd.DataFrame({'item_one': [4, 5],
+                                  'item_two': [7, 6]})
 
-    def __setitem__(self, key, value):
-        self.item[key] = np.atleast_2d(value)
-
-@pytest.mark.parametrize('batch_length', [1, 2])
-def test_l(batch_length):
+@pytest.mark.parametrize('batch_size', [1, 2, 3])
+def test_l(batch_size):
     """Test L expression for all sorts of read-write options.
 
-    batch_length
+    batch_size
         The length of array with components.
     """
-    pipeline = (Dataset(1).p
-        .add_components('object', [SomeObject()]*batch_length)
+    pipeline = (Dataset(batch_size).p
+        .add_components('object', [DummyObject() for i in range(batch_size)])
+        .add_components('object2', [None for i in range(batch_size)])
+        .update(L('object2'), L('object'))
         .update(L('object').attr, L('object').battr)
-        .update(L('object')['item_0'], [10]*batch_length)
-        .update(L('object')[['item_2', 'item_3']], L('object')[['item_0', 'item_1']])
+        .update(L('object').item['item_0'], [[10, 10, 10]] * batch_size)
+        .update(L('object').item[['item_3', 'item_4']], L('object').item[['item_1', 'item_2']])
+        # multiple getattr and getitem
+        .update(L('object').other.attr_one, L('object').other.attr_two)
+        .update(L('object').other.item['item_one'], L('object').other.item['item_two'])
+        .update(L('object').other_list[0].item['item_one'], L('object').other_list[1].item['item_two'])
     )
-    batch = pipeline.next_batch(1)
-    assert batch.object[0].attr == 1
-    assert sum(batch.object[0]['item_0'] == 10) == 3
-    assert np.allclose(batch.object[0][['item_2', 'item_3']], batch.object[0][['item_0', 'item_1']])
+    batch = pipeline.next_batch(batch_size)
+
+    for i in range(batch_size):
+        assert isinstance(batch.object2[i], DummyObject)
+        assert batch.object[i].attr == 1
+        assert (batch.object[i].item['item_0'] == 10).sum() == 3
+        assert np.allclose(batch.object[i].item[['item_3', 'item_4']], batch.object[i].item[['item_1', 'item_2']])
+        assert batch.object[i].other.attr_one == batch.object[i].other.attr_two
+        assert np.allclose(batch.object[i].other.item['item_one'], batch.object[i].other.item['item_two'])
+        assert np.allclose(batch.object[i].other_list[0].item['item_one'],
+                           batch.object[i].other_list[1].item['item_two'])
