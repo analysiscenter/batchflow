@@ -2,10 +2,7 @@
 import operator
 from collections import defaultdict
 
-import numpy as np
-
 from .config import Config
-from .utils import to_list
 from .utils_random import make_rng
 
 
@@ -236,7 +233,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
 
     def _get_name(self, **kwargs):
         if isinstance(self.name, NamedExpression):
-            return self.name.get(**kwargs)
+            return eval_expr(self.name, **kwargs)
         return self.name
 
     def get(self, **kwargs):
@@ -464,15 +461,15 @@ class L(B):
         """
         name, batch, _ = self._get_params(**kwargs)
 
+        # when given a component name, convert to a component data
         if isinstance(name, str):
             return L(getattr(batch, name))
 
-        # name might be a wrapper (to remember attr or item) or the list itself
-        items = name.name if isinstance(name, L) else name
+        # expecting that name is a collection of items
         if 'attr' in self.kwargs:
-            return [getattr(v, self.kwargs['attr']) for v in items]
+            return [getattr(v, self.kwargs['attr']) for v in name]
         if 'item' in self.kwargs:
-            return [v[self.kwargs['item']] for v in items]
+            return [v[self.kwargs['item']] for v in name]
         return name
 
     def __getattr__(self, name):
@@ -486,7 +483,7 @@ class L(B):
         if 'attr' in self.kwargs:
             return s + '.' + self.kwargs['attr']
         if 'item' in self.kwargs:
-            return s + '[' + self.kwargs['item'] +']'
+            return s + '[' + str(self.kwargs['item']) +']'
         return s
 
 
@@ -730,10 +727,10 @@ class R(PipelineNamedExpression):
         ::
 
             ne = R('normal', 0, 1, size=(10, 20)))
-            value = ne.get(batch)
+            value = ne.get(batch=batch)
             # value.shape will be (10, 20)
 
-            value = ne.get(batch, size=30)
+            value = ne.get(size=30, batch=batch)
             # value.shape will be (30, 10, 20)
             # so size is treated like a batch size
         """
@@ -765,10 +762,10 @@ class R(PipelineNamedExpression):
                     kwsize = (kwsize,)
                 size = kwsize + size
 
-        kwargs = {**self.kwargs, 'size': size}
-        kwargs = eval_expr(kwargs)
+        rkwargs = {**self.kwargs, 'size': size}
+        rkwargs = eval_expr(rkwargs, **kwargs)
 
-        return name(*args, **kwargs)
+        return name(*args, **rkwargs)
 
     def assign(self, *args, **kwargs):
         """ Assign a value """
