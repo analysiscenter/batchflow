@@ -209,6 +209,8 @@ class DummyObject:
         self.attr = 0
         self.battr = 1
         self.cattr = np.array([-15])
+        self.func_args = None
+        self.func_kwargs = None
         self.other = DummyChild()
         self.other_list = [DummyChild(), DummyChild()]
         self.item = pd.DataFrame({'item_0': [1, 2, 3],
@@ -216,6 +218,10 @@ class DummyObject:
                                   'item_2': [-1, -2, -3],
                                   'item_3': [-1, -1, -1],
                                   'item_4': [-1, -1, -1]})
+
+    def function(self, *args, **kwargs):
+        self.func_args = args
+        self.func_kwargs = kwargs
 
 class DummyChild():
     """Another dummy class for L expression test"""
@@ -245,9 +251,11 @@ def test_l(batch_size):
         .update(L('object').other.attr_one, L('object').other.attr_two)
         .update(L('object').other.item['item_one'], L('object').other.item['item_two'])
         .update(L('object').other_list[0].item['item_one'], L('object').other_list[1].item['item_two'])
-        # check that getitem evaluates correctly
+        # getitem with Named Expression
         .add_components('comp', 0)
         .update(L('object').cattr[B('comp')], L('object').other.cattr[B('comp')])
+        # Call
+        .do_nothing(L('object').function(1, B('comp'), a=5, b=B('comp')))
     ).next_batch(batch_size)
 
     for i in range(batch_size):
@@ -260,3 +268,5 @@ def test_l(batch_size):
         assert np.allclose(batch.object[i].other_list[0].item['item_one'],
                            batch.object[i].other_list[1].item['item_two'])
         assert np.allclose(batch.object[i].cattr, batch.object[i].other.cattr)
+        assert batch.object[i].func_args == (1, 0)
+        assert batch.object[i].func_kwargs == {'a': 5, 'b': 0}
