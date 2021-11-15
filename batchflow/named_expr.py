@@ -449,8 +449,9 @@ class L(B):
     Note
     ----
     ``L('comp').attr`` is equivalent to the list comprehension ``[val.attr for val in batch.comp]``.
+    ``L('comp').func(*args, **kwargs)`` is equivalent to the list comprehension ``[val.func(*args, **kwargs)
+                                                                                   for val in batch.comp]``.
     ``L('comp')[item]`` is equivalent to the list comprehension ``[val[item] for val in batch.comp]``.
-
     Any chains of consecutive calls of items or attribures like ``L('comp').attr[item].attr2 ... `` are also allowed.
     """
     def __init__(self, name=None, mode='w', **kwargs):
@@ -458,8 +459,8 @@ class L(B):
         self.kwargs = kwargs
 
     def get(self, **kwargs):
-        """ Returns an instance of the class that allows one to access attributes or items
-        stored in the batch component.
+        """ Returns an instance of the class that allows one to access attributes or items stored in the batch
+        component or call a method from it.
         """
         name, batch, _ = self._get_params(**kwargs)
 
@@ -472,6 +473,9 @@ class L(B):
             return [getattr(v, self.kwargs['attr']) for v in name]
         if 'item' in self.kwargs:
             return [v[eval_expr(self.kwargs['item'], **kwargs)] for v in name]
+        if 'call' in self.kwargs:
+            call_args, call_kwargs = self.kwargs['call']
+            return [v(*eval_expr(call_args, **kwargs), **eval_expr(call_kwargs, **kwargs)) for v in name]
         return name
 
     def assign(self, value, **kwargs):
@@ -494,12 +498,21 @@ class L(B):
     def __getitem__(self, item):
         return L(self, item=item)
 
+    def __call__(self, *args, **kwargs):
+        return L(self, call=(args, kwargs))
+
     def __repr__(self):
         s = 'L(' + repr(self.name) + ')'
         if 'attr' in self.kwargs:
             return s + '.' + self.kwargs['attr']
         if 'item' in self.kwargs:
             return s + '[' + str(self.kwargs['item']) +']'
+        if 'call' in self.kwargs:
+            args, kwargs = self.kwargs['call']
+            args = ', '.join(map(str, args)) if args else ''
+            kwargs = ', '.join([f"{k}={v}" for k, v in kwargs.items()]) if kwargs else ''
+            args = args + ', ' + kwargs if kwargs else args
+            return s + '(' + args + ')'
         return s
 
 
