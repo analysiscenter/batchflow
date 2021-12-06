@@ -19,6 +19,7 @@ try:
 except ImportError:
     CUPY_AVAILABLE = False
 
+from .initialization import best_practice_resnet_init
 from .visualization import VisualizationMixin
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
@@ -69,7 +70,6 @@ DECAYS_DEFAULTS = {
 }
 
 
-
 class TorchModel(BaseModel, VisualizationMixin):
     r""" Base class for eager Torch models.
 
@@ -99,6 +99,23 @@ class TorchModel(BaseModel, VisualizationMixin):
     placeholder_batch_size : int
         If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
         placeholder (usually np.ndarrays with zeros) creation. Default value is 2.
+
+    init_weights : callable, 'best_practice_resnet', or None
+        Model weights initilaization.
+        If None, then default initialization is used.
+        If 'best_practice_resnet', then common used non-default initialization is used.
+        If callable, then callable applied to each layer.
+
+        Examples:
+
+        - ``{'init_weights': 'best_practice_resnet'}``
+        - .. code-block:: python
+
+            def callable_init(module): # example of a callable for init
+                if isinstance(module, nn.Linear):
+                    nn.kaiming_normal_(module.weight)
+
+            config = {'init_weights': callable_init}
 
     loss : str, dict
         Loss function, might be defined in multiple formats.
@@ -316,6 +333,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.devices = []
 
         # Train procedure and ifrastructure
+        self.init_weights = None
         self.loss = None
         self.optimizer = None
         self.decay = None
@@ -365,6 +383,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.build_config()
 
         # Store some of the config values
+        self.init_weights = self.full_config.get('init_weights', None)
         self.microbatch = self.full_config.get('microbatch', None)
         self.sync_frequency = self.full_config.get('sync_frequency', 1)
         self.amp = self.full_config.get('amp', True)
@@ -584,6 +603,7 @@ class TorchModel(BaseModel, VisualizationMixin):
                 blocks.append((block_name, block))
 
         self.model = nn.Sequential(OrderedDict(blocks))
+        self.initialize_weights()
         self._to_device()
 
         self.make_loss(**self.unpack('loss'))
@@ -720,6 +740,8 @@ class TorchModel(BaseModel, VisualizationMixin):
     def set_model(self, model):
         """ Set the underlying model to a supplied one and update training infrastructure. """
         self.model = model
+        self.initialize_weights()
+
 
         self._to_device()
 
@@ -788,6 +810,19 @@ class TorchModel(BaseModel, VisualizationMixin):
         torch.nn.Module or None
         """
         return cls.block(inputs, name='head', **kwargs)
+
+    # Model weights initialization
+    def initialize_weights(self):
+        """ Initialize model weights with a callable or use default."""
+        if self.model and (self.init_weights is not None):
+            # Parse model weights initilaization
+            if isinstance(self.init_weights, str):
+                # We have only one variant of predefined init function, so we check that init is str for a typo case
+                # The common used non-default weights initialization:
+                self.init_weights = best_practice_resnet_init
+
+            # Weights and biases initialization
+            self.model.apply(self.init_weights)
 
 
     # Transfer data to/from device(s)
@@ -1226,8 +1261,12 @@ class TorchModel(BaseModel, VisualizationMixin):
             _, value = feed_dict.popitem()
             args = (*args, value)
         if feed_dict:
-            if targets is not None and 'targets' in feed_dict.keys():
-                warnings.warn("`targets` already present in `feed_dict`, so those passed as keyword arg won't be used")
+            if targets is not None:
+                if 'targets' in feed_dict.keys():
+                    warnings.warn("`targets` is already present in `feed_dict`, " +
+                                  "so targets passed as a keyword arg won't be used")
+                else:
+                    feed_dict['targets'] = targets
             *inputs, targets = self.parse_inputs(*args, **feed_dict)
 
         # Positional arguments only

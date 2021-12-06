@@ -13,7 +13,7 @@ from .dataset import Dataset
 from .pipeline import Pipeline
 from .monitor import *
 from .notifier import Notifier
-from .named_expr import NamedExpression, B, BA, C, F, V, M, D, R, W, P, PP, I
+from .named_expr import NamedExpression, B, L, C, F, V, M, D, R, W, P, PP, I, eval_expr
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, parallel, any_action_failed, mjit, deprecated, apply_parallel
 from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
@@ -22,6 +22,7 @@ from .utils import save_data_to, read_data_from
 from .utils_random import make_rng, make_seed_sequence, spawn_seed_sequence
 from .utils_notebook import in_notebook, get_notebook_path, get_notebook_name, run_notebook, pylint_notebook,\
                             get_available_gpus, set_gpus
+from .utils_telegram import TelegramMessage
 
 
 __version__ = '0.5.0'

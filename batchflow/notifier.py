@@ -1,10 +1,11 @@
 """ Progress notifier. """
+import sys
 import math
 from time import time, gmtime, strftime
 
 from tqdm import tqdm
 from tqdm.notebook import tqdm as tqdm_notebook
-from tqdm.auto import tqdm as tqdm_auto
+from tqdm.autonotebook import tqdm as tqdm_auto
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,8 +14,9 @@ try:
 except ImportError:
     pass
 
-from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .named_expr import NamedExpression, eval_expr
+from .monitor import ResourceMonitor, MONITOR_ALIASES
+from .utils_telegram import TelegramMessage
 
 
 class DummyBar:
@@ -26,10 +28,15 @@ class DummyBar:
 
         self.n = 0
         self.desc = ''
+        self.postfix = ''
         self.start_t = time()
 
     def update(self, n):
         self.n += n
+
+    @property
+    def format_dict(self):
+        return {'n': self.n, 'total': self.total, 't': time() - self.start_t}
 
     def format_meter(self, n, total, t, **kwargs):
         _ = kwargs
@@ -38,8 +45,11 @@ class DummyBar:
     def display(self, *args, **kwargs):
         _ = args, kwargs
 
-    def set_description(self, description):
-        self.desc = description
+    def set_description(self, desc):
+        self.desc = desc
+
+    def set_postfix_str(self, postfix):
+        self.postfix = postfix
 
     def close(self):
         pass
@@ -66,8 +76,13 @@ class Notifier:
             as well as everything else (monitors, variables, logs) are still tracked.
     update_total : bool
         Whether the total amount of iterations should be computed at initialization.
+    desc : str
+        Prefix for created descriptions.
+    disable : bool
+        Whether to disable the notifier completely: progress bar, monitors and graphs.
     total, batch_size, n_iters, n_epochs, drop_last, length
         Parameters to calculate total amount of iterations.
+
     frequency : int
         Frequency of notifier updates.
     monitors : str, :class:`.Monitor`, :class:`.NamedExpression`, dict or sequence of them
@@ -81,8 +96,20 @@ class Notifier:
             Can be used to change the default way of displaying graphs.
     graphs : str, :class:`.Monitor`, :class:`.NamedExpression`, or sequence of them
         Same semantics, as `monitors`, but tracked entities are displayed in dynamically updated plots.
-    file : str
+    log_file : str
         If provided, a textual log is written into the supplied path.
+
+    telegram : bool
+        Whether to send notifications to a Telegram Bot. Works with both textual bars and figures (from `graphs`).
+        Under the hood, keeps track of two messages - one with text, one with media, and edits them when needed.
+        `silent` parameters controls, whether messages are sent with notifications or not.
+
+        One must supply telegram `token` and `chat_id` either by passing directly or
+        setting environment variables `TELEGRAM_TOKEN` and `TELEGRAM_CHAT_ID`. To get them:
+            - create a bot <https://core.telegram.org/bots#6-botfather> and copy its `{token}`
+            - add the bot to a chat and send it a message such as `/start`
+            - go to <https://api.telegram.org/bot`{token}`/getUpdates> to find out the `{chat_id}`
+
     window : int
         Allows to plot only the last `window` values from every tracked container.
     layout : str
@@ -91,15 +118,18 @@ class Notifier:
         Total size of drawn figure.
     savepath : str
         Path to save image, created by tracking entities with `graphs`.
-    disable : bool
-        Whether to disable the notifier completely: progress bar, monitors and graphs.
     *args, **kwargs
         Positional and keyword arguments that are used to create underlying progress bar.
     """
-    def __init__(self, bar=None, *args, update_total=True,
+    COLOUR_RUNNING = '#2196f3'
+    COLOUR_SUCCESS = '#4caf50'
+    COLOUR_FAILURE = '#f44336'
+
+    def __init__(self, bar=None, *args, update_total=True, disable=False,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
-                 frequency=1, monitors=None, graphs=None, file=None,
-                 window=None, layout='h', figsize=None, savepath=None, disable=False, **kwargs):
+                 frequency=1, monitors=None, graphs=None, log_file=None,
+                 telegram=False, token=None, chat_id=None, silent=True,
+                 window=None, layout='h', figsize=None, savepath=None, **kwargs):
         # Prepare data containers like monitors and pipeline variables
         if monitors:
             monitors = monitors if isinstance(monitors, (tuple, list)) else [monitors]
@@ -147,9 +177,9 @@ class Notifier:
         self.start_monitors()
 
         # Prepare file log
-        self.file = file
-        if self.file:
-            with open(self.file, 'w'):
+        self.log_file = log_file
+        if self.log_file:
+            with open(self.log_file, 'w'):
                 pass
 
         # Create bar; set the number of total iterations, if possible
@@ -160,21 +190,33 @@ class Notifier:
             bar_func = bar
         elif bar in ['n', 'nb', 'notebook', 'j', 'jpn', 'jupyter']:
             bar_func = tqdm_notebook
-        elif bar in ['a', 'auto']:
+        elif bar in [True, 'a', 'auto']:
             bar_func = tqdm_auto
-        elif bar in [True, 't', 'tqdm']:
+        elif bar in ['t', 'tqdm']:
             bar_func = tqdm
+        elif bar in ['telegram', 'tg']:
+            bar_func = tqdm_auto
+            telegram = True
         elif bar in [False, None]:
             bar_func = DummyBar
         else:
             raise ValueError('Unknown bar value:', bar)
 
         # Set default values for bars
-        if 'ncols' not in kwargs:
-            if bar_func == tqdm_notebook:
-                kwargs['ncols'] = min(700 + 100 * len(monitors or []), 1000)
-            elif bar_func == tqdm:
-                kwargs['ncols'] = min(80 + 10 * len(monitors or []), 120)
+        if bar_func is tqdm or bar_func is tqdm_notebook:
+            if bar_func is tqdm:
+                ncols = min(80 + 10 * self.n_monitors, 120)
+                colour = self.COLOUR_SUCCESS
+            elif bar_func is tqdm_notebook:
+                ncols = min(700 + 150 * self.n_monitors, 1000)
+                colour = None
+
+            kwargs = {
+                'ncols': ncols,
+                'colour': colour,
+                'file': sys.stdout,
+                **kwargs
+            }
 
         self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
 
@@ -189,6 +231,12 @@ class Notifier:
         #pylint: disable=invalid-unary-operand-type
         self.slice = slice(-window, None, None) if isinstance(window, int) else slice(None)
         self.layout, self.figsize, self.savepath = layout, figsize, savepath
+
+        # Prepare Telegram notifications
+        self.telegram = telegram
+        if self.telegram:
+            self.telegram_text = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
+            self.telegram_media = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
 
 
     def update_total(self, batch_size, n_iters, n_epochs, drop_last, length, total=None):
@@ -230,29 +278,34 @@ class Notifier:
 
         self.data_containers = []
         self.has_graphs = False
-        self.file = None
+        self.log_file = None
+        self.telegram = False
 
 
     def update(self, n=1, pipeline=None, batch=None):
         """ Update Notifier with new info:
         - fetch up-to-date data from batch, pipeline and monitors
-        - set bar description
+        - set bar postfix
         - draw plots anew
-        - update log file
+        - update log log_file
+        - send notifications to Telegram
         - increment underlying progress bar tracker
         """
-        if (self.bar.n + 1) % self.frequency == 0 or (self.bar.n == self.bar.total - 1):
+        if self.bar.n == 0 or (self.bar.n + 1) % self.frequency == 0 or (self.bar.n == self.bar.total - 1):
             self.timestamps.append(gmtime())
 
             if self.data_containers:
                 self.update_data(pipeline=pipeline, batch=batch)
-                self.update_description()
+            self.update_postfix()
 
             if self.has_graphs:
-                self.update_plots(self.n_monitors, True)
+                self.update_plots(index=self.n_monitors, add_suptitle=True)
 
-            if self.file:
-                self.update_file()
+            if self.log_file:
+                self.update_log_file()
+
+            if self.telegram:
+                self.update_telegram()
 
         self.bar.update(n)
 
@@ -272,10 +325,13 @@ class Notifier:
                 value = eval_expr(source, pipeline=pipeline, batch=batch)
                 container['data'] = value
 
-    def update_description(self):
-        """ Set new bar description. """
-        description = self.create_description(iteration=-1)
-        self.bar.set_description(description)
+    def update_postfix(self):
+        """ Set the new bar description, if needed. """
+        postfix = self.create_description(iteration=-1)
+
+        previous_postfix = self.bar.postfix or ''
+        if postfix and not previous_postfix.startswith(postfix):
+            self.bar.set_postfix_str(postfix)
 
     def update_plots(self, index=0, add_suptitle=False, savepath=None, clear_display=True):
         """ Draw plots anew. """
@@ -306,7 +362,7 @@ class Notifier:
 
                 if plot_function is not None:
                     plot_function(fig=fig, ax=ax[i - index], i=i,
-                                  data_x=data_x, data_y=data_y, container=container)
+                                  data_x=data_x, data_y=data_y, container=container, notifier=self)
                 # Default plotting functionality
                 elif isinstance(data_y, (tuple, list)) or (isinstance(data_y, np.ndarray) and data_y.ndim == 1):
                     ax[i - index].plot(data_x, data_y)
@@ -319,7 +375,13 @@ class Notifier:
                     ax[i - index].set_title(name, fontsize=12)
 
         if add_suptitle:
-            title = self.format_meter(self.n+1, self.total, time()-self.start_t, ncols=80)
+            fmt = {
+                **self.bar.format_dict,
+                'n': self.bar.n + 1,
+                'ncols': 80,
+                'colour': None,
+            }
+            title = self.bar.format_meter(**fmt)
             plt.suptitle(title, y=0.99, fontsize=14)
 
         savepath = savepath or (f'{self.savepath}_{self.bar.n}' if self.savepath is not None else None)
@@ -327,12 +389,28 @@ class Notifier:
             plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
         plt.show()
 
-    def update_file(self):
-        """ Update file on the fly. """
-        with open(self.file, 'a+') as f:
-            print(self.create_message(self.bar.n, self.bar.desc[:-2]), file=f)
+        if self.telegram:
+            self.telegram_media.send(fig)
 
+    def update_log_file(self):
+        """ Update log file on the fly. """
+        with open(self.log_file, 'a+') as f:
+            print(self.create_message(self.bar.n, self.bar.postfix or ''), file=f)
 
+    def update_telegram(self):
+        """ Send a textual notification to a Telegram. """
+        fmt = {
+            **self.bar.format_dict,
+            'n': self.bar.n + 1,
+            'ncols': 80,
+            'colour': None,
+        }
+        text = self.bar.format_meter(**fmt).strip()
+        idx = text.find('[')
+
+        self.telegram_text.send(f'`{text[:idx]}`\n`{text[idx:]}`')
+
+    # Manual usage of notifier instance
     def visualize(self):
         """ Convenient alias for working with an instance. """
         self.update_plots(clear_display=False)
@@ -345,14 +423,24 @@ class Notifier:
                 print(self.create_message(i, description), file=f)
 
     def __call__(self, iterable):
-        self.update_total(0, 0, 0, 0, 0, total=len(iterable))
-        for item in iterable:
-            yield item
-            self.update()
-        self.close()
+        if self.bar is not None and self.bar.total is None:
+            self.update_total(0, 0, 0, 0, 0, total=len(iterable))
 
-    def close(self):
+        try:
+            for item in iterable:
+                yield item
+                self.update()
+            self.close(success=True)
+        except: #pylint: disable=bare-except
+            self.close(success=False)
+            raise
+
+    def close(self, success=True):
         """ Close the underlying progress bar. """
+        #pylint: disable=attribute-defined-outside-init
+        if not success:
+            self.bar.colour = self.COLOUR_FAILURE
+
         self.bar.close()
         self.stop_monitors()
 
@@ -375,6 +463,7 @@ class Notifier:
     def create_description(self, iteration):
         """ Create string description of a given iteration. """
         description = []
+
         for container in self.data_containers:
             source = container['source']
             name = container['name']
@@ -387,6 +476,7 @@ class Notifier:
 
     def create_message(self, iteration, description):
         """ Combine timestamp, iteration and description into one string message. """
+        iteration = iteration // self.frequency
         timestamp = strftime("%Y-%m-%d  %H:%M:%S", self.timestamps[iteration])
         return f'{timestamp}     Iteration {iteration:5};    {description}'
 
@@ -395,6 +485,10 @@ class Notifier:
         if not key in self.__dict__ and hasattr(self.bar, key):
             return getattr(self.bar, key)
         raise AttributeError(key)
+
+    def __del__(self):
+        """ Extra safety measure to close the underlying bar: helps to prevent tqdm bug. """
+        self.close()
 
     @staticmethod
     def clear():

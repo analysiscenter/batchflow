@@ -3,6 +3,7 @@ from copy import copy
 from functools import partial
 
 import numpy as np
+from matplotlib import pyplot as plt
 
 from ...decorators import mjit
 from . import Metrics, binarize, sigmoid, infmean
@@ -157,6 +158,38 @@ class ClassificationMetrics(Metrics):
     @property
     def confusion_matrix(self):
         return self._confusion_matrix.sum(axis=0)
+
+    def plot_confusion_matrix(self, classes=None, normalize=False, figsize=(10, 10)):
+        """ Plot confusion matrix.
+
+        Parameters
+        ----------
+        classes : sequence, optional
+            Sequence of classes labels.
+        normalize : bool
+            Whether to normalize confusion matrix over target classes.
+        figsize : tuple of ints
+            Image width and height in inches.
+        """
+        confusion_matrix = np.array(self.confusion_matrix)
+        if classes is None:
+            classes = np.arange(self.num_classes)
+        if normalize:
+            confusion_matrix = confusion_matrix / np.nansum(confusion_matrix, axis=0)
+
+        fig, ax = plt.subplots(figsize=figsize)
+        image = ax.matshow(confusion_matrix)
+        ax.set_xticks(np.arange(confusion_matrix.shape[0]))
+        ax.set_xticklabels(classes, rotation=75, ha="left")
+        ax.set_xlabel("Actual class")
+        ax.set_yticks(np.arange(confusion_matrix.shape[0]))
+        ax.set_yticklabels(classes)
+        ax.set_ylabel("Predicted class")
+        ax.set_title("Normalized confusion matrix")
+        fig.colorbar(image, ax=ax, shrink=0.8)
+        fig.tight_layout()
+        plt.grid(False)
+        plt.show()
 
     def copy(self):
         """ Return a duplicate containing only the confusion matrix """

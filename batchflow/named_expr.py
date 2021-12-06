@@ -2,10 +2,7 @@
 import operator
 from collections import defaultdict
 
-import numpy as np
-
 from .config import Config
-from .utils import to_list
 from .utils_random import make_rng
 
 
@@ -79,7 +76,7 @@ TERNARY_OPS = {
 }
 
 BINARY_OPS = {
-    '__add__': operator.add, '__radd__': swap(operator.add),
+    '__add__': operator.add, '__radd__': swap(operator.add), '__concat__': operator.concat,
     '__sub__': operator.sub, '__rsub__': swap(operator.sub),
     '__mul__': operator.mul, '__rmul__': swap(operator.mul),
     '__floordiv__': operator.floordiv, '__rfloordiv__': swap(operator.floordiv),
@@ -91,20 +88,23 @@ BINARY_OPS = {
     '__and__': operator.and_, '__or__': operator.or_, '__xor__': operator.xor,
     '__lt__': operator.lt, '__le__': operator.le, '__gt__': operator.gt, '__ge__': operator.ge,
     '__eq__': operator.eq, '__ne__': operator.ne,
+    '__is__': operator.is_, '__is_not__': operator.is_not,
+    '#getitem': lambda a, b: a[b],
     '#item': lambda a, b: a[b],
     '#format': lambda a, b: b.format(a),
     '#attr': lambda a, b: getattr(a, b),
 }
 
 UNARY_OPS = {
-    '__neg__': operator.neg, '__pos__': operator.pos, '__abs__': operator.abs, '__invert__': operator.inv,
+    '__neg__': operator.neg, '__pos__': operator.pos, '__invert__': operator.inv, '__not__': operator.not_,
+    '__abs__': operator.abs,
     '#str': str,
 }
 
 OPERATIONS = {**TERNARY_OPS, **BINARY_OPS, **UNARY_OPS}
 
 OPERATIONS_SIGNS = {
-    '__pos__': '+', '__neg__': '-', '__invert__': '~',
+    '__pos__': '+', '__neg__': '-', '__invert__': '~', '__concat__': '+',
     '__add__': '+', '__radd__': '+',
     '__sub__': '-', '__rsub__': '-',
     '__mul__': '*', '__rmul__': '*',
@@ -117,6 +117,7 @@ OPERATIONS_SIGNS = {
     '__and__': '&', '__or__': ' |', '__xor__': '^',
     '__lt__': '<', '__le__': '<=', '__gt__': '>', '__ge__': '>=',
     '__eq__': '==', '__ne__': '!=',
+    '__is__': 'is', '__is_not__': 'is not', '__not__': 'not '
 }
 
 def add_ops(cls):
@@ -181,7 +182,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
         return AlgebraicNamedExpression(op='#attr', a=self, b=name)
 
     def __getitem__(self, key):
-        if isinstance(key, slice):
+        if isinstance(key, slice) and any(isinstance(v, NamedExpression) for v in (key.start, key.stop, key.step)):
             key = AlgebraicNamedExpression(op='#slice', a=key.start, b=key.stop, c=key.step)
         return AlgebraicNamedExpression(op='#item', a=self, b=key)
 
@@ -232,7 +233,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
 
     def _get_name(self, **kwargs):
         if isinstance(self.name, NamedExpression):
-            return self.name.get(**kwargs)
+            return eval_expr(self.name, **kwargs)
         return self.name
 
     def get(self, **kwargs):
@@ -375,7 +376,7 @@ class AlgebraicNamedExpression(NamedExpression):
         if self.op == '#str':
             return 'str(' + repr(self.a) + ')'
         if self.op == '#attr':
-            return repr(self.a) + '.' + repr(self.b)[1:-1]
+            return repr(self.a) + '.' + repr(self.b)[1:-1] # remove ''
         if self.op == '#item':
             return repr(self.a) + '[' + repr(self.b) +']'
         if self.op == '#format':
@@ -441,46 +442,79 @@ class B(NamedExpression):
         if name is not None:
             setattr(batch, name, value)
 
-class BA(B):
-    """ Array component to use when the batch component is an array of objects.
+
+class L(B):
+    """ List of objects or a batch component with a list of objects.
 
     Note
     ----
-    ``BA('obj').images`` equivalent to the list comprehension ``[val.images for val in batch.obj]``.
-    ``BA("obj")['labels']`` equivalent to the list comprehension ``[val['labels'] for val in batch.obj]``.
+    ``L('comp').attr`` is equivalent to the list comprehension ``[val.attr for val in batch.comp]``.
+    ``L('comp').func(*args, **kwargs)`` is equivalent to the list comprehension ``[val.func(*args, **kwargs)
+                                                                                   for val in batch.comp]``.
+    ``L('comp')[item]`` is equivalent to the list comprehension ``[val[item] for val in batch.comp]``.
+    Any chains of consecutive calls of items or attribures like ``L('comp').attr[item].attr2 ... `` are also allowed.
     """
-    def get(self, **kwargs):
-        """ Returns an instance of the class that allows one to access attributes or items
-        stored in the batch component.
-        """
-        return Component(super().get(**kwargs))
+    def __init__(self, name=None, mode='w', **kwargs):
+        super().__init__(name, mode)
+        self.kwargs = kwargs
 
-class Component:
-    """ Implements an interface for accessing attributes or items of all elements from an array of objects. """
-    def __init__(self, component):
-        self.component = component
+    def get(self, **kwargs):
+        """ Returns an instance of the class that allows one to access attributes or items stored in the batch
+        component or call a method from it.
+        """
+        name, batch, _ = self._get_params(**kwargs)
+
+        # when given a component name, convert to a component data
+        if isinstance(name, str):
+            return L(getattr(batch, name))
+
+        # expecting that name is a collection of items
+        if 'attr' in self.kwargs:
+            return [getattr(v, self.kwargs['attr']) for v in name]
+        if 'item' in self.kwargs:
+            return [v[eval_expr(self.kwargs['item'], **kwargs)] for v in name]
+        if 'call' in self.kwargs:
+            call_args, call_kwargs = self.kwargs['call']
+            return [v(*eval_expr(call_args, **kwargs), **eval_expr(call_kwargs, **kwargs)) for v in name]
+        return name
+
+    def assign(self, value, **kwargs):
+        """ Assign a value to batch component or item/attribute stored in the batch component """
+        name, batch, _ = self._get_params(**kwargs)
+
+        if 'attr' in self.kwargs:
+            for n, v in zip(name ,value):
+                setattr(n, self.kwargs['attr'], v)
+        elif 'item' in self.kwargs:
+            for n, v in zip(name, value):
+                n[eval_expr(self.kwargs['item'], **kwargs)] = v
+        else:
+            # If value is assigned to the object itself it will be rewritten with `value`.
+            setattr(batch, name, value)
 
     def __getattr__(self, name):
-        return np.array([getattr(val, name) for val in self.component])
+        return L(self, attr=name)
 
-    def __setattr__(self, name, value):
-        if name == 'component':
-            self.__dict__[name] = value
-        else:
-            if len(self.component) != len(value):
-                raise ValueError("Given `value`'s length must be equal to batch size.")
-            for item, val in zip(self.component, value):
-                setattr(item, name, val)
+    def __getitem__(self, item):
+        return L(self, item=item)
 
-    def __getitem__(self, key):
-        return np.array([val[key] for val in self.component])
+    def __call__(self, *args, **kwargs):
+        return L(self, call=(args, kwargs))
 
-    def __setitem__(self, key, value):
-        key = to_list(key)
-        if len(self.component) != len(value):
-            raise ValueError("Given `value`'s length must be equal to batch size.")
-        for item, val in zip(self.component, value):
-            item[key] = val
+    def __repr__(self):
+        s = 'L(' + repr(self.name) + ')'
+        if 'attr' in self.kwargs:
+            return s + '.' + self.kwargs['attr']
+        if 'item' in self.kwargs:
+            return s + '[' + str(self.kwargs['item']) +']'
+        if 'call' in self.kwargs:
+            args, kwargs = self.kwargs['call']
+            args = ', '.join(map(str, args)) if args else ''
+            kwargs = ', '.join([f"{k}={v}" for k, v in kwargs.items()]) if kwargs else ''
+            args = args + ', ' + kwargs if kwargs else args
+            return s + '(' + args + ')'
+        return s
+
 
 class PipelineNamedExpression(NamedExpression):
     #pylint: disable=abstract-method
@@ -722,10 +756,10 @@ class R(PipelineNamedExpression):
         ::
 
             ne = R('normal', 0, 1, size=(10, 20)))
-            value = ne.get(batch)
+            value = ne.get(batch=batch)
             # value.shape will be (10, 20)
 
-            value = ne.get(batch, size=30)
+            value = ne.get(size=30, batch=batch)
             # value.shape will be (30, 10, 20)
             # so size is treated like a batch size
         """
@@ -757,10 +791,10 @@ class R(PipelineNamedExpression):
                     kwsize = (kwsize,)
                 size = kwsize + size
 
-        kwargs = {**self.kwargs, 'size': size}
-        kwargs = eval_expr(kwargs)
+        rkwargs = {**self.kwargs, 'size': size}
+        rkwargs = eval_expr(rkwargs, **kwargs)
 
-        return name(*args, **kwargs)
+        return name(*args, **rkwargs)
 
     def assign(self, *args, **kwargs):
         """ Assign a value """

@@ -138,11 +138,13 @@ class SEBlock(nn.Module):
     def __init__(self, inputs=None, ratio=4, bias=False, **kwargs):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
-        in_units = get_shape(inputs)[1]
-        units = [in_units // ratio, in_units]
+        in_filters = get_shape(inputs)[1]
+        filters = [in_filters // ratio, in_filters]
         activations = ['relu', 'sigmoid']
-        kwargs = {'layout': 'Vfafa >',
-                  'units': units, 'activation': activations,
+        kwargs = {'layout': 'V>caca',
+                  'kernel_size': 1,
+                  'filters': filters,
+                  'activation': activations,
                   'dim': get_num_dims(inputs),
                   'bias': bias,
                   **kwargs}
@@ -150,7 +152,7 @@ class SEBlock(nn.Module):
 
         self.desc_kwargs = {
             'class': self.__class__.__name__,
-            'units': units,
+            'filters': filters,
             'ratio': ratio,
             'bias': bias,
         }
@@ -161,7 +163,7 @@ class SEBlock(nn.Module):
     def __repr__(self):
         if getattr(self, 'debug', False):
             return super().__repr__()
-        layer_desc = ('{class}(units={units}, ratio={ratio}, bias={bias})'
+        layer_desc = ('{class}(filters={filters}, ratio={ratio}, bias={bias})'
                       .format(**self.desc_kwargs))
         return layer_desc
 
@@ -241,12 +243,12 @@ class SimpleSelfAttention(nn.Module):
         batch_size, spatial = x.shape[0], x.shape[2:]
         num_features = np.prod(spatial)
 
-        phi = self.mid_branch(x).view(batch_size, -1, num_features) # (B, C/8, N)
-        theta = self.bot_branch(x).view(batch_size, num_features, -1) # (B, N, C)
+        phi = self.mid_branch(x).reshape(batch_size, -1, num_features) # (B, C/8, N)
+        theta = self.bot_branch(x).reshape(batch_size, num_features, -1) # (B, N, C)
         attention = torch.bmm(phi, theta) / num_features # (B, C/8, C)
 
-        out = self.top_branch(x).view(batch_size, num_features, -1) # (B, N, C/8)
-        out = torch.bmm(out, attention).view(batch_size, -1, *spatial)
+        out = self.top_branch(x).reshape(batch_size, num_features, -1) # (B, N, C/8)
+        out = torch.bmm(out, attention).reshape(batch_size, -1, *spatial)
         return self.gamma*out + x
 
     def __repr__(self):

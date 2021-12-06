@@ -1,5 +1,6 @@
 """ Utility functions to work with Jupyter Notebooks. """
 import os
+import sys
 import re
 import json
 import time
@@ -64,7 +65,8 @@ def get_notebook_name():
 def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-1,
                  working_dir='./', execute_kwargs=None,
                  save_ipynb=True, out_path_ipynb=None, save_html=False, out_path_html=None, suffix='_out',
-                 add_timestamp=True, hide_input=False, display_links=True, raise_exception=False, return_nb=False):
+                 add_timestamp=True, hide_input=False, display_links=True,
+                 raise_exception=False, show_error_info=True, return_nb=False):
     """ Run a notebook and save the output.
     Additionally, allows to pass `nb_kwargs` arguments, that are used for notebook execution. Under the hood,
     we place all of them into a separate cell, inserted in the notebook; hence, all of the keys must be valid Python
@@ -105,9 +107,11 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
         Whether to hide the code cells in the output notebook.
     display_links : bool
         Whether to display links to the output notebook and html at execution.
-    raise_exception
+    raise_exception : bool
         Whether to re-raise exceptions from the notebook.
-    return_nb
+    show_error_info : bool
+        Whether to show a message with information about an error in the output notebook (if an error exists).
+    return_nb : bool
         Whether to return the notebook object from this function.
     """
     # pylint: disable=bare-except, lost-exception
@@ -134,6 +138,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
     # Read the master notebook, prepare and insert kwargs cell
     notebook = nbformat.read(path, as_version=4)
+    exec_info = True
     if hide_input:
         notebook["metadata"].update({"hide_input": True})
     if nb_kwargs:
@@ -149,12 +154,31 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
     try:
         executor.preprocess(notebook, {'metadata': {'path': working_dir}})
     except:
-        # Execution failed, print a message and re-raise
-        msg = ('Error executing the notebook "%s".\n'
-               'Notebook arguments: %s\n\n'
-               'See notebook "%s" for the traceback.' %
-               (path, str(nb_kwargs), out_path_ipynb))
-        print(msg)
+        # Execution failed, print a message with error location and re-raise
+        # Find cell with a failure
+        exec_info = sys.exc_info()
+
+        # Get notebook cells from an execution traceback and iterate over them
+        notebook_cells = exec_info[2].tb_frame.f_locals['notebook']['cells']
+        error_cell_number = None
+        for cell in notebook_cells:
+            try:
+                # A cell with a failure has 'output_type' equals to 'error', but cells have
+                # variable structure and some of them don't have these target fields
+                if cell['outputs'][0]['output_type'] == 'error':
+                    error_cell_number = cell['execution_count']
+                    break
+            except:
+                pass
+
+        if show_error_info:
+            msg = ('Error executing the notebook "%s".\n'
+                   'Notebook arguments: %s\n\n'
+                   'See notebook "%s" (cell number %s) for the traceback.' %
+                   (path, str(nb_kwargs), out_path_ipynb, error_cell_number))
+            print(msg)
+
+        exec_info = error_cell_number
 
         if raise_exception:
             raise
@@ -170,7 +194,9 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
         # Save the executed notebook/HTML to disk
         if save_ipynb:
-            nbformat.write(notebook, out_path_ipynb)
+            with open(out_path_ipynb, 'w', encoding='utf-8') as file:
+                nbformat.write(notebook, file)
+
             if display_links:
                 display(FileLink(out_path_ipynb))
         if save_html:
@@ -182,8 +208,8 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
                 display(FileLink(out_path_html))
 
         if return_nb:
-            return notebook
-        return None
+            return (exec_info, notebook)
+        return exec_info
 
 
 def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, ignore_codes=None,

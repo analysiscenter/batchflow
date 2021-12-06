@@ -69,7 +69,7 @@ class BaseConvBlock(nn.ModuleDict):
         - N - upsample with nearest neighbors resize
         - X - upsample with subpixel convolution (:class:`~.layers.SubpixelConv`)
         - B, R - start a new branch with auxilliary :class:`~.layers.BaseConvBlock`
-        - `.` - end the most recent created branch with concatenation
+        - `|` - end the most recent created branch with concatenation
         - `+` - end the most recent created branch with summation
         - `*` - end the most recent created branch with multiplication
         - `&` - end the most recent created branch with softsum

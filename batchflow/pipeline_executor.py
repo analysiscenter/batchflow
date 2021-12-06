@@ -217,11 +217,15 @@ class PipelineExecutor:
                     pass
                 except StopPipeline:
                     break
+                except KeyboardInterrupt:
+                    notifier.close(success=False)
+                    raise
                 except Exception as exc:  # pylint:disable=broad-except
                     if ignore_exceptions:
                         print("Exception:", exc)
                         traceback.print_tb(exc.__traceback__)
                     else:
+                        notifier.close(success=False)
                         raise
                 else:
                     is_empty = False
@@ -235,7 +239,7 @@ class PipelineExecutor:
             self.pipeline.random = random
             self.pipeline.random_seed = pipeline_seed
 
-        notifier.close()
+        notifier.close(success=True)
         self.notifier = notifier
 
         if self.pipeline.after:
