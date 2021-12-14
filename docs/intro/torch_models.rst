@@ -287,7 +287,7 @@ Here we split network configuration and network definition into separate methods
 
         @classmethod
         def body(cls, **kwargs):
-            kwargs = cls.get_defaults('body', kwargs)
+            kwargs = cls.get_block_defaults('body', kwargs)
             x = ConvBlock(**kwargs)
             return x
 
