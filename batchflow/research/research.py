@@ -82,8 +82,10 @@ class Research:
         self.memory_ratio = None
         self.n_gpu_checks = 3
         self.gpu_check_delay = 5
+        self.dump_monitor = True
 
         self._is_executed = False
+        self._get_env_meta = []
 
     def __getattr__(self, key):
         if self.monitor is not None and key in self.monitor.SHARED_VARIABLES:
@@ -116,7 +118,7 @@ class Research:
         self.domain.set_update(function, when, **kwargs)
         return self
 
-    def attach_env_meta(self, **kwargs):
+    def _attach_env_meta(self, cwd='.', dst=None, replace=None, commands=None, *args, **kwargs):
         """ Save the information about the current state of project repository: commit, diff, status and others.
 
         Parameters
@@ -125,24 +127,50 @@ class Research:
             dict where values are bash commands and keys are names of files to save output of the command.
             Results will be stored in `env` subfolder of the research.
         """
+        if cwd == '.':
+            dst = ''
+        else:
+            dst = dst or os.path.split(os.path.realpath(cwd))[1]
+        if isinstance(commands, (tuple, list)):
+            args = [*commands, *args]
+        elif isinstance(commands, dict):
+            kwargs = {**commands, **kwargs}
+
+        all_commands = [('env_state', command) for command in args]
+        all_commands = [*all_commands, *kwargs.items()]
+
+        for filename, command in all_commands:
+            process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, cwd=cwd)
+            output, _ = process.communicate()
+            result = output.decode('utf')
+            if replace is not None:
+                for key, value in replace.items():
+                    result = re.sub(key, value, result)
+            if self.dump_results:
+                if not os.path.exists(os.path.join(self.name, 'env', dst)):
+                    os.makedirs(os.path.join(self.name, 'env', dst))
+                with open(os.path.join(self.name, 'env', dst, filename + '.txt'), 'w') as file:
+                    print(result, file=file)
+            else:
+                self._env[dst+'/'+filename] = result
+
+    def attach_env_meta(self, cwd='.', dst=None, replace=None, commands=None, *args, **kwargs):
+        self._get_env_meta.append(dict(
+            cwd=cwd, dst=dst, replace=replace, commands=commands, args=args, kwargs=kwargs,
+        ))
+        return self
+
+    def attach_git_meta(self, cwd='.', dst=None, commands=None, **kwargs):
+        commands = commands or dict()
         commands = {
             'commit': "git log --name-status HEAD^..HEAD",
             'diff': 'git diff',
             'status': 'git status -uno',
+            **commands,
             **kwargs
         }
-
-        for filename, command in commands.items():
-            process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
-            output, _ = process.communicate()
-            result = re.sub('"image/png": ".*?"', '"image/png": "..."', output.decode('utf'))
-            if self.dump_results:
-                if not os.path.exists(os.path.join(self.name, 'env')):
-                    os.makedirs(os.path.join(self.name, 'env'))
-                with open(os.path.join(self.name, 'env', filename + '.txt'), 'w') as file:
-                    print(result, file=file)
-            else:
-                self._env[filename] = result
+        replace = {'"image/png": ".*?"': '"image/png": "..."'}
+        return self.attach_env_meta(cwd=cwd, dst=dst, replace=replace, commands=commands)
 
     @property
     def env(self):
@@ -233,7 +261,7 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=True, env_meta=None, seed=None, profile=False, dump_monitor=False,
+            debug=False, finalize=True, git_meta=True, seed=None, profile=False, dump_monitor=False,
             memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5):
         """ Run research.
 
@@ -273,8 +301,8 @@ class Research:
             `parallel=False` and `executor_target='for'`, by default False.
         finalize : bool, optional
             continue experiment iteration after exception in some unit or not, by default True.
-        env_meta : dict or None
-            kwargs for :meth:`.Research.attach_env_meta`.
+        git_meta : bool, optional
+            attach get repo state or not (see :meth:`.Research.attach_git_meta`).
         seed : bool or int or object with a seed sequence attribute
             see :meth:`~batchflow.utils_random.make_seed_sequence`.
         profile : bool, optional
@@ -345,8 +373,12 @@ class Research:
             self.loglevel = loglevel or 'info'
         else:
             self.loglevel = loglevel or 'error'
-
-        self.attach_env_meta(**(env_meta or {}))
+        if git_meta:
+            self.attach_git_meta(dst='cwd')
+        for item in self._get_env_meta:
+            args = item.pop('args', [])
+            kwargs = item.pop('kwargs', {})
+            self._attach_env_meta(*args, **item, **kwargs)
         self.create_logger()
         self.logger.info("Research is starting")
 
@@ -464,7 +496,7 @@ class Research:
     @property
     def is_finished(self):
         """ The number of experimenys in queue of tasks. """
-        return (self.monitor.in_queue + self.monitor.remained_experiments == 0)
+        return self.monitor.in_queue + self.monitor.remained_experiments == 0
 
     def __str__(self):
         spacing = ' ' * 4
