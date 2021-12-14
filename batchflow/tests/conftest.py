@@ -6,9 +6,6 @@ import numpy as np
 from batchflow import Dataset, ImagesBatch
 
 
-from .config_pass_test import single_config, multi_config, model_and_config
-
-
 @pytest.fixture()
 def model_setup_images_clf():
     """ Pytest fixture to generate fake dataset and model config for image classification
