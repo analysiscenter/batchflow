@@ -83,6 +83,8 @@ class Research:
         self.n_gpu_checks = 3
         self.gpu_check_delay = 5
 
+        self._is_executed = False
+
     def __getattr__(self, key):
         if self.monitor is not None and key in self.monitor.SHARED_VARIABLES:
             return getattr(self.monitor, key)
@@ -361,14 +363,14 @@ class Research:
             self.distributor.run()
             self.monitor.stop()
 
+        self._is_executed = True
         try:
-            if detach:
-                self.process = mp.Process(target=_start_distributor)
-                self.process.start()
-                self.logger.info(f"Detach research [pid:{self.process.pid}]")
-                self.monitor.detach(self.process)
-            else:
-                _start_distributor()
+            self.process = mp.Process(target=_start_distributor)
+            self.process.start()
+            self.logger.info(f"Detach research [pid:{self.process.pid}]")
+            self.monitor.detach(self.process)
+            if not detach:
+                self.process.join()
                 self.terminate()
         except KeyboardInterrupt as e:
             self.logger.info("Research has been stopped by KeyboardInterrupt.")
@@ -376,21 +378,23 @@ class Research:
             raise e
         return self
 
-    def terminate(self):
+    def terminate(self, kill_processes=False):
         """ Kill all research processes. """
-        self.logger.info("Terminate research processes")
+        if self._is_executed:
+            self.logger.info("Terminate research processes")
+            if kill_processes:
+                order = {'EXECUTOR': 0, 'WORKER': 1, 'DETACHED_PROCESS': 2}
+                processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
 
-        if self.monitor is not None:
-            self.monitor.stop(wait=False)
+                for pid, process_type in processes_to_kill:
+                    if pid is not None and psutil.pid_exists(pid):
+                        process = psutil.Process(pid)
+                        process.kill()
+                        self.logger.info(f"Terminate {process_type} [pid:{pid}]")
 
-        order = {'EXECUTOR': 0, 'WORKER': 1, 'DETACHED_PROCESS': 2}
-        processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
-
-        for pid, process_type in processes_to_kill:
-            if pid is not None and psutil.pid_exists(pid):
-                process = psutil.Process(pid)
-                process.kill()
-                self.logger.info(f"Terminate {process_type} [pid:{pid}]")
+            if self.monitor is not None:
+                self.monitor.stop(wait=False)
+        self._is_executed = False
 
 
     def create_logger(self):
@@ -457,6 +461,11 @@ class Research:
             raise FileNotFoundError(f"Folder {name} doesn't exist.")
         return os.path.isfile(os.path.join(name, 'research.dill'))
 
+    @property
+    def is_finished(self):
+        """ The number of experimenys in queue of tasks. """
+        return (self.monitor.in_queue + self.monitor.remained_experiments == 0)
+
     def __str__(self):
         spacing = ' ' * 4
         repr = ''
@@ -499,20 +508,20 @@ class ResearchMonitor:
 
     def __init__(self, research, path=None, bar=True):
         self.queue = mp.JoinableQueue()
-        self.research = research
-        self.path = path
+        self.stop_signal = mp.JoinableQueue()
         self.exceptions = mp.Manager().list()
-        self.bar = tqdm.tqdm(disable=(not bar), position=0, leave=True) if isinstance(bar, bool) else bar
-
         self.shared_values = mp.Manager().dict()
-        for key in self.SHARED_VARIABLES:
-            self.shared_values[key] = 0
         self.current_iterations = mp.Manager().dict()
         self.processes = mp.Manager().dict()
 
-        self.n_iters = self.research.n_iters
+        self.research = research
+        self.path = path
+        self.bar = tqdm.tqdm(disable=(not bar), position=0, leave=True) if isinstance(bar, bool) else bar
 
-        self.stop_signal = mp.JoinableQueue()
+        for key in self.SHARED_VARIABLES:
+            self.shared_values[key] = 0
+
+        self.n_iters = self.research.n_iters
 
         self.dump = False
         self.process = None
@@ -543,7 +552,7 @@ class ResearchMonitor:
 
     @property
     def in_queue(self):
-        """ The number of experimenys in queue of tasks. """
+        """ The number of experiments in queue of tasks. """
         return self.generated_experiments - self.finished_experiments
 
     def send(self, status, experiment=None, worker=None, **kwargs):

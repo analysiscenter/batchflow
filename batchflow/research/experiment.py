@@ -738,7 +738,7 @@ class Experiment:
             self.iteration = iteration
 
             self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
-            exception = StopIteration if self.debug else Exception
+            exception = (StopIteration, KeyboardInterrupt) if self.debug else Exception
             try:
                 self.outputs[name], unit_time = self.actions[name](iteration, n_iters, last=self.last)
             except exception as e: #pylint:disable=broad-except
