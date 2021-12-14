@@ -930,7 +930,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         # Lock the entire method; release in any case
         try:
             if lock:
-                self.model_lock.acquire() #pylint: disable=consider-using-with
+                self.model_lock.acquire()
             self.last_iteration_info = {}
 
             # Parse inputs and targets: always a list
@@ -1215,7 +1215,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         # Acquire lock; release in any case
         try:
             if lock:
-                self.model_lock.acquire() #pylint: disable=consider-using-with
+                self.model_lock.acquire()
 
             # Parse outputs: always a list
             single_output = isinstance(outputs, str)
