@@ -119,14 +119,6 @@ class Research:
         return self
 
     def _attach_env_meta(self, cwd='.', dst=None, replace=None, commands=None, *args, **kwargs):
-        """ Save the information about the current state of project repository: commit, diff, status and others.
-
-        Parameters
-        ----------
-        kwargs : dict
-            dict where values are bash commands and keys are names of files to save output of the command.
-            Results will be stored in `env` subfolder of the research.
-        """
         if cwd == '.':
             dst = ''
         else:
@@ -149,18 +141,47 @@ class Research:
             if self.dump_results:
                 if not os.path.exists(os.path.join(self.name, 'env', dst)):
                     os.makedirs(os.path.join(self.name, 'env', dst))
-                with open(os.path.join(self.name, 'env', dst, filename + '.txt'), 'w') as file:
-                    print(result, file=file)
+                with open(os.path.join(self.name, 'env', dst, filename + '.txt'), 'a') as file:
+                    file.write(result)
             else:
-                self._env[dst+'/'+filename] = result
+                self._env[os.path.join(dst, filename)] = self._env.get(os.path.join(dst, filename), '') + result
 
     def attach_env_meta(self, cwd='.', dst=None, replace=None, commands=None, *args, **kwargs):
+        """ Execute bash command and save the result into txt file. Results will be stored in research folder
+        (if it will be created) and in _env attribute.
+
+        Parameters
+        ----------
+        cwd : str, optional
+            cwd to execute the command, by default '.'
+        dst : str, optional
+            name of the subfolder/key to save the output, by default None. None means that `dst` will be the same
+            as basename of cwd (except the case when `cwd='.'`, then dst will be '' (empty string)).
+        replace : dict, optional
+            mapping to change some parts of the output, by default None
+        commands : dict or list of str, optional
+            commands to execute, by default None. If list, then all results will be saved (appended) into
+            '{dst}/env_state.txt'. If dict, each output will saved into '{dst}/{key}.txt'.
+        *args, **kwargs : see `commands`.
+        """
         self._get_env_meta.append(dict(
             cwd=cwd, dst=dst, replace=replace, commands=commands, args=args, kwargs=kwargs,
         ))
         return self
 
     def attach_git_meta(self, cwd='.', dst=None, commands=None, **kwargs):
+        """ Get git repo state (commit, diff, status, ...)
+
+        Parameters
+        ----------
+        cwd : str, optional
+            path to repo, by default '.'
+        dst : str, optional
+            name of the subfolder/key to save the output, by default None. None means that `dst` will be the same
+            as basename of cwd (except the case when `cwd='.'`, then dst will be '' (empty string)).
+        commands : dict, optional
+            commands to execute. Each output will saved into '{dst}/{key}.txt'.
+        """
         commands = commands or dict()
         commands = {
             'commit': "git log --name-status HEAD^..HEAD",
