@@ -1,5 +1,6 @@
 """ Contains mixin for :class:`~.torch.TorchModel` to provide textual and graphical visualizations. """
 import sys
+from ast import literal_eval
 from pprint import pformat as _pformat
 import matplotlib.pyplot as plt
 
@@ -38,38 +39,37 @@ class VisualizationMixin:
 
         if config:
             message += template_header.format('Config')
-            message += pformat(self.full_config.config) + '\n'
+            message += pformat(self.full_config.config, sort_dicts=False) + '\n'
 
         if devices:
             message += template_header.format('Devices')
             message += f'Leading device is {self.device}\n'
             if self.devices:
-                message += '\n'.join([f'Device {i} is {d}' for i, d in enumerate(self.devices)])
-                message += '\n'
+                message += '\n'.join([f'Device {i} is {d}' for i, d in enumerate(self.devices)]) + '\n'
 
         if model:
             message += template_header.format('Model')
             message += str(self.model) + '\n'
 
         if misc:
-            message += template_header.format('Additional info')
+            message += template_header.format('Shapes')
 
             if self.inputs_shapes:
-                message += '\n'.join([f'Input {i} has shape {s}' for i, s in enumerate(self.inputs_shapes)])
+                message += '\n'.join([f'Input {i} has shape {s}' for i, s in enumerate(self.inputs_shapes)]) + '\n'
             if self.targets_shapes:
-                message += f'\nTarget has shape {self.targets_shapes}'
+                message += '\n'.join([f'Target {i} has shape {s}' for i, s in enumerate(self.targets_shapes)]) + '\n'
             if self.classes:
-                message += f'\nNumber of classe: {self.classes}'
+                message += f'Number of classes: {self.classes}\n'
 
             if self.model:
                 num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-                message += f'\nTotal number of parameters in model: {num_params}'
+                message += f'\nTotal number of parameters in the model: {num_params}'
 
             message += f'\nTotal number of passed training iterations: {self.iteration}\n'
 
             message += template_header.format('Last iteration params')
-            message += pformat(self.last_iteration_info, sort_dicts=False)
-        return message
+            message += pformat(self.last_iteration_info, sort_dicts=False) + '\n'
+        return message[1:-1]
 
     def short_repr(self):
         """ Show simplified model layout. """
@@ -131,8 +131,67 @@ class VisualizationMixin:
         plt.grid(True)
         plt.show()
 
-    # Visualize intermediate layers: activations and features
-    def get_intermediate_activations(self, *args, layers=None, feed_dict=None, **kwargs):
+
+
+class LayerHook:
+    """ Create hook to get layer activations and gradients. """
+    def __init__(self, module):
+        self.activation = None
+        self.gradient = None
+
+        self.forward_handle = module.register_forward_hook(self.forward_hook)
+        self.backward_handle = module.register_backward_hook(self.backward_hook)
+
+    def forward_hook(self, module, input, output):
+        """ Save activations: if multi-output, the first one is saved. """
+        _ = module, input
+        if isinstance(output, (tuple, list)):
+            output = output[-1]
+        self.activation = output
+
+    def backward_hook(self, module, grad_input, grad_output):
+        """ Save gradients: if multi-output, the first one is saved. """
+        _ = module, grad_input
+        if isinstance(grad_output, (tuple, list)):
+            grad_output = grad_output[0]
+        self.gradient = grad_output
+
+    def close(self):
+        self.forward_handle.remove()
+        self.backward_handle.remove()
+
+    def __del__(self):
+        self.close()
+
+
+class ExtractionMixin:
+    """ Extract information about intermediate layers: activations, gradients and weights. """
+    def is_layer_id(self, string):
+        """ !!. """
+        try:
+            _ = self.get_layer(string)
+            return True
+        except (AttributeError, LookupError):
+            return False
+
+    def get_layer(self, layer_id):
+        """ !!. """
+        layer_id = layer_id.replace('[', ':').replace(']', '')
+        prefix, *attributes = layer_id.split('.')
+        if prefix != 'model':
+            raise AttributeError('Layer id should start with `model`. i.e. `model.head`!')
+
+        result = self.model
+        for attribute in attributes:
+            attribute, *item_ids = attribute.split(':')
+
+            result = getattr(result, attribute)
+            for item_id in item_ids:
+                result = result[literal_eval(item_id)]
+        return result
+
+
+    def get_intermediate_activations(self, inputs, layers=None):
         """ Compute the intermediate activations of a given layers in the same structure (tuple/list/dict).
 
         Under the hood, a forward hook is registered to capture the output of a targeted layers,
@@ -168,11 +227,10 @@ class VisualizationMixin:
         else:
             container = dict(layers) # shallow copy is fine
 
-        container = {key: LayerExtractor(module)
+        container = {key: LayerHook(module)
                      for key, module in container.items()}
 
         # Parse inputs to model, run model
-        inputs, _ = self._make_prediction_inputs(*args, targets=None, feed_dict=feed_dict, **kwargs)
         inputs = self.transfer_to_device(inputs)
         self.model.eval()
         with torch.no_grad():
@@ -219,7 +277,7 @@ class VisualizationMixin:
         image_var.requires_grad = True
 
         # Set up optimization procedure
-        extractor = LayerExtractor(layer)
+        extractor = LayerHook(layer)
         optimizer = torch.optim.Adam([image_var], lr=0.1, weight_decay=1e-6)
         self.model.eval()
 
@@ -246,8 +304,8 @@ class VisualizationMixin:
             return image_var, losses
         return image_var
 
-    def get_gradcam(self, *args, targets=None, feed_dict=None,
-                    layer=None, gradient_mode='onehot', cam_class=None, **kwargs):
+    def get_gradcam(self, inputs, targets=None,
+                    layer=None, gradient_mode='onehot', cam_class=None):
         """ Create visual explanation of a network decisions, based on the intermediate layer gradients.
         Ramprasaath R. Selvaraju, et al "`Grad-CAM: Visual Explanations
         from Deep Networks via Gradient-based Localization <https://arxiv.org/abs/1610.02391>`_"
@@ -274,8 +332,7 @@ class VisualizationMixin:
         kwargs : dict
             Additional named arguments directly passed to `feed_dict`.
         """
-        extractor = LayerExtractor(layer)
-        inputs, targets = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
+        extractor = LayerHook(layer)
         inputs = self.transfer_to_device(inputs)
 
         self.model.eval()
@@ -283,7 +340,7 @@ class VisualizationMixin:
 
         if isinstance(gradient_mode, np.ndarray):
             gradient = self.transfer_to_device(gradient_mode)
-        elif 'targ' in gradient_mode:
+        elif 'target' in gradient_mode:
             gradient = targets
         elif 'onehot' in gradient_mode:
             gradient = torch.zeros_like(prediction)[0:1]
@@ -345,7 +402,7 @@ class VisualizationMixin:
                 submodules_amount = sum(1 for _ in module.modules())
                 module_instance = module.__class__.__name__
                 if (submodules_amount == 1) and (module_instance != 'Identity'):
-                    extractors.append(LayerExtractor(module))
+                    extractors.append(LayerHook(module))
                     statistics['Modules instances'].append(module_instance)
             _ = model(input_tensor)
         finally:
@@ -384,34 +441,3 @@ class VisualizationMixin:
             ax.set_ylabel(title, fontsize=12)
             ax.grid(True)
         fig.show()
-
-
-class LayerExtractor:
-    """ Create hook to get layer activations and gradients. """
-    def __init__(self, module):
-        self.activation = None
-        self.gradient = None
-
-        self.forward_handle = module.register_forward_hook(self.forward_hook)
-        self.backward_handle = module.register_backward_hook(self.backward_hook)
-
-    def forward_hook(self, module, input, output):
-        """ Save activations: if multi-output, the first one is saved. """
-        _ = module, input
-        if isinstance(output, (tuple, list)):
-            output = output[-1]
-        self.activation = output
-
-    def backward_hook(self, module, grad_input, grad_output):
-        """ Save gradients: if multi-output, the first one is saved. """
-        _ = module, grad_input
-        if isinstance(grad_output, (tuple, list)):
-            grad_output = grad_output[0]
-        self.gradient = grad_output
-
-    def close(self):
-        self.forward_handle.remove()
-        self.backward_handle.remove()
-
-    def __del__(self):
-        self.close()
