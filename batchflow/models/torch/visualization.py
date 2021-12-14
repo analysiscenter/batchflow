@@ -1,5 +1,6 @@
 """ Contains mixin for :class:`~.torch.TorchModel` to provide textual and graphical visualizations. """
-from pprint import pformat
+import sys
+from pprint import pformat as _pformat
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -7,6 +8,16 @@ import torch
 
 # Also imports `tensorboard`, if necessary
 
+def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts=True, underscore_numbers=False):
+    """ Backwards compatible version of pformat. """
+    # pylint: disable=unexpected-keyword-arg
+    _ = underscore_numbers
+    if sys.version_info[1] < 8:
+        result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact)
+    else:
+        result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact,
+                          sort_dicts=sort_dicts)
+    return result
 
 
 class VisualizationMixin:
@@ -23,29 +34,30 @@ class VisualizationMixin:
     def _information(self, config=True, devices=True, model=False, misc=True):
         """ Create information string. """
         message = ''
-        template = '\n##### {}:\n'
+        template_header = '\n\033[1m\033[4m{}:\033[0m\n'
 
         if config:
-            message += template.format('Config')
+            message += template_header.format('Config')
             message += pformat(self.full_config.config) + '\n'
 
         if devices:
-            message += template.format('Devices')
+            message += template_header.format('Devices')
             message += f'Leading device is {self.device}\n'
             if self.devices:
                 message += '\n'.join([f'Device {i} is {d}' for i, d in enumerate(self.devices)])
+                message += '\n'
 
         if model:
-            message += template.format('Model')
+            message += template_header.format('Model')
             message += str(self.model) + '\n'
 
         if misc:
-            message += template.format('Additional info')
+            message += template_header.format('Additional info')
 
-            if self.input_shapes:
-                message += '\n'.join([f'Input {i} has shape {s}' for i, s in enumerate(self.input_shapes)])
-            if self.target_shape:
-                message += f'\nTarget has shape {self.target_shape}'
+            if self.inputs_shapes:
+                message += '\n'.join([f'Input {i} has shape {s}' for i, s in enumerate(self.inputs_shapes)])
+            if self.targets_shapes:
+                message += f'\nTarget has shape {self.targets_shapes}'
             if self.classes:
                 message += f'\nNumber of classe: {self.classes}'
 
@@ -55,8 +67,8 @@ class VisualizationMixin:
 
             message += f'\nTotal number of passed training iterations: {self.iteration}\n'
 
-            message += template.format('Last iteration params')
-            message += pformat(self.iter_info)
+            message += template_header.format('Last iteration params')
+            message += pformat(self.last_iteration_info, sort_dicts=False)
         return message
 
     def short_repr(self):
@@ -96,6 +108,17 @@ class VisualizationMixin:
         writer = SummaryWriter(log_dir=log_dir, **kwargs)
         writer.add_graph(self.model, self._placeholder_data())
         writer.close()
+
+    def show_loss(self):
+        """ Plot graph of loss values over iterations. """
+        plt.figure(figsize=(8, 6))
+        plt.plot(self.loss_list)
+
+        plt.title('Loss values', fontsize=18)
+        plt.xlabel('Iterations', fontsize=12)
+        plt.ylabel('Loss', fontsize=18, rotation=0)
+        plt.grid(True)
+        plt.show()
 
     def show_lr(self):
         """ Plot graph of learning rate over iterations. """

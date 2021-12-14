@@ -1,7 +1,6 @@
 """ Eager version of TorchModel. """
 import os
 import re
-import warnings
 import threading
 import inspect
 from collections import OrderedDict
@@ -11,7 +10,7 @@ import dill
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn as nn
+from torch import nn
 
 try:
     import cupy as cp
@@ -306,7 +305,7 @@ class TorchModel(BaseModel, VisualizationMixin):
     """
     PRESERVE = [
         'full_config', 'config', 'model',
-        'input_names', 'input_shapes', 'target_shape', 'classes',
+        'inputs_shapes', 'targets_shapes', 'classes',
         'loss', 'optimizer', 'decay', 'decay_step',
         'sync_counter', 'microbatch',
         'iteration', 'iter_info', 'lr_list', 'syncs', 'decay_iters',
@@ -319,16 +318,15 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.full_config = Config(config)
         self.model_lock = threading.Lock()
 
-        # Shapes of inputs and outputs
-        self.input_names = None
-        self.input_shapes = None
-        self.target_shape = None
+        # Shapes of inputs and targets
+        self.inputs_shapes = None
+        self.targets_shapes = None
         self.classes = None
 
         # Pytorch model
         self.model = None
 
-        # Leading device and list of all devices used
+        # Leading device and list of all devices to use
         self.device = None
         self.devices = []
 
@@ -342,6 +340,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.amp = True
         self.scaler = None
 
+        self.operations = {}
         self.callbacks = []
 
         # Memory amortization: accumulate gradients to update weights later
@@ -355,7 +354,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         # Store info about passed train iterations
         self.iteration = 0
-        self.iter_info = {}
+        self.last_iteration_info = {}
         self.lr_list = []
         self.syncs = []
         self.decay_iters = []
@@ -369,34 +368,25 @@ class TorchModel(BaseModel, VisualizationMixin):
         super().__init__(config)
 
     def reset(self):
-        """ Allows to recreate model from scratch. """
+        """ Delete the underlying model and all the infrastructure. Use to create model from scratch. """
+        # TODO: do we really need this?
         self.model = None
-        self.iter_info = {}
+        self.last_iteration_info = {}
 
 
     def build(self):
-        """ Build the model. """
+        """ Initialize the instance: make the config, attributes, and, if possible, PyTorch model. """
         # Create config from default and external one
         self.full_config = self.combine_configs()
-        self._get_devices()
-        self._get_placeholder_shapes()
-        self.build_config()
+        self.parse_devices()
+        self.parse_placeholder_shapes()
 
-        # Store some of the config values
-        self.init_weights = self.full_config.get('init_weights', None)
-        self.microbatch = self.full_config.get('microbatch', None)
-        self.sync_frequency = self.full_config.get('sync_frequency', 1)
-        self.amp = self.full_config.get('amp', True)
-
-        self.sam_rho = self.full_config.get('sam_rho', 0.0)
-        self.sam_individual_norm = self.full_config.get('sam_individual_norm', False)
-        self.profile = self.full_config.get('profile', False)
-
-        self.callbacks = [callback.set_model(self) for callback in self.full_config.get('callbacks', [])]
+        self.update_config()
+        self.update_attributes()
 
         # If the inputs are set in config with their shapes we can build right away
-        if self.input_shapes:
-            self._build()
+        if self.inputs_shapes:
+            self.build_model()
 
 
     # Create config of model creation: combine the external and default ones
@@ -449,7 +439,6 @@ class TorchModel(BaseModel, VisualizationMixin):
         config['head'] = {}
         config['common'] = {}
 
-        config['predictions'] = None
         config['output'] = None
         return config
 
@@ -458,29 +447,12 @@ class TorchModel(BaseModel, VisualizationMixin):
         config = self.default_config() + self.config
         return config
 
-    def build_config(self):
-        """ Define model's architecture configuration.
-
-        * Don't forget to call ``super().build_config()`` in the beginning.
-
-        * Define parameters for :meth:`.TorchModel.initial_block`, :meth:`.TorchModel.body`, :meth:`.TorchModel.head`,
-          which depend on inputs.
-
-        * Dont forget to return ``config`` at the end.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            def build_config(self):
-                config = super().build_config()
-                config['head/filters'] = self.num_classes('targets')
-                return config
-        """
+    def update_config(self):
+        """ Update config with instance attributes. """
         config = self.full_config
 
-        config['head/target_shape'] = self.target_shape
-        # As `build_config` can be called multiple times, and `head/classes` key can have value `None`,
+        config['head/targets_shapes'] = self.targets_shapes
+        # As `update_config` can be called multiple times, and `head/classes` key can have value `None`,
         # we need to use `or` insetad of `get`
         config['head/classes'] = config.get('head/classes') or self.classes
 
@@ -489,17 +461,34 @@ class TorchModel(BaseModel, VisualizationMixin):
         if config.get('head/filters') is None:
             config['head/filters'] = config.get('head/classes')
 
-    def unpack(self, name):
-        """ Get params from config. """
-        unpacked = unpack_fn_from_config(name, self.full_config)
-        if isinstance(unpacked, list):
-            return {name: unpacked}
-        key, kwargs = unpacked
-        return {name: key, **kwargs}
+        print('CCC', self.classes)
+
+    def update_attributes(self):
+        """ Update instance attributes from config. """
+        config = self.full_config
+
+        self.init_weights = config.get('init_weights', None)
+        self.microbatch = config.get('microbatch', None)
+        self.sync_frequency = config.get('sync_frequency', 1)
+        self.amp = config.get('amp', True)
+
+        self.sam_rho = config.get('sam_rho', 0.0)
+        self.sam_individual_norm = config.get('sam_individual_norm', False)
+        self.profile = config.get('profile', False)
+
+        self.callbacks = [callback.set_model(self) for callback in config.get('callbacks', [])]
+
+        operations = config['output']
+        if not isinstance(operations, dict):
+            operations = operations or []
+            operations = list(operations) if isinstance(operations, (tuple, list)) else [operations]
+            operations = {'' : operations}
+        self.operations = operations
 
 
-    # Prepare to build the model: determine device(s) and shape(s)
-    def _get_devices(self):
+    # Prepare to build the PyTorch model: determine device(s) and shape(s)
+    def parse_devices(self):
+        """ !!. """
         devices = self.full_config.get('device')
         if devices is None:
             if torch.cuda.is_available():
@@ -528,118 +517,54 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         torch.backends.cudnn.benchmark = self.full_config.get('benchmark', 'cuda' in self.device.type)
 
-    def _get_placeholder_shapes(self):
+    def parse_placeholder_shapes(self):
+        """ Update attributes with shapes from config. """
         config = self.full_config
 
-        input_names = config.pop('initial_block/inputs', default=None)
-        if input_names is not None:
-            batch_size = config.get('placeholder_batch_size', 2)
-            input_names = input_names if isinstance(input_names, (tuple, list)) else [input_names]
+        batch_size = config.get('placeholder_batch_size', 2)
+        inputs_shapes = config.get('inputs_shapes') or config.get('input_shapes')
+        targets_shapes = config.get('targets_shapes') or config.get('target_shapes')
+        classes = config.get('classes')
 
-            shapes = []
-            for name in input_names:
-                cfg = config['inputs'].get(name, {})
-                if 'shape' in cfg:
-                    shapes.append((batch_size, *cfg['shape']))
-                else:
-                    shapes.append(None)
+        if inputs_shapes:
+            inputs_shapes = self._to_nested_list(inputs_shapes)
+            self.inputs_shapes = [(batch_size, *shape) for shape in inputs_shapes]
 
-            if None not in shapes:
-                self.input_shapes = shapes
-            self.input_names = input_names
+        if targets_shapes:
+            targets_shapes = self._to_nested_list(targets_shapes)
+            self.targets_shapes = [(batch_size, *shape) for shape in targets_shapes]
 
-        if config.get('inputs'):
-            classes, shapes = [], []
-            for name in self.LABELS_ALIASES:
-                cfg = config['inputs'].get(name, {})
-                if 'classes' in cfg:
-                    classes.append(cfg['classes'])
-                if 'shape' in cfg:
-                    shapes.append(cfg['shape'])
-            if len(classes) == 1:
-                self.classes = classes[0]
-            if len(shapes) == 1:
-                self.target_shape = (batch_size, *shapes[0])
-                if self.classes is None:
-                    self.classes = shapes[0][0]
+            if not classes:
+                self.classes = [item[0] for item in targets_shapes]
 
-    def _to_device(self):
-        """ Select whether to put model on a single device or to a number of devices in `DataParallel` mode.
+        if classes:
+            classes = list(classes) if isinstance(classes, (tuple, list)) else [classes]
+            self.classes = classes
 
-        Notes
-        -----
-        The method serves for code simplification at build / load stages and shouldn't be applied to prebuilt
-        models since it does not change models attributes (like `self.device`) and does not process model-related
-        objects (like loss functions or optimizers).
-        """
-        if len(self.devices) > 1:
-            self.model = nn.DataParallel(self.model, self.devices)
-        else:
-            self.model.to(self.device)
-
-    # Chain multiple building blocks to create model
-    def _build(self, inputs=None):
-        config = self.full_config
-        order = config.get('order')
-
-        inputs = inputs or self._placeholder_data()
-
-        blocks = []
-        for item in order:
-            if isinstance(item, str):
-                block_name = config_name = method = item
-            elif isinstance(item, tuple) and len(item) == 3:
-                block_name, config_name, method = item
-            elif isinstance(item, dict):
-                block_name = item['block_name']
-                config_name = item.get('config_name', block_name)
-                method = item.get('method', config_name)
-
-            inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
-            block = self._make_block(config_name, method, config, inputs)
-            if block is not None:
-                block.to(self.device)
-                inputs = block(inputs)
-                blocks.append((block_name, block))
-
-        self.model = nn.Sequential(OrderedDict(blocks))
-        self.initialize_weights()
-        self._to_device()
-
-        self.make_loss(**self.unpack('loss'))
-        self.make_optimizer(**self.unpack('optimizer'))
-        self.make_decay(**self.unpack('decay'), optimizer=self.optimizer)
-        self.scaler = torch.cuda.amp.GradScaler()
+    @staticmethod
+    def _to_nested_list(sequence):
+        if not isinstance(sequence[0], (tuple, list)):
+            return [list(sequence)]
+        return [list(item) for item in sequence]
 
 
-    def _placeholder_data(self):
-        data = [np.zeros(shape, dtype=np.float32) for shape in self.input_shapes]
+    def make_placeholder_data(self):
+        """ !!. """
+        data = [np.zeros(shape, dtype=np.float32) for shape in self.inputs_shapes]
         data = self.transfer_to_device(data)
         return data
 
-    def _make_block(self, name, method, config, inputs):
-        if isinstance(config[name], nn.Module):
-            block = config[name]
-        elif isinstance(config[name], dict):
-            config = {**config['common'], **config[name]}
-            if 'module' in config:
-                module = config['module']
-                if isinstance(module, nn.Module):
-                    block = module
-                else:
-                    kwargs = config.get('module_kwargs', {})
-                    if 'inputs' in inspect.getfullargspec(module.__init__)[0]:
-                        kwargs = {'inputs': inputs, **kwargs}
-                    block = module(*config.get('module_args', []), **kwargs)
-            else:
-                method = getattr(self, method) if isinstance(method, str) else method
-                block = method(inputs=inputs, **config)
-        else:
-            raise ValueError('{} must be configured either as nn.Module or dictionary, got {}'.format(name, config))
-        return block
+
+    # Create training infrastructure: loss, optimizer, decay
+    def unpack(self, name):
+        """ Get params from config. """
+        unpacked = unpack_fn_from_config(name, self.full_config)
+        if isinstance(unpacked, list):
+            return {name: unpacked}
+        key, kwargs = unpacked
+        return {name: key, **kwargs}
 
 
-    # Create training procedure(s): loss, optimizer, decay
     def make_loss(self, loss, **kwargs):
         """ Set model loss. Changes the `loss` attribute. """
         loss_fn = None
@@ -743,27 +668,98 @@ class TorchModel(BaseModel, VisualizationMixin):
         self.initialize_weights()
 
 
-        self._to_device()
+        self.model_to_device()
 
         self.make_loss(**self.unpack('loss'))
         self.make_optimizer(**self.unpack('optimizer'))
         self.make_decay(**self.unpack('decay'), optimizer=self.optimizer)
         self.scaler = torch.cuda.amp.GradScaler()
 
-    # Define model structure
+    # Chain multiple building blocks to create model
+    def build_model(self, inputs=None):
+        """ !!. """
+        inputs = inputs or self.make_placeholder_data()
+        inputs = inputs[0] if len(inputs) == 1 else inputs
+
+        blocks = OrderedDict()
+        for item in self.full_config.get('order'):
+            # Get the `block_name`, which is used as the name in the Sequential,
+            #         `config_name`, which is used to retrieve parameters from config,
+            #     and `method`, which is either a callable or name of the method to get from the current instance
+            if isinstance(item, str):
+                block_name = config_name = method = item
+            elif isinstance(item, tuple) and len(item) == 3:
+                block_name, config_name, method = item
+            elif isinstance(item, dict):
+                block_name = item['block_name']
+                config_name = item.get('config_name', block_name)
+                method = item.get('method', config_name)
+
+            # Make block, from the `inputs`, transfer it to device
+            # Important: apply to the `inputs` before showing to the next block, so the shapes/etc are updated
+            block = self.make_block(config_name, method, inputs)
+
+            if block is not None:
+                block.to(self.device)
+                inputs = block(inputs)
+                blocks[block_name] = block
+
+        # Use the OrderedDict in Sequential to give readable names to stages
+        self.model = nn.Sequential(blocks)
+        self.initialize_weights()
+        self.model_to_device()
+
+        # Make the infrastructure after the model is created, so that they are on the same device
+        self.make_loss(**self.unpack('loss'))
+        self.make_optimizer(**self.unpack('optimizer'))
+        self.make_decay(**self.unpack('decay'), optimizer=self.optimizer)
+        self.scaler = torch.cuda.amp.GradScaler()
+
+    def make_block(self, name, method, inputs):
+        """ !!. """
+        config = self.full_config
+        block = config[name]
+
+        if isinstance(block, nn.Module):
+            # Already initialized module
+            pass
+
+        elif isinstance(block, dict):
+            block_params = {**config['common'], **block}
+
+            if 'module' in block_params:
+                # A custom module
+                module = block_params['module']
+
+                if isinstance(module, nn.Module):
+                    # Already initialized module
+                    block = module
+                else:
+                    # Initialize module with parameters from config. Add `inputs`, if needed
+                    kwargs = block_params.get('module_kwargs', {})
+                    if 'inputs' in inspect.getfullargspec(module.__init__)[0]:
+                        kwargs['inputs'] = inputs
+                    block = module(**kwargs)
+            else:
+                # A string to get the module from the instance or callable that returns nn.Module
+                method = getattr(self, method) if isinstance(method, str) else method
+                block = method(inputs=inputs, **block_params)
+        else:
+            raise ValueError(f'`{name}` must be configured either as nn.Module or dictionary, got {block_params}')
+        return block
+
+
+    # Pre-defined building blocks
     @classmethod
-    def get_defaults(cls, name, kwargs):
-        """ Fill block params from default config and kwargs """
-        config = cls.default_config()
-        _config = Config(config.get(name))
-        _config = _config + (kwargs or {})
-        config = {**config['common'], **_config}
-        return config
+    def get_block_defaults(cls, name, kwargs):
+        """ Make block parameters from class default config and kwargs. """
+        class_config = cls.default_config()
+        return class_config['common'] + Config(class_config.get(name)) + (kwargs or {})
 
     @classmethod
     def block(cls, inputs, name, **kwargs):
         """ Model building block: either a :class:`~.torch.layers.ConvBlock` or a `base_block`. """
-        kwargs = cls.get_defaults(name, kwargs)
+        kwargs = cls.get_block_defaults(name, kwargs)
         if kwargs.get('layout') or kwargs.get('base_block'):
             return ConvBlock(inputs=inputs, **kwargs)
         return None
@@ -811,6 +807,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         """
         return cls.block(inputs, name='head', **kwargs)
 
+
     # Model weights initialization
     def initialize_weights(self):
         """ Initialize model weights with a callable or use default."""
@@ -825,23 +822,12 @@ class TorchModel(BaseModel, VisualizationMixin):
             self.model.apply(self.init_weights)
 
 
-    # Transfer data to/from device(s)
-    def parse_inputs(self, *args, **kwargs):
-        """ Convert arguments (either positional or keyword) into inputs and targets of a neural network. """
-        if args and kwargs:
-            raise ValueError('Use either positional or keyword arguments in `train` call.')
-
-        if kwargs:
-            for name in ['labels', 'masks', 'targets']:
-                if name in kwargs:
-                    targets = kwargs.pop(name)
-
-            args = [kwargs.get(name) for name in (self.input_names or list(kwargs.keys()))]
-            args.append(targets)
-        return args
-
+    # Transfer to/from device(s)
     def transfer_to_device(self, data):
         """ Transfer (possibly nested) structure to device and return the same structure. """
+        if isinstance(data, (dict, Config)):
+            return {key : self.transfer_to_device(value) for key, value in data.items()}
+
         if isinstance(data, (tuple, list)):
             return [self.transfer_to_device(item) for item in data]
 
@@ -863,57 +849,56 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         if data is None:
             return None
-        raise TypeError('Passed data should either be a `np.ndarray`, `torch.Tensor` or `cupy.ndarray`. ')
+        raise TypeError('Passed data should either be a `np.ndarray`, `torch.Tensor` or `cupy.ndarray`.')
 
     def transfer_from_device(self, data):
         """ Transfer (possibly nested) structure from device and return the same structure. """
+        if isinstance(data, (dict, Config)):
+            return {key : self.transfer_from_device(value) for key, value in data.items()}
+
         if isinstance(data, (tuple, list)):
             return [self.transfer_from_device(item) for item in data]
 
         if isinstance(data, (torch.Tensor, torch.autograd.Variable)):
-            return data.detach().cpu().numpy()
+            cpu_tensor = data.detach().cpu().numpy()
+            if self.amp and cpu_tensor.dtype != np.float32:
+                cpu_tensor = cpu_tensor.astype(np.float32)
+            return cpu_tensor
 
         if isinstance(data, (np.ndarray, int, float)):
             return data
-        raise TypeError('Passed data should either be a `torch.Tensor` or sequence of them. ')
+        raise TypeError('Passed data should either be a `torch.Tensor` or a container of them. ')
 
-    def parse_output(self, fetches, outputs):
-        """ Retrieve tensors from device in the same structure, as `fetches`. """
-        fetches = fetches if fetches is not None else []
-        _fetches = [fetches] if isinstance(fetches, str) else fetches
+    def model_to_device(self):
+        """ Select whether to put model on a single device or to a number of devices in `DataParallel` mode.
 
-        output = []
-        for name in _fetches:
-            if name in outputs:
-                value = outputs[name]
-                value = self.transfer_from_device(value)
-                output.append(value)
-            else:
-                raise KeyError('Unknown value to fetch', name)
-
-        output = output[0] if isinstance(fetches, str) else type(fetches)(output)
-        return output
+        Notes
+        -----
+        The method serves for code simplification at build / load stages and shouldn't be applied to prebuilt
+        models since it does not change models attributes (like `self.device`) and does not process model-related
+        objects (like loss functions or optimizers).
+        """
+        if len(self.devices) > 1:
+            self.model = nn.DataParallel(self.model, self.devices)
+        else:
+            self.model.to(self.device)
 
 
     # Apply model to train/predict on given data
-    def train(self, *args, feed_dict=None, fetches=None, lock=True, profile=False,
-              sync_frequency=True, microbatch=True, sam_rho=None, sam_individual_norm=None, **kwargs):
+    def train(self, inputs, targets, outputs=None, lock=True, profile=False,
+              sync_frequency=True, microbatch=True, microbatch_drop_last=True,
+              sam_rho=None, sam_individual_norm=None):
         """ Train the model with the data provided
 
         Parameters
         ----------
-        args
-            Arguments to be passed directly into the model.
-        feed_dict : dict
-            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
-            with keys being names and values being actual data.
-        fetches : tuple, list
-            Sequence of tensor names to calculate and return.
+        !!
         lock : bool
             If True, then model, loss and gradient update operations are locked, thus allowing for multithreading.
         sync_frequency : int, bool or None
             If int, then how often to apply accumulated gradients to the weights.
-            If True, then value from config is used (default value is to apply gradients after each batch of data).
+            If True, then value from config is used. Default value is 1,
+            which means to apply gradients after each batch of data.
             If False or None, then gradients are applied after each batch of data.
         microbatch : int, bool or None
             If int, then size of chunks to split every batch into. Allows to process given data sequentially,
@@ -944,15 +929,21 @@ class TorchModel(BaseModel, VisualizationMixin):
 
             model.train(B('images'), B('labels'), fetches='loss')
         """
-        # Prepare inputs and targets: convert to Torch Tensors and transfer to device
-        *inputs, targets = self.parse_inputs(*args, **{**(feed_dict or {}), **kwargs})
-
         # Lock the entire method; release in any case
         try:
             if lock:
-                self.model_lock.acquire()
+                self.model_lock.acquire() #pylint: disable=consider-using-with
+            self.last_iteration_info = {}
 
-            # Parse arguments
+            # Parse inputs and targets: always a list
+            inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
+            targets = list(targets) if isinstance(targets, (tuple, list)) else [targets]
+
+            # Parse outputs: always a list
+            single_output = isinstance(outputs, str)
+            outputs = [outputs] if single_output else (outputs or [])
+
+            # Parse train parameters
             if sync_frequency is True:
                 sync_frequency = self.sync_frequency
             elif sync_frequency is False or sync_frequency is None:
@@ -964,40 +955,57 @@ class TorchModel(BaseModel, VisualizationMixin):
                 else:
                     microbatch = microbatch or self.microbatch
 
-            # Split data into microbatches, if needed
-            if microbatch:
-                microbatch = 1 if microbatch is True else microbatch
-                steps = len(targets) // microbatch
-                split_inputs = [[item[i:i + microbatch] for item in inputs] for i in range(0, len(targets), microbatch)]
-                split_targets = [targets[i:i + microbatch] for i in range(0, len(targets), microbatch)]
-            else:
-                steps = 1
-                split_inputs = [inputs]
-                split_targets = [targets]
-
             # Prepare parameters for SAM
             if sam_rho is None:
                 sam_rho = self.sam_rho
             if sam_individual_norm is None:
                 sam_individual_norm = self.sam_individual_norm
 
-            # Create Pytorch model if it is yet to be initialized, based on the actual inputs
-            if self.model is None:
-                if isinstance(split_inputs[0], (list, tuple)):
-                    self.input_shapes = [get_shape(item) for item in split_inputs[0]]
-                else:
-                    self.input_shapes = get_shape(split_inputs[0])
+            # Compute batch_size and make sure it is the same for all inputs and targets
+            batch_size = len(inputs[0])
+            for i, item in enumerate(inputs):
+                if len(item) != batch_size:
+                    raise ValueError('All of `inputs` should have the same length, as the first one!'
+                                     f'Input at position `{i}` has size {len(item)}!={batch_size}')
+            for i, item in enumerate(targets):
+                if len(item) != batch_size:
+                    raise ValueError('All of `targets` should have the same length, as the first of `inputs`!'
+                                     f'Target at position `{i}` has size {len(item)}!={batch_size}')
 
-                self.target_shape = get_shape(split_targets[0])
-                if self.classes is None:
-                    if len(self.target_shape) > 1: # segmentation
-                        self.classes = self.target_shape[1]
+            # Split data into microbatches, if needed
+            if microbatch:
+                chunked_inputs = [[item[i:i + microbatch] for item in inputs]
+                                  for i in range(0, batch_size, microbatch)]
+                chunked_targets = [[item[i:i + microbatch] for item in targets]
+                                   for i in range(0, batch_size, microbatch)]
+
+                if microbatch_drop_last and batch_size % microbatch != 0:
+                    chunked_inputs = chunked_inputs[:-1]
+                    chunked_targets = chunked_targets[:-1]
+            else:
+                chunked_inputs = [inputs]
+                chunked_targets = [targets]
+
+            steps = len(chunked_inputs)
+            inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
+            targets_shapes = [get_shape(item) for item in chunked_targets[-1]]
+            self.last_iteration_info.update({'inputs_shapes': inputs_shapes,
+                                             'targets_shapes': targets_shapes})
+
+            # Create PyTorch model if it is yet to be initialized, based on the actual inputs
+            if self.model is None:
+                # Update config with shapes
+                self.inputs_shapes = inputs_shapes
+                self.targets_shapes = targets_shapes
+                if not self.classes:
+                    self.classes = [shape[1] for shape in targets_shapes]
+
+                self.update_config()
 
                 # Can use the first two items to build model: no need for the whole tensor
-                self.build_config()
-                build_inputs = [item[:2] for item in split_inputs[0]]
+                build_inputs = [item[:2] for item in chunked_inputs[0]]
                 build_inputs = self.transfer_to_device(build_inputs)
-                self._build(build_inputs)
+                self.build_model(build_inputs)
 
             self.model.train()
 
@@ -1008,128 +1016,91 @@ class TorchModel(BaseModel, VisualizationMixin):
                 profiler.__enter__()
 
             # Train on each of the microbatches
-            outputs = []
-            for i in range(steps):
-                _inputs = split_inputs[i]
-                _targets = split_targets[i]
+            chunked_outputs = []
+            for chunk_inputs, chunk_targets in zip(chunked_inputs, chunked_targets):
+                chunk_inputs = self.transfer_to_device(chunk_inputs)
+                chunk_targets = self.transfer_to_device(chunk_targets)
 
-                _inputs = self.transfer_to_device(_inputs)
-                _targets = self.transfer_to_device(_targets)
+                # Return is a dictionary with desired outputs and some meta information
+                chunk_outputs = self._train(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs,
+                                            sync_frequency=sync_frequency*steps,
+                                            sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
+                chunked_outputs.append(chunk_outputs)
 
-                output = self._train(*_inputs, _targets, fetches=fetches, sync_frequency=sync_frequency*steps,
-                                     sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
-                outputs.append(output)
-
-            # Store the average value of loss over the entire batch
-            self.loss_list.append(np.mean(self._loss_list[-steps:]))
-
-            # Parse `outputs` to a desired structure. `outputs` stores fetches for each microbatch
-            # which must be aggregated to get fetches for the whole batch. Scalar values will be
-            # aggregated by `mean`, array values will be concatenated by the first (batch) axis.
-            if fetches:
-                outputs = [[item] for item in outputs] if isinstance(fetches, str) else outputs
-                output = []
-                for i in range(len(outputs[0])):
-                    fetches_values = [item[i] for item in outputs]
-                    if fetches_values[0].size != 1:
-                        output.append(np.concatenate(fetches_values, axis=0))
-                    else:
-                        output.append(np.mean(fetches_values))
-                if isinstance(fetches, str):
-                    output = output[0]
-            else:
-                output = []
-
-            # Exit the profiling mode
+            # Exit the profiling
             if profile:
                 profiler.__exit__(None, None, None)
                 self.profilers.append(profiler)
 
+            # Store the average value of loss over microbatches
+            self.loss_list.append(np.mean(self._loss_list[-steps:]))
+
             # Store info about current iteration
-            self.iter_info.update({
+            self.last_iteration_info.update({
                 'amp': self.amp,
                 'microbatch': microbatch,
                 'sync_frequency': sync_frequency,
                 'steps': steps,
-                'sam': bool(sam_rho), 'sam_rho': sam_rho, 'sam_individual_norm': sam_individual_norm,
-                'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
-                'actual_model_outputs_shape': get_shape(_targets),
+                'sam': bool(sam_rho), 'sam_rho': sam_rho,
+                'sam_individual_norm': sam_individual_norm,
+                'outputs': outputs,
             })
 
             # Call the callbacks
             for callback in self.callbacks:
                 callback.on_iter_end()
 
+            # Parse `chunked_outputs` to a desired structure. `chunked_outputs` stores `outputs` for each microbatch
+            # which must be aggregated to get `outputs` for the whole batch.
+            # Scalar values are aggregated by `mean`, array values are concatenated along the first (batch) axis.
+            result = []
+
+            for output_name in outputs:
+                # All tensors for current `output_name`
+                chunked_output = [chunk_outputs[output_name] for chunk_outputs in chunked_outputs]
+
+                if chunked_output[0].size != 1:
+                    result.append(np.concatenate(chunked_output, axis=0))
+                else:
+                    result.append(np.mean(chunked_output))
+            if single_output:
+                result = result[0]
+
         finally:
             if lock:
                 self.model_lock.release()
-        return output
+        return result
 
-    def _train(self, *args, fetches=None, sync_frequency=True, sam_rho=0.0, sam_individual_norm=True):
+    def _train(self, inputs, targets, outputs, sync_frequency, sam_rho, sam_individual_norm):
         # Parse inputs
-        *inputs, targets = args
-        inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
+        inputs = inputs[0] if len(inputs) == 1 else inputs
+        targets = targets[0] if len(targets) == 1 else targets
 
-        # Apply model, compute loss and gradients
+        # Compute predictions; store shapes for introspection
         with torch.cuda.amp.autocast(enabled=self.amp):
             predictions = self.model(inputs)
+        predictions_ = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
+        self.last_iteration_info['predictions_shapes'] = [get_shape(item) for item in predictions_]
 
         # SAM: store grads from previous microbatches
         if self.iteration >= 1 and bool(sam_rho):
-            for p in self.model.parameters():
-                if p.grad is not None:
-                    self.optimizer.state[p]['previous_grad'] = p.grad.clone().detach()
-                    p.grad = None
+            self._train_sam_store_gradients()
 
+        # Compute loss and gradients; store loss value for every microbatch
         with torch.cuda.amp.autocast(enabled=self.amp):
             loss = self.loss(predictions, targets)
-            loss_ = loss if sync_frequency == 1 else loss / sync_frequency
-        (self.scaler.scale(loss_) if self.amp else loss).backward()
+            loss_ = loss / sync_frequency
+        (self.scaler.scale(loss_) if self.amp else loss_).backward()
+        self._loss_list.append(self.transfer_from_device(loss))
 
         # SAM: use obtained grads to move to the local maxima
         if self.iteration >= 1 and bool(sam_rho):
-            # Fetch gradients
-            grads = []
-            params_with_grads = []
-            for p in self.model.parameters():
-                if p.grad is not None:
-                    grads.append(p.grad.clone().detach())
-                    params_with_grads.append(p)
-                    p.grad = None
-
-            # Move to the local maxima
-            if sam_individual_norm:
-                epsilons = [grad * sam_rho / (grad.detach().norm(2).to(self.device)) for grad in grads]
-            else:
-                grad_norm = torch.stack([g.detach().norm(2).to(self.device) for g in grads]).norm(2)
-                epsilons = [eps * sam_rho / grad_norm for eps in grads]
-
-            if self.amp:
-                scale = self.scaler.get_scale()
-                epsilons = [eps / scale for eps in epsilons]
-            params_with_grads = [p + eps for p, eps in zip(params_with_grads, epsilons)]
-
-            # Compute new gradients: direction to move to minimize the local maxima
-            with torch.cuda.amp.autocast(enabled=self.amp):
-                predictions = self.model(inputs)
-                loss_inner = self.loss(predictions, targets)
-            (self.scaler.scale(loss_inner) if self.amp else loss_inner).backward()
-
-            # Cancel the previous update to model parameters, add stored gradients from previous microbatches
-            params_with_grads = [p - eps for p, eps in zip(params_with_grads, epsilons)]
-
-            for p in self.model.parameters():
-                previous_grad = self.optimizer.state[p].get('previous_grad')
-                if previous_grad is not None:
-                    p.grad.add_(previous_grad)
-
-        # Store loss value for every microbatch
-        self._loss_list.append(loss.detach().cpu().numpy())
+            self._train_sam_update_gradients(inputs=inputs, targets=targets, sync_frequency=sync_frequency,
+                                             sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
 
         # Whether to update weights or keep accumulating
         if self.sync_counter == sync_frequency - 1:
-            # Store learning rate: once per sync
-            # Note: we do it before decay, so it is actual LR used on this iteration
+            # Store learning rate: we do it before decay, so it is actual LR used on this iteration
             self.lr_list.append([group['lr'] for group in self.optimizer.param_groups])
 
             # Update weights and remove grads
@@ -1160,31 +1131,69 @@ class TorchModel(BaseModel, VisualizationMixin):
             self.sync_counter += 1
             self.syncs.append(False)
 
-        # Store outputs
+        # Make all possible outputs
+        additional_outputs = self.make_outputs(predictions=predictions)
         output_container = {
+            **additional_outputs,
             'predictions': predictions,
             'loss': loss,
         }
 
-        config = self.full_config
-        additional_outputs = self.output(inputs=predictions,
-                                         predictions=config['predictions'],
-                                         ops=config['output'])
-        output_container = {**output_container, **additional_outputs}
-        output = self.parse_output(fetches, output_container)
-        return output
+        # Transfer only the requested outputs to CPU
+        requested_outputs = {key : output_container[key] for key in outputs}
+        return self.transfer_from_device(requested_outputs)
+
+    def _train_sam_store_gradients(self):
+        """ Store gradients from previous microbatches. """
+        for p in self.model.parameters():
+            if p.grad is not None:
+                self.optimizer.state[p]['previous_grad'] = p.grad.clone().detach()
+                p.grad = None
+
+    def _train_sam_update_gradients(self, inputs, targets, sync_frequency, sam_rho, sam_individual_norm):
+        """ Update gradients to move to the local maxima. """
+        # Fetch gradients
+        grads = []
+        params_with_grads = []
+        for p in self.model.parameters():
+            if p.grad is not None:
+                grads.append(p.grad.clone().detach())
+                params_with_grads.append(p)
+                p.grad = None
+
+        # Move to the local maxima
+        if sam_individual_norm:
+            epsilons = [grad * sam_rho / (grad.detach().norm(2).to(self.device)) for grad in grads]
+        else:
+            grad_norm = torch.stack([g.detach().norm(2).to(self.device) for g in grads]).norm(2)
+            epsilons = [eps * sam_rho / grad_norm for eps in grads]
+
+        if self.amp:
+            scale = self.scaler.get_scale()
+            epsilons = [eps / scale for eps in epsilons]
+        params_with_grads = [p + eps for p, eps in zip(params_with_grads, epsilons)]
+
+        # Compute new gradients: direction to move to minimize the local maxima
+        with torch.cuda.amp.autocast(enabled=self.amp):
+            predictions_inner = self.model(inputs)
+            loss_inner = self.loss(predictions_inner, targets) / sync_frequency
+        (self.scaler.scale(loss_inner) if self.amp else loss_inner).backward()
+
+        # Cancel the previous update to model parameters, add stored gradients from previous microbatches
+        params_with_grads = [p - eps for p, eps in zip(params_with_grads, epsilons)]
+
+        for p in self.model.parameters():
+            previous_grad = self.optimizer.state[p].get('previous_grad')
+            if previous_grad is not None:
+                p.grad.add_(previous_grad)
 
 
-    def predict(self, *args, targets=None, feed_dict=None, fetches=None, lock=True, **kwargs):
+    def predict(self, inputs, targets=None, outputs=None, lock=True):
         """ Get predictions on the data provided.
 
         Parameters
         ----------
-        args : sequence
-            Arguments to be passed directly into the model.
-        feed_dict : dict
-            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
-            with keys being names and values being actual data.
+        !!
         targets : ndarray, optional
             Targets to calculate loss.
         fetches : tuple, list
@@ -1204,170 +1213,96 @@ class TorchModel(BaseModel, VisualizationMixin):
 
             model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
-        inputs, targets = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
 
-        # Acquire lock, release anyway
+        # Acquire lock; release in any case
         try:
             if lock:
-                self.model_lock.acquire()
+                self.model_lock.acquire() #pylint: disable=consider-using-with
+
+            # Parse outputs: always a list
+            single_output = isinstance(outputs, str)
+            outputs = [outputs] if single_output else (outputs or [])
 
             self.model.eval()
+            output_container = {}
 
             with torch.no_grad(), torch.cuda.amp.autocast(enabled=self.amp):
-                output_container = {}
                 inputs = self.transfer_to_device(inputs)
                 predictions = self.model(inputs)
-
-                if self.amp:
-                    if isinstance(predictions, (tuple, list)):
-                        predictions = type(predictions)(p.float() for p in predictions)
-                    else:
-                        predictions = predictions.float()
                 output_container['predictions'] = predictions
 
                 if targets is not None:
                     targets = self.transfer_to_device(targets)
-                    output_container['loss'] = self.loss(predictions, targets)
+                    loss = self.loss(predictions, targets)
+                    output_container['loss'] = loss
 
-            config = self.full_config
-            additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
-                                             ops=config['output'])
-            output_container = {**output_container, **additional_outputs}
-            output = self.parse_output(fetches, output_container)
+            # Make all possible outputs
+            additional_outputs = self.make_outputs(predictions=predictions)
+            output_container.update(additional_outputs)
+
+            # Transfer only the requested outputs to CPU
+            requested_outputs = [output_container[key] for key in outputs]
+            result = self.transfer_from_device(requested_outputs)
+            if single_output:
+                result = result[0]
 
         finally:
             if lock:
                 self.model_lock.release()
-        return output
+        return result
 
-    def _make_prediction_inputs(self, *args, targets=None, feed_dict=None, **kwargs):
-        """ Parse arguments to create valid inputs for the model.
-        Implements the logic of parsing the positional and keyword arguments to the model,
-        possibly wrapped into `feed_dict` dictionary, or even combination of the two.
 
-        Used under the hood of :meth:`~.TorchModel.predict` method.
 
-        Examples
-        --------
-        .. code-block:: python
-
-            model.predict(B('images'), targets=B('labels'))
-            model.predict(images=B('images'), targets=B('labels'))
-            model.predict(B('images'), targets=B('labels'), masks=B('masks'))
-        """
-        # Concatenate `kwargs` and `feed_dict`; if not empty, use keywords in `parse_input`
-        feed_dict = {**(feed_dict or {}), **kwargs}
-        if len(feed_dict) == 1:
-            _, value = feed_dict.popitem()
-            args = (*args, value)
-        if feed_dict:
-            if targets is not None:
-                if 'targets' in feed_dict.keys():
-                    warnings.warn("`targets` is already present in `feed_dict`, " +
-                                  "so targets passed as a keyword arg won't be used")
-                else:
-                    feed_dict['targets'] = targets
-            *inputs, targets = self.parse_inputs(*args, **feed_dict)
-
-        # Positional arguments only
-        else:
-            inputs = self.parse_inputs(*args)
-            if targets is not None:
-                targets = self.parse_inputs(targets)[0]
-        inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
-        return inputs, targets
-
-    def output(self, inputs, predictions=None, ops=None):
-        """ Add output operations to the model, like predicted probabilities or labels, etc.
-
-        Parameters
-        ----------
-        inputs : torch.Tensor or a sequence of torch.Tensors
-            Input tensors.
-
-        predictions : str or callable
-            Operation to apply to the network output to obtain tensor which is used in loss computation.
-
-            If str, then one of predefined operations:
-                - 'sigmoid' - ``sigmoid(inputs)``
-                - 'proba' - ``softmax(inputs)``
-                - 'labels' - ``argmax(inputs)``
-                - 'softplus' - ``softplus(inputs)``
-
-            If callable, then user-defined operation.
-
-        ops : sequence, dict or OrderedDict
-            Auxiliary operations to apply.
-
-            If sequence, then operations to apply. Transformed tensors are stored with the same name, as operation
-            If dict, then mapping from prefixes to operations. Transformed tensors are stored with
-            the prefixed name of the operation.
-
-            For multi-output models ensure that an ordered dict is used (e.g. :class:`~collections.OrderedDict`).
-
-        Raises
-        ------
-        ValueError if the number of inputs does not equal to the number of prefixes
-        TypeError if inputs is not a Tensor or a sequence of Tensors
-
-        Examples
-        --------
-        .. code-block:: python
-
-            config = {
-                'output': ['proba', 'labels']
-            }
-
-        However, if one of the placeholders also has a name 'labels', then it will be lost as the model
-        will rewrite the name 'labels' with an output. In this case dict might be more convenient:
-
-        .. code-block:: python
-
-            config = {
-                'output': {'predicted': ['proba', 'labels']}
-            }
-
-        Now the output will be stored under names 'predicted_proba' and 'predicted_labels'.
-        """
-        if ops is None:
-            ops = []
-        elif not isinstance(ops, (dict, tuple, list)):
-            ops = [ops]
-        if not isinstance(ops, dict):
-            ops = {'': ops}
-
-        if not isinstance(inputs, (tuple, list)):
-            inputs = [inputs]
+    def make_outputs(self, predictions):
+        """ !!. """
+        predictions = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
 
         outputs = {}
-        for i, tensor in enumerate(inputs):
+        # Iterate over tensors in predictions and the corresponding output operations
+        for i, (tensor, (output_prefix, output_operations)) in enumerate(zip(predictions, self.operations.items())):
             if not isinstance(tensor, torch.Tensor):
-                raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(tensor)))
+                raise TypeError(f'Network outputs are expected to be tensors, got {type(tensor)} instead!')
 
-            prefix = [*ops.keys()][i]
-            attr_prefix = prefix + '_' if prefix else ''
+            output_prefix = output_prefix + '_' if output_prefix else ''
 
-            self._add_output_op(tensor, predictions, 'predictions', '')
-            for oper in ops[prefix]:
-                name, output = self._add_output_op(tensor, oper, oper, attr_prefix)
-                outputs[name] = output
+            # For each operation, add multiple aliases
+            for j, operation in enumerate(output_operations):
+                output_tensor, operation_name = self.apply_output_operation(tensor, operation)
+                if operation_name:
+                    outputs[output_prefix + operation_name] = output_tensor # i.e. `first_sigmoid`, `sigmoid`
+
+                outputs.update({
+                    output_prefix + str(j) : output_tensor, # i.e. `first_0`, `0`
+                    f'predictions_{i}_{j}' : output_tensor, # i.e. `predictions_0_0`
+                })
+
+            # For each tensor, add default alias
+            outputs[f'predictions_{i}'] = tensor
         return outputs
 
-    def _add_output_op(self, inputs, oper, name, attr_prefix):
-        if oper is None:
-            output = inputs
-        elif oper == 'softplus':
-            output = torch.nn.functional.softplus(inputs)
-        elif oper == 'sigmoid':
-            output = torch.sigmoid(inputs)
-        elif oper == 'proba':
-            output = torch.nn.functional.softmax(inputs, dim=1)
-        elif oper == 'labels':
-            output = inputs.argmax(dim=1)
-        elif callable(oper):
-            output = oper(inputs)
-            name = oper.__name__
-        return attr_prefix + name, output
+    @staticmethod
+    def apply_output_operation(tensor, operation):
+        """ !!. """
+        with torch.no_grad():
+            if operation is None:
+                result = tensor
+                name = ''
+            elif operation == 'softplus':
+                result = torch.nn.functional.softplus(tensor)
+                name = operation
+            elif operation == 'sigmoid':
+                result = torch.sigmoid(tensor)
+                name = operation
+            elif operation == 'proba':
+                result = torch.nn.functional.softmax(tensor, dim=1)
+                name = operation
+            elif operation == 'labels':
+                result = tensor.argmax(dim=1)
+                name = operation
+            elif callable(operation):
+                result = operation(tensor)
+                name = operation.__name__
+        return result, name
 
 
     # Preserve model for later usage
@@ -1429,7 +1364,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         The model will be moved to device specified in the model config by key `device`.
         """
         _ = args
-        self._get_devices()
+        self.parse_devices()
 
         if kwargs.get('pickle_module') is None:
             kwargs['pickle_module'] = dill
@@ -1447,7 +1382,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             setattr(self, item, checkpoint.get(item))
         self.full_config = self.full_config + load_config
 
-        self._to_device()
+        self.model_to_device()
 
         if eval:
             self.model.eval()
