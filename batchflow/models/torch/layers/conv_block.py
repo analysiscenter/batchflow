@@ -97,7 +97,7 @@ class BaseConvBlock(nn.ModuleDict):
     dilation_rate: int
         Default is 1.
     activation : callable
-        Default is `tf.nn.relu`.
+        Default is ReLU.
     pool_size : int
         Default is 2.
     pool_strides : int
