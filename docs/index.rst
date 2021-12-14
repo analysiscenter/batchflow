@@ -63,7 +63,7 @@ BatchFlow includes ready-to-use proven architectures like VGG, Inception, ResNet
 To apply them to your data just choose a model, specify the inputs (like the number of classes or images shape)
 and call ``train_model``. Of course, you can also choose a loss function, an optimizer and many other parameters, if you want.::
 
-    from batchflow.models.tf import ResNet34
+    from batchflow.models.torch import ResNet34
 
     my_workflow = my_dataset.pipeline()
                   .init_model('dynamic', ResNet34, config={
@@ -141,7 +141,6 @@ Some BatchFlow modules also depend on other mandatory packages:
 
 * pandas and multiprocess for ``batchflow.research``
 * torch for ``batchflow.models.torch``
-* tensorflow ``for batchflow.models.tf``
 
 
 Citing BatchFlow

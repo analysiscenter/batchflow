@@ -61,7 +61,7 @@ for i in range(NUM_ITERS):
 To apply them to your data just choose a model, specify the inputs (like the number of classes or images shape)
 and call `train_model`. Of course, you can also choose a loss function, an optimizer and many other parameters, if you want.
 ```python
-from batchflow.models.tf import ResNet34
+from batchflow.models.torch import ResNet34
 
 my_workflow = my_dataset.pipeline()
               .init_model('dynamic', ResNet34, config={

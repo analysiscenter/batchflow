@@ -63,7 +63,7 @@ def test_run_notebooks(path, microbatch, device):
 
     device : str or None
         If None, then default device behaviour is used.
-        If str, then any option of device configuration from :class:`.tf.TFModel` is supported.
+        If str, then any option of device configuration from :class:`.torch.TorchModel` is supported.
 
     Notes
     -----

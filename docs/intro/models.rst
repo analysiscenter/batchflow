@@ -288,23 +288,18 @@ Parallel training
 
 If you :doc:`prefetch <prefetch>` with actions based on non-thread-safe models, you might encounter that your model
 hardly learns anything. The reason is that model variables might not update concurrently. To solve this problem a lock
-can be added to an action to allow for only one concurrent execution::
+can be added to the train or predict method to allow for only one concurrent execution::
 
-   class MyBatch(Batch):
-       ...
-       @action(use_lock="some_model_lock")
-       def train_it(self, model_name):
-           model = self.get_model_by_name(model_name)
-           model.train(input_images=self.images, input_labels=self.labels)
-           return self
+    Pipeline()
+    ...
+    .train('my_model', B.images, B.targets, use_lock=True)
 
-However, as far as ``TensorFlow`` is concerned, its optimizers have a parameter `use_locking <https://www.tensorflow.org/api_docs/python/tf/train/Optimizer#__init__>`_
-which allows for concurrent updates when set to ``True``.
+By default, the lock is used during both train and predict methods.
 
 
 Ready to use models
 ===================
-See documentation for :doc:`Tensorflow <tf_models>` and :doc:`Torch models <torch_models>` and
+See documentation for :doc:`Torch models <torch_models>` and
 the list of :doc:`implemented architectures <model_zoo>`.
 
 
