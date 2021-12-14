@@ -19,7 +19,7 @@ except ImportError:
     CUPY_AVAILABLE = False
 
 from .initialization import best_practice_resnet_init
-from .visualization import VisualizationMixin
+from .visualization import VisualizationMixin, LayerHook, ExtractionMixin
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
 from .losses import CrossEntropyLoss, BinaryLovaszLoss, LovaszLoss, SSIM, MSSIM
@@ -69,7 +69,7 @@ DECAYS_DEFAULTS = {
 }
 
 
-class TorchModel(BaseModel, VisualizationMixin):
+class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
     r""" Base class for eager Torch models.
 
     Parameters
@@ -308,7 +308,7 @@ class TorchModel(BaseModel, VisualizationMixin):
         'inputs_shapes', 'targets_shapes', 'classes',
         'loss', 'optimizer', 'decay', 'decay_step',
         'sync_counter', 'microbatch',
-        'iteration', 'iter_info', 'lr_list', 'syncs', 'decay_iters',
+        'iteration', 'last_iteration_info', 'lr_list', 'syncs', 'decay_iters',
         '_loss_list', 'loss_list',
     ]
 
@@ -460,8 +460,6 @@ class TorchModel(BaseModel, VisualizationMixin):
             config['head/units'] = config.get('head/classes')
         if config.get('head/filters') is None:
             config['head/filters'] = config.get('head/classes')
-
-        print('CCC', self.classes)
 
     def update_attributes(self):
         """ Update instance attributes from config. """
@@ -867,7 +865,7 @@ class TorchModel(BaseModel, VisualizationMixin):
 
         if isinstance(data, (np.ndarray, int, float)):
             return data
-        raise TypeError('Passed data should either be a `torch.Tensor` or a container of them. ')
+        raise TypeError(f'Passed data should either be a `torch.Tensor` or a container of them, got {data}')
 
     def model_to_device(self):
         """ Select whether to put model on a single device or to a number of devices in `DataParallel` mode.
@@ -1138,6 +1136,7 @@ class TorchModel(BaseModel, VisualizationMixin):
             'predictions': predictions,
             'loss': loss,
         }
+        self.last_iteration_info['available_outputs'] = list(output_container.keys())
 
         # Transfer only the requested outputs to CPU
         requested_outputs = {key : output_container[key] for key in outputs}
@@ -1213,7 +1212,6 @@ class TorchModel(BaseModel, VisualizationMixin):
 
             model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
-
         # Acquire lock; release in any case
         try:
             if lock:
@@ -1221,8 +1219,23 @@ class TorchModel(BaseModel, VisualizationMixin):
 
             # Parse outputs: always a list
             single_output = isinstance(outputs, str)
-            outputs = [outputs] if single_output else (outputs or [])
+            outputs_ = [outputs] if single_output else (outputs or [])
 
+            # If the requested output is a layer id, add the hook
+            outputs = []
+            for output_name in outputs_:
+                if self.is_layer_id(output_name):
+                    layer = self.get_layer(output_name)
+                    hook = LayerHook(layer)
+                    outputs.append(hook)
+                else:
+                    outputs.append(output_name)
+
+            # Raise error early
+            if 'loss' in outputs and targets is None:
+                raise TypeError('`targets` should be provided to fetch `loss`!')
+
+            # Compute predictions and, if possible, loss
             self.model.eval()
             output_container = {}
 
@@ -1240,8 +1253,16 @@ class TorchModel(BaseModel, VisualizationMixin):
             additional_outputs = self.make_outputs(predictions=predictions)
             output_container.update(additional_outputs)
 
+            # Retrieve activation data from hooks
+            requested_outputs = []
+            for item in outputs:
+                if isinstance(item, LayerHook):
+                    item.close()
+                    requested_outputs.append(item.activation)
+                else:
+                    requested_outputs.append(output_container[item])
+
             # Transfer only the requested outputs to CPU
-            requested_outputs = [output_container[key] for key in outputs]
             result = self.transfer_from_device(requested_outputs)
             if single_output:
                 result = result[0]
