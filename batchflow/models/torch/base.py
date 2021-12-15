@@ -372,7 +372,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
         # First, extract all necessary info from config into the instance attributes.
         # Then, update config with some of parsed values -- mainly for convenience.
-        self.update_attributes()
+        self.parse_attributes()
         self.update_config()
 
         # If the inputs are set in config with their shapes we can build right away
@@ -396,31 +396,32 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
         Don't forget to use the default config from parent class.
         """
-        config = Config()
-        config['inputs'] = {}
-        config['placeholder_batch_size'] = 2
+        config = Config({
+            # Model building
+            'order': ['initial_block', 'body', 'head'],
+            'initial_block': {}, 'body': {}, 'head': {},
+            'placeholder_batch_size': 2,
 
-        config['device'] = None
-        config['benchmark'] = True
-        config['profile'] = False
-        config['microbatch'] = None
-        config['sync_frequency'] = 1
+            # Additional operations to apply to model predictions
+            'output': None,
 
-        config['loss'] = None
-        config['optimizer'] = 'Adam'
-        config['decay'] = None
-        config['amp'] = True
+            # Devices and memory control
+            'amp': True,
+            'device': None,
+            'benchmark': True,
+            'microbatch': None,
+            'sync_frequency': 1,
+            'profile': False,
 
-        config['sam_rho'] = 0.0
-        config['sam_individual_norm'] = True
+            # Training infrastructure
+            'loss': None,
+            'optimizer': 'Adam',
+            'decay': None,
 
-        config['order'] = ['initial_block', 'body', 'head']
-        config['initial_block'] = {}
-        config['body'] = {}
-        config['head'] = {}
-        config['common'] = {}
-
-        config['output'] = None
+            # SAM: sharpness-aware minimization
+            'sam_rho': 0.0,
+            'sam_individual_norm': True,
+        })
         return config
 
     def combine_configs(self):
@@ -444,8 +445,8 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
 
     # Parse config keys into instance attributes
-    def update_attributes(self):
-        """ Update instance attributes with values from config. """
+    def parse_attributes(self):
+        """ Parse instance attributes from config. """
         config = self.full_config
 
         self.init_weights = config.get('init_weights', None)
@@ -870,7 +871,17 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
         Parameters
         ----------
-        !!
+        inputs : np.ndarray or sequence of them
+            Model inputs. If there is a single input, then it is passed to model directly; otherwise, we pass a list.
+            If the microbatching is used, individual elements are split along the first axis.
+        targets : np.ndarray or sequence of them
+            Model targets to calculate loss with.
+            If there is a single target, then it is passed to loss computation directly; otherwise, we pass a list.
+            If the microbatching is used, individual elements are split along the first axis.
+        outputs : str or sequence of them
+            Desired outputs of the method.
+            Each string defines a tensor to get and should be one of pre-defined or set in `outputs` key in the config.
+            Pre-defined tensors are `predictions`, `loss`, and `predictions_{i}` for multi-output models.
         lock : bool
             If True, then model, loss and gradient update operations are locked, thus allowing for multithreading.
         sync_frequency : int, bool or None
@@ -883,6 +894,8 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
             accumulating gradients from microbatches and applying them once in the end.
             If True, then value from config is used (default value is not to use microbatching).
             If False or None, then microbatching is not used.
+        microbatch_drop_last : bool
+            Whether to drop microbatches, that are smaller than the microbatch size. Default is True.
         sam_rho : float
             Foret P. et al. "`Sharpness-Aware Minimization for Efficiently Improving Generalization
             <https://arxiv.org/abs/2010.01412>`_".
@@ -894,12 +907,10 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         profile : bool
             Whether to collect stats of model training timings.
             If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
-        kwargs : dict
-            Additional named arguments directly passed to `feed_dict`.
 
         Returns
         -------
-        Calculated values of tensors in `fetches` in the same order.
+        Calculated values of requested tensors from `outputs` in the same order.
 
         Examples
         --------
@@ -1172,7 +1183,18 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
         Parameters
         ----------
-        !!
+        inputs : np.ndarray or sequence of them
+            Model inputs. Passed directly to model.
+        targets : np.ndarray or sequence of them
+            Optional model targets to calculate loss with. Passed directly to model.
+        outputs : str or sequence of them
+            Desired outputs of the method.
+            Each string defines a tensor to get and should be one of:
+                - pre-defined tensors, which are `predictions`, `loss`, and `predictions_{i}` for multi-output models.
+                - values described in the `outputs` key in the config
+                - layer id, which describes how to access the layer through a series of `getattr` and `getitem` calls.
+                Allows to get intermediate activations of a neural network.
+
         targets : ndarray, optional
             Targets to calculate loss.
         fetches : tuple, list
@@ -1188,9 +1210,14 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
         Examples
         --------
-        .. code-block:: python
+        Layer ids allow to get intermediate activations. If the model has `batchflow_model.model.head[0]` layer,
+        you can access it with::
 
-            model.predict(B('images'), targets=B('labels'), fetches='loss')
+        >>> batchflow_model.predict(inputs=B.images, outputs='model.head[0]')
+
+        String keys for `getitem` calls are also allowed::
+
+        >>> batchflow_model.predict(inputs=B.images, outputs='model.body.encoder["block-0"]')
         """
         # Acquire lock; release in any case
         try:
@@ -1254,7 +1281,9 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
 
     def make_outputs(self, predictions):
-        """ !!. """
+        """ Produce additional outputs, defined in the config, from `predictions`.
+        Also adds a number of aliases to predicted tensors.
+        """
         predictions = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
 
         outputs = {}
@@ -1282,7 +1311,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
     @staticmethod
     def apply_output_operation(tensor, operation):
-        """ !!. """
+        """ Apply `operation`, possibly aliased with a string, to `tensor`. """
         with torch.no_grad():
             if operation is None:
                 result = tensor
