@@ -952,7 +952,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
             # Split the data into `microbatch` size chunks
             (chunked_inputs, chunked_targets,
             batch_size, microbatch) = self.split_into_microbatches(inputs, targets,
-                                                                    microbatch, microbatch_drop_last)
+                                                                   microbatch, microbatch_drop_last)
 
             steps = len(chunked_inputs)
             inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
@@ -1032,7 +1032,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         targets = self.transfer_to_device(targets)
 
         # Convert layer ids into LayerHooks
-        outputs = self._prepare_outputs(outputs)
+        outputs = self.prepare_outputs(outputs)
 
         # Compute predictions; store shapes for introspection
         with torch.cuda.amp.autocast(enabled=self.amp):
