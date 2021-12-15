@@ -308,7 +308,8 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         'inputs_shapes', 'targets_shapes', 'classes',
         'loss', 'optimizer', 'decay', 'decay_step',
         'sync_counter', 'microbatch',
-        'iteration', 'last_iteration_info', 'lr_list', 'syncs', 'decay_iters',
+        'iteration', 'last_train_info', 'last_predict_info',
+        'lr_list', 'syncs', 'decay_iters',
         '_loss_list', 'loss_list',
     ]
 
@@ -350,9 +351,10 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         self.sam_rho = 0.0
         self.sam_individual_norm = True
 
-        # Store info about passed train iterations
+        # Store info about passed train/predict iterations
         self.iteration = 0
-        self.last_iteration_info = {}
+        self.last_train_info = {}
+        self.last_predict_info = {}
         self.lr_list = []
         self.syncs = []
         self.decay_iters = []
@@ -383,7 +385,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         """ Delete the underlying model and all the infrastructure. Use to create model from scratch. """
         # TODO: do we really need this?
         self.model = None
-        self.last_iteration_info = {}
+        self.last_train_info = {}
 
 
     # Create config of model creation: combine the external and default ones
@@ -399,7 +401,10 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         config = Config({
             # Model building
             'order': ['initial_block', 'body', 'head'],
-            'initial_block': {}, 'body': {}, 'head': {},
+            'initial_block': {},
+            'body': {},
+            'head': {},
+            'common': {},
             'placeholder_batch_size': 2,
 
             # Additional operations to apply to model predictions
@@ -922,7 +927,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         try:
             if lock:
                 self.model_lock.acquire()
-            self.last_iteration_info = {}
+            self.last_train_info = {}
 
             # Parse inputs and targets: always a list
             inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
@@ -938,48 +943,22 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
             elif sync_frequency is False or sync_frequency is None:
                 sync_frequency = 1
 
-            if microbatch:
-                if microbatch is True:
-                    microbatch = self.microbatch
-                else:
-                    microbatch = microbatch or self.microbatch
-
             # Prepare parameters for SAM
             if sam_rho is None:
                 sam_rho = self.sam_rho
             if sam_individual_norm is None:
                 sam_individual_norm = self.sam_individual_norm
 
-            # Compute batch_size and make sure it is the same for all inputs and targets
-            batch_size = len(inputs[0])
-            for i, item in enumerate(inputs):
-                if len(item) != batch_size:
-                    raise ValueError('All of `inputs` should have the same length, as the first one!'
-                                     f'Input at position `{i}` has size {len(item)}!={batch_size}')
-            for i, item in enumerate(targets):
-                if len(item) != batch_size:
-                    raise ValueError('All of `targets` should have the same length, as the first of `inputs`!'
-                                     f'Target at position `{i}` has size {len(item)}!={batch_size}')
-
-            # Split data into microbatches, if needed
-            if microbatch:
-                chunked_inputs = [[item[i:i + microbatch] for item in inputs]
-                                  for i in range(0, batch_size, microbatch)]
-                chunked_targets = [[item[i:i + microbatch] for item in targets]
-                                   for i in range(0, batch_size, microbatch)]
-
-                if microbatch_drop_last and batch_size % microbatch != 0:
-                    chunked_inputs = chunked_inputs[:-1]
-                    chunked_targets = chunked_targets[:-1]
-            else:
-                chunked_inputs = [inputs]
-                chunked_targets = [targets]
+            # Split the data into `microbatch` size chunks
+            (chunked_inputs, chunked_targets,
+            batch_size, microbatch) = self._split_into_microbatches(inputs, targets,
+                                                                    microbatch, microbatch_drop_last)
 
             steps = len(chunked_inputs)
             inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
             targets_shapes = [get_shape(item) for item in chunked_targets[-1]]
-            self.last_iteration_info.update({'inputs_shapes': inputs_shapes,
-                                             'targets_shapes': targets_shapes})
+            self.last_train_info.update({'inputs_shapes': inputs_shapes,
+                                         'targets_shapes': targets_shapes})
 
             # Create PyTorch model if it is yet to be initialized, based on the actual inputs
             if self.model is None:
@@ -1007,11 +986,8 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
             # Train on each of the microbatches
             chunked_outputs = []
             for chunk_inputs, chunk_targets in zip(chunked_inputs, chunked_targets):
-                chunk_inputs = self.transfer_to_device(chunk_inputs)
-                chunk_targets = self.transfer_to_device(chunk_targets)
-
-                # Return is a dictionary with desired outputs and some meta information
-                chunk_outputs = self._train(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs,
+                # Compute forward and backward passes of the model, apply gradients, evaluate requested outputs
+                chunk_outputs = self._train(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs[:],
                                             sync_frequency=sync_frequency*steps,
                                             sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
                 chunked_outputs.append(chunk_outputs)
@@ -1021,39 +997,27 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
                 profiler.__exit__(None, None, None)
                 self.profilers.append(profiler)
 
+            # Call the callbacks
+            for callback in self.callbacks:
+                callback.on_iter_end()
+
+            # Aggregate the outputs from microbatches
+            result = self._aggregate_microbatches(outputs, chunked_outputs, single_output)
+
             # Store the average value of loss over microbatches
             self.loss_list.append(np.mean(self._loss_list[-steps:]))
 
-            # Store info about current iteration
-            self.last_iteration_info.update({
+            # Store info about current train iteration
+            self.last_train_info.update({
                 'amp': self.amp,
-                'microbatch': microbatch,
+                'batch_size': batch_size,
+                'microbatch_size': microbatch,
                 'sync_frequency': sync_frequency,
                 'steps': steps,
                 'sam': bool(sam_rho), 'sam_rho': sam_rho,
                 'sam_individual_norm': sam_individual_norm,
                 'outputs': outputs,
             })
-
-            # Call the callbacks
-            for callback in self.callbacks:
-                callback.on_iter_end()
-
-            # Parse `chunked_outputs` to a desired structure. `chunked_outputs` stores `outputs` for each microbatch
-            # which must be aggregated to get `outputs` for the whole batch.
-            # Scalar values are aggregated by `mean`, array values are concatenated along the first (batch) axis.
-            result = []
-
-            for output_name in outputs:
-                # All tensors for current `output_name`
-                chunked_output = [chunk_outputs[output_name] for chunk_outputs in chunked_outputs]
-
-                if chunked_output[0].size != 1:
-                    result.append(np.concatenate(chunked_output, axis=0))
-                else:
-                    result.append(np.mean(chunked_output))
-            if single_output:
-                result = result[0]
 
         finally:
             if lock:
@@ -1064,12 +1028,15 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         # Parse inputs
         inputs = inputs[0] if len(inputs) == 1 else inputs
         targets = targets[0] if len(targets) == 1 else targets
+        inputs = self.transfer_to_device(inputs)
+        targets = self.transfer_to_device(targets)
+
+        # Convert layer ids into LayerHooks
+        outputs = self._prepare_outputs(outputs)
 
         # Compute predictions; store shapes for introspection
         with torch.cuda.amp.autocast(enabled=self.amp):
             predictions = self.model(inputs)
-        predictions_ = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
-        self.last_iteration_info['predictions_shapes'] = [get_shape(item) for item in predictions_]
 
         # SAM: store grads from previous microbatches
         if self.iteration >= 1 and bool(sam_rho):
@@ -1127,10 +1094,16 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
             'predictions': predictions,
             'loss': loss,
         }
-        self.last_iteration_info['available_outputs'] = list(output_container.keys())
+
+        # Log inner info
+        predictions_ = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
+        self.last_train_info['predictions_shapes'] = [get_shape(item) for item in predictions_]
+        self.last_train_info['available_outputs'] = list(output_container.keys())
+
+        # Retrieve requested outputs
+        requested_outputs = self._extract_outputs(outputs, output_container)
 
         # Transfer only the requested outputs to CPU
-        requested_outputs = {key : output_container[key] for key in outputs}
         return self.transfer_from_device(requested_outputs)
 
     def _train_sam_store_gradients(self):
@@ -1178,7 +1151,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
                 p.grad.add_(previous_grad)
 
 
-    def predict(self, inputs, targets=None, outputs=None, lock=True):
+    def predict(self, inputs, targets=None, outputs=None, lock=True, microbatch=False):
         """ Get predictions on the data provided.
 
         Parameters
@@ -1194,19 +1167,16 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
                 - values described in the `outputs` key in the config
                 - layer id, which describes how to access the layer through a series of `getattr` and `getitem` calls.
                 Allows to get intermediate activations of a neural network.
-
-        targets : ndarray, optional
-            Targets to calculate loss.
-        fetches : tuple, list
-            Sequence of tensors to fetch from the model.
         lock : bool
             If True, then model and loss computation operations are locked, thus allowing for multithreading.
-        kwargs : dict
-            Additional named arguments directly passed to `feed_dict`.
+        microbatch : int, bool or None
+            If int, then size of chunks to split every batch into. Allows to process given data sequentially.
+            If True, then value from config is used (default value is not to use microbatching).
+            If False or None, then microbatching is not used.
 
         Returns
         -------
-        Calculated values of tensors in `fetches` in the same order.
+        Calculated values of tensors in `outputs` in the same order.
 
         Examples
         --------
@@ -1223,61 +1193,91 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         try:
             if lock:
                 self.model_lock.acquire()
+            self.last_predict_info = {}
+
+            # Parse inputs and targets: always a list
+            inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
+            targets = (list(targets) if isinstance(targets, (tuple, list)) else [targets]) if targets else []
 
             # Parse outputs: always a list
             single_output = isinstance(outputs, str)
-            outputs_ = [outputs] if single_output else (outputs or [])
-
-            # If the requested output is a layer id, add the hook
-            outputs = []
-            for output_name in outputs_:
-                if self.is_layer_id(output_name):
-                    layer = self.get_layer(output_name)
-                    hook = LayerHook(layer)
-                    outputs.append(hook)
-                else:
-                    outputs.append(output_name)
+            outputs = [outputs] if single_output else (outputs or [])
 
             # Raise error early
-            if 'loss' in outputs and targets is None:
+            if 'loss' in outputs and not targets:
                 raise TypeError('`targets` should be provided to fetch `loss`!')
 
-            # Compute predictions and, if possible, loss
+            # Split the data into `microbatch` size chunks
+            (chunked_inputs, chunked_targets,
+            batch_size, microbatch) = self._split_into_microbatches(inputs, targets,
+                                                                    microbatch, drop_last=False)
+
+            steps = len(chunked_inputs)
+            inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
+            targets_shapes = [get_shape(item) for item in chunked_targets[-1]]
+            self.last_predict_info.update({'inputs_shapes': inputs_shapes,
+                                           'targets_shapes': targets_shapes})
+
+            # Evaluate each microbatch separately
             self.model.eval()
-            output_container = {}
 
-            with torch.no_grad(), torch.cuda.amp.autocast(enabled=self.amp):
-                inputs = self.transfer_to_device(inputs)
-                predictions = self.model(inputs)
-                output_container['predictions'] = predictions
+            chunked_outputs = []
+            for chunk_inputs, chunk_targets in zip(chunked_inputs, chunked_targets):
+                # Evaluate requested outputs
+                chunk_outputs = self._predict(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs[:])
+                chunked_outputs.append(chunk_outputs)
 
-                if targets is not None:
-                    targets = self.transfer_to_device(targets)
-                    loss = self.loss(predictions, targets)
-                    output_container['loss'] = loss
+            # Aggregate the outputs from microbatches
+            result = self._aggregate_microbatches(outputs, chunked_outputs, single_output)
 
-            # Make all possible outputs
-            additional_outputs = self.make_outputs(predictions=predictions)
-            output_container.update(additional_outputs)
-
-            # Retrieve activation data from hooks
-            requested_outputs = []
-            for item in outputs:
-                if isinstance(item, LayerHook):
-                    item.close()
-                    requested_outputs.append(item.activation)
-                else:
-                    requested_outputs.append(output_container[item])
-
-            # Transfer only the requested outputs to CPU
-            result = self.transfer_from_device(requested_outputs)
-            if single_output:
-                result = result[0]
+            # Store info about current predict iteration
+            self.last_predict_info.update({
+                'amp': self.amp,
+                'batch_size': batch_size,
+                'microbatch_size': microbatch,
+                'steps': steps,
+                'outputs': outputs,
+            })
 
         finally:
             if lock:
                 self.model_lock.release()
         return result
+
+    def _predict(self, inputs, targets, outputs):
+        # Parse inputs
+        inputs = inputs[0] if len(inputs) == 1 else inputs
+        targets = targets[0] if len(targets) == 1 else targets
+
+        # Convert layer ids into LayerHooks
+        outputs = self._prepare_outputs(outputs)
+
+        output_container = {}
+        with torch.no_grad(), torch.cuda.amp.autocast(enabled=self.amp):
+            inputs = self.transfer_to_device(inputs)
+            predictions = self.model(inputs)
+
+            output_container['predictions'] = predictions
+
+            if targets:
+                targets = self.transfer_to_device(targets)
+                loss = self.loss(predictions, targets)
+                output_container['loss'] = loss
+
+        # Make all possible outputs
+        additional_outputs = self.make_outputs(predictions=predictions)
+        output_container.update(additional_outputs)
+
+        # Log inner info
+        predictions_ = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
+        self.last_train_info['predictions_shapes'] = [get_shape(item) for item in predictions_]
+        self.last_predict_info['available_outputs'] = list(output_container.keys())
+
+        # Retrieve requested outputs
+        requested_outputs = self._extract_outputs(outputs, output_container)
+
+        # Transfer only the requested outputs to CPU
+        return self.transfer_from_device(requested_outputs)
 
 
     def make_outputs(self, predictions):
@@ -1332,6 +1332,85 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
                 result = operation(tensor)
                 name = operation.__name__
         return result, name
+
+
+
+    def _split_into_microbatches(self, inputs, targets, microbatch, drop_last):
+        # Parse microbatch size
+        if microbatch:
+            if microbatch is True:
+                microbatch = self.microbatch
+            else:
+                microbatch = microbatch or self.microbatch
+
+        # Compute batch_size and make sure it is the same for all inputs and targets
+        batch_size = len(inputs[0])
+        for i, item in enumerate(inputs):
+            if len(item) != batch_size:
+                raise ValueError('All of `inputs` should have the same length, as the first one!'
+                                    f'Input at position `{i}` has size {len(item)}!={batch_size}')
+        for i, item in enumerate(targets):
+            if len(item) != batch_size:
+                raise ValueError('All of `targets` should have the same length, as the first of `inputs`!'
+                                    f'Target at position `{i}` has size {len(item)}!={batch_size}')
+
+        # Split data into microbatches, if needed
+        if microbatch:
+            chunked_inputs = [[item[i:i + microbatch] for item in inputs]
+                                for i in range(0, batch_size, microbatch)]
+            chunked_targets = [[item[i:i + microbatch] for item in targets]
+                                for i in range(0, batch_size, microbatch)]
+
+            if drop_last and batch_size % microbatch != 0:
+                chunked_inputs = chunked_inputs[:-1]
+                chunked_targets = chunked_targets[:-1]
+        else:
+            chunked_inputs = [inputs]
+            chunked_targets = [targets]
+
+        return chunked_inputs, chunked_targets, batch_size, microbatch
+
+    def _aggregate_microbatches(self, outputs, chunked_outputs, single_output):
+        # Parse `chunked_outputs` to a desired structure. `chunked_outputs` stores `outputs` for each microbatch
+        # which must be aggregated to get `outputs` for the whole batch.
+        # Scalar values are aggregated by `mean`, array values are concatenated along the first (batch) axis.
+        result = []
+        for output_name in outputs:
+            # All tensors for current `output_name`
+            chunked_output = [chunk_outputs[output_name] for chunk_outputs in chunked_outputs]
+
+            if chunked_output[0].size != 1:
+                result.append(np.concatenate(chunked_output, axis=0))
+            else:
+                result.append(np.mean(chunked_output))
+        if single_output:
+            result = result[0]
+
+        return result
+
+    def _prepare_outputs(self, outputs):
+        # If the requested output is a layer id, add the hook
+        result = []
+        for output_name in outputs:
+            if self.is_layer_id(output_name):
+                layer = self.get_layer(output_name)
+                hook = LayerHook(layer)
+                result.append(hook)
+            else:
+                result.append(output_name)
+        return result
+
+    def _extract_outputs(self, outputs, output_container):
+        # Retrieve activation data from hooks, get other requested outputs from container
+        requested_outputs = {}
+        for item in outputs:
+            if isinstance(item, LayerHook):
+                item.close()
+                value = item.activation
+            else:
+                value = output_container[item]
+            requested_outputs[item] = value
+        return requested_outputs
 
 
     # Preserve model for later usage
