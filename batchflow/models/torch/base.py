@@ -1101,7 +1101,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         self.last_train_info['available_outputs'] = list(output_container.keys())
 
         # Retrieve requested outputs
-        requested_outputs = self._extract_outputs(outputs, output_container)
+        requested_outputs = self.extract_outputs(outputs, output_container)
 
         # Transfer only the requested outputs to CPU
         return self.transfer_from_device(requested_outputs)
