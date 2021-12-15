@@ -67,8 +67,13 @@ class VisualizationMixin:
 
             message += f'\nTotal number of passed training iterations: {self.iteration}\n'
 
-            message += template_header.format('Last iteration params')
-            message += pformat(self.last_iteration_info, sort_dicts=False) + '\n'
+            if self.last_train_info:
+                message += template_header.format('Last train iteration info')
+                message += pformat(self.last_train_info, sort_dicts=False) + '\n'
+
+            if self.last_predict_info:
+                message += template_header.format('Last predict iteration info')
+                message += pformat(self.last_predict_info, sort_dicts=False) + '\n'
         return message[1:-1]
 
     def short_repr(self):
