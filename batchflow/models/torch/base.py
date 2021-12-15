@@ -951,7 +951,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
             # Split the data into `microbatch` size chunks
             (chunked_inputs, chunked_targets,
-            batch_size, microbatch) = self._split_into_microbatches(inputs, targets,
+            batch_size, microbatch) = self.split_into_microbatches(inputs, targets,
                                                                     microbatch, microbatch_drop_last)
 
             steps = len(chunked_inputs)
@@ -1002,7 +1002,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
                 callback.on_iter_end()
 
             # Aggregate the outputs from microbatches
-            result = self._aggregate_microbatches(outputs, chunked_outputs, single_output)
+            result = self.aggregate_microbatches(outputs, chunked_outputs, single_output)
 
             # Store the average value of loss over microbatches
             self.loss_list.append(np.mean(self._loss_list[-steps:]))
@@ -1209,8 +1209,8 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
             # Split the data into `microbatch` size chunks
             (chunked_inputs, chunked_targets,
-            batch_size, microbatch) = self._split_into_microbatches(inputs, targets,
-                                                                    microbatch, drop_last=False)
+            batch_size, microbatch) = self.split_into_microbatches(inputs, targets,
+                                                                   microbatch, drop_last=False)
 
             steps = len(chunked_inputs)
             inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
@@ -1228,7 +1228,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
                 chunked_outputs.append(chunk_outputs)
 
             # Aggregate the outputs from microbatches
-            result = self._aggregate_microbatches(outputs, chunked_outputs, single_output)
+            result = self.aggregate_microbatches(outputs, chunked_outputs, single_output)
 
             # Store info about current predict iteration
             self.last_predict_info.update({
@@ -1250,7 +1250,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         targets = targets[0] if len(targets) == 1 else targets
 
         # Convert layer ids into LayerHooks
-        outputs = self._prepare_outputs(outputs)
+        outputs = self.prepare_outputs(outputs)
 
         output_container = {}
         with torch.no_grad(), torch.cuda.amp.autocast(enabled=self.amp):
@@ -1274,12 +1274,13 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         self.last_predict_info['available_outputs'] = list(output_container.keys())
 
         # Retrieve requested outputs
-        requested_outputs = self._extract_outputs(outputs, output_container)
+        requested_outputs = self.extract_outputs(outputs, output_container)
 
         # Transfer only the requested outputs to CPU
         return self.transfer_from_device(requested_outputs)
 
 
+    # Common utilities for train and predict
     def make_outputs(self, predictions):
         """ Produce additional outputs, defined in the config, from `predictions`.
         Also adds a number of aliases to predicted tensors.
@@ -1334,8 +1335,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         return result, name
 
 
-
-    def _split_into_microbatches(self, inputs, targets, microbatch, drop_last):
+    def split_into_microbatches(self, inputs, targets, microbatch, drop_last):
         # Parse microbatch size
         if microbatch:
             if microbatch is True:
@@ -1370,7 +1370,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
         return chunked_inputs, chunked_targets, batch_size, microbatch
 
-    def _aggregate_microbatches(self, outputs, chunked_outputs, single_output):
+    def aggregate_microbatches(self, outputs, chunked_outputs, single_output):
         # Parse `chunked_outputs` to a desired structure. `chunked_outputs` stores `outputs` for each microbatch
         # which must be aggregated to get `outputs` for the whole batch.
         # Scalar values are aggregated by `mean`, array values are concatenated along the first (batch) axis.
@@ -1388,7 +1388,8 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
         return result
 
-    def _prepare_outputs(self, outputs):
+
+    def prepare_outputs(self, outputs):
         # If the requested output is a layer id, add the hook
         result = []
         for output_name in outputs:
@@ -1400,7 +1401,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
                 result.append(output_name)
         return result
 
-    def _extract_outputs(self, outputs, output_container):
+    def extract_outputs(self, outputs, output_container):
         # Retrieve activation data from hooks, get other requested outputs from container
         requested_outputs = {}
         for item in outputs:
