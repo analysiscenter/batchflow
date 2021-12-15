@@ -312,8 +312,6 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         '_loss_list', 'loss_list',
     ]
 
-    LABELS_ALIASES = ['labels', 'masks', 'targets']
-
     def __init__(self, config=None):
         self.full_config = Config(config)
         self.model_lock = threading.Lock()
@@ -367,6 +365,20 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         self.profile_info = None
         super().__init__(config)
 
+    def build(self):
+        """ Initialize the instance: make the config, attributes, and, if possible, PyTorch model. """
+        # Create config from default and external one
+        self.full_config = self.combine_configs()
+
+        # First, extract all necessary info from config into the instance attributes.
+        # Then, update config with some of parsed values -- mainly for convenience.
+        self.update_attributes()
+        self.update_config()
+
+        # If the inputs are set in config with their shapes we can build right away
+        if self.inputs_shapes:
+            self.build_model()
+
     def reset(self):
         """ Delete the underlying model and all the infrastructure. Use to create model from scratch. """
         # TODO: do we really need this?
@@ -374,46 +386,15 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         self.last_iteration_info = {}
 
 
-    def build(self):
-        """ Initialize the instance: make the config, attributes, and, if possible, PyTorch model. """
-        # Create config from default and external one
-        self.full_config = self.combine_configs()
-        self.parse_devices()
-        self.parse_placeholder_shapes()
-
-        self.update_config()
-        self.update_attributes()
-
-        # If the inputs are set in config with their shapes we can build right away
-        if self.inputs_shapes:
-            self.build_model()
-
-
     # Create config of model creation: combine the external and default ones
     @classmethod
     def default_config(cls):
         """ Define model defaults.
 
-        You need to override this method if you expect your model or its blocks to serve as a base for other models
-        (e.g. VGG for FCN, ResNet for LinkNet, etc).
-
         Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc)
         specific to the model, but independent of anything else (like image shapes, number of classes, etc).
 
-        These defaults can be changed in :meth:`~.TorchModel.build_config` or when calling :meth:`.Pipeline.init_model`.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            @classmethod
-            def default_config(cls):
-                config = TorchModel.default_config()
-                config['initial_block'] = dict(layout='cnap', filters=16, kernel_size=7, strides=2,
-                                               pool_size=3, pool_strides=2)
-                config['body/filters'] = 32
-                config['head'] = dict(layout='cnadV', dropout_rate=.2)
-                return config
+        Don't forget to use the default config from parent class.
         """
         config = Config()
         config['inputs'] = {}
@@ -461,8 +442,10 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         if config.get('head/filters') is None:
             config['head/filters'] = config.get('head/classes')
 
+
+    # Parse config keys into instance attributes
     def update_attributes(self):
-        """ Update instance attributes from config. """
+        """ Update instance attributes with values from config. """
         config = self.full_config
 
         self.init_weights = config.get('init_weights', None)
@@ -476,6 +459,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
         self.callbacks = [callback.set_model(self) for callback in config.get('callbacks', [])]
 
+        # Parse operations, that should be applied to model predictions, into a dictionary
         operations = config['output']
         if not isinstance(operations, dict):
             operations = operations or []
@@ -483,11 +467,15 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
             operations = {'' : operations}
         self.operations = operations
 
+        self._parse_devices()
+        self._parse_placeholder_shapes()
 
-    # Prepare to build the PyTorch model: determine device(s) and shape(s)
-    def parse_devices(self):
-        """ !!. """
+    def _parse_devices(self):
+        """ Extract `devices` and `benchmark` from config.
+        If the config value is not set, use the best available accelerator.
+        """
         devices = self.full_config.get('device')
+
         if devices is None:
             if torch.cuda.is_available():
                 self.device = torch.device('cuda:0')
@@ -515,8 +503,8 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
         torch.backends.cudnn.benchmark = self.full_config.get('benchmark', 'cuda' in self.device.type)
 
-    def parse_placeholder_shapes(self):
-        """ Update attributes with shapes from config. """
+    def _parse_placeholder_shapes(self):
+        """ Extract `inputs_shapes`, `targets_shapes`, `classes` from config. """
         config = self.full_config
 
         batch_size = config.get('placeholder_batch_size', 2)
@@ -545,23 +533,28 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
             return [list(sequence)]
         return [list(item) for item in sequence]
 
-
     def make_placeholder_data(self):
-        """ !!. """
+        """ Create a sequence of tensor, based on the parsed `inputs_shapes`. """
         data = [np.zeros(shape, dtype=np.float32) for shape in self.inputs_shapes]
         data = self.transfer_to_device(data)
         return data
 
 
     # Create training infrastructure: loss, optimizer, decay
-    def unpack(self, name):
+    def make_infrastructure(self):
+        """ Create loss, optimizer and decay, required for training the model. """
+        self.make_loss(**self._unpack('loss'))
+        self.make_optimizer(**self._unpack('optimizer'))
+        self.make_decay(**self._unpack('decay'), optimizer=self.optimizer)
+        self.scaler = torch.cuda.amp.GradScaler()
+
+    def _unpack(self, name):
         """ Get params from config. """
         unpacked = unpack_fn_from_config(name, self.full_config)
         if isinstance(unpacked, list):
             return {name: unpacked}
         key, kwargs = unpacked
         return {name: key, **kwargs}
-
 
     def make_loss(self, loss, **kwargs):
         """ Set model loss. Changes the `loss` attribute. """
@@ -579,12 +572,12 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         elif isinstance(loss, nn.Module):
             # Already a valid module
             loss_fn = loss
-        elif callable(loss):
-            # Callable: just pass other arguments in
-            loss_fn = partial(loss, **kwargs)
         elif isinstance(loss, type):
             # Class to make module
             pass
+        elif callable(loss):
+            # Callable: just pass other arguments in
+            loss_fn = partial(loss, **kwargs)
         else:
             raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
 
@@ -659,23 +652,31 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
             self.decay_step.append(step_params)
 
 
-    # Use an external model
+    # Set pre-initialized model or chain multiple building blocks to create model
     def set_model(self, model):
-        """ Set the underlying model to a supplied one and update training infrastructure. """
+        """ Set the underlying PyTorch model to a supplied one and update training infrastructure. """
         self.model = model
         self.initialize_weights()
-
-
         self.model_to_device()
 
-        self.make_loss(**self.unpack('loss'))
-        self.make_optimizer(**self.unpack('optimizer'))
-        self.make_decay(**self.unpack('decay'), optimizer=self.optimizer)
-        self.scaler = torch.cuda.amp.GradScaler()
+        self.make_infrastructure()
 
-    # Chain multiple building blocks to create model
+
     def build_model(self, inputs=None):
-        """ !!. """
+        """ Create the instance of PyTorch model by chaining multiple blocks sequentially.
+        After it, create training infrastructure (loss, optimizer, decay).
+
+        The order is defined by `order` key in the config, which is [`initial_block`, `body`, `head`] by default.
+        Each item in `order` should describe the block name, the config name and method to create. It can be a:
+            - string, then we use at as name, key and method name
+            - tuple of three elements, which are name, key and method name or callable
+            - dictionary with three items, which are `block_name`, `config_name` and `method`.
+
+        The `block_name` is then used as the identifier in resulting model, i.e. `model.initial_block`, `model.body`.
+        The `config_name` is used to retrieve block creation parameters from config.
+        The `method` is either a string to getattr from the current instance or a callable.
+        Either method or callable should return an instance of nn.Module and accept block parameters.
+        """
         inputs = inputs or self.make_placeholder_data()
         inputs = inputs[0] if len(inputs) == 1 else inputs
 
@@ -707,14 +708,10 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         self.initialize_weights()
         self.model_to_device()
 
-        # Make the infrastructure after the model is created, so that they are on the same device
-        self.make_loss(**self.unpack('loss'))
-        self.make_optimizer(**self.unpack('optimizer'))
-        self.make_decay(**self.unpack('decay'), optimizer=self.optimizer)
-        self.scaler = torch.cuda.amp.GradScaler()
+        self.make_infrastructure()
 
     def make_block(self, name, method, inputs):
-        """ !!. """
+        """ Create the block with `method` by retrieving its parameters from config by `name`. """
         config = self.full_config
         block = config[name]
 
@@ -756,7 +753,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
     @classmethod
     def block(cls, inputs, name, **kwargs):
-        """ Model building block: either a :class:`~.torch.layers.ConvBlock` or a `base_block`. """
+        """ Model building block. """
         kwargs = cls.get_block_defaults(name, kwargs)
         if kwargs.get('layout') or kwargs.get('base_block'):
             return ConvBlock(inputs=inputs, **kwargs)
@@ -765,9 +762,6 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
     @classmethod
     def initial_block(cls, inputs, **kwargs):
         """ Transform inputs. Usually used for initial preprocessing, e.g. reshaping, downsampling etc.
-
-        Notes
-        -----
         For parameters see :class:`~.torch.layers.ConvBlock`.
 
         Returns
@@ -779,9 +773,6 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
     @classmethod
     def body(cls, inputs, **kwargs):
         """ Base layers which produce a network embedding.
-
-        Notes
-        -----
         For parameters see :class:`~.torch.layers.ConvBlock`.
 
         Returns
@@ -792,11 +783,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
     @classmethod
     def head(cls, inputs, **kwargs):
-        """ The last network layers which produce predictions. Usually used to make network output
-        compatible with the `targets` tensor.
-
-        Notes
-        -----
+        """ Produce predictions. Usually used to make network output compatible with the `targets` tensor.
         For parameters see :class:`~.torch.layers.ConvBlock`.
 
         Returns
@@ -808,7 +795,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
     # Model weights initialization
     def initialize_weights(self):
-        """ Initialize model weights with a callable or use default."""
+        """ Initialize model weights with a pre-defined or supplied callable. """
         if self.model and (self.init_weights is not None):
             # Parse model weights initilaization
             if isinstance(self.init_weights, str):
@@ -816,7 +803,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
                 # The common used non-default weights initialization:
                 self.init_weights = best_practice_resnet_init
 
-            # Weights and biases initialization
+            # Actual weights initialization
             self.model.apply(self.init_weights)
 
 
@@ -824,13 +811,13 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
     def transfer_to_device(self, data):
         """ Transfer (possibly nested) structure to device and return the same structure. """
         if isinstance(data, (dict, Config)):
-            return {key : self.transfer_to_device(value) for key, value in data.items()}
+            return type(data)({key : self.transfer_to_device(value) for key, value in data.items()})
 
         if isinstance(data, (tuple, list)):
-            return [self.transfer_to_device(item) for item in data]
+            return type(data)([self.transfer_to_device(item) for item in data])
 
         if isinstance(data, np.ndarray):
-            if data.dtype not in [np.float32, 'float32']:
+            if data.dtype != np.float32:
                 data = data.astype(np.float32)
             data = torch.from_numpy(data).to(self.device)
             return data
@@ -868,14 +855,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         raise TypeError(f'Passed data should either be a `torch.Tensor` or a container of them, got {data}')
 
     def model_to_device(self):
-        """ Select whether to put model on a single device or to a number of devices in `DataParallel` mode.
-
-        Notes
-        -----
-        The method serves for code simplification at build / load stages and shouldn't be applied to prebuilt
-        models since it does not change models attributes (like `self.device`) and does not process model-related
-        objects (like loss functions or optimizers).
-        """
+        """ Put model on device(s). If needed, apply DataParallel wrapper. """
         if len(self.devices) > 1:
             self.model = nn.DataParallel(self.model, self.devices)
         else:
@@ -1271,7 +1251,6 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
             if lock:
                 self.model_lock.release()
         return result
-
 
 
     def make_outputs(self, predictions):
