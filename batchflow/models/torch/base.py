@@ -1088,7 +1088,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
             self.syncs.append(False)
 
         # Make all possible outputs
-        additional_outputs = self.make_outputs(predictions=predictions)
+        additional_outputs = self.compute_outputs(predictions=predictions)
         output_container = {
             **additional_outputs,
             'predictions': predictions,
@@ -1265,7 +1265,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
                 output_container['loss'] = loss
 
         # Make all possible outputs
-        additional_outputs = self.make_outputs(predictions=predictions)
+        additional_outputs = self.compute_outputs(predictions=predictions)
         output_container.update(additional_outputs)
 
         # Log inner info
@@ -1281,7 +1281,62 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
 
     # Common utilities for train and predict
-    def make_outputs(self, predictions):
+    def split_into_microbatches(self, inputs, targets, microbatch, drop_last):
+        """ Split inputs and targets into microbatch-sized chunks. """
+        # Parse microbatch size
+        if microbatch:
+            if microbatch is True:
+                microbatch = self.microbatch
+            else:
+                microbatch = microbatch or self.microbatch
+
+        # Compute batch_size and make sure it is the same for all inputs and targets
+        batch_size = len(inputs[0])
+        for i, item in enumerate(inputs):
+            if len(item) != batch_size:
+                raise ValueError('All of `inputs` should have the same length, as the first one!'
+                                    f'Input at position `{i}` has size {len(item)}!={batch_size}')
+        for i, item in enumerate(targets):
+            if len(item) != batch_size:
+                raise ValueError('All of `targets` should have the same length, as the first of `inputs`!'
+                                    f'Target at position `{i}` has size {len(item)}!={batch_size}')
+
+        # Split data into microbatches, if needed
+        if microbatch:
+            chunked_inputs = [[item[i:i + microbatch] for item in inputs]
+                                for i in range(0, batch_size, microbatch)]
+            chunked_targets = [[item[i:i + microbatch] for item in targets]
+                                for i in range(0, batch_size, microbatch)]
+
+            if drop_last and batch_size % microbatch != 0:
+                chunked_inputs = chunked_inputs[:-1]
+                chunked_targets = chunked_targets[:-1]
+        else:
+            chunked_inputs = [inputs]
+            chunked_targets = [targets]
+
+        return chunked_inputs, chunked_targets, batch_size, microbatch
+
+    def aggregate_microbatches(self, outputs, chunked_outputs, single_output):
+        """ Aggregate outputs from microbatches into outputs for the whole batch.
+        Scalar values are aggregated by `mean`, array values are concatenated along the first (batch) axis.
+        """
+        result = []
+        for output_name in outputs:
+            # All tensors for current `output_name`
+            chunked_output = [chunk_outputs[output_name] for chunk_outputs in chunked_outputs]
+
+            if chunked_output[0].size != 1:
+                result.append(np.concatenate(chunked_output, axis=0))
+            else:
+                result.append(np.mean(chunked_output))
+        if single_output:
+            result = result[0]
+
+        return result
+
+
+    def compute_outputs(self, predictions):
         """ Produce additional outputs, defined in the config, from `predictions`.
         Also adds a number of aliases to predicted tensors.
         """
@@ -1335,62 +1390,8 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         return result, name
 
 
-    def split_into_microbatches(self, inputs, targets, microbatch, drop_last):
-        # Parse microbatch size
-        if microbatch:
-            if microbatch is True:
-                microbatch = self.microbatch
-            else:
-                microbatch = microbatch or self.microbatch
-
-        # Compute batch_size and make sure it is the same for all inputs and targets
-        batch_size = len(inputs[0])
-        for i, item in enumerate(inputs):
-            if len(item) != batch_size:
-                raise ValueError('All of `inputs` should have the same length, as the first one!'
-                                    f'Input at position `{i}` has size {len(item)}!={batch_size}')
-        for i, item in enumerate(targets):
-            if len(item) != batch_size:
-                raise ValueError('All of `targets` should have the same length, as the first of `inputs`!'
-                                    f'Target at position `{i}` has size {len(item)}!={batch_size}')
-
-        # Split data into microbatches, if needed
-        if microbatch:
-            chunked_inputs = [[item[i:i + microbatch] for item in inputs]
-                                for i in range(0, batch_size, microbatch)]
-            chunked_targets = [[item[i:i + microbatch] for item in targets]
-                                for i in range(0, batch_size, microbatch)]
-
-            if drop_last and batch_size % microbatch != 0:
-                chunked_inputs = chunked_inputs[:-1]
-                chunked_targets = chunked_targets[:-1]
-        else:
-            chunked_inputs = [inputs]
-            chunked_targets = [targets]
-
-        return chunked_inputs, chunked_targets, batch_size, microbatch
-
-    def aggregate_microbatches(self, outputs, chunked_outputs, single_output):
-        # Parse `chunked_outputs` to a desired structure. `chunked_outputs` stores `outputs` for each microbatch
-        # which must be aggregated to get `outputs` for the whole batch.
-        # Scalar values are aggregated by `mean`, array values are concatenated along the first (batch) axis.
-        result = []
-        for output_name in outputs:
-            # All tensors for current `output_name`
-            chunked_output = [chunk_outputs[output_name] for chunk_outputs in chunked_outputs]
-
-            if chunked_output[0].size != 1:
-                result.append(np.concatenate(chunked_output, axis=0))
-            else:
-                result.append(np.mean(chunked_output))
-        if single_output:
-            result = result[0]
-
-        return result
-
-
     def prepare_outputs(self, outputs):
-        # If the requested output is a layer id, add the hook
+        """ Add the hooks to all outputs that look like a layer id. """
         result = []
         for output_name in outputs:
             if self.is_layer_id(output_name):
@@ -1402,7 +1403,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         return result
 
     def extract_outputs(self, outputs, output_container):
-        # Retrieve activation data from hooks, get other requested outputs from container
+        """ Retrieve activation data from hooks, get other requested outputs from container. """
         requested_outputs = {}
         for item in outputs:
             if isinstance(item, LayerHook):
