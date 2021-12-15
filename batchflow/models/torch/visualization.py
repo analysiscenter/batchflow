@@ -13,7 +13,7 @@ def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts
     """ Backwards compatible version of pformat. """
     # pylint: disable=unexpected-keyword-arg
     _ = underscore_numbers
-    if sys.version_info[1] < 8:
+    if sys.version_info.minor < 8:
         result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact)
     else:
         result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact,
@@ -134,7 +134,7 @@ class VisualizationMixin:
 
 
 class LayerHook:
-    """ Create hook to get layer activations and gradients. """
+    """ Hook to get both activations and gradients for a layer. """
     def __init__(self, module):
         self.activation = None
         self.gradient = None
@@ -167,7 +167,9 @@ class LayerHook:
 class ExtractionMixin:
     """ Extract information about intermediate layers: activations, gradients and weights. """
     def is_layer_id(self, string):
-        """ !!. """
+        """ Check if the passed `string` is a layer id: a string, that can be used to access a layer in the model.
+        For more about layer ids, refer to `:meth:~.get_layer` documentation.
+        """
         try:
             _ = self.get_layer(string)
             return True
@@ -175,7 +177,17 @@ class ExtractionMixin:
             return False
 
     def get_layer(self, layer_id):
-        """ !!. """
+        """ Get layer instance by its layer id.
+
+        The layer id describes how to access the layer through a series of `getattr` and `getitem` calls.
+        For example, if the model has `batchflow_model.model.head[0]` layer, you can access it with::
+
+        >>> batchflow_model.get_layer('model.head[0]')
+
+        String keys for `getitem` calls are also allowed::
+
+        >>> batchflow_model.get_layer('model.body.encoder["block-0"]')
+        """
         layer_id = layer_id.replace('[', ':').replace(']', '')
         prefix, *attributes = layer_id.split('.')
         if prefix != 'model':
@@ -199,17 +211,12 @@ class ExtractionMixin:
 
         Parameters
         ----------
+        inputs : np.array or sequence of them
+            Inputs to the model.
         layers : nn.Module, sequence or dict
             If nn.Module, then must be a part of the `model` attribute to get activations from.
             If sequence, then multiple such modules.
             If dictionary, then values must be such modules.
-        args : sequence
-            Arguments to be passed directly into the model.
-        feed_dict : dict
-            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
-            with keys being names and values being actual data.
-        kwargs : dict
-            Additional named arguments directly passed to `feed_dict`.
 
         Returns
         -------
@@ -315,6 +322,8 @@ class ExtractionMixin:
 
         Parameters
         ----------
+        inputs : np.array or sequence of them
+            Inputs to the model.
         layers : nn.Module, sequence or dict
             Part of the model to base visualizations on.
         gradient_mode : Tensor or str
@@ -324,13 +333,6 @@ class ExtractionMixin:
             Otherwise, model prediction is used.
         cam_class : int
             If gradient mode is `onehot`, then class to visualize. Default is the model prediction.
-        args : sequence
-            Arguments to be passed directly into the model.
-        feed_dict : dict
-            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
-            with keys being names and values being actual data.
-        kwargs : dict
-            Additional named arguments directly passed to `feed_dict`.
         """
         extractor = LayerHook(layer)
         inputs = self.transfer_to_device(inputs)
