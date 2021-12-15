@@ -1322,9 +1322,9 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         Scalar values are aggregated by `mean`, array values are concatenated along the first (batch) axis.
         """
         result = []
-        for output_name in outputs:
+        for i, _ in enumerate(outputs):
             # All tensors for current `output_name`
-            chunked_output = [chunk_outputs[output_name] for chunk_outputs in chunked_outputs]
+            chunked_output = [chunk_outputs[i] for chunk_outputs in chunked_outputs]
 
             if chunked_output[0].size != 1:
                 result.append(np.concatenate(chunked_output, axis=0))
@@ -1404,14 +1404,15 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
     def extract_outputs(self, outputs, output_container):
         """ Retrieve activation data from hooks, get other requested outputs from container. """
-        requested_outputs = {}
+        requested_outputs = []
         for item in outputs:
             if isinstance(item, LayerHook):
                 item.close()
                 value = item.activation
             else:
                 value = output_container[item]
-            requested_outputs[item] = value
+
+            requested_outputs.append(value)
         return requested_outputs
 
 

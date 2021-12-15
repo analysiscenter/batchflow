@@ -63,7 +63,7 @@ class VisualizationMixin:
 
             if self.model:
                 num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-                message += f'\nTotal number of parameters in the model: {num_params}'
+                message += f'\nTotal number of parameters in the model: {num_params:,}'
 
             message += f'\nTotal number of passed training iterations: {self.iteration}\n'
 
