@@ -42,7 +42,7 @@ class VisualizationMixin:
 
         if config:
             message += template_header.format('Config')
-            message += pformat(self.full_config.config, sort_dicts=False) + '\n'
+            message += pformat(self.config.config, sort_dicts=False) + '\n'
 
         if devices:
             message += template_header.format('Devices')
@@ -140,19 +140,19 @@ class VisualizationMixin:
         plt.show()
 
 
+
 class OptimalBatchSizeMixin:
     """ !!. """
     def compute_optimal_batch_size(self, method='train', max_memory=90, inputs=None, targets=None, pbar='n',
                                    start_batch_size=4, delta_batch_size=4, max_batch_size=128, max_iters=16,
-                                   n=500, frequency=0.05, time_threshold=3, length_threshold=50,
-                                   tail_size=20, std_threshold=0.1):
+                                   n=20, frequency=0.05, time_threshold=3, tail_size=20, std_threshold=0.1):
         """ !!. """
         table = {}
         batch_size = start_batch_size
         for _ in Notifier(pbar)(range(max_iters)):
             info = self.get_memory_utilization(batch_size, method=method,
                                                inputs=inputs, targets=targets, n=n, frequency=frequency,
-                                               time_threshold=time_threshold, length_threshold=length_threshold,
+                                               time_threshold=time_threshold,
                                                tail_size=tail_size, std_threshold=std_threshold)
             table[batch_size] = info
 
@@ -175,9 +175,8 @@ class OptimalBatchSizeMixin:
                 'model_size': model_size,
                 'table': table}
 
-
-    def get_memory_utilization(self, batch_size, method='train', inputs=None, targets=None, n=500, frequency=0.05,
-                               time_threshold=3, length_threshold=50, tail_size=20, std_threshold=0.1):
+    def get_memory_utilization(self, batch_size, method='train', inputs=None, targets=None, n=20, frequency=0.05,
+                               time_threshold=3, tail_size=20, std_threshold=0.1):
         """ !!. """
         #
         inputs = inputs or self.make_placeholder_data(batch_size)
@@ -191,12 +190,11 @@ class OptimalBatchSizeMixin:
         #
         torch.cuda.empty_cache()
         return self._get_memory_utilization(method=method, inputs=inputs, targets=targets, n=n, frequency=frequency,
-                                            time_threshold=time_threshold, length_threshold=length_threshold,
+                                            time_threshold=time_threshold,
                                             tail_size=tail_size, std_threshold=std_threshold)
 
-
     def _get_memory_utilization(self, method, inputs, targets, n, frequency,
-                                time_threshold, length_threshold, tail_size, std_threshold):
+                                time_threshold, tail_size, std_threshold):
         """ !!. """
         #
         with GPUMemoryMonitor(frequency=frequency) as monitor:
@@ -209,19 +207,15 @@ class OptimalBatchSizeMixin:
         #
         data = monitor.data
         time = len(data) * frequency # in seconds
-        if time > 3 and len(data) > length_threshold:
+        if time > time_threshold:
             tail = data[-tail_size:]
             if np.std(tail) < std_threshold:
                 return {'memory': np.mean(tail), 'n': n, 'monitor': monitor}
 
         #
         return self._get_memory_utilization(method=method, inputs=inputs, targets=targets,
-                                            n=2*n, frequency=frequency,
-                                            time_threshold=time_threshold, length_threshold=length_threshold,
+                                            n=2*n, frequency=frequency, time_threshold=time_threshold,
                                             tail_size=tail_size, std_threshold=std_threshold)
-
-
-
 
 
 
