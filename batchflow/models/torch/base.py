@@ -366,12 +366,22 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.profile = False
         self.profilers = []
         self.profile_info = None
-        super().__init__(config)
 
-    def build(self):
+        # Store the config for later usage
+        self.external_config = Config(config)
+
+        #
+        load = self.external_config.get('load')
+        if load:
+            self.load(**load)
+        else:
+            self.initialize()
+
+
+    def initialize(self):
         """ Initialize the instance: make the config, attributes, and, if possible, PyTorch model. """
         # Create config from default and external one
-        self.full_config = self.combine_configs()
+        self.config = self.combine_configs()
 
         # First, extract all necessary info from config into the instance attributes.
         # Then, update config with some of parsed values -- mainly for convenience.
@@ -432,12 +442,12 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     def combine_configs(self):
         """ Combine default configuration and the external one. """
-        config = self.default_config() + self.config
+        config = self.default_config() + self.external_config
         return config
 
     def update_config(self):
         """ Update config with instance attributes. """
-        config = self.full_config
+        config = self.config
 
         config['head/targets_shapes'] = self.targets_shapes
         # As `update_config` can be called multiple times, and `head/classes` key can have value `None`,
@@ -453,7 +463,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     # Parse config keys into instance attributes
     def parse_attributes(self):
         """ Parse instance attributes from config. """
-        config = self.full_config
+        config = self.config
 
         self.init_weights = config.get('init_weights', None)
         self.microbatch = config.get('microbatch', None)
@@ -481,7 +491,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         """ Extract `devices` and `benchmark` from config.
         If the config value is not set, use the best available accelerator.
         """
-        devices = self.full_config.get('device')
+        devices = self.config.get('device')
 
         if devices is None:
             if torch.cuda.is_available():
@@ -508,11 +518,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                             if device not in self.devices[:i]]
             self.device = self.devices[0]
 
-        torch.backends.cudnn.benchmark = self.full_config.get('benchmark', 'cuda' in self.device.type)
+        torch.backends.cudnn.benchmark = self.config.get('benchmark', 'cuda' in self.device.type)
 
     def _parse_placeholder_shapes(self):
         """ Extract `inputs_shapes`, `targets_shapes`, `classes` from config. """
-        config = self.full_config
+        config = self.config
 
         batch_size = config.get('placeholder_batch_size', 2)
         inputs_shapes = config.get('inputs_shapes') or config.get('input_shapes')
@@ -561,7 +571,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     def _unpack(self, name):
         """ Get params from config. """
-        unpacked = unpack_fn_from_config(name, self.full_config)
+        unpacked = unpack_fn_from_config(name, self.config)
         if isinstance(unpacked, list):
             return {name: unpacked}
         key, kwargs = unpacked
@@ -693,7 +703,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         inputs = self.transfer_to_device(inputs)
 
         blocks = OrderedDict()
-        for item in self.full_config.get('order'):
+        for item in self.config.get('order'):
             # Get the `block_name`, which is used as the name in the Sequential,
             #         `config_name`, which is used to retrieve parameters from config,
             #     and `method`, which is either a callable or name of the method to get from the current instance
@@ -724,7 +734,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     def make_block(self, name, method, inputs):
         """ Create the block with `method` by retrieving its parameters from config by `name`. """
-        config = self.full_config
+        config = self.config
         block = config[name]
 
         if isinstance(block, nn.Module):
@@ -1490,13 +1500,13 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         else:
             checkpoint = torch.load(path, **kwargs)
 
-        # `load_config` is a reference to `self.config` used to update `full_config`
-        # It is required since `self.config` is overwritten in the cycle below
-        load_config = self.config
+        # `load_config` is a reference to `self.external_config` used to update `config`
+        # It is required since `self.external_config` is overwritten in the cycle below
+        load_config = self.external_config
 
         for item in self.PRESERVE:
             setattr(self, item, checkpoint.get(item))
-        self.full_config = self.full_config + load_config
+        self.config = self.config + load_config
 
         self.model_to_device()
 

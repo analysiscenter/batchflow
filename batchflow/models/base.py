@@ -1,99 +1,38 @@
 """ Contains a base model class"""
+from abc import ABC, abstractmethod
 
-from ..config import Config
-
-class BaseModel:
-    """ Base class for all models
-
-    Attributes
-    ----------
-    name : str
-        a model name
-    config : dict
-        configuration parameters
-
-    Notes
-    -----
-
-    **Configuration**:
-
-    * build : bool or 1 or 'first'
-        whether to build a model by calling `self.build()`. Default is True.
-        If build == 1 or 'first', then build is called before load, otherwise afterwards.
-    * load : dict
-        parameters for model loading. If present, a model will be loaded
-        by calling `self.load(**config['load'])`.
-
-    * model_class : type
-        (optional) A specific model class to instantiate the model.
-
-    """
-    def __init__(self, config=None, *args, **kwargs):
-        self.config = Config(config)
-        load = self.config.get('load')
-        build = self.config.get('build', default=load is None)
-        if not isinstance(build, bool) and build in [1, 'first']:
-            self.build(*args, **kwargs)
-            build = False
-        if load:
-            self.load(**load)
-        if build:
-            self.build(*args, **kwargs)
+class BaseModel(ABC):
+    """ Base interface for models. """
 
     @property
     def default_name(self):
-        """: str - the class name (serve as a default for a model name) """
+        """ PLaceholder for model name. """
         return self.__class__.__name__
 
-    @classmethod
-    def pop(cls, variables, config, **kwargs):
-        """ Return variables and remove them from config"""
-        return Config().pop(variables, config, **kwargs)
-
-    @classmethod
-    def get(cls, variables, default=None, config=None):
-        """ Return variables from config """
-        return Config().get(variables, default=default, config=config)
-
-    @classmethod
-    def put(cls, variable, value, config):
-        """ Put a new variable into config """
-        return Config().put(variable, value, config)
-
-    def _make_inputs(self, names=None, config=None):
-        """ Make model input data using config
-
-        Parameters
-        ----------
-        names : a sequence of str - names for input variables
-
-        Returns
-        -------
-        None or dict - where key is a variable name and a value is a corresponding variable after configuration
-        """
-        _ = names, config
-        return None
-
+    @abstractmethod
     def reset(self):
-        """ Reset the trained model to allow a new training from scratch """
-        pass
+        """ Reset the trained model to allow a new training from scratch. """
 
-    def build(self, *args, **kwargs):
-        """ Define the model """
-        _ = self, args, kwargs
+    @abstractmethod
+    def train(self):
+        """ Train the model. """
 
-    def load(self, *args, **kwargs):
-        """ Load the model """
-        _ = self, args, kwargs
+    @abstractmethod
+    def predict(self):
+        """ Make a prediction using the model.  """
 
-    def save(self, *args, **kwargs):
-        """ Save the model """
-        _ = self, args, kwargs
+    @abstractmethod
+    def load(self):
+        """ Load the model from dick. """
 
-    def train(self, *args, **kwargs):
-        """ Train the model """
-        _ = self, args, kwargs
+    @abstractmethod
+    def save(self):
+        """ Save the model to dick. """
 
-    def predict(self, *args, **kwargs):
-        """ Make a prediction using the model  """
-        _ = self, args, kwargs
+    @classmethod
+    def is_model_like(cls, obj):
+        """ Check if the `obj` provides the same interface, as required by this specification. """
+        for method in cls.__abstractmethods__:
+            if not hasattr(obj, method):
+                return False
+        return True
