@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+from ...monitor import GPUMemoryMonitor
+from ...notifier import Notifier
+
 # Also imports `tensorboard`, if necessary
 
 def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts=True, underscore_numbers=False):
@@ -135,6 +138,90 @@ class VisualizationMixin:
         plt.ylabel(r'$\lambda$', fontsize=18, rotation=0)
         plt.grid(True)
         plt.show()
+
+
+class OptimalBatchSizeMixin:
+    """ !!. """
+    def compute_optimal_batch_size(self, method='train', max_memory=90, inputs=None, targets=None, pbar='n',
+                                   start_batch_size=4, delta_batch_size=4, max_batch_size=128, max_iters=16,
+                                   n=500, frequency=0.05, time_threshold=3, length_threshold=50,
+                                   tail_size=20, std_threshold=0.1):
+        """ !!. """
+        table = {}
+        batch_size = start_batch_size
+        for _ in Notifier(pbar)(range(max_iters)):
+            info = self.get_memory_utilization(batch_size, method=method,
+                                               inputs=inputs, targets=targets, n=n, frequency=frequency,
+                                               time_threshold=time_threshold, length_threshold=length_threshold,
+                                               tail_size=tail_size, std_threshold=std_threshold)
+            table[batch_size] = info
+
+            # Exit condition
+            batch_size += delta_batch_size
+            if info['memory'] > 80 or batch_size > max_batch_size :
+                break
+
+        #
+        matrix = np.array([[batch_size, 1] for batch_size in table.keys()])
+        vector = np.array([value['memory'] for value in table.values()])
+        item_size, model_size = np.dot(np.linalg.pinv(matrix), vector)
+
+        #
+        optimal_batch_size = (max_memory - model_size) / item_size
+        optimal_batch_size = int(optimal_batch_size)
+
+        return {'batch_size': optimal_batch_size,
+                'item_size': item_size,
+                'model_size': model_size,
+                'table': table}
+
+
+    def get_memory_utilization(self, batch_size, method='train', inputs=None, targets=None, n=500, frequency=0.05,
+                               time_threshold=3, length_threshold=50, tail_size=20, std_threshold=0.1):
+        """ !!. """
+        #
+        inputs = inputs or self.make_placeholder_data(batch_size)
+        inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
+        inputs = [item[:batch_size] for item in inputs]
+
+        targets = targets or self.predict(inputs=inputs, outputs='predictions')
+        targets = list(targets) if isinstance(targets, (tuple, list)) else [targets]
+        targets = [item[:batch_size] for item in targets]
+
+        #
+        torch.cuda.empty_cache()
+        return self._get_memory_utilization(method=method, inputs=inputs, targets=targets, n=n, frequency=frequency,
+                                            time_threshold=time_threshold, length_threshold=length_threshold,
+                                            tail_size=tail_size, std_threshold=std_threshold)
+
+
+    def _get_memory_utilization(self, method, inputs, targets, n, frequency,
+                                time_threshold, length_threshold, tail_size, std_threshold):
+        """ !!. """
+        #
+        with GPUMemoryMonitor(frequency=frequency) as monitor:
+            for _ in range(n):
+                if method == 'train':
+                    _ = self.train(inputs=inputs, targets=targets, microbatch=False)
+                elif method == 'predict':
+                    _ = self.predict(inputs=inputs, microbatch=False)
+
+        #
+        data = monitor.data
+        time = len(data) * frequency # in seconds
+        if time > 3 and len(data) > length_threshold:
+            tail = data[-tail_size:]
+            if np.std(tail) < std_threshold:
+                return {'memory': np.mean(tail), 'n': n, 'monitor': monitor}
+
+        #
+        return self._get_memory_utilization(method=method, inputs=inputs, targets=targets,
+                                            n=2*n, frequency=frequency,
+                                            time_threshold=time_threshold, length_threshold=length_threshold,
+                                            tail_size=tail_size, std_threshold=std_threshold)
+
+
+
 
 
 
