@@ -70,7 +70,7 @@ DECAYS_DEFAULTS = {
 
 
 class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, VisualizationMixin):
-    r""" Base class for eager Torch models.
+    """ Base class for eager Torch models.
 
     Parameters
     ----------
