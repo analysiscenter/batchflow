@@ -147,6 +147,7 @@ class OptimalBatchSizeMixin:
                                    start_batch_size=4, delta_batch_size=4, max_batch_size=128, max_iters=16,
                                    n=20, frequency=0.05, time_threshold=3, tail_size=20, std_threshold=0.1):
         """ !!. """
+        #pylint: disable=consider-iterating-dictionary
         table = {}
         batch_size = start_batch_size
         for _ in Notifier(pbar)(range(max_iters)):

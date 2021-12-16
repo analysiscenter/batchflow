@@ -20,7 +20,7 @@ ignored-modules=numpy,cv2
 
 [MESSAGE CONTROL]
 no-docstring-rgx=^(_|forward)
-disable=no-member, no-value-for-parameter, no-self-use, too-many-branches, unsubscriptable-object, redefined-variable-type, too-many-star-expressions, duplicate-code, not-context-manager, too-many-lines, global-statement, locally-disabled, wrong-import-position, invalid-sequence-index, redundant-keyword-arg, bad-super-call, no-self-argument, redefined-builtin, arguments-differ, len-as-condition, keyword-arg-before-vararg, assignment-from-none, useless-return, useless-import-alias, unnecessary-pass, cyclic-import, assignment-from-no-return, comparison-with-callable, unnecessary-lambda, import-outside-toplevel, import-error, abstract-method
+disable=no-member, no-value-for-parameter, no-self-use, too-many-branches, unsubscriptable-object, redefined-variable-type, too-many-star-expressions, duplicate-code, not-context-manager, too-many-lines, global-statement, locally-disabled, wrong-import-position, invalid-sequence-index, redundant-keyword-arg, bad-super-call, no-self-argument, redefined-builtin, arguments-differ, len-as-condition, keyword-arg-before-vararg, assignment-from-none, useless-return, useless-import-alias, unnecessary-pass, cyclic-import, assignment-from-no-return, comparison-with-callable, unnecessary-lambda, import-outside-toplevel, import-error, abstract-method, too-many-ancestors
 
 [BASIC]
 class-rgx=[A-Z_][a-zA-Z0-9_]+$
