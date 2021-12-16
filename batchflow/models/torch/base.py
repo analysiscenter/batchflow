@@ -19,7 +19,7 @@ except ImportError:
     CUPY_AVAILABLE = False
 
 from .initialization import best_practice_resnet_init
-from .visualization import VisualizationMixin, LayerHook, ExtractionMixin
+from .mixins import OptimalBatchSizeMixin, LayerHook, ExtractionMixin, VisualizationMixin
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
 from .losses import CrossEntropyLoss, BinaryLovaszLoss, LovaszLoss, SSIM, MSSIM
@@ -69,7 +69,7 @@ DECAYS_DEFAULTS = {
 }
 
 
-class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
+class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, VisualizationMixin):
     r""" Base class for eager Torch models.
 
     Parameters
@@ -318,6 +318,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         self.model_lock = threading.Lock()
 
         # Shapes of inputs and targets
+        self.placeholder_batch_size = 2
         self.inputs_shapes = None
         self.targets_shapes = None
         self.classes = None
@@ -518,6 +519,8 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         targets_shapes = config.get('targets_shapes') or config.get('target_shapes')
         classes = config.get('classes')
 
+        self.placeholder_batch_size = batch_size
+
         if inputs_shapes:
             inputs_shapes = self._to_nested_list(inputs_shapes)
             self.inputs_shapes = [(batch_size, *shape) for shape in inputs_shapes]
@@ -539,10 +542,12 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
             return [list(sequence)]
         return [list(item) for item in sequence]
 
-    def make_placeholder_data(self):
+    def make_placeholder_data(self, batch_size=None):
         """ Create a sequence of tensor, based on the parsed `inputs_shapes`. """
-        data = [np.zeros(shape, dtype=np.float32) for shape in self.inputs_shapes]
-        data = self.transfer_to_device(data)
+        batch_size = batch_size or self.placeholder_batch_size
+
+        data = [np.zeros((batch_size, *shape[1:]), dtype=np.float32)
+                for shape in self.inputs_shapes]
         return data
 
 
@@ -685,6 +690,7 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
         """
         inputs = inputs or self.make_placeholder_data()
         inputs = inputs[0] if len(inputs) == 1 else inputs
+        inputs = self.transfer_to_device(inputs)
 
         blocks = OrderedDict()
         for item in self.full_config.get('order'):
@@ -972,7 +978,6 @@ class TorchModel(BaseModel, ExtractionMixin, VisualizationMixin):
 
                 # Can use the first two items to build model: no need for the whole tensor
                 build_inputs = [item[:2] for item in chunked_inputs[0]]
-                build_inputs = self.transfer_to_device(build_inputs)
                 self.build_model(build_inputs)
 
             self.model.train()
