@@ -35,19 +35,25 @@ def get_notebook_path():
 
     import requests
     import ipykernel
-    from jupyter_server.serverapp import list_running_servers
 
-    kernel_id = re.search('kernel-(.*).json',
-                          ipykernel.connect.get_connection_file()).group(1)
-    servers = list_running_servers()
+    # Id of the current running kernel: a string uid
+    kernel_id = re.search('kernel-(.*).json', ipykernel.connect.get_connection_file()).group(1)
+
+    # Get running servers for both JupyterLab v2.# and v3.#
+    from notebook.notebookapp import list_running_servers as list_running_servers_v2
+    from jupyter_server.serverapp import list_running_servers as list_running_servers_v3
+    servers = list(list_running_servers_v2()) + list(list_running_servers_v3())
+
     for server in servers:
+        root_dir = server.get('root_dir') or server.get('notebook_dir')
         response = requests.get(requests.compat.urljoin(server['url'], 'api/sessions'),
                                 params={'token': server.get('token', '')})
+
         for params in json.loads(response.text):
             if params['kernel']['id'] == kernel_id:
                 relative_path = params['notebook']['path']
-                return os.path.join(server['root_dir'], relative_path)
-    return None
+                return os.path.join(root_dir, relative_path)
+    raise ValueError(f'Unable to find kernel `{kernel_id}` in {len(servers)} servers!')
 
 def get_notebook_name():
     """ Return the title of the current Jupyter notebook without base directory and extension,
