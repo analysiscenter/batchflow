@@ -70,34 +70,125 @@ DECAYS_DEFAULTS = {
 
 
 class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, VisualizationMixin):
-    """ Base class for eager Torch models.
+    """ Base class for Torch models.
+
+    Implements two main logics:
+        - the first is to build PyTorch model as a sequence of configurable nn.Modules
+        - the second is to make infrastructure for model training, e.g. loss, optimizer and decay,
+        and provide methods for the model training and inference.
+    In the `examples` section you can find a drop-in template for your model.
+
+    All of the parameters for both logics are defined in the config, supplied at initialization.
+    The detailed description can be seen at `parameters` section; here, we describe the overall structure of keys:
+        - global `cuda` parameters:
+            - `device` sets the desired accelerator to use. Default is to use the single best available (GPU over CPU).
+            - `benchmark` defines the `cuda` behavior: trade some GPU memory to get minor (~15%) acceleration.
+            Default is True.
+
+        - PyTorch model configuration.
+            - `order` defines the sequence of blocks to build the model from. Default is initial_block -> body -> head.
+            Separation of the NN into multiple blocks is just for conveniency, so we can split
+            the preprocessing, main body of the model, and postprocessing into individual parts.
+            In the simplest case, each element is a string that points to other key in the config,
+            which is used to create a :class:`~.torch.layers.ConvBlock`.
+            Check the detailed description for more complex cases.
+            - `initial_block`, `body`, `head` are parameters for this respective parts of the neural network.
+            Defaults are empty layouts, meaning no operations.
+            - `common` parameters are passed to each of the neural network parts. Default is empty.
+            - `output` defines additional operations, applied to the output after loss computation.
+            By default, we have `predictions`, `predictions_{i}` and `predictions_{i}_{j}` aliases.
+            Note that these do not interfere with loss computation and are here only for conveniency.
+            - `init_weights` allows to initialize weights.
+
+        - shapes info. If fully provided, used to initialize the model. If no shapes are given in the config,
+        the model is created at the time of the first `train` call by looking at the actual batch data and shapes.
+        Keys are `inputs_shapes`, `targets_shapes`, `classes`, and `placeholder_batch_size`.
+        By default, no shapes are set in the config.
+
+        - train and inference methods have common parameters:
+            - `amp` turns on/off automatic mixed precision, which allows to perform some of the operations in `float16`.
+            Default is True.
+            - `microbatch` allows to split the training/inference batches in chunks (microbatches) and process
+            them sequentially. During train, we apply gradients only after all microbatches from the batch are used.
+            Default is to not use microbatching.
+
+        - train only parameters:
+            - `sync_frequency` to apply gradients only once in a `sync_frequency` calls to `train` method.
+            Default is to apply gradients after each `train` iteration.
+            - `callbacks` to apply operations at the end of each iteration. Default is no callbacks.
+            - `sam_rho`, `sam_individual_norm` to use sharpness-aware minimization. Default is to not use SAM at all.
+            - `profile` to get detailed report of model performance. Default is False.
+
+        - infrastructure for training:
+            - `loss`. No default value, so this key is requiered.
+            - `optimizer`. Default is `Adam`.
+            ` decay`. Default is to not use learning rate decay.
+
+
+    We recommend looking at :class:`~.torch.layers.ConvBlock` to learn about parameters for model building blocks,
+    and at :class:`~.EncoderDecoder` which allows more sophisticated logic of block chaining.
+
 
     Parameters
     ----------
     config : dict, :class:`~Config`
         Configuration of model creation. Below are the valid keys.
 
-    inputs : dict, optional
-        Mapping from placeholder names (e.g. ``images``, ``labels``, ``masks``) to arguments of their initialization.
-        Allows to create placeholders of needed shape and data format and initialize model before
-        first pass of actual batch data (thus explicitly imposing shapes).
+    # Global parameters
+    device : str, torch.device or sequence
+        Device to use for model, training and inference.
+        If str, a device name (e.g. ``'cpu'`` or ``'gpu:0'``). Regular expressions are also allowed (e.g. ``'gpu:*'``).
+        If torch.device, then device to be used.
+        If sequence, then each entry must be in one of previous formats, and batch data is paralleled across them.
+        Default behaviour is to use one (and only one) device of the best available type (priority to GPU over CPU).
 
-        Value must be a dictionary with parameters. If some parameters are omitted, then defaults will be at use.
-        Valid keys are:
+    benchmark : bool
+        Whether to optimize network's forward pass during the first batch.
+        Leverages the memory-speed trade-off: the network may use more GPU memory to compute predictions faster.
+        Speeds up the forward pass by ~15% if shapes of inputs are constant.
+        Make sure not to use different shapes of inputs.
 
-            dtype : str or torch.dtype
-                Data type. Default is 'float32'.
 
-            shape : int, None, sequence of ints or Nones
-                Tensor shape with channels and without batch size. Default is None.
+    # Model building configuration
+    order : sequence
+        Defines sequence of network blocks in the architecture. Default is initial_block -> body -> head.
+        Each element of the sequence must be either a string, a tuple or a dict.
+        If string, then it is used as name of method to use, as config key to use, as name in model repr.
+        For example, ``'initial_block'`` stands for using ``self.initial_block`` with config[`initial_block`]
+        as parameters, and model representation would show this part of network as `initial_block`.
+        If tuple, then it must have three elements: (block_name, config_name, method).
+        If dict, then it must contain three keys: `block_name`, `config_name`, `method`.
+        In cases of tuple and dict, `method` can also be callable.
 
-            classes : int, array-like or None
-                If int, then number of classes.
-                If None, then tensor has no classes. Default is None.
+    initial_block : dict
+        User-defined module or parameters for the input block, usually :class:`~.torch.layers.ConvBlock` parameters.
 
-    placeholder_batch_size : int
-        If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
-        placeholder (usually np.ndarrays with zeros) creation. Default value is 2.
+        Examples:
+
+        - ``{'initial_block': dict(layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
+        - ``{'initial_block': MyCustomModule(some_param=1, another_param=2)}``
+
+    body : dict or nn.Module
+        User-defined module or parameters for the base network layers,
+        usually :class:`~.torch.layers.ConvBlock` parameters.
+
+    head : dict or nn.Module
+        User-defined module or parameters for the prediction layers,
+        usually :class:`~.torch.layers.ConvBlock` parameters.
+
+    common : dict
+        Default parameters for all blocks (see :class:`~.torch.layers.ConvBlock`).
+
+    output : str, list or dict
+        Auxiliary operations to apply to the network predictions.
+        If dict, then should have the same length and order as network predictions.
+        Each key defines this prediction name, each value should be a str/list of operations to apply to this tensor.
+        For example, ``{'my_prediction' : ['sigmoid', my_callable, 'softmax]}``.
+        Generated outputs are available as `my_prediction_{j}`, `my_prediction_sigmoid`,
+        and also by alias `predictions_{i}_{j}`, where `i` is the tensor ordinal and `j` is operation ordinal.
+
+        If list or str, then default prefix `''` is used.
+        See :meth:`.TorchModel.output` for more details.
 
     init_weights : callable, 'best_practice_resnet', or None
         Model weights initilaization.
@@ -116,6 +207,62 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             config = {'init_weights': callable_init}
 
+
+    # Shapes: optional
+    inputs_shapes : sequence
+        Shapes of the input tensors without the batch size.
+        Must be a tuple (one input) or sequence on tuples (multiple inputs) with shapes.
+
+    inputs_shapes : sequence
+        Shapes of the target tensors without the batch size.
+        Must be a tuple (one target) or sequence on tuples (multiple targets) with shapes.
+        Available as `` parameter in the `head` block.
+
+    classes : int or sequence of ints
+        Number of desired classes in the output tensor. Available as `` parameter in the `head` block.
+
+    placeholder_batch_size : int
+        If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
+        placeholder (usually np.ndarrays with zeros) creation. Default value is 2.
+
+
+    # Train and inference behavior
+    amp : bool
+        Whether to use automated mixed precision during model training and inference. Default is True.
+        The output type of predictions remains float32. Can be changed in `train` and `predict` arguments.
+
+    microbatch : int, bool or None
+        Also known as virtual batch. Allows to process given data sequentially,
+        accumulating gradients from microbatches and applying them once in the end.
+        If int, then size of chunks to split every batch into.
+        If True, then every batch is split into individual items (same as microbatch equals 1).
+        If False or None, then feature is not used. Default is not to use microbatching.
+        Can be changed in `train` and `predict` arguments.
+
+
+    # Additional train modifications
+    sync_frequency : int
+        How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
+        Can be changed in `train` and `predict` arguments.
+
+    callbacks : sequence of `:class:callbacks.BaseCallback`
+        Callbacks to call at the end of each training iteration.
+
+    sam_rho : float
+        Foret P. et al. "`Sharpness-Aware Minimization for Efficiently Improving Generalization
+        <https://arxiv.org/abs/2010.01412>`_".
+        If evaluates to False, then SAM is not used.
+        If float, then controls the size of neighborhood (check the paper for details).
+    sam_individual_norm : bool
+        If True, then each gradient is scaled according to its own L2 norm.
+        If False, then one common gradient norm is computed and used as a scaler for all gradients.
+
+    profile : bool
+        Whether to collect stats of model training timings.
+        If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
+
+
+    # Infrastructure
     loss : str, dict
         Loss function, might be defined in multiple formats.
 
@@ -127,7 +274,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
               ``'huber'``, ``'logloss'``, ``'dice'``)
             - a class name from `torch losses <https://pytorch.org/docs/stable/nn.html#loss-functions>`_
               (e.g. ``'PoissonNLL'`` or ``'TripletMargin'``)
-            - an instance of `:class:torch.nn.Module`
+            - an instance or constructor of `:class:torch.nn.Module`
             - callable
 
         Examples:
@@ -136,6 +283,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         - ``{'loss': {'name': 'KLDiv', 'reduction': 'none'}}``
         - ``{'loss': {'name': MyCustomLoss, 'epsilon': 1e-6}}``
         - ``{'loss': my_custom_loss_fn}``
+        - ``{'loss': my_custom_loss_class}``
 
     optimizer : str, dict
         Optimizer, might be defined in multiple formats.
@@ -188,120 +336,28 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             {'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
                        {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'first_iter': 901}]
 
-    device : str, torch.device or sequence
-        If str, a device name (e.g. ``'cpu'`` or ``'gpu:0'``). Regular expressions are also allowed (e.g. ``'gpu:*'``).
-        If torch.device, then device to be used.
-        If sequence, then each entry must be in one of previous formats, and batch data is paralleled across them.
-        Default behaviour is to use one (and only one) device of the best available type (priority to GPU over CPU).
 
-    benchmark : bool
-        Whether to optimize network's forward pass after the first batch. Can speed up training if shapes of inputs
-        are constant.
+    Examples
+    --------
+    segmentation_config = {
+        # Model layout
+        'initial_block': {'layout': 'cna cna cnap',                    # string layout: c=conv, n=BN, a=act, p=pool
+                          filters: [INT, INT, INT],                    # individual filters for each convolution
+                          'kernel_size': 3},                           # common kernel_size for all convolutions
 
-    profile : bool
-        Whether to collect stats of model training timings.
-        If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
+        'body': {'base_block': ResBlock,                               # in ConvBlock, we can use any nn.Module as base
+                 'filters': INT, 'kernel_size': INT,
+                 'downsample': False, 'attention': 'scse'},            # additional parameters of ResBlock module
 
-    amp : bool
-        Whether to use automated mixed precision during model training and inference. Default is True.
-        The output type of predictions remains float32.
+        'head': {'layout' : 'cna', 'filters': 1},                      # postprocessing
+        'output': 'sigmoid',                                           # can get `sigmoid` output in the `predict`
 
-    sync_frequency : int
-        How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
-
-    microbatch : int, bool or None
-        Also known as virtual batch. If int, then size of chunks to split every batch into.
-        Allows to process given data sequentially, accumulating gradients from microbatches and applying them
-        once in the end. Can be changed later in the `train` method. Batch size must be divisible by microbatch size.
-        If True, then every batch is split into individual items (same as microbatch equals 1).
-        If False or None, then feature is not used. Default is not to use microbatching.
-
-    sam_rho : float
-        Foret P. et al. "`Sharpness-Aware Minimization for Efficiently Improving Generalization
-        <https://arxiv.org/abs/2010.01412>`_".
-        If evaluates to False, then SAM is not used.
-        If float, then controls the size of neighborhood (check the paper for details).
-    sam_individual_norm : bool
-        If True, then each gradient is scaled according to its own L2 norm.
-        If False, then one common gradient norm is computed and used as a scaler for all gradients.
-
-    callbacks : sequence of `:class:callbacks.BaseCallback`
-        Callbacks to call at the end of each training iteration.
-
-    order : sequence
-        Defines sequence of network blocks in the architecture. Default is initial_block -> body -> head.
-        Each element of the sequence must be either a string, a tuple or a dict.
-        If string, then it is used as name of method to use, as config key to use, as name in model repr.
-        For example, ``'initial_block'`` stands for using ``self.initial_block`` with config[`initial_block`]
-        as parameters, and model representation would show this part of network as `initial_block`.
-        If tuple, then it must have three elements: (block_name, config_name, method).
-        If dict, then it must contain three keys: `block_name`, `config_name`, `method`.
-        In cases of tuple and dict, `method` can also be callable.
-
-    initial_block : dict
-        User-defined module or parameters for the input block, usually
-        :class:`~.torch.layers.ConvBlock` parameters.
-
-        If ``initial_block/inputs`` is specified with a name or list of names,
-        then it should contain names from ``inputs`` with info about shapes of tensors to be passed to `initial_block`.
-
-        Examples:
-
-        - ``{'initial_block/inputs': 'images'}``
-        - ``{'initial_block': dict(inputs='features')}``
-        - ``{'initial_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
-        - ``{'initial_block': MyCustomModule(some_param=1, another_param=2)}``
-
-    body : dict or nn.Module
-        User-defined module or parameters for the base network layers,
-        usually :class:`~.torch.layers.ConvBlock` parameters.
-
-    head : dict or nn.Module
-        User-defined module or parameters for the head layers,
-        usually :class:`~.torch.layers.ConvBlock` parameters.
-
-    predictions : str or callable
-        An operation applied to the head output to make the predictions tensor which is used in the loss function.
-        See :meth:`.TorchModel.output` for details.
-
-    output : dict or list
-        Auxiliary operations to apply to network predictions. See :meth:`.TorchModel.output` for details.
-
-    common : dict
-        Default parameters for all blocks (see :class:`~.torch.layers.ConvBlock`).
-
-
-    **In order to create your own model, it is recommended to:**
-
-    * Take a look at :class:`~.torch.layers.ConvBlock` since it is widely used as a building
-      block almost everywhere.
-
-    * Define model defaults (e.g. number of filters, dropout rates, etc) by overriding
-      :meth:`.TorchModel.default_config`. Those parameters are then updated with external configuration dictionary.
-
-    * Define config post-processing by overriding :meth:`~.TorchModel.build_config`.
-      Its main use is to infer parameters that can't be known in advance (e.g. number of classes, shape of inputs).
-
-    * Override :meth:`~.TorchModel.initial_block`, :meth:`~.TorchModel.body` and :meth:`~.TorchModel.head`, if needed.
-      You can either use usual `Torch layers <https://pytorch.org/docs/stable/nn.html>`_,
-      or predefined layers like :class:`~eager_torch.layers.PyramidPooling`.
-      Conveniently, 'initial_block' is used to make pre-processing (e.g. reshaping or agressive pooling) of inputs,
-      'body' contains the meat of the network flow, and 'head' makes sure that the output is compatible with targets.
-
-
-    **In order to use existing model, it is recommended to:**
-
-    * If ``inputs`` key defines shapes for all tensors in ``initial_block/inputs``, then model is created off of
-      placeholders (tensors with all zeros); otherwise, the first batch data is used to create model.
-
-    * ``loss``, ``optimizer``, ``decay`` keys.
-
-    * ``initial_block`` sub-dictionary with ``inputs`` key with names of tensors to use as network inputs.
-
-    * ``initial_block``, ``body``, ``head`` keys are used to define behaviour of respective part of the network.
-      Default behaviour is to support all of the :class:`~.torch.layers.ConvBlock` options.
-      For complex models, take a look at default config of the chosen model to learn
-      which parameters should be configured.
+        # Train configuration
+        'loss': 'bdice',                                               # binary dice coefficient as loss function
+        'optimizer': {'name': 'Adam', 'lr': 0.01,},
+        'decay': {'name': 'exp', 'gamma': 0.9, 'frequency': 100},
+        'microbatch': 16,                                              # size of microbatches at training
+    }
     """
     PRESERVE = [
         'full_config', 'config', 'model',
