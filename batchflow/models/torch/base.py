@@ -87,7 +87,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         - PyTorch model configuration.
             - `order` defines the sequence of blocks to build the model from. Default is initial_block -> body -> head.
-            Separation of the NN into multiple blocks is just for conveniency, so we can split
+            Separation of the NN into multiple blocks is just for convenience, so we can split
             the preprocessing, main body of the model, and postprocessing into individual parts.
             In the simplest case, each element is a string that points to other key in the config,
             which is used to create a :class:`~.torch.layers.ConvBlock`.
@@ -97,7 +97,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             - `common` parameters are passed to each of the neural network parts. Default is empty.
             - `output` defines additional operations, applied to the output after loss computation.
             By default, we have `predictions`, `predictions_{i}` and `predictions_{i}_{j}` aliases.
-            Note that these do not interfere with loss computation and are here only for conveniency.
+            Note that these do not interfere with loss computation and are here only for convenience.
             - `init_weights` allows to initialize weights.
 
         - shapes info. If fully provided, used to initialize the model. If no shapes are given in the config,
@@ -120,9 +120,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             - `profile` to get detailed report of model performance. Default is False.
 
         - infrastructure for training:
-            - `loss`. No default value, so this key is requiered.
+            - `loss`. No default value, so this key is required.
             - `optimizer`. Default is `Adam`.
-            ` decay`. Default is to not use learning rate decay.
+            - `decay`. Default is to not use learning rate decay.
 
 
     We recommend looking at :class:`~.torch.layers.ConvBlock` to learn about parameters for model building blocks,
@@ -211,15 +211,15 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     # Shapes: optional
     inputs_shapes : sequence
         Shapes of the input tensors without the batch size.
-        Must be a tuple (one input) or sequence on tuples (multiple inputs) with shapes.
+        Must be a tuple (one input) or sequence of tuples (multiple inputs) with shapes.
 
     inputs_shapes : sequence
         Shapes of the target tensors without the batch size.
-        Must be a tuple (one target) or sequence on tuples (multiple targets) with shapes.
-        Available as `` parameter in the `head` block.
+        Must be a tuple (one target) or sequence of tuples (multiple targets) with shapes.
+        Available as `targets_shapes` parameter in the `head` block.
 
     classes : int or sequence of ints
-        Number of desired classes in the output tensor. Available as `` parameter in the `head` block.
+        Number of desired classes in the output tensor. Available as `classes` parameter in the `head` block.
 
     placeholder_batch_size : int
         If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
@@ -749,7 +749,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             - tuple of three elements, which are name, config key and method name or callable
             - dictionary with three items, which are `block_name`, `config_name` and `method`.
 
-            The `block_name` is then used as the identifier in resulting model, i.e. `model.body`, `model.head`.
+            The `block_name` is used as the identifier in resulting model, i.e. `model.body`, `model.head`.
             The `config_name` is used to retrieve block creation parameters from config.
             The `method` is either a callable or name of the method to get from the current instance.
             Either method or callable should return an instance of nn.Module and accept block parameters.
@@ -1357,9 +1357,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     def split_into_microbatches(self, inputs, targets, microbatch, drop_last):
         """ Split inputs and targets into microbatch-sized chunks. """
         # Parse microbatch size
-        if microbatch:
-            if microbatch is True:
-                microbatch = self.microbatch
+        if microbatch is True:
+            microbatch = self.microbatch
 
         # Compute batch_size and make sure it is the same for all inputs and targets
         batch_size = len(inputs[0])

@@ -145,7 +145,7 @@ class OptimalBatchSizeMixin:
     """ Compute optimal batch size for training/inference to maximize GPU memory usage.
     Works by using `train`/`predict` with different batch sizes, and measuring how much memory is taken.
     Then, we solve the system of `measured_memory = batch_size * item_size + model_size + eps` equations for both
-    `item_size` and `model_size`ю
+    `item_size` and `model_size`.
 
     For stable measurements, we make `n` iterations of `train`/`predict`, until the memory consumption stabilizes.
     """
@@ -165,7 +165,7 @@ class OptimalBatchSizeMixin:
 
             # Exit condition
             batch_size += delta_batch_size
-            if info['memory'] > 80 or batch_size > max_batch_size :
+            if info['memory'] > max_memory or batch_size > max_batch_size :
                 break
 
         # Make and solve a system of equations for `item_size`, `model_size`

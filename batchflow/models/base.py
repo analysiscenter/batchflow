@@ -6,7 +6,7 @@ class BaseModel(ABC):
 
     @property
     def default_name(self):
-        """ PLaceholder for model name. """
+        """ Placeholder for model name. """
         return self.__class__.__name__
 
     @abstractmethod
@@ -23,11 +23,11 @@ class BaseModel(ABC):
 
     @abstractmethod
     def load(self):
-        """ Load the model from dick. """
+        """ Load the model from the disc. """
 
     @abstractmethod
     def save(self):
-        """ Save the model to dick. """
+        """ Save the model to the disc. """
 
     @classmethod
     def is_model_like(cls, obj):
