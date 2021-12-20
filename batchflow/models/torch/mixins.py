@@ -222,6 +222,7 @@ class OptimalBatchSizeMixin:
 
 class LayerHook:
     """ Hook to get both activations and gradients for a layer. """
+    # TODO: work out the list activations / gradients
     def __init__(self, module):
         self.activation = None
         self.gradient = None
@@ -230,17 +231,17 @@ class LayerHook:
         self.backward_handle = module.register_backward_hook(self.backward_hook)
 
     def forward_hook(self, module, input, output):
-        """ Save activations: if multi-output, the first one is saved. """
+        """ Save activations: if multi-output, the last one is saved. """
         _ = module, input
         if isinstance(output, (tuple, list)):
             output = output[-1]
         self.activation = output
 
     def backward_hook(self, module, grad_input, grad_output):
-        """ Save gradients: if multi-output, the first one is saved. """
+        """ Save gradients: if multi-output, the last one is saved. """
         _ = module, grad_input
         if isinstance(grad_output, (tuple, list)):
-            grad_output = grad_output[0]
+            grad_output = grad_output[-1]
         self.gradient = grad_output
 
     def close(self):

@@ -689,14 +689,14 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         The order is defined by `order` key in the config, which is [`initial_block`, `body`, `head`] by default.
         Each item in `order` should describe the block name, the config name and method to create. It can be a:
-            - string, then we use at as name, key and method name
-            - tuple of three elements, which are name, key and method name or callable
+            - string, then we use it as name, config key and method name
+            - tuple of three elements, which are name, config key and method name or callable
             - dictionary with three items, which are `block_name`, `config_name` and `method`.
 
-        The `block_name` is then used as the identifier in resulting model, i.e. `model.initial_block`, `model.body`.
-        The `config_name` is used to retrieve block creation parameters from config.
-        The `method` is either a string to getattr from the current instance or a callable.
-        Either method or callable should return an instance of nn.Module and accept block parameters.
+            The `block_name` is then used as the identifier in resulting model, i.e. `model.body`, `model.head`.
+            The `config_name` is used to retrieve block creation parameters from config.
+            The `method` is either a callable or name of the method to get from the current instance.
+            Either method or callable should return an instance of nn.Module and accept block parameters.
         """
         inputs = inputs or self.make_placeholder_data()
         inputs = inputs[0] if len(inputs) == 1 else inputs
@@ -717,7 +717,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 method = item.get('method', config_name)
 
             # Make block, from the `inputs`, transfer it to device
-            # Important: apply to the `inputs` before showing to the next block, so the shapes/etc are updated
+            # Important: apply to the `inputs` before passing them to the next block, so the shapes/etc are updated
             block = self.make_block(config_name, method, inputs)
 
             if block is not None:
@@ -831,12 +831,12 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     # Transfer to/from device(s)
     def transfer_to_device(self, data):
-        """ Transfer (possibly nested) structure to device and return the same structure. """
+        """ Transfer (possibly nested) data structure to device and return the same structure. """
         if isinstance(data, (dict, Config)):
             return type(data)({key : self.transfer_to_device(value) for key, value in data.items()})
 
         if isinstance(data, (tuple, list)):
-            return type(data)([self.transfer_to_device(item) for item in data])
+            return type(data)(self.transfer_to_device(item) for item in data)
 
         if isinstance(data, np.ndarray):
             if data.dtype != np.float32:
@@ -856,15 +856,16 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         if data is None:
             return None
-        raise TypeError('Passed data should either be a `np.ndarray`, `torch.Tensor` or `cupy.ndarray`.')
+        raise TypeError('Passed data should either be a `np.ndarray`, `torch.Tensor`, `cupy.ndarray`, '
+                        f'or a container of them, got{type(data)}.')
 
     def transfer_from_device(self, data):
-        """ Transfer (possibly nested) structure from device and return the same structure. """
+        """ Transfer (possibly nested) data structure from device and return the same structure. """
         if isinstance(data, (dict, Config)):
-            return {key : self.transfer_from_device(value) for key, value in data.items()}
+            return type(data)({key : self.transfer_from_device(value) for key, value in data.items()})
 
         if isinstance(data, (tuple, list)):
-            return [self.transfer_from_device(item) for item in data]
+            return type(data)(self.transfer_from_device(item) for item in data)
 
         if isinstance(data, (torch.Tensor, torch.autograd.Variable)):
             cpu_tensor = data.detach().cpu().numpy()
@@ -874,7 +875,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         if isinstance(data, (np.ndarray, int, float)):
             return data
-        raise TypeError(f'Passed data should either be a `torch.Tensor` or a container of them, got {data}')
+        raise TypeError('Passed data should either be a `np.ndarray`, `torch.Tensor`'
+                        f' or a container of them, got {type(data)}.')
 
     def model_to_device(self):
         """ Put model on device(s). If needed, apply DataParallel wrapper. """
@@ -907,8 +909,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             If True, then model, loss and gradient update operations are locked, thus allowing for multithreading.
         sync_frequency : int, bool or None
             If int, then how often to apply accumulated gradients to the weights.
-            If True, then value from config is used. Default value is 1,
-            which means to apply gradients after each batch of data.
+            If True, then value from config is used.
+            Default value is 1, which means to apply gradients after each batch of data.
             If False or None, then gradients are applied after each batch of data.
         microbatch : int, bool or None
             If int, then size of chunks to split every batch into. Allows to process given data sequentially,
@@ -1302,19 +1304,17 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         if microbatch:
             if microbatch is True:
                 microbatch = self.microbatch
-            else:
-                microbatch = microbatch or self.microbatch
 
         # Compute batch_size and make sure it is the same for all inputs and targets
         batch_size = len(inputs[0])
         for i, item in enumerate(inputs):
             if len(item) != batch_size:
-                raise ValueError('All of `inputs` should have the same length, as the first one!'
-                                    f'Input at position `{i}` has size {len(item)}!={batch_size}')
+                raise ValueError('All of `inputs` should have the same batch_size, as the first one!'
+                                    f'Input at position `{i}` has batch_size {len(item)}!={batch_size}')
         for i, item in enumerate(targets):
             if len(item) != batch_size:
-                raise ValueError('All of `targets` should have the same length, as the first of `inputs`!'
-                                    f'Target at position `{i}` has size {len(item)}!={batch_size}')
+                raise ValueError('All of `targets` should have the same batch_size, as the first of `inputs`!'
+                                    f'Target at position `{i}` has batch_size {len(item)}!={batch_size}')
 
         # Split data into microbatches, if needed
         if microbatch:
@@ -1361,7 +1361,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         # Iterate over tensors in predictions and the corresponding output operations
         for i, (tensor, (output_prefix, output_operations)) in enumerate(zip(predictions, self.operations.items())):
             if not isinstance(tensor, torch.Tensor):
-                raise TypeError(f'Network outputs are expected to be tensors, got {type(tensor)} instead!')
+                raise TypeError(f'Network outputs are expected to be tensors, got {type(tensor)} instead.')
 
             output_prefix = output_prefix + '_' if output_prefix else ''
 
