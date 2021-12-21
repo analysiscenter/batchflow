@@ -1,6 +1,5 @@
 [![License](https://img.shields.io/github/license/analysiscenter/batchflow.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Python](https://img.shields.io/badge/python-3.6-blue.svg)](https://python.org)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-1.14-orange.svg)](https://tensorflow.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.7-orange.svg)](https://pytorch.org)
 [![codecov](https://codecov.io/gh/analysiscenter/batchflow/branch/master/graph/badge.svg)](https://codecov.io/gh/analysiscenter/batchflow)
 [![PyPI](https://badge.fury.io/py/batchflow.svg)](https://badge.fury.io/py/batchflow)
@@ -61,7 +60,7 @@ for i in range(NUM_ITERS):
 To apply them to your data just choose a model, specify the inputs (like the number of classes or images shape)
 and call `train_model`. Of course, you can also choose a loss function, an optimizer and many other parameters, if you want.
 ```python
-from batchflow.models.tf import ResNet34
+from batchflow.models.torch import ResNet34
 
 my_workflow = my_dataset.pipeline()
               .init_model('dynamic', ResNet34, config={

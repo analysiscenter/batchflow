@@ -5,7 +5,6 @@ batchflow.models
 .. toctree::
 
     batchflow.models.metrics
-    batchflow.models.tf
     batchflow.models.torch
 
 

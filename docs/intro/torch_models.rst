@@ -129,7 +129,7 @@ inputs
 Inputs section contains a description of model input data, its shapes, transformations needed and names of the resulting tensors.
 
 Each input might have following parameters:
-    ``dtype`` : str or tf.DType (by default 'float32')
+    ``dtype`` : str (by default 'float32')
         data type
 
     ``shape`` : int or tuple / list

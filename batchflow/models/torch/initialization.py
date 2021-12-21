@@ -6,7 +6,7 @@ from torch import nn
 def best_practice_resnet_init(module):
     """ Common used non-default model weights initialization for ResNet.
 
-    It is similar to weights initialization in `PyTorch ResNet 
+    It is similar to weights initialization in `PyTorch ResNet
     <https://github.com/pytorch/vision/blob/main/torchvision/models/resnet.py>`_.
     """
     if isinstance(module, nn.Conv2d):

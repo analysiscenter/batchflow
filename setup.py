@@ -37,6 +37,7 @@ setup(
         'tqdm>=4.19.7',
         'scipy>=0.19.1',
         'scikit-image>=0.13.1',
+        'matplotlib>=3.0',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',

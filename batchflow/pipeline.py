@@ -1092,11 +1092,13 @@ class Pipeline:
 
         >>> pipeline
             .init_variable('inferred_masks', default=[])
-            .predict_model('tf_unet', fetches='predictions', feed_dict={'x': B('images')},
+            .predict_model('my_model',
+                           B.images,
+                           fetches='predictions',
                            save_to=V('inferred_masks'))
 
-        Call a `tf_unet` model `train` method with `fetches` and `feed_dict` arguments:
-        ``predictions = tf_unet.train(fetches='predictions', feed_dict={'x': batch.images})``
+        Call a `my_model` model `train` method with images as positional and `fetches` as keyword arguments:
+        ``predictions = my_model.train(B.images, fetches='predictions')``
         Predictions for each batch will be stored in a pipeline variable `inferred_masks`.
         """
         return self._add_action(PREDICT_MODEL_ID, *args, _args=dict(model_name=name, save_to=save_to), **kwargs)
