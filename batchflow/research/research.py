@@ -416,39 +416,41 @@ class Research:
             self.distributor.run()
             self.monitor.stop()
 
-        self._is_executed = True
-        try:
-            self.process = mp.Process(target=_start_distributor)
-            self.process.start()
-            self.logger.info(f"Detach research [pid:{self.process.pid}]")
-            self.monitor.detach(self.process)
-            if not detach:
-                self.process.join()
+        if self.parallel:
+            try:
+                self.process = mp.Process(target=_start_distributor)
+                self.process.start()
+                self.logger.info(f"Create separate research process [pid:{self.process.pid}]")
+                self.monitor.detach(self.process)
+                if not detach:
+                    self.process.join()
+            except KeyboardInterrupt as e:
+                self.logger.info("Research has been stopped by KeyboardInterrupt.")
                 self.terminate()
-        except KeyboardInterrupt as e:
-            self.logger.info("Research has been stopped by KeyboardInterrupt.")
-            self.terminate()
-            raise e
+                raise e
+        else:
+            if detach:
+                warnings.warn("detach can't be enabled when parallel=False")
+            _start_distributor()
         return self
 
     def terminate(self, kill_processes=False):
         """ Kill all research processes. """
-        if self._is_executed:
+        # TODO: killed processes don't release GPU.
+        self.logger.info("Stop research.")
+        if kill_processes and self.monitor is not None:
             self.logger.info("Terminate research processes")
-            if kill_processes:
-                order = {'EXECUTOR': 0, 'WORKER': 1, 'DETACHED_PROCESS': 2}
-                processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
+            order = {'EXECUTOR': 0, 'WORKER': 1, 'DETACHED_PROCESS': 2}
+            processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
+            print(processes_to_kill)
+            for pid, process_type in processes_to_kill:
+                if pid is not None and psutil.pid_exists(pid):
+                    process = psutil.Process(pid)
+                    process.terminate()
+                    self.logger.info(f"Terminate {process_type} [pid:{pid}]")
 
-                for pid, process_type in processes_to_kill:
-                    if pid is not None and psutil.pid_exists(pid):
-                        process = psutil.Process(pid)
-                        process.kill()
-                        self.logger.info(f"Terminate {process_type} [pid:{pid}]")
-
-            if self.monitor is not None:
-                self.monitor.stop(wait=False)
-        self._is_executed = False
-
+        if self.monitor is not None:
+            self.monitor.stop(wait=False)
 
     def create_logger(self):
         """ Create research logger. """
@@ -658,7 +660,6 @@ class ResearchMonitor:
     def handler(self):
         """ Signals handler. """
         signal = self.queue.get()
-        filename = os.path.join(self.path, 'monitor.csv')
         with self.bar as progress:
             while signal is not None:
                 status = signal.get('status')
@@ -688,7 +689,7 @@ class ResearchMonitor:
                     progress.refresh()
 
                 if self.dump:
-                    with open(filename, 'a') as f:
+                    with open(os.path.join(self.path, 'monitor.csv'), 'a') as f:
                         writer = csv.writer(f)
                         writer.writerow([str(signal.get(column, '')) for column in self.COLUMNS])
                 signal = self.queue.get()
