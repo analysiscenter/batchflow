@@ -1,9 +1,8 @@
 """ Basic Torch layers. """
-import numpy as np
 import torch
 import torch.nn as nn
 
-from ..utils import get_shape, get_num_channels, get_num_dims, safe_eval
+from ..utils import get_num_channels, get_num_dims, safe_eval
 
 
 
