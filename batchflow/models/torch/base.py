@@ -105,10 +105,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         Keys are `inputs_shapes`, `targets_shapes`, `classes`, and `placeholder_batch_size`.
         By default, no shapes are set in the config.
 
-        - train and inference methods have common parameters:
+        - train and inference common parameters:
             - `amp` turns on/off automatic mixed precision, which allows to perform some of the operations in `float16`.
             Default is True.
-            - `microbatch` allows to split the training/inference batches in chunks (microbatches) and process
+            - `microbatch_size` allows to split the training/inference batches in chunks (microbatches) and process
             them sequentially. During train, we apply gradients only after all microbatches from the batch are used.
             Default is to not use microbatching.
 
@@ -231,12 +231,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         Whether to use automated mixed precision during model training and inference. Default is True.
         The output type of predictions remains float32. Can be changed in `train` and `predict` arguments.
 
-    microbatch : int, bool or None
+    microbatch_size : int, bool or None
         Also known as virtual batch. Allows to process given data sequentially,
         accumulating gradients from microbatches and applying them once in the end.
         If int, then size of chunks to split every batch into.
-        If True, then every batch is split into individual items (same as microbatch equals 1).
-        If False or None, then feature is not used. Default is not to use microbatching.
+        If False or None, then this feature is not used. Default is not to use microbatching.
         Can be changed in `train` and `predict` arguments.
 
 
@@ -356,14 +355,14 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         'loss': 'bdice',                                               # binary dice coefficient as loss function
         'optimizer': {'name': 'Adam', 'lr': 0.01,},
         'decay': {'name': 'exp', 'gamma': 0.9, 'frequency': 100},
-        'microbatch': 16,                                              # size of microbatches at training
+        'microbatch_size': 16,                                         # size of microbatches at training
     }
     """
     PRESERVE = [
         'full_config', 'config', 'model',
         'inputs_shapes', 'targets_shapes', 'classes',
         'loss', 'optimizer', 'decay', 'decay_step',
-        'sync_counter', 'microbatch',
+        'sync_counter', 'microbatch_size',
         'iteration', 'last_train_info', 'last_predict_info',
         'lr_list', 'syncs', 'decay_iters',
         '_loss_list', 'loss_list',
@@ -402,7 +401,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         # Memory amortization: accumulate gradients to update weights later
         self.sync_frequency = 1
         self.sync_counter = 0
-        self.microbatch = None
+        self.microbatch_size = None
 
         # Sharpness-aware minimization
         self.sam_rho = 0.0
@@ -481,7 +480,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             'amp': True,
             'device': None,
             'benchmark': True,
-            'microbatch': None,
+            'microbatch_size': False,
             'sync_frequency': 1,
             'profile': False,
 
@@ -522,7 +521,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         config = self.config
 
         self.init_weights = config.get('init_weights', None)
-        self.microbatch = config.get('microbatch', None)
+        self.microbatch_size = config.get('microbatch_size', config.get('microbatch', False))
         self.sync_frequency = config.get('sync_frequency', 1)
         self.amp = config.get('amp', True)
 
@@ -944,7 +943,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     # Apply model to train/predict on given data
     def train(self, inputs, targets, outputs=None, lock=True, profile=False,
-              sync_frequency=True, microbatch=True, microbatch_drop_last=True,
+              sync_frequency=True, microbatch_size=None, microbatch_drop_last=True,
               sam_rho=None, sam_individual_norm=None):
         """ Train the model with the data provided
 
@@ -968,11 +967,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             If True, then value from config is used.
             Default value is 1, which means to apply gradients after each batch of data.
             If False or None, then gradients are applied after each batch of data.
-        microbatch : int, bool or None
+        microbatch_size : int, bool or None
             If int, then size of chunks to split every batch into. Allows to process given data sequentially,
             accumulating gradients from microbatches and applying them once in the end.
-            If True, then value from config is used (default value is not to use microbatching).
-            If False or None, then microbatching is not used.
+            If None, then value from config is used (default value is not to use microbatching).
+            If False, then microbatching is not used.
         microbatch_drop_last : bool
             Whether to drop microbatches, that are smaller than the microbatch size. Default is True.
         sam_rho : float
@@ -1023,10 +1022,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             if sam_individual_norm is None:
                 sam_individual_norm = self.sam_individual_norm
 
-            # Split the data into `microbatch` size chunks
+            # Split the data into `microbatch_size` size chunks
             (chunked_inputs, chunked_targets,
-            batch_size, microbatch) = self.split_into_microbatches(inputs, targets,
-                                                                   microbatch, microbatch_drop_last)
+             batch_size, microbatch_size) = self.split_into_microbatches(inputs, targets,
+                                                                         microbatch_size, microbatch_drop_last)
 
             steps = len(chunked_inputs)
             inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
@@ -1084,7 +1083,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self.last_train_info.update({
                 'amp': self.amp,
                 'batch_size': batch_size,
-                'microbatch_size': microbatch,
+                'microbatch_size': microbatch_size,
                 'sync_frequency': sync_frequency,
                 'steps': steps,
                 'sam': bool(sam_rho), 'sam_rho': sam_rho,
@@ -1224,7 +1223,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 p.grad.add_(previous_grad)
 
 
-    def predict(self, inputs, targets=None, outputs=None, lock=True, microbatch=False):
+    def predict(self, inputs, targets=None, outputs=None, lock=True, microbatch_size=False):
         """ Get predictions on the data provided.
 
         Parameters
@@ -1242,10 +1241,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 Allows to get intermediate activations of a neural network.
         lock : bool
             If True, then model and loss computation operations are locked, thus allowing for multithreading.
-        microbatch : int, bool or None
+        microbatch_size : int, bool or None
             If int, then size of chunks to split every batch into. Allows to process given data sequentially.
-            If True, then value from config is used (default value is not to use microbatching).
-            If False or None, then microbatching is not used.
+            If None, then value from config is used (default value is not to use microbatching).
+            If False, then microbatching is not used.
 
         Returns
         -------
@@ -1282,8 +1281,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             # Split the data into `microbatch` size chunks
             (chunked_inputs, chunked_targets,
-            batch_size, microbatch) = self.split_into_microbatches(inputs, targets,
-                                                                   microbatch, drop_last=False)
+             batch_size, microbatch_size) = self.split_into_microbatches(inputs, targets,
+                                                                         microbatch_size, drop_last=False)
 
             steps = len(chunked_inputs)
             inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
@@ -1307,7 +1306,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self.last_predict_info.update({
                 'amp': self.amp,
                 'batch_size': batch_size,
-                'microbatch_size': microbatch,
+                'microbatch_size': microbatch_size,
                 'steps': steps,
                 'outputs': outputs,
             })
@@ -1354,11 +1353,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Common utilities for train and predict
-    def split_into_microbatches(self, inputs, targets, microbatch, drop_last):
+    def split_into_microbatches(self, inputs, targets, microbatch_size, drop_last):
         """ Split inputs and targets into microbatch-sized chunks. """
         # Parse microbatch size
-        if microbatch is True:
-            microbatch = self.microbatch
+        if microbatch_size is None:
+            microbatch_size = self.microbatch_size
 
         # Compute batch_size and make sure it is the same for all inputs and targets
         batch_size = len(inputs[0])
@@ -1372,20 +1371,20 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                                     f'Target at position `{i}` has batch_size {len(item)}!={batch_size}')
 
         # Split data into microbatches, if needed
-        if microbatch:
-            chunked_inputs = [[item[i:i + microbatch] for item in inputs]
-                                for i in range(0, batch_size, microbatch)]
-            chunked_targets = [[item[i:i + microbatch] for item in targets]
-                                for i in range(0, batch_size, microbatch)]
+        if microbatch_size:
+            chunked_inputs = [[item[i:i + microbatch_size] for item in inputs]
+                                for i in range(0, batch_size, microbatch_size)]
+            chunked_targets = [[item[i:i + microbatch_size] for item in targets]
+                                for i in range(0, batch_size, microbatch_size)]
 
-            if drop_last and batch_size % microbatch != 0:
+            if drop_last and batch_size % microbatch_size != 0:
                 chunked_inputs = chunked_inputs[:-1]
                 chunked_targets = chunked_targets[:-1]
         else:
             chunked_inputs = [inputs]
             chunked_targets = [targets]
 
-        return chunked_inputs, chunked_targets, batch_size, microbatch
+        return chunked_inputs, chunked_targets, batch_size, microbatch_size
 
     def aggregate_microbatches(self, outputs, chunked_outputs, single_output):
         """ Aggregate outputs from microbatches into outputs for the whole batch.
