@@ -27,7 +27,7 @@ def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts
 class VisualizationMixin:
     """ Collection of visualization (both textual and graphical) tools for a :class:`~.torch.TorchModel`. """
     # Textual visualization of the model
-    def information(self, config=True, devices=True, model=False, misc=True):
+    def information(self, config=False, devices=True, model=False, misc=True):
         """ Show information about model configuration, used devices, train steps and more. """
         print(self._information(config=config, devices=devices, model=model, misc=misc))
 
@@ -35,7 +35,7 @@ class VisualizationMixin:
         """ Return the info message with default parameters. """
         return self._information()
 
-    def _information(self, config=True, devices=True, model=False, misc=True):
+    def _information(self, config=False, devices=True, model=False, misc=True):
         """ Create information string. """
         message = ''
         template_header = '\n\033[1m\033[4m{}:\033[0m\n'
@@ -64,9 +64,10 @@ class VisualizationMixin:
             if self.classes:
                 message += f'Number of classes: {self.classes}\n'
 
+            message += template_header.format('Model info')
             if self.model:
                 num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-                message += f'\nTotal number of parameters in the model: {num_params:,}'
+                message += f'Total number of parameters in the model: {num_params:,}'
 
             message += f'\nTotal number of passed training iterations: {self.iteration}\n'
 
@@ -205,9 +206,9 @@ class OptimalBatchSizeMixin:
         with GPUMemoryMonitor(frequency=frequency) as monitor:
             for _ in range(n):
                 if method == 'train':
-                    _ = self.train(inputs=inputs, targets=targets, microbatch=False)
+                    _ = self.train(inputs=inputs, targets=targets, microbatch_size=False)
                 elif method == 'predict':
-                    _ = self.predict(inputs=inputs, microbatch=False)
+                    _ = self.predict(inputs=inputs, microbatch_size=False)
 
         # Check if the measurement is stable. If so, return the value and confidence
         data = monitor.data
