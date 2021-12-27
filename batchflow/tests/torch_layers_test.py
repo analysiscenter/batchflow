@@ -131,7 +131,7 @@ def test_flatten(inp_shape, keepdims, out_shape, expectation, batch_size):
 
 
 @pytest.mark.parametrize('inp_shape', [(2,), (2, 3), (1, 2, 3)])
-def test_flatten_dafault(inp_shape):
+def test_flatten_default(inp_shape):
     """ test Flatten default parameters """
     batch_size = 2
     inp = torch.zeros((batch_size, ) + inp_shape)
