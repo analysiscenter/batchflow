@@ -33,15 +33,18 @@ class Dense(nn.Module):
     """ Dense layer.
 
     Parameters
-        ----------
-        units : int or srt
-            out_features in linear layer. see :meth:`~..utils.safe_eval` for details on str values
-        bias : bool, optional
-            whether to learn  an additive bias by default True
-        flatten : bool, optional
-            whether to flatten input prior to feeding it to linear layer, by default True
-        keep_dims : int, optional
-            dimensions to keep while flattening input, see :class:`~.Flatten`, by default 0
+    ----------
+    units : int or srt
+        Out_features in linear layer. see :meth:`~..utils.safe_eval` for details on str values.
+
+    bias : bool, optional
+        Whether to learn  an additive bias by default True.
+
+    flatten : bool, optional
+        Whether to flatten input prior to feeding it to linear layer, by default True.
+
+    keep_dims : int, optional
+        Dimensions to keep while flattening input, see :class:`~.Flatten`, by default 0.
     """
     def __init__(self, units, bias=True, inputs=None, flatten=True, keep_dims=0):
         super().__init__()
