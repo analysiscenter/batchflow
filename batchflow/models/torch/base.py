@@ -213,7 +213,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         Shapes of the input tensors without the batch size.
         Must be a tuple (one input) or sequence of tuples (multiple inputs) with shapes.
 
-    inputs_shapes : sequence
+    targets_shapes : sequence
         Shapes of the target tensors without the batch size.
         Must be a tuple (one target) or sequence of tuples (multiple targets) with shapes.
         Available as `targets_shapes` parameter in the `head` block.
@@ -465,17 +465,6 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         Don't forget to use the default config from parent class.
         """
         config = Config({
-            # Model building
-            'order': ['initial_block', 'body', 'head'],
-            'initial_block': {},
-            'body': {},
-            'head': {},
-            'common': {},
-            'placeholder_batch_size': 2,
-
-            # Additional operations to apply to model predictions
-            'output': None,
-
             # Devices and memory control
             'amp': True,
             'device': None,
@@ -483,6 +472,19 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             'microbatch_size': False,
             'sync_frequency': 1,
             'profile': False,
+
+            # Model building
+            'order': ['initial_block', 'body', 'head'],
+            'initial_block': {},
+            'body': {},
+            'head': {},
+            'common': {},
+
+            # Additional operations to apply to model predictions
+            'output': None,
+
+            # Shapes
+            'placeholder_batch_size': 2,
 
             # Training infrastructure
             'loss': None,
@@ -626,6 +628,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     def _unpack(self, name):
         """ Get params from config. """
+        # TODO: move all code here to make it more explicit
         unpacked = unpack_fn_from_config(name, self.config)
         if isinstance(unpacked, list):
             return {name: unpacked}
@@ -1544,7 +1547,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         The model will be moved to device specified in the model config by key `device`.
         """
         _ = args
-        self.parse_devices()
+        self._parse_devices()
 
         if kwargs.get('pickle_module') is None:
             kwargs['pickle_module'] = dill
