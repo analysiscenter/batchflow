@@ -125,7 +125,7 @@ class VisualizationMixin:
 
         plt.title('Loss values', fontsize=18)
         plt.xlabel('Iterations', fontsize=12)
-        plt.ylabel('Loss', fontsize=18, rotation=0)
+        plt.ylabel('Loss', fontsize=18)
         plt.grid(True)
         plt.show()
 
