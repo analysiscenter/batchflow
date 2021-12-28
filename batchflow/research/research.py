@@ -148,7 +148,7 @@ class Research:
 
     def attach_env_meta(self, cwd='.', dst=None, replace=None, commands=None, *args, **kwargs):
         """ Execute bash command and save the result into txt file. Results will be stored in research folder
-        (if it will be created) and in _env attribute.
+        (if it is created) and in _env attribute.
 
         Parameters
         ----------
@@ -518,7 +518,7 @@ class Research:
 
     @property
     def is_finished(self):
-        """ The number of experimenys in queue of tasks. """
+        """ Whether all tasks are completed or not. """
         return self.monitor.in_queue + self.monitor.remained_experiments == 0
 
     def __str__(self):
