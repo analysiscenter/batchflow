@@ -2,6 +2,7 @@
 """ Research class for muliple parallel experiments. """
 
 import os
+import sys
 import datetime
 import csv
 import itertools
@@ -85,7 +86,7 @@ class Research:
         self.dump_monitor = True
 
         self._is_executed = False
-        self._get_env_meta = []
+        self._env_meta_to_collect = []
 
     def __getattr__(self, key):
         if self.monitor is not None and key in self.monitor.SHARED_VARIABLES:
@@ -118,11 +119,13 @@ class Research:
         self.domain.set_update(function, when, **kwargs)
         return self
 
-    def _attach_env_meta(self, cwd='.', dst=None, replace=None, commands=None, *args, **kwargs):
-        if cwd == '.':
-            dst = ''
-        else:
-            dst = dst or os.path.split(os.path.realpath(cwd))[1]
+    def _get_env_state(self, cwd='.', dst=None, replace=None, commands=None, *args, **kwargs):
+        """ Execute commands and save output. """
+        if cwd == '.' and dst is None:
+            dst = 'cwd'
+        elif dst is None:
+            dst = os.path.split(os.path.realpath(cwd))[1]
+
         if isinstance(commands, (tuple, list)):
             args = [*commands, *args]
         elif isinstance(commands, dict):
@@ -132,9 +135,15 @@ class Research:
         all_commands = [*all_commands, *kwargs.items()]
 
         for filename, command in all_commands:
-            process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, cwd=cwd)
-            output, _ = process.communicate()
-            result = output.decode('utf')
+            if command.startswith('#'):
+                if command[1:] == 'python':
+                    result = sys.version
+                else:
+                    raise ValueError(f'Unknown env: {command}')
+            else:
+                process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, cwd=cwd)
+                output, _ = process.communicate()
+                result = output.decode('utf')
             if replace is not None:
                 for key, value in replace.items():
                     result = re.sub(key, value, result)
@@ -146,52 +155,36 @@ class Research:
             else:
                 self._env[os.path.join(dst, filename)] = self._env.get(os.path.join(dst, filename), '') + result
 
-    def attach_env_meta(self, cwd='.', dst=None, replace=None, commands=None, *args, **kwargs):
-        """ Execute bash command and save the result into txt file. Results will be stored in research folder
-        (if it is created) and in _env attribute.
 
-        Parameters
-        ----------
-        cwd : str, optional
-            cwd to execute the command, by default '.'
-        dst : str, optional
-            name of the subfolder/key to save the output, by default None. None means that `dst` will be the same
-            as basename of cwd (except the case when `cwd='.'`, then dst will be '' (empty string)).
-        replace : dict, optional
-            mapping to change some parts of the output, by default None
-        commands : dict or list of str, optional
-            commands to execute, by default None. If list, then all results will be saved (appended) into
-            '{dst}/env_state.txt'. If dict, each output will saved into '{dst}/{key}.txt'.
-        *args, **kwargs : see `commands`.
+    def attach_env_meta(self):
+        """ Get version of packages (by "pip list" and "conda list") and python version. Results will be stored
+        in research folder (if it is created) or in _env attribute.
         """
-        self._get_env_meta.append(dict(
-            cwd=cwd, dst=dst, replace=replace, commands=commands, args=args, kwargs=kwargs,
-        ))
+        commands = {
+            'pip': 'pip list',
+            'conda': 'conda list',
+            'python': '#python'
+        }
+        self._env_meta_to_collect.append(dict(commands=commands, cwd='.', dst=''))
         return self
 
-    def attach_git_meta(self, cwd='.', dst=None, commands=None, **kwargs):
-        """ Get git repo state (commit, diff, status, ...)
+    def attach_git_meta(self, cwd='.'):
+        """ Get git repo state (current commit, diff and status). Results will be stored
+        in research folder (if it is created) or in _env attribute.
 
         Parameters
         ----------
         cwd : str, optional
             path to repo, by default '.'
-        dst : str, optional
-            name of the subfolder/key to save the output, by default None. None means that `dst` will be the same
-            as basename of cwd (except the case when `cwd='.'`, then dst will be '' (empty string)).
-        commands : dict, optional
-            commands to execute. Each output will saved into '{dst}/{key}.txt'.
         """
-        commands = commands or dict()
         commands = {
             'commit': "git log --name-status HEAD^..HEAD",
             'diff': 'git diff',
             'status': 'git status -uno',
-            **commands,
-            **kwargs
         }
         replace = {'"image/png": ".*?"': '"image/png": "..."'}
-        return self.attach_env_meta(cwd=cwd, dst=dst, replace=replace, commands=commands)
+        self._env_meta_to_collect.append(dict(cwd=cwd, dst=None, replace=replace, commands=commands))
+        return self
 
     @property
     def env(self):
@@ -282,7 +275,7 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=True, git_meta=True, seed=None, profile=False, dump_monitor=False,
+            debug=False, finalize=True, git_meta=True, env_meta=True, seed=None, profile=False, dump_monitor=False,
             memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5):
         """ Run research.
 
@@ -324,6 +317,8 @@ class Research:
             continue experiment iteration after exception in some unit or not, by default True.
         git_meta : bool, optional
             attach get repo state or not (see :meth:`.Research.attach_git_meta`).
+        env_meta : bool, optional
+            attach env meta or not (see :meth:`.Research.attach_env_meta`).
         seed : bool or int or object with a seed sequence attribute
             see :meth:`~batchflow.utils_random.make_seed_sequence`.
         profile : bool, optional
@@ -394,13 +389,17 @@ class Research:
             self.loglevel = loglevel or 'info'
         else:
             self.loglevel = loglevel or 'error'
+        self.create_logger()
+
         if git_meta:
-            self.attach_git_meta(dst='cwd')
-        for item in self._get_env_meta:
+            self.attach_git_meta()
+        if env_meta:
+            self.attach_env_meta()
+        for item in self._env_meta_to_collect:
             args = item.pop('args', [])
             kwargs = item.pop('kwargs', {})
-            self._attach_env_meta(*args, **item, **kwargs)
-        self.create_logger()
+            self._get_env_state(*args, **item, **kwargs)
+
         self.logger.info("Research is starting")
 
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
