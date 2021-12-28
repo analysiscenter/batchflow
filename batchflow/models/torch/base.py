@@ -1424,18 +1424,24 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 raise TypeError(f'Network outputs are expected to be tensors, got {type(tensor)} instead.')
 
             if output_prefix is not None:
+                # Save the tensor itself under the `output_prefix` name
+                if output_prefix:
+                    outputs[output_prefix] = tensor
+
                 output_prefix = output_prefix + '_' if output_prefix else ''
 
                 # For each operation, add multiple aliases
-                for j, operation in enumerate(output_operations):
-                    output_tensor, operation_name = self.apply_output_operation(tensor, operation)
-                    if operation_name:
-                        outputs[output_prefix + operation_name] = output_tensor # i.e. `first_sigmoid`, `sigmoid`
+                if output_operations:
+                    for j, operation in enumerate(output_operations):
+                        output_tensor, operation_name = self.apply_output_operation(tensor, operation)
+                        if operation_name:
+                            outputs[output_prefix + operation_name] = output_tensor # i.e. `first_sigmoid`, `sigmoid`
 
-                    outputs.update({
-                        output_prefix + str(j) : output_tensor, # i.e. `first_0`, `0`
-                        f'predictions_{i}_{j}' : output_tensor, # i.e. `predictions_0_0`
-                    })
+                        outputs.update({
+                            output_prefix + str(j) : output_tensor, # i.e. `first_0`, `0`
+                            f'predictions_{i}_{j}' : output_tensor, # i.e. `predictions_0_0`
+                        })
+
 
             # For each tensor, add default alias
             outputs[f'predictions_{i}'] = tensor
