@@ -1,11 +1,14 @@
 """ Progress notifier. """
 import sys
 import math
+import warnings
 from time import time, gmtime, strftime
 
-from tqdm import tqdm
-from tqdm.notebook import tqdm as tqdm_notebook
-from tqdm.autonotebook import tqdm as tqdm_auto
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    from tqdm import tqdm
+    from tqdm.notebook import tqdm as tqdm_notebook
+    from tqdm.autonotebook import tqdm as tqdm_auto
 
 import numpy as np
 import matplotlib.pyplot as plt

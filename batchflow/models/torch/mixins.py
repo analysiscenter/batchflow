@@ -140,6 +140,39 @@ class VisualizationMixin:
         plt.grid(True)
         plt.show()
 
+    def show_graphs(self, figsize=(12, 6), window=20, log_loss=True, log_lr=False, return_figure=False):
+        """ Plot loss and learning rate over the same figure. """
+        fig, ax1 = plt.subplots(1, 1, figsize=figsize)
+        ax2 = ax1.twinx()
+
+        # Main plots: loss and lr
+        ax1.plot(self.loss_list, label='loss', color='blue', alpha=0.5 if window is not None else 1.)
+        ax2.plot(self.lr_list, label='learning rate', color='orange', alpha=1.)
+
+        if window is not None:
+            averaged_loss = np.convolve(self.loss_list, np.ones(window), mode='valid') / window
+            averaged_loss = np.insert(averaged_loss, 0, np.full(window - 1, None))
+
+            ax1.plot(averaged_loss, label='loss running mean', color='blue', alpha=1.)
+
+        lines = [line for ax in fig.axes for line in ax.lines]
+        ax1.legend(lines, [line.get_label() for line in lines])
+
+        ax1.set_title('Loss values and learning rate', fontsize=18)
+        ax1.set_xlabel('Iterations', fontsize=12)
+        ax1.set_ylabel('Loss', fontsize=12)
+        ax2.set_ylabel('Learning rate', fontsize=12)
+
+        if log_loss:
+            ax1.set_yscale('log')
+        if log_lr:
+            ax2.set_yscale('log')
+        ax1.grid(True)
+
+        if return_figure:
+            return fig
+        return None
+
 
 
 class OptimalBatchSizeMixin:
