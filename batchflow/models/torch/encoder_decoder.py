@@ -145,13 +145,16 @@ class DecoderModule(nn.ModuleDict):
                     layer_desc = 'upsample-{}'.format(i)
 
                 elif letter in ['c']:
-                    if self.skip and (i < len(inputs) - 2):
-                        args = {'factor': factor[i],
-                                **kwargs, **combine_args, **unpack_args(combine_args, i, num_stages)}
+                    if self.skip:
+                        if i < len(inputs) - 2:
+                            args = {'factor': factor[i],
+                                    **kwargs, **combine_args, **unpack_args(combine_args, i, num_stages)}
 
-                        layer = Combine(inputs=[x, inputs[-i - 3]], **args)
-                        x = layer([x, inputs[-i - 3]])
-                        layer_desc = 'combine-{}'.format(i)
+                            layer = Combine(inputs=[x, inputs[-i - 3]], **args)
+                            x = layer([x, inputs[-i - 3]])
+                            layer_desc = 'combine-{}'.format(i)
+                    else:
+                        continue
                 else:
                     raise ValueError('Unknown letter in order {}, use one of ("b", "u", "c")'.format(letter))
 
