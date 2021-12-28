@@ -25,8 +25,10 @@ class Flatten(nn.Module):
         if len(self.keep_dims) == x.ndim:
             return x
 
-        new_shape = [x.size(i) for i in self.keep_dims]
-        return x.view(*new_shape, -1)
+        for d1, d2 in enumerate(self.keep_dims):
+            x = x.transpose(d1, d2)
+        new_shape = [x.size(i) for i in range(len(self.keep_dims))]
+        return x.reshape(*new_shape, -1)
 
 
 class Dense(nn.Module):
