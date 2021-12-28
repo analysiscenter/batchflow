@@ -203,7 +203,7 @@ class Encoder(TorchModel):
     @classmethod
     def body(cls, inputs, return_all=False, **kwargs):
         """ Make a sequential list of encoder modules. """
-        kwargs = cls.get_defaults('body', kwargs)
+        kwargs = cls.get_block_defaults('body', kwargs)
         encoder = kwargs.pop('encoder')
         layers = [('encoder', EncoderModule(inputs=inputs, return_all=return_all, **{**kwargs, **encoder}))]
         return nn.Sequential(OrderedDict(layers))
@@ -271,7 +271,7 @@ class Decoder(TorchModel):
     @classmethod
     def body(cls, inputs, **kwargs):
         """ Make a sequential list of decoder modules. """
-        kwargs = cls.get_defaults('body', kwargs)
+        kwargs = cls.get_block_defaults('body', kwargs)
         decoder = kwargs.pop('decoder')
         layers = [('decoder', DecoderModule(inputs=inputs, **{**kwargs, **decoder}))]
         return nn.Sequential(OrderedDict(layers))
@@ -279,7 +279,7 @@ class Decoder(TorchModel):
     @classmethod
     def head(cls, inputs, classes=None, **kwargs):
         """ Make network's head. If needed, apply 1x1 convolution to obtain correct output shape. """
-        kwargs = cls.get_defaults('head', kwargs)
+        kwargs = cls.get_block_defaults('head', kwargs)
         layers = []
         layer = super().head(inputs, classes=classes, **kwargs)
         if layer is not None:
@@ -430,7 +430,7 @@ class EncoderDecoder(Decoder):
     @classmethod
     def body(cls, inputs, **kwargs):
         """ Sequence of encoder, embedding and decoder. """
-        kwargs = cls.get_defaults('body', kwargs)
+        kwargs = cls.get_block_defaults('body', kwargs)
         encoder = kwargs.pop('encoder')
         embedding = kwargs.pop('embedding')
         decoder = kwargs.pop('decoder')

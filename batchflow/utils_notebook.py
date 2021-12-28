@@ -8,7 +8,7 @@ import warnings
 
 import numpy as np
 
-# Additionally imports 'requests`, 'ipykernel`, `notebook`, `nbconvert`, `pylint`,
+# Additionally imports 'requests`, 'ipykernel`, `jupyter_server`, `nbconvert`, `pylint`,
 #                      'nbconvert', 'IPython' and `nvidia_smi`, if needed
 
 
@@ -35,19 +35,25 @@ def get_notebook_path():
 
     import requests
     import ipykernel
-    from notebook.notebookapp import list_running_servers
 
-    kernel_id = re.search('kernel-(.*).json',
-                          ipykernel.connect.get_connection_file()).group(1)
-    servers = list_running_servers()
+    # Id of the current running kernel: a string uid
+    kernel_id = re.search('kernel-(.*).json', ipykernel.connect.get_connection_file()).group(1)
+
+    # Get running servers for both JupyterLab v2.# and v3.#
+    from notebook.notebookapp import list_running_servers as list_running_servers_v2
+    from jupyter_server.serverapp import list_running_servers as list_running_servers_v3
+    servers = list(list_running_servers_v2()) + list(list_running_servers_v3())
+
     for server in servers:
+        root_dir = server.get('root_dir') or server.get('notebook_dir')
         response = requests.get(requests.compat.urljoin(server['url'], 'api/sessions'),
                                 params={'token': server.get('token', '')})
+
         for params in json.loads(response.text):
             if params['kernel']['id'] == kernel_id:
                 relative_path = params['notebook']['path']
-                return os.path.join(server['notebook_dir'], relative_path)
-    return None
+                return os.path.join(root_dir, relative_path)
+    raise ValueError(f'Unable to find kernel `{kernel_id}` in {len(servers)} servers!')
 
 def get_notebook_name():
     """ Return the title of the current Jupyter notebook without base directory and extension,
@@ -212,8 +218,8 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
         return exec_info
 
 
-def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, ignore_codes=None,
-                    keep_script=False, return_report=False):
+def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, ignore_codes=tuple(),
+                    use_pylintrc=True, keep_script=False, return_report=False):
     """ Run pylint on entire Jupyter notebook.
     Under the hood, the notebook is converted to regular `.py` script,
     special IPython commands like magics removed, and then pylint is executed.
@@ -245,9 +251,26 @@ def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, 
     from nbconvert import PythonExporter
     from pylint import epylint as lint
 
+    # Parse parameters
     path = path or get_notebook_path()
     options = options if options.startswith(' ') else ' ' + options
-    ignore_codes = ignore_codes or ['invalid-name', 'import-error', 'wrong-import-position']
+    ignore_codes = set(ignore_codes)
+    ignore_codes.update({'invalid-name', 'import-error', 'wrong-import-position', 'trailing-whitespace'})
+
+    # Try to add `pylintrc` configuration file to options
+    if use_pylintrc and 'rcfile' not in options:
+        # Locate the batchflow pylintrcfile
+        # The loop converts the __file__ path, which is a combination of absolute and relative path, to an absolute
+        pylintcrc_path = []
+        for item in __file__.split('/')[:-2]:
+            if item != '..':
+                pylintcrc_path.append(item)
+            else:
+                pylintcrc_path.pop(-1)
+        pylintcrc_path = '/' + os.path.join(*pylintcrc_path, 'pylintrc')
+
+        if os.path.exists(pylintcrc_path):
+            options += f' --rcfile {pylintcrc_path}'
 
     # Convert the notebook contents to raw string without outputs
     code, _ = PythonExporter().from_filename(path)
