@@ -328,6 +328,47 @@ class Pipeline:
         """ Add a nested pipeline to the log of future actions """
         self._actions.append({'name': PIPELINE_ID, 'pipeline': pipeline, 'proba': proba, 'repeat': repeat})
 
+
+    LINE_LENGTH = 80
+    ITEM_LENGTH = 40
+    PREFIX = '\033[1m\033[4m'
+
+    def __str__(self):
+        """ Textual representation of a pipeline: list all actions and their keyword parameters. """
+        # TODO: with the help of `inspect` and `get_method` method, can match the `args` to their actual names
+        msg = []
+        for i, action in enumerate(self._actions):
+            name = self.get_action_name(action)
+            indent = (len(name) + len(str(i)) + 3) * ' '
+
+            # Combine kwargs passed directly to actions and ones from pipeline methods
+            kwargs = {**action['kwargs'], **action}
+            for key in ['name', 'args', 'kwargs', 'proba', 'repeat']:
+                kwargs.pop(key)
+
+            # Make string with parameters
+            lines_kwargs = []
+            str_kwargs = ''
+            for key, value in kwargs.items():
+                # Control the length of one parameter value
+                value_ = repr(value)
+                value_ = value_ if len(value_) < self.ITEM_LENGTH else '[...]'
+                str_kwargs += f'{key}={value_}, '
+
+                # Control the length of current line
+                if len(str_kwargs) + len(indent) > self.LINE_LENGTH:
+                    lines_kwargs.append(str_kwargs[:-2])
+                    str_kwargs = ''
+            if str_kwargs:
+                lines_kwargs.append(str_kwargs[:-2])
+            str_kwargs = f'\n{indent}'.join(lines_kwargs)
+
+            action_msg = f'#{i} {self.PREFIX}{name}\033[0m({str_kwargs})'
+            msg.append(action_msg)
+
+        return '\n'.join(msg)
+
+
     @property
     def index(self):
         """ Return index of the source dataset """
@@ -934,6 +975,15 @@ class Pipeline:
     def m(self, name, batch=None):
         """ A shorter alias for get_model_by_name() """
         return self.get_model_by_name(name, batch=batch)
+
+    @property
+    def model(self):
+        """ An alias for a present model, if pipeline has only one model initialized. """
+        n_models = len(self.models.models)
+        if n_models == 1:
+            return list(self.models.models.values())[0]
+        raise TypeError('`model` property should be used only for pipelines with exactly 1 initialized model, '
+                        f'have {n_models} instead!')
 
     def init_model(self, name, model_class=None, mode='dynamic', config=None, source=None):
         """ Initialize a static or dynamic model by building or importing it
