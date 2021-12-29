@@ -1274,7 +1274,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             # Parse inputs and targets: always a list
             inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
-            targets = (list(targets) if isinstance(targets, (tuple, list)) else [targets]) if targets else []
+            if targets is not None:
+                targets = (list(targets) if isinstance(targets, (tuple, list)) else [targets])
+            else:
+                targets = []
 
             # Parse outputs: always a list
             single_output = isinstance(outputs, str)
@@ -1336,7 +1339,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             output_container['predictions'] = predictions
 
-            if targets:
+            if len(targets) > 0:
                 targets = self.transfer_to_device(targets)
                 loss = self.loss(predictions, targets)
                 output_container['loss'] = loss

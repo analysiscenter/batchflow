@@ -324,6 +324,9 @@ class Notifier:
                 value = pipeline.v(source)
                 container['data'] = value
 
+            elif isinstance(source, list):
+                container['data'] = source
+
             else:
                 value = eval_expr(source, pipeline=pipeline, batch=batch)
                 container['data'] = value
