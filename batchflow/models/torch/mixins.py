@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 import torch
+from scipy.ndimage import convolve
 
 from ...monitor import GPUMemoryMonitor
 from ...notifier import Notifier
@@ -140,21 +141,28 @@ class VisualizationMixin:
         plt.grid(True)
         plt.show()
 
-    def show_graphs(self, figsize=(12, 6), window=20, log_loss=True, log_lr=False, return_figure=False):
+    def show_graphs(self, figsize=(12, 6), window=20, final_window=50,
+                    log_loss=False, log_lr=False, return_figure=False):
         """ Plot loss and learning rate over the same figure. """
-        fig, ax1 = plt.subplots(1, 1, figsize=figsize)
-        ax2 = ax1.twinx()
+        # Legends
+        loss_label = f'loss ⟶ {self.loss_list[-1]:2.3f}'
+        lr_label = f'learning rate ⟶ {self.lr_list[-1][0]:1.5f}'
+        if final_window is not None:
+            final_window = min(final_window, self.iteration)
+            loss_label += f'\nmean over last {final_window} iterations={np.mean(self.loss_list[-final_window:]):2.3f}'
 
         # Main plots: loss and lr
-        ax1.plot(self.loss_list, label='loss', color='blue', alpha=0.5 if window is not None else 1.)
-        ax2.plot(self.lr_list, label='learning rate', color='orange', alpha=1.)
+        fig, ax1 = plt.subplots(1, 1, figsize=figsize)
+        ax2 = ax1.twinx()
+        ax1.plot(self.loss_list, label=loss_label, color='blue', alpha=0.5 if window is not None else 1.)
+        ax2.plot(self.lr_list, label=lr_label, color='orange', alpha=1.)
 
+        # Averaged loss plot
         if window is not None:
-            averaged_loss = np.convolve(self.loss_list, np.ones(window), mode='valid') / window
-            averaged_loss = np.insert(averaged_loss, 0, np.full(window - 1, None))
-
+            averaged_loss = convolve(self.loss_list, np.ones(window), mode='nearest') / window
             ax1.plot(averaged_loss, label='loss running mean', color='blue', alpha=1.)
 
+        # Annotations
         lines = [line for ax in fig.axes for line in ax.lines]
         ax1.legend(lines, [line.get_label() for line in lines])
 
