@@ -155,8 +155,9 @@ class PipelineExecutor:
                                 batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                 drop_last=drop_last, length=len(self.pipeline))
         if notifier.total is None:
-            notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                                  drop_last=drop_last, length=len(self.pipeline))
+            notifier.compute_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                   drop_last=drop_last, length=len(self.pipeline))
+            notifier.make_bar()
 
         if self.pipeline.before:
             self.pipeline.before.run()

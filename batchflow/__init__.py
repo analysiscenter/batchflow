@@ -12,7 +12,7 @@ from .config import Config
 from .dataset import Dataset
 from .pipeline import Pipeline
 from .monitor import *
-from .notifier import Notifier
+from .notifier import Notifier, notifier
 from .named_expr import NamedExpression, B, L, C, F, V, M, D, R, W, P, PP, I, eval_expr
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, parallel, any_action_failed, mjit, deprecated, apply_parallel
