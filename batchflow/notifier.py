@@ -43,7 +43,7 @@ class DummyBar:
 
     def format_meter(self, n, total, t, **kwargs):
         _ = kwargs
-        return f'{n}/{total} iterations done; elapsed time is {t:3.3} seconds'
+        return f'{n}/{total} iterations done; elapsed time is {t:3.3} seconds; {self.postfix}'
 
     def display(self, *args, **kwargs):
         _ = args, kwargs
@@ -77,8 +77,6 @@ class Notifier:
             - `t` or True for standard text tqdm is used.
             - otherwise, no progress bar will be displayed. Note that iterations,
             as well as everything else (monitors, variables, logs) are still tracked.
-    update_total : bool
-        Whether the total amount of iterations should be computed at initialization.
     desc : str
         Prefix for created descriptions.
     disable : bool
@@ -129,7 +127,7 @@ class Notifier:
     COLOUR_SUCCESS = '#4caf50'
     COLOUR_FAILURE = '#f44336'
 
-    def __init__(self, bar=None, *args, update_total=True, disable=False,
+    def __init__(self, bar='a', disable=False,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  frequency=1, monitors=None, graphs=None, log_file=None,
                  telegram=False, token=None, chat_id=None, silent=True,
@@ -172,7 +170,7 @@ class Notifier:
                 elif isinstance(source, str):
                     container['name'] = source
                 else:
-                    container['name'] = None
+                    container['name'] = '<unknown_container>'
 
             self.data_containers.append(container)
 
@@ -186,10 +184,7 @@ class Notifier:
             with open(self.log_file, 'w'):
                 pass
 
-        # Create bar; set the number of total iterations, if possible
-        self.bar = None
-
-        bar_func = None
+        # Parse string bar identifier to constructor
         if callable(bar):
             bar_func = bar
         elif bar in ['n', 'nb', 'notebook', 'j', 'jpn', 'jupyter']:
@@ -205,6 +200,12 @@ class Notifier:
             bar_func = DummyBar
         else:
             raise ValueError('Unknown bar value:', bar)
+
+        # Convert the bar, based on other parameters
+        if disable:
+            bar_func = DummyBar
+        if self.has_graphs and bar_func is tqdm:
+            bar_func = tqdm_notebook
 
         # Set default values for bars
         if bar_func is tqdm or bar_func is tqdm_notebook:
@@ -222,14 +223,14 @@ class Notifier:
                 **kwargs
             }
 
-        self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
+        # Function to initialize / reinitialize bar, when needed
+        self.bar = None
+        self.bar_func = lambda total: bar_func(total=total, **kwargs)
 
-        # Turn off everything if `disable`
-        self._disable = disable
-
-        if update_total:
-            self.update_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                              drop_last=drop_last, length=length)
+        # Make bar with known / unknown total length
+        self.compute_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                           drop_last=drop_last, length=length)
+        self.make_bar()
 
         # Prepare plot params
         #pylint: disable=invalid-unary-operand-type
@@ -243,7 +244,7 @@ class Notifier:
             self.telegram_media = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
 
 
-    def update_total(self, batch_size, n_iters, n_epochs, drop_last, length, total=None):
+    def compute_total(self, batch_size, n_iters, n_epochs, drop_last, length, total=None):
         """ Re-calculate total number of iterations. """
         if total is None:
             if n_iters is not None:
@@ -253,21 +254,20 @@ class Notifier:
                     total = length // batch_size * n_epochs
                 else:
                     total = math.ceil(length * n_epochs / batch_size)
+        self.total = total
 
-        # Force close previous bar, create new
+    def make_bar(self):
+        """ Create new bar. Force close the previous, if needed. """
         if self.bar is not None:
             try:
                 # jupyter bar must be closed and reopened
                 self.bar.display(close=True)
-                self.bar = self.bar_func(total=total)
+                self.bar = self.bar_func(total=self.total)
             except TypeError:
                 # text bar can work with a simple reassigning of `total`
-                self.bar.total = total
+                self.bar.total = self.total
         else:
-            self.bar = self.bar_func(total=total)
-
-        if self._disable:
-            self.disable()
+            self.bar = self.bar_func(total=self.total)
 
     def disable(self):
         """ Completely disable notifier: progress bar, monitors and graphs. """
@@ -280,6 +280,7 @@ class Notifier:
             finally:
                 self.bar = DummyBar(total=self.total)
 
+        self.stop_monitors()
         self.data_containers = []
         self.has_graphs = False
         self.log_file = None
@@ -430,8 +431,10 @@ class Notifier:
                 print(self.create_message(i, description), file=f)
 
     def __call__(self, iterable):
-        if self.bar is not None and self.bar.total is None:
-            self.update_total(0, 0, 0, 0, 0, total=len(iterable))
+        if self.bar is not None:
+            if self.bar.total is None and hasattr(iterable, '__len__'):
+                self.compute_total(None, None, None, None, None, total=len(iterable))
+            self.make_bar()
 
         try:
             for item in iterable:
@@ -441,6 +444,13 @@ class Notifier:
         except: #pylint: disable=bare-except
             self.close(success=False)
             raise
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _, __, ___):
+        self.close()
+
 
     def close(self, success=True):
         """ Close the underlying progress bar. """
@@ -483,11 +493,15 @@ class Notifier:
             else:
                 continue
 
-            # Trim the value: currently, we work with floats only
+            # Trim the value: currently, we work with numbers only
             if 'format' in container:
                 desc = container['format'].format(value)
-            elif isinstance(value, (int, float, np.signedinteger, np.floating)):
-                desc = f'{name}={value:<6.6f}' if isinstance(value, (float, np.floating)) else f'{name}={value:<6}'
+            elif isinstance(value, (float, np.floating)):
+                desc = f'{name}={value:2.4f}'
+            elif isinstance(value, (int, np.signedinteger,)):
+                desc = f'{name}={value:,}'
+            else:
+                continue
 
             description.append(desc)
         return ';   '.join(description)
@@ -513,3 +527,8 @@ class Notifier:
         """ Clear all the instances. Can help fix tqdm behaviour. """
         # pylint: disable=protected-access
         tqdm._instances.clear()
+
+
+def notifier(iterable, *args, bar='a', **kwargs):
+    """ A convenient wrapper for iterables. """
+    return Notifier(bar=bar, *args, **kwargs)(iterable)
