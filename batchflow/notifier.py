@@ -88,13 +88,14 @@ class Notifier:
 
     frequency : int
         Frequency of notifier updates.
-    monitors : str, :class:`.Monitor`, :class:`.NamedExpression`, dict or sequence of them
+    monitors : str, :class:`.Monitor`, :class:`.NamedExpression`, list, dict or sequence of them
         Set tracked ('monitored') entities: they are displayed in the bar description.
         Strings are either registered monitor identifiers or names of pipeline variables.
         Named expressions are evaluated with the pipeline.
         If dict, then 'source' key should be one of the above to identify container.
         Other available keys:
-            - 'name' is used to display at bar descriptions and plot titles
+            - 'name' is used to display at bar descriptions and plot titles. Not used if the `format` is provided.
+            - 'format' is used to create string description from the last value in the container's data.
             - 'plot_function' is used to display container data.
             Can be used to change the default way of displaying graphs.
     graphs : str, :class:`.Monitor`, :class:`.NamedExpression`, or sequence of them
@@ -473,11 +474,22 @@ class Notifier:
         for container in self.data_containers:
             source = container['source']
             name = container['name']
+
+            # Extract value from container for the `iteration`
             if isinstance(source, (str, NamedExpression)):
                 value = container['data'][iteration]
-                if isinstance(value, (int, float, np.signedinteger, np.floating)):
-                    desc = f'{name}={value:<6.6f}' if isinstance(value, (float, np.floating)) else f'{name}={value:<6}'
-                    description.append(desc)
+            elif isinstance(source, list):
+                value = container['data'][iteration]
+            else:
+                continue
+
+            # Trim the value: currently, we work with floats only
+            if 'format' in container:
+                desc = container['format'].format(value)
+            elif isinstance(value, (int, float, np.signedinteger, np.floating)):
+                desc = f'{name}={value:<6.6f}' if isinstance(value, (float, np.floating)) else f'{name}={value:<6}'
+
+            description.append(desc)
         return ';   '.join(description)
 
     def create_message(self, iteration, description):

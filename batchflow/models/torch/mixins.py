@@ -142,8 +142,30 @@ class VisualizationMixin:
         plt.show()
 
     def show_graphs(self, figsize=(12, 6), window=20, final_window=50,
-                    log_loss=False, log_lr=False, return_figure=False):
-        """ Plot loss and learning rate over the same figure. """
+                    log_loss=False, log_lr=False, return_figure=False, savepath=None, save_kwargs=None):
+        """ Plot loss and learning rate over the same figure.
+
+        Parameters
+        figsize : tuple of ints
+            Size of the figure.
+        window : int or None
+            If int, then averaged graph of loss values is displayed over the regular one.
+            The average for each point is computed as the mean value of the kernel with the center in this point.
+            Around the edges of loss graph (in the beginning and at the end) we use the nearest value to pad.
+            If None, no additional graphs are displayed.
+        final_window : int or None
+            If int, then we additionally display the mean value of the last `final_window` iterations in the legend.
+            If None, no additional info is displayed.
+        log_loss, log_lr : bool
+            Whether to take the log of respective graph values.
+        return figure : bool
+            Whether to return the figure.
+        savepath : str or None
+            If str, then path to save the figure.
+            If None, the figure is not saved to disk.
+        save_kwargs : dict or None
+            If dict, then additional parameters for figure saving.
+        """
         # Legends
         loss_label = f'loss ⟶ {self.loss_list[-1]:2.3f}'
         lr_label = f'learning rate ⟶ {self.lr_list[-1][0]:1.5f}'
@@ -176,6 +198,12 @@ class VisualizationMixin:
         if log_lr:
             ax2.set_yscale('log')
         ax1.grid(True)
+
+        if savepath is not None:
+            save_kwargs = {'bbox_inches': 'tight',
+                           'pad_inches': 0, 'dpi': 100,
+                           **(save_kwargs or {})}
+            fig.savefig(savepath, **save_kwargs)
 
         if return_figure:
             return fig
