@@ -96,22 +96,19 @@ class Worker:
         additional config for all experiments executed in Worker
     tasks : DynamicQueue
         tasks queue
-    responses : multiprocess.JoinableQueue
-        queue for responses aboute executed tasks
     research : Research
         research
     """
-    def __init__(self, index, worker_config, tasks, responses, research):
+    def __init__(self, index, worker_config, tasks, research):
         self.index = index
         self.worker_config = worker_config
         self.tasks = tasks
-        self.responses = responses
         self.research = research
 
         self.pid = None
 
     def __call__(self):
-        self.pid = os.getpid()
+        self.pid = os.getpid() if self.research.parallel else None
         self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has started.")
         _return = True
 
@@ -153,7 +150,6 @@ class Worker:
             task_idx, configs = task
 
             self.research.monitor.send(worker=self, status='GET_TASK', task_idx=task_idx)
-            self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] have got task {task_idx}.")
             name = f"Task {task_idx}"
 
             experiment = self.research.experiment
@@ -168,15 +164,17 @@ class Worker:
             if self.research.parallel:
                 process = mp.Process(target=executor.run, args=(self, ))
                 process.start()
+                self.research.logger.info(
+                    f"Worker {self.index} [pid:{self.pid}] has started task {task_idx} [pid:{process.pid}]."
+                )
                 process.join()
             else:
                 executor.run(self)
             self.research.monitor.send(worker=self, status='FINISH_TASK', task_idx=task_idx)
             self.tasks.task_done()
-            self.responses.put((self.index, task_idx))
         self.research.monitor.send(worker=self, status='STOP_WORKER')
 
-        self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has stopped.")
+        self.research.logger.info(f"Worker {self.index} [pid:{self.pid}] has stopped.")
 
         return _return
 
@@ -219,7 +217,6 @@ class Distributor:
     def __init__(self, tasks, research):
         self.tasks = tasks
         self.research = research
-        self.responses = mp.JoinableQueue()
 
     def run(self):
         """ Run disributor and all workers. """
@@ -229,18 +226,21 @@ class Distributor:
         else:
             worker_configs = self.research.workers
         for i, worker_config in enumerate(worker_configs):
-            workers += [Worker(i, worker_config, self.tasks, self.responses, self.research)]
+            workers.append(Worker(i, worker_config, self.tasks, self.research))
 
         self.tasks.next_tasks(len(workers))
         self.research.logger.info(f'Start workers (parallel={self.research.parallel})')
 
         if self.research.parallel:
+            processes = []
             for worker in workers:
-                mp.Process(target=worker).start()
+                process = mp.Process(target=worker)
+                process.start()
+                processes.append(process)
 
             self.send_state()
             while self.tasks.tasks_in_queue > 0:
-                self.responses.get()
+                self.tasks.join()
                 self.tasks.finished_tasks += 1
                 self.tasks.tasks_in_queue -= 1
 
@@ -249,8 +249,8 @@ class Distributor:
                 self.send_state()
 
             self.tasks.stop_workers(len(workers))
-            for _ in workers:
-                self.tasks.join()
+            for process in processes:
+                process.join()
         else:
             self.send_state()
             _workers = itertools.cycle(workers)

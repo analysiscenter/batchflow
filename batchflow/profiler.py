@@ -30,9 +30,13 @@ class Profiler:
             self.detailed = False
             self._profiler = None
 
-        self.profile_info = None
+        self._profile_info = []
         self._profile_info_lock = threading.Lock()
         self.start_time = None
+
+    @property
+    def profile_info(self):
+        return pd.concat(self._profile_info)
 
     def enable(self):
         """ Enable profiling. """
@@ -72,10 +76,7 @@ class Profiler:
         df = pd.DataFrame(values, index=multiindex)
 
         with self._profile_info_lock:
-            if self.profile_info is None:
-                self.profile_info = df
-            else:
-                self.profile_info = self.profile_info.append(df)
+            self._profile_info.append(df)
 
     def __getstate__(self):
         state = self.__dict__.copy()

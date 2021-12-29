@@ -1,18 +1,33 @@
 """ Contains mixin for :class:`~.torch.TorchModel` to provide textual and graphical visualizations. """
-from pprint import pformat
+import sys
+from ast import literal_eval
+from pprint import pformat as _pformat
 import matplotlib.pyplot as plt
 
 import numpy as np
 import torch
 
+from ...monitor import GPUMemoryMonitor
+from ...notifier import Notifier
+
 # Also imports `tensorboard`, if necessary
 
+def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts=True, underscore_numbers=False):
+    """ Backwards compatible version of pformat. """
+    # pylint: disable=unexpected-keyword-arg
+    _ = underscore_numbers
+    if sys.version_info.minor < 8:
+        result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact)
+    else:
+        result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact,
+                          sort_dicts=sort_dicts)
+    return result
 
 
 class VisualizationMixin:
     """ Collection of visualization (both textual and graphical) tools for a :class:`~.torch.TorchModel`. """
     # Textual visualization of the model
-    def information(self, config=True, devices=True, model=False, misc=True):
+    def information(self, config=False, devices=True, model=False, misc=True):
         """ Show information about model configuration, used devices, train steps and more. """
         print(self._information(config=config, devices=devices, model=model, misc=misc))
 
@@ -20,44 +35,50 @@ class VisualizationMixin:
         """ Return the info message with default parameters. """
         return self._information()
 
-    def _information(self, config=True, devices=True, model=False, misc=True):
+    def _information(self, config=False, devices=True, model=False, misc=True):
         """ Create information string. """
         message = ''
-        template = '\n##### {}:\n'
+        template_header = '\n\033[1m\033[4m{}:\033[0m\n'
 
         if config:
-            message += template.format('Config')
-            message += pformat(self.full_config.config) + '\n'
+            message += template_header.format('Config')
+            message += pformat(self.config.config, sort_dicts=False) + '\n'
 
         if devices:
-            message += template.format('Devices')
+            message += template_header.format('Devices')
             message += f'Leading device is {self.device}\n'
             if self.devices:
-                message += '\n'.join([f'Device {i} is {d}' for i, d in enumerate(self.devices)])
+                message += '\n'.join([f'Device {i} is {d}' for i, d in enumerate(self.devices)]) + '\n'
 
         if model:
-            message += template.format('Model')
+            message += template_header.format('Model')
             message += str(self.model) + '\n'
 
         if misc:
-            message += template.format('Additional info')
+            message += template_header.format('Shapes')
 
-            if self.input_shapes:
-                message += '\n'.join([f'Input {i} has shape {s}' for i, s in enumerate(self.input_shapes)])
-            if self.target_shape:
-                message += f'\nTarget has shape {self.target_shape}'
+            if self.inputs_shapes:
+                message += '\n'.join([f'Input {i} has shape {s}' for i, s in enumerate(self.inputs_shapes)]) + '\n'
+            if self.targets_shapes:
+                message += '\n'.join([f'Target {i} has shape {s}' for i, s in enumerate(self.targets_shapes)]) + '\n'
             if self.classes:
-                message += f'\nNumber of classe: {self.classes}'
+                message += f'Number of classes: {self.classes}\n'
 
+            message += template_header.format('Model info')
             if self.model:
                 num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-                message += f'\nTotal number of parameters in model: {num_params}'
+                message += f'Total number of parameters in the model: {num_params:,}'
 
             message += f'\nTotal number of passed training iterations: {self.iteration}\n'
 
-            message += template.format('Last iteration params')
-            message += pformat(self.iter_info)
-        return message
+            if self.last_train_info:
+                message += template_header.format('Last train iteration info')
+                message += pformat(self.last_train_info, sort_dicts=False) + '\n'
+
+            if self.last_predict_info:
+                message += template_header.format('Last predict iteration info')
+                message += pformat(self.last_predict_info, sort_dicts=False) + '\n'
+        return message[1:-1]
 
     def short_repr(self):
         """ Show simplified model layout. """
@@ -97,6 +118,17 @@ class VisualizationMixin:
         writer.add_graph(self.model, self._placeholder_data())
         writer.close()
 
+    def show_loss(self):
+        """ Plot graph of loss values over iterations. """
+        plt.figure(figsize=(8, 6))
+        plt.plot(self.loss_list)
+
+        plt.title('Loss values', fontsize=18)
+        plt.xlabel('Iterations', fontsize=12)
+        plt.ylabel('Loss', fontsize=18, rotation=0)
+        plt.grid(True)
+        plt.show()
+
     def show_lr(self):
         """ Plot graph of learning rate over iterations. """
         plt.figure(figsize=(8, 6))
@@ -108,8 +140,163 @@ class VisualizationMixin:
         plt.grid(True)
         plt.show()
 
-    # Visualize intermediate layers: activations and features
-    def get_intermediate_activations(self, *args, layers=None, feed_dict=None, **kwargs):
+
+
+class OptimalBatchSizeMixin:
+    """ Compute optimal batch size for training/inference to maximize GPU memory usage.
+    Works by using `train`/`predict` with different batch sizes, and measuring how much memory is taken.
+    Then, we solve the system of `measured_memory = batch_size * item_size + model_size + eps` equations for both
+    `item_size` and `model_size`.
+
+    For stable measurements, we make `n` iterations of `train`/`predict`, until the memory consumption stabilizes.
+    """
+    def compute_optimal_batch_size(self, method='train', max_memory=90, inputs=None, targets=None, pbar='n',
+                                   start_batch_size=4, delta_batch_size=4, max_batch_size=128, max_iters=16,
+                                   n=20, frequency=0.05, time_threshold=3, tail_size=20, std_threshold=0.1):
+        """ Compute memory usage for multiple batch sizes. """
+        #pylint: disable=consider-iterating-dictionary
+        table = {}
+        batch_size = start_batch_size
+        for _ in Notifier(pbar)(range(max_iters)):
+            info = self.get_memory_utilization(batch_size, method=method,
+                                               inputs=inputs, targets=targets, n=n, frequency=frequency,
+                                               time_threshold=time_threshold,
+                                               tail_size=tail_size, std_threshold=std_threshold)
+            table[batch_size] = info
+
+            # Exit condition
+            batch_size += delta_batch_size
+            if info['memory'] > max_memory or batch_size > max_batch_size :
+                break
+
+        # Make and solve a system of equations for `item_size`, `model_size`
+        matrix = np.array([[batch_size, 1] for batch_size in table.keys()])
+        vector = np.array([value['memory'] for value in table.values()])
+        item_size, model_size = np.dot(np.linalg.pinv(matrix), vector)
+
+        # Compute the `batch_size` to use up to `max_memory`
+        optimal_batch_size = (max_memory - model_size) / item_size
+        optimal_batch_size = int(optimal_batch_size)
+
+        return {'batch_size': optimal_batch_size,
+                'item_size': item_size,
+                'model_size': model_size,
+                'table': table}
+
+    def get_memory_utilization(self, batch_size, method='train', inputs=None, targets=None, n=20, frequency=0.05,
+                               time_threshold=3, tail_size=20, std_threshold=0.1):
+        """ For a given `batch_size`, make `inputs` and `targets` and compute memory utilization. """
+        inputs = inputs or self.make_placeholder_data(batch_size)
+        inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
+        inputs = [item[:batch_size] for item in inputs]
+
+        targets = targets or self.predict(inputs=inputs, outputs='predictions')
+        targets = list(targets) if isinstance(targets, (tuple, list)) else [targets]
+        targets = [item[:batch_size] for item in targets]
+
+        # Clear the GPU from potential previous runs
+        torch.cuda.empty_cache()
+        return self._get_memory_utilization(method=method, inputs=inputs, targets=targets, n=n, frequency=frequency,
+                                            time_threshold=time_threshold,
+                                            tail_size=tail_size, std_threshold=std_threshold)
+
+    def _get_memory_utilization(self, method, inputs, targets, n, frequency,
+                                time_threshold, tail_size, std_threshold):
+        """ Run method `n` times and make sure that memory measurements are stable. """
+        with GPUMemoryMonitor(frequency=frequency) as monitor:
+            for _ in range(n):
+                if method == 'train':
+                    _ = self.train(inputs=inputs, targets=targets, microbatch_size=False)
+                elif method == 'predict':
+                    _ = self.predict(inputs=inputs, microbatch_size=False)
+
+        # Check if the measurement is stable. If so, return the value and confidence
+        data = monitor.data
+        time = len(data) * frequency # in seconds
+        if time > time_threshold:
+            tail = data[-tail_size:]
+            if np.std(tail) < std_threshold:
+                return {'memory': np.mean(tail), 'n': n, 'monitor': monitor}
+
+        # If the measurement is not stable, run for twice as long
+        return self._get_memory_utilization(method=method, inputs=inputs, targets=targets,
+                                            n=2*n, frequency=frequency, time_threshold=time_threshold,
+                                            tail_size=tail_size, std_threshold=std_threshold)
+
+
+
+class LayerHook:
+    """ Hook to get both activations and gradients for a layer. """
+    # TODO: work out the list activations / gradients
+    def __init__(self, module):
+        self.activation = None
+        self.gradient = None
+
+        self.forward_handle = module.register_forward_hook(self.forward_hook)
+        self.backward_handle = module.register_backward_hook(self.backward_hook)
+
+    def forward_hook(self, module, input, output):
+        """ Save activations: if multi-output, the last one is saved. """
+        _ = module, input
+        if isinstance(output, (tuple, list)):
+            output = output[-1]
+        self.activation = output
+
+    def backward_hook(self, module, grad_input, grad_output):
+        """ Save gradients: if multi-output, the last one is saved. """
+        _ = module, grad_input
+        if isinstance(grad_output, (tuple, list)):
+            grad_output = grad_output[-1]
+        self.gradient = grad_output
+
+    def close(self):
+        self.forward_handle.remove()
+        self.backward_handle.remove()
+
+    def __del__(self):
+        self.close()
+
+
+class ExtractionMixin:
+    """ Extract information about intermediate layers: activations, gradients and weights. """
+    def is_layer_id(self, string):
+        """ Check if the passed `string` is a layer id: a string, that can be used to access a layer in the model.
+        For more about layer ids, refer to `:meth:~.get_layer` documentation.
+        """
+        try:
+            _ = self.get_layer(string)
+            return True
+        except (AttributeError, LookupError):
+            return False
+
+    def get_layer(self, layer_id):
+        """ Get layer instance by its layer id.
+
+        The layer id describes how to access the layer through a series of `getattr` and `getitem` calls.
+        For example, if the model has `batchflow_model.model.head[0]` layer, you can access it with::
+
+        >>> batchflow_model.get_layer('model.head[0]')
+
+        String keys for `getitem` calls are also allowed::
+
+        >>> batchflow_model.get_layer('model.body.encoder["block-0"]')
+        """
+        layer_id = layer_id.replace('[', ':').replace(']', '')
+        prefix, *attributes = layer_id.split('.')
+        if prefix != 'model':
+            raise AttributeError('Layer id should start with `model`. i.e. `model.head`!')
+
+        result = self.model
+        for attribute in attributes:
+            attribute, *item_ids = attribute.split(':')
+
+            result = getattr(result, attribute)
+            for item_id in item_ids:
+                result = result[literal_eval(item_id)]
+        return result
+
+
+    def get_intermediate_activations(self, inputs, layers=None):
         """ Compute the intermediate activations of a given layers in the same structure (tuple/list/dict).
 
         Under the hood, a forward hook is registered to capture the output of a targeted layers,
@@ -117,17 +304,12 @@ class VisualizationMixin:
 
         Parameters
         ----------
+        inputs : np.array or sequence of them
+            Inputs to the model.
         layers : nn.Module, sequence or dict
             If nn.Module, then must be a part of the `model` attribute to get activations from.
             If sequence, then multiple such modules.
             If dictionary, then values must be such modules.
-        args : sequence
-            Arguments to be passed directly into the model.
-        feed_dict : dict
-            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
-            with keys being names and values being actual data.
-        kwargs : dict
-            Additional named arguments directly passed to `feed_dict`.
 
         Returns
         -------
@@ -145,11 +327,10 @@ class VisualizationMixin:
         else:
             container = dict(layers) # shallow copy is fine
 
-        container = {key: LayerExtractor(module)
+        container = {key: LayerHook(module)
                      for key, module in container.items()}
 
         # Parse inputs to model, run model
-        inputs, _ = self._make_prediction_inputs(*args, targets=None, feed_dict=feed_dict, **kwargs)
         inputs = self.transfer_to_device(inputs)
         self.model.eval()
         with torch.no_grad():
@@ -196,7 +377,7 @@ class VisualizationMixin:
         image_var.requires_grad = True
 
         # Set up optimization procedure
-        extractor = LayerExtractor(layer)
+        extractor = LayerHook(layer)
         optimizer = torch.optim.Adam([image_var], lr=0.1, weight_decay=1e-6)
         self.model.eval()
 
@@ -223,8 +404,8 @@ class VisualizationMixin:
             return image_var, losses
         return image_var
 
-    def get_gradcam(self, *args, targets=None, feed_dict=None,
-                    layer=None, gradient_mode='onehot', cam_class=None, **kwargs):
+    def get_gradcam(self, inputs, targets=None,
+                    layer=None, gradient_mode='onehot', cam_class=None):
         """ Create visual explanation of a network decisions, based on the intermediate layer gradients.
         Ramprasaath R. Selvaraju, et al "`Grad-CAM: Visual Explanations
         from Deep Networks via Gradient-based Localization <https://arxiv.org/abs/1610.02391>`_"
@@ -234,6 +415,8 @@ class VisualizationMixin:
 
         Parameters
         ----------
+        inputs : np.array or sequence of them
+            Inputs to the model.
         layers : nn.Module, sequence or dict
             Part of the model to base visualizations on.
         gradient_mode : Tensor or str
@@ -243,16 +426,8 @@ class VisualizationMixin:
             Otherwise, model prediction is used.
         cam_class : int
             If gradient mode is `onehot`, then class to visualize. Default is the model prediction.
-        args : sequence
-            Arguments to be passed directly into the model.
-        feed_dict : dict
-            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
-            with keys being names and values being actual data.
-        kwargs : dict
-            Additional named arguments directly passed to `feed_dict`.
         """
-        extractor = LayerExtractor(layer)
-        inputs, targets = self._make_prediction_inputs(*args, targets=targets, feed_dict=feed_dict, **kwargs)
+        extractor = LayerHook(layer)
         inputs = self.transfer_to_device(inputs)
 
         self.model.eval()
@@ -260,7 +435,7 @@ class VisualizationMixin:
 
         if isinstance(gradient_mode, np.ndarray):
             gradient = self.transfer_to_device(gradient_mode)
-        elif 'targ' in gradient_mode:
+        elif 'target' in gradient_mode:
             gradient = targets
         elif 'onehot' in gradient_mode:
             gradient = torch.zeros_like(prediction)[0:1]
@@ -322,7 +497,7 @@ class VisualizationMixin:
                 submodules_amount = sum(1 for _ in module.modules())
                 module_instance = module.__class__.__name__
                 if (submodules_amount == 1) and (module_instance != 'Identity'):
-                    extractors.append(LayerExtractor(module))
+                    extractors.append(LayerHook(module))
                     statistics['Modules instances'].append(module_instance)
             _ = model(input_tensor)
         finally:
@@ -361,34 +536,3 @@ class VisualizationMixin:
             ax.set_ylabel(title, fontsize=12)
             ax.grid(True)
         fig.show()
-
-
-class LayerExtractor:
-    """ Create hook to get layer activations and gradients. """
-    def __init__(self, module):
-        self.activation = None
-        self.gradient = None
-
-        self.forward_handle = module.register_forward_hook(self.forward_hook)
-        self.backward_handle = module.register_backward_hook(self.backward_hook)
-
-    def forward_hook(self, module, input, output):
-        """ Save activations: if multi-output, the first one is saved. """
-        _ = module, input
-        if isinstance(output, (tuple, list)):
-            output = output[-1]
-        self.activation = output
-
-    def backward_hook(self, module, grad_input, grad_output):
-        """ Save gradients: if multi-output, the first one is saved. """
-        _ = module, grad_input
-        if isinstance(grad_output, (tuple, list)):
-            grad_output = grad_output[0]
-        self.gradient = grad_output
-
-    def close(self):
-        self.forward_handle.remove()
-        self.backward_handle.remove()
-
-    def __del__(self):
-        self.close()
