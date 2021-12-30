@@ -3,6 +3,7 @@ import sys
 from ast import literal_eval
 from pprint import pformat as _pformat
 import matplotlib.pyplot as plt
+from matplotlib.ticker import AutoMinorLocator
 
 import numpy as np
 import torch
@@ -119,16 +120,6 @@ class VisualizationMixin:
         writer.add_graph(self.model, self._placeholder_data())
         writer.close()
 
-    def show_loss(self):
-        """ Plot graph of loss values over iterations. """
-        plt.figure(figsize=(8, 6))
-        plt.plot(self.loss_list)
-
-        plt.title('Loss values', fontsize=18)
-        plt.xlabel('Iterations', fontsize=12)
-        plt.ylabel('Loss', fontsize=18)
-        plt.grid(True)
-        plt.show()
 
     def show_lr(self):
         """ Plot graph of learning rate over iterations. """
@@ -141,8 +132,8 @@ class VisualizationMixin:
         plt.grid(True)
         plt.show()
 
-    def show_graphs(self, figsize=(12, 6), window=20, final_window=50,
-                    log_loss=False, log_lr=False, return_figure=False, savepath=None, save_kwargs=None):
+    def show_loss(self, overlay_lr=True, figsize=(12, 6), window=20, final_window=50, minor_tick_frequency=4,
+                  log_loss=False, log_lr=False, return_figure=False, savepath=None, save_kwargs=None):
         """ Plot loss and learning rate over the same figure.
 
         Parameters
@@ -156,6 +147,9 @@ class VisualizationMixin:
         final_window : int or None
             If int, then we additionally display the mean value of the last `final_window` iterations in the legend.
             If None, no additional info is displayed.
+        minor_tick_frequency : int or None
+            If int, then number of minor ticks on yaxis between major ticks.
+            If None, no minor ticks are added.
         log_loss, log_lr : bool
             Whether to take the log of respective graph values.
         return figure : bool
@@ -168,21 +162,28 @@ class VisualizationMixin:
         """
         # Legends
         loss_label = f'loss ⟶ {self.loss_list[-1]:2.3f}'
-        lr_label = f'learning rate ⟶ {self.lr_list[-1][0]:1.5f}'
         if final_window is not None:
             final_window = min(final_window, self.iteration)
             loss_label += f'\nmean over last {final_window} iterations={np.mean(self.loss_list[-final_window:]):2.3f}'
 
         # Main plots: loss and lr
         fig, ax1 = plt.subplots(1, 1, figsize=figsize)
-        ax2 = ax1.twinx()
         ax1.plot(self.loss_list, label=loss_label, color='blue', alpha=0.5 if window is not None else 1.)
-        ax2.plot(self.lr_list, label=lr_label, color='orange', alpha=1.)
+
+        if overlay_lr:
+            ax2 = ax1.twinx()
+            ax2.plot(self.lr_list, label=f'learning rate ⟶ {self.lr_list[-1][0]:1.5f}', color='orange', alpha=1.)
 
         # Averaged loss plot
         if window is not None:
             averaged_loss = convolve(self.loss_list, np.ones(window), mode='nearest') / window
             ax1.plot(averaged_loss, label='loss running mean', color='blue', alpha=1.)
+
+        # Change scale of axis, if needed
+        if log_loss:
+            ax1.set_yscale('log')
+        if overlay_lr and log_lr:
+            ax2.set_yscale('log')
 
         # Annotations
         lines = [line for ax in fig.axes for line in ax.lines]
@@ -191,13 +192,14 @@ class VisualizationMixin:
         ax1.set_title('Loss values and learning rate', fontsize=18)
         ax1.set_xlabel('Iterations', fontsize=12)
         ax1.set_ylabel('Loss', fontsize=12)
-        ax2.set_ylabel('Learning rate', fontsize=12)
+        if overlay_lr:
+            ax2.set_ylabel('Learning rate', fontsize=12)
 
-        if log_loss:
-            ax1.set_yscale('log')
-        if log_lr:
-            ax2.set_yscale('log')
-        ax1.grid(True)
+        # Grid over the figure
+        if minor_tick_frequency is not None:
+            ax1.yaxis.set_minor_locator(AutoMinorLocator(minor_tick_frequency))
+            ax1.grid(which='minor', color='#CCCCCC', linestyle='--')
+        ax1.grid(which='major', color='#CCCCCC')
 
         if savepath is not None:
             save_kwargs = {'bbox_inches': 'tight',
