@@ -4,7 +4,6 @@ import re
 import inspect
 from threading import Lock
 from functools import partial
-from itertools import zip_longest
 from collections import OrderedDict
 
 import dill
@@ -1419,35 +1418,33 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         """
         predictions = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
 
-        outputs = {}
+        if len(predictions) < len(self.operations):
+            raise ValueError(f'Not enough predictions ({len(predictions)}) to apply {len(self.operations)} operations.'
+                             ' Revise the `output` config key!')
+
+        # Add default aliases for each predicted tensor
+        outputs = {f'predictions_{i}': tensor  for i, tensor in enumerate(predictions)}
+
         # Iterate over tensors in predictions and the corresponding output operations
-        iterator = zip_longest(predictions, self.operations.items(), fillvalue=(None, None))
-        for i, (tensor, (output_prefix, output_operations)) in enumerate(iterator):
-            if not isinstance(tensor, torch.Tensor):
-                raise TypeError(f'Network outputs are expected to be tensors, got {type(tensor)} instead.')
+        for i, (tensor, (output_prefix, output_operations)) in enumerate(zip(predictions, self.operations.items())):
+            # Save the tensor itself under the `output_prefix` name
+            if output_prefix:
+                outputs[output_prefix] = tensor
 
-            if output_prefix is not None:
-                # Save the tensor itself under the `output_prefix` name
-                if output_prefix:
-                    outputs[output_prefix] = tensor
+            output_prefix = output_prefix + '_' if output_prefix else ''
 
-                output_prefix = output_prefix + '_' if output_prefix else ''
+            # For each operation, add multiple aliases
+            if output_operations:
+                for j, operation in enumerate(output_operations):
+                    output_tensor, operation_name = self.apply_output_operation(tensor, operation)
+                    if operation_name:
+                        outputs[output_prefix + operation_name] = output_tensor # i.e. `first_sigmoid`, `sigmoid`
 
-                # For each operation, add multiple aliases
-                if output_operations:
-                    for j, operation in enumerate(output_operations):
-                        output_tensor, operation_name = self.apply_output_operation(tensor, operation)
-                        if operation_name:
-                            outputs[output_prefix + operation_name] = output_tensor # i.e. `first_sigmoid`, `sigmoid`
+                    outputs.update({
+                        output_prefix + str(j) : output_tensor, # i.e. `first_0`, `0`
+                        f'output_{i}_{j}' : output_tensor, # i.e. `predictions_0_0`
+                    })
 
-                        outputs.update({
-                            output_prefix + str(j) : output_tensor, # i.e. `first_0`, `0`
-                            f'predictions_{i}_{j}' : output_tensor, # i.e. `predictions_0_0`
-                        })
-
-
-            # For each tensor, add default alias
-            outputs[f'predictions_{i}'] = tensor
         return outputs
 
     @staticmethod
