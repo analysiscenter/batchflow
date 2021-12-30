@@ -168,7 +168,7 @@ class Notifier:
                 if isinstance(source, ResourceMonitor):
                     container['name'] = source.__class__.__name__
                 elif isinstance(source, NamedExpression):
-                    container['name'] = source.name
+                    container['name'] = repr(source)
                 elif isinstance(source, str):
                     container['name'] = source
                 elif callable(source):
@@ -333,6 +333,10 @@ class Notifier:
                 value = pipeline.v(source)
                 container['data'] = value
 
+            elif isinstance(source, NamedExpression):
+                value = eval_expr(source, pipeline=pipeline, batch=batch)
+                container['data'] = value
+
             elif isinstance(source, list):
                 container['data'] = source
 
@@ -340,8 +344,8 @@ class Notifier:
                 container['data'] = source()
 
             else:
-                value = eval_expr(source, pipeline=pipeline, batch=batch)
-                container['data'] = value
+                raise TypeError(f'Unknown type of `source`, {type(source)}!')
+
 
     def update_postfix(self):
         """ Set the new bar description, if needed. """
