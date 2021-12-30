@@ -86,10 +86,12 @@ class Notifier:
 
     frequency : int
         Frequency of notifier updates.
-    monitors : str, :class:`.Monitor`, :class:`.NamedExpression`, list, dict or sequence of them
+    monitors : str, :class:`.Monitor`, :class:`.NamedExpression`, callable, sequence, dict or sequence of them
         Set tracked ('monitored') entities: they are displayed in the bar description.
-        Strings are either registered monitor identifiers or names of pipeline variables.
+        If str, then either registered monitor identifiers or names of pipeline variables.
         Named expressions are evaluated with the pipeline.
+        If callable, then it is used to retrieve the container with data.
+        If sequence, then it is used as the container with data.
         If dict, then 'source' key should be one of the above to identify container.
         Other available keys:
             - 'name' is used to display at bar descriptions and plot titles. Not used if the `format` is provided.
@@ -123,13 +125,13 @@ class Notifier:
     *args, **kwargs
         Positional and keyword arguments that are used to create underlying progress bar.
     """
+    #pylint: disable=too-many-arguments
     COLOUR_RUNNING = '#2196f3'
     COLOUR_SUCCESS = '#4caf50'
     COLOUR_FAILURE = '#f44336'
 
-    def __init__(self, bar='a', disable=False,
+    def __init__(self, bar='a', disable=False, frequency=1, monitors=None, graphs=None, log_file=None,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
-                 frequency=1, monitors=None, graphs=None, log_file=None,
                  telegram=False, token=None, chat_id=None, silent=True,
                  window=None, layout='h', figsize=None, savepath=None, **kwargs):
         # Prepare data containers like monitors and pipeline variables
@@ -169,6 +171,8 @@ class Notifier:
                     container['name'] = source.name
                 elif isinstance(source, str):
                     container['name'] = source
+                elif callable(source):
+                    container['name'] = '<unknown_callable>'
                 else:
                     container['name'] = '<unknown_container>'
 
@@ -202,8 +206,6 @@ class Notifier:
             raise ValueError('Unknown bar value:', bar)
 
         # Convert the bar, based on other parameters
-        if disable:
-            bar_func = DummyBar
         if self.has_graphs and bar_func is tqdm:
             bar_func = tqdm_notebook
 
@@ -224,8 +226,13 @@ class Notifier:
             }
 
         # Function to initialize / reinitialize bar, when needed
+        if disable:
+            bar_func = DummyBar
+            self.disable()
+
         self.bar = None
         self.bar_func = lambda total: bar_func(total=total, **kwargs)
+
 
         # Make bar with known / unknown total length
         self.compute_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
@@ -328,6 +335,9 @@ class Notifier:
 
             elif isinstance(source, list):
                 container['data'] = source
+
+            elif callable(source):
+                container['data'] = source()
 
             else:
                 value = eval_expr(source, pipeline=pipeline, batch=batch)
