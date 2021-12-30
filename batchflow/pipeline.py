@@ -983,7 +983,7 @@ class Pipeline:
         if n_models == 1:
             return list(self.models.models.values())[0]
         raise TypeError('`model` property should be used only for pipelines with exactly 1 initialized model, '
-                        f'have {n_models} instead!')
+                        f'but pipeline has {n_models} instead!')
 
     def init_model(self, name, model_class=None, mode='dynamic', config=None, source=None):
         """ Initialize a static or dynamic model by building or importing it
