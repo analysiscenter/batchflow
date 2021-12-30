@@ -133,7 +133,7 @@ class VisualizationMixin:
         plt.show()
 
     def show_loss(self, overlay_lr=True, figsize=(12, 6), window=20, final_window=50, minor_tick_frequency=4,
-                  log_loss=False, log_lr=False, return_figure=False, savepath=None, save_kwargs=None):
+                  log_loss=False, log_lr=False, show=True, return_figure=False, savepath=None, save_kwargs=None):
         """ Plot loss and learning rate over the same figure.
 
         Parameters
@@ -201,16 +201,24 @@ class VisualizationMixin:
             ax1.grid(which='minor', color='#CCCCCC', linestyle='--')
         ax1.grid(which='major', color='#CCCCCC')
 
+        # Finalize
         if savepath is not None:
             save_kwargs = {'bbox_inches': 'tight',
                            'pad_inches': 0, 'dpi': 100,
                            **(save_kwargs or {})}
             fig.savefig(savepath, **save_kwargs)
 
+        if show:
+            fig.show()
+            plt.show()
+        else:
+            plt.close()
+
         if return_figure:
             return fig
         return None
 
+    plot_loss = show_loss
 
 
 class OptimalBatchSizeMixin:
