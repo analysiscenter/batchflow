@@ -67,34 +67,19 @@ def get_notebook_name():
     return os.path.splitext(get_notebook_path())[0].split('/')[-1]
 
 
-def extract_traceback(notebook, cell_num=None):
+def extract_traceback(notebook):
     """ Extracts error traceback from notebooks.
 
     Parameters
     ----------
     notebook: :class:`nbformat.notebooknode.NotebookNode`
         Executed notebook to find an error traceback.
-    cell_num: int or None
-        A number of an error cell.
-        If None, than we will find cell_num iterating over notebook.
-        If notebook doesn't contain markdown cells than `cell_num` equals to `exec_info`
-        from `seismiqb.batchflow.utils_notebook.run_notebook` in error case.
     """
-    print(type(notebook))
     traceback_message = "TRACEBACK: \n"
     failed = False
+    error_cell_num = None
 
-    cells = []
-    if cell_num is not None:
-        # Write a potential error cell to a head of a searching list
-        # A cell number can be incorrect due to a user mistake
-        if cell_num < len(notebook['cells']):
-            cell_info = notebook['cells'][cell_num]
-            cells = [cell_info]
-
-    cells.extend(notebook['cells'])
-
-    for cell_info in cells:
+    for cell_info in notebook['cells']:
         # Find a cell output with a traceback and extract the traceback
         outputs = cell_info.get('outputs', [])
 
@@ -103,13 +88,14 @@ def extract_traceback(notebook, cell_num=None):
 
             if traceback:
                 failed = True
+                error_cell_num = cell_info['execution_count']
                 traceback_message += '\n'.join(traceback)
                 break
 
         if failed:
             break
 
-    return failed, traceback_message
+    return failed, error_cell_num, traceback_message
 
 
 def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-1,
@@ -171,7 +157,6 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
     from nbconvert import HTMLExporter
     import shelve
     from dill import Pickler, Unpickler
-    import re
 
     # Prepare paths
     if not os.path.exists(path):
@@ -202,9 +187,9 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
         shelve.Pickler = Pickler
         shelve.Unpickler = Unpickler
 
-        with shelve.open(nb_kwargs_path) as db:
+        with shelve.open(nb_kwargs_path) as nb_locals:
             for k, v in nb_kwargs.items():
-                db[k] = v
+                nb_locals[k] = v
 
         code = f"""
                 import os
@@ -214,8 +199,8 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
                 shelve.Pickler = Pickler
                 shelve.Unpickler = Unpickler
 
-                with shelve.open('{nb_kwargs_path}') as db:
-                    nb_kwargs = {{**db}}
+                with shelve.open('{nb_kwargs_path}') as nb_additional_locals:
+                    nb_kwargs = {{**nb_additional_locals}}
                     print("nb_kwargs =", nb_kwargs)
 
                     locals().update(nb_kwargs)
@@ -229,44 +214,23 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
     start_time = time.time()
     try:
         executor.preprocess(notebook, {'metadata': {'path': working_dir}})
-    except:
-        # Execution failed, print a message with error location and re-raise
-        # Find cell with a failure
-        exec_info = sys.exc_info()
-
-        # Get notebook cells from an execution traceback and iterate over them
-        notebook_cells = exec_info[2].tb_frame.f_locals['notebook']['cells']
-        error_cell_number = None
-        for cell in notebook_cells:
-            try:
-                # A cell with a failure has 'output_type' equals to 'error', but cells have
-                # variable structure and some of them don't have these target fields
-                if cell['outputs'][0]['output_type'] == 'error':
-                    error_cell_number = cell['execution_count']
-                    break
-            except:
-                pass
-
-        if show_error_info:
-            msg = ('Error executing the notebook "%s".\n'
-                   'Notebook arguments: %s\n\n'
-                   'See notebook "%s" (cell number %s) for the traceback.' %
-                   (path, str(nb_kwargs), out_path_ipynb, error_cell_number))
-            print(msg)
-
-        exec_info = error_cell_number
-
-        if raise_exception:
-            raise
     finally:
-        # Try to find an error traceback (if exists) and information about failure
-        failed, traceback_message = extract_traceback(notebook=notebook)
-        failed = failed or exec_info is not True
+        # Check that something gone wrong or not
+        failed, error_cell_num, traceback_message = extract_traceback(notebook=notebook)
+        exec_info = {'failed': failed}
 
         if failed:
-            exec_info = {'failed': failed, 'failed cell number': exec_info, 'traceback': traceback_message}
-        else:
-            exec_info = {'failed': failed}
+            exec_info.update({'failed cell number': error_cell_num, 'traceback': traceback_message})
+
+            if show_error_info:
+                msg = ('Error executing the notebook "%s".\n'
+                    'Notebook arguments: %s\n\n'
+                    'See notebook "%s" (cell number %s) for the traceback.' %
+                    (path, str(nb_kwargs), out_path_ipynb, error_cell_num))
+                print(msg)
+
+            if raise_exception:
+                raise
 
         # Add execution info
         if add_timestamp:
