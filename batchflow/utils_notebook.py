@@ -6,7 +6,6 @@ import json
 import time
 import warnings
 
-import nbformat
 import numpy as np
 
 # Additionally imports 'requests`, 'ipykernel`, `jupyter_server`, `nbconvert`, `pylint`,
@@ -67,63 +66,51 @@ def get_notebook_name():
 
     return os.path.splitext(get_notebook_path())[0].split('/')[-1]
 
-# Methods for traceback extraction from a notebook
-def find_traceback_in_outputs(cell_info):
-    """ Find cell output with a traceback and extract the traceback."""
-    outputs = cell_info.get('outputs', [])
-    traceback_message = ""
-    has_error_traceback = False
 
-    for output in outputs:
-        traceback = output.get('traceback', [])
-
-        if traceback:
-            has_error_traceback = True
-
-            for line in traceback:
-                traceback_message += line
-            break
-
-    return has_error_traceback, traceback_message
-
-def extract_traceback(path_ipynb, cell_num=None):
-    """ Extracts error traceback from tests notebooks.
+def extract_traceback(notebook, cell_num=None):
+    """ Extracts error traceback from notebooks.
 
     Parameters
     ----------
-    path_ipynb: str
-        Path to a notebook from which extract error traceback.
+    notebook: :class:`nbformat.notebooknode.NotebookNode`
+        Executed notebook to find an error traceback.
     cell_num: int or None
         A number of an error cell.
         If None, than we will find cell_num iterating over notebook.
         If notebook doesn't contain markdown cells than `cell_num` equals to `exec_info`
         from `seismiqb.batchflow.utils_notebook.run_notebook` in error case.
     """
+    print(type(notebook))
     traceback_message = "TRACEBACK: \n"
     failed = False
-    has_error_traceback = False
-    out_notebook = nbformat.read(path_ipynb, as_version=4)
 
+    cells = []
     if cell_num is not None:
-        # Get a traceback from a cell directly
-        cell_info = out_notebook['cells'][cell_num]
+        # Write a potential error cell to a head of a searching list
+        # A cell number can be incorrect due to a user mistake
+        if cell_num < len(notebook['cells']):
+            cell_info = notebook['cells'][cell_num]
+            cells = [cell_info]
 
-        has_error_traceback, current_traceback_message = find_traceback_in_outputs(cell_info=cell_info)
+    cells.extend(notebook['cells'])
 
-    if has_error_traceback:
-        traceback_message += current_traceback_message
-        failed = True
-    else:
-        # Find a cell with a traceback
-        for cell_info in out_notebook['cells']:
-            has_error_traceback, current_traceback_message = find_traceback_in_outputs(cell_info=cell_info)
+    for cell_info in cells:
+        # Find a cell output with a traceback and extract the traceback
+        outputs = cell_info.get('outputs', [])
 
-            if has_error_traceback:
-                traceback_message += current_traceback_message
+        for output in outputs:
+            traceback = output.get('traceback', [])
+
+            if traceback:
                 failed = True
+                traceback_message += '\n'.join(traceback)
                 break
 
+        if failed:
+            break
+
     return failed, traceback_message
+
 
 def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-1,
                  working_dir='./', execute_kwargs=None,
@@ -179,6 +166,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
     """
     # pylint: disable=bare-except, lost-exception
     from IPython.display import display, FileLink
+    import nbformat
     from nbconvert.preprocessors import ExecutePreprocessor
     from nbconvert import HTMLExporter
     import shelve
@@ -271,6 +259,15 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
         if raise_exception:
             raise
     finally:
+        # Try to find an error traceback (if exists) and information about failure
+        failed, traceback_message = extract_traceback(notebook=notebook)
+        failed = failed or exec_info is not True
+
+        if failed:
+            exec_info = {'failed': failed, 'failed cell number': exec_info, 'traceback': traceback_message}
+        else:
+            exec_info = {'failed': failed}
+
         # Add execution info
         if add_timestamp:
             duration = int(time.time() - start_time)
@@ -287,20 +284,6 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
             if display_links:
                 display(FileLink(out_path_ipynb))
-
-            # Try to find an error traceback (if exists) and information about failure
-            failed, traceback_message = extract_traceback(out_path_ipynb)
-            failed = failed or exec_info is not True
-        else:
-            failed = exec_info is not True
-            if failed:
-                traceback_message = "For getting a traceback message provide `save_ipynb=True` in the `run_notebook` method."
-
-        if failed:
-            exec_info = {'failed': failed, 'failed cell number': exec_info, 'traceback': traceback_message}
-            print(traceback_message)
-        else:
-            exec_info = {'failed': failed}
 
         if save_html:
             html_exporter = HTMLExporter()
