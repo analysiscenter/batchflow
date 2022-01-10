@@ -321,6 +321,9 @@ class Notifier:
 
         self.bar.update(n)
 
+        if self.bar.n == self.bar.total:
+            self.close()
+
     def update_data(self, pipeline=None, batch=None):
         """ Get data from monitor or pipeline. """
         for container in self.data_containers:

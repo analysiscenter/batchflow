@@ -524,7 +524,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         config = self.config
 
         self.init_weights = config.get('init_weights', None)
-        self.microbatch_size = config.get('microbatch_size', config.get('microbatch', False))
+        self.microbatch_size = config.get('microbatch', config.get('microbatch_size', False))
         self.sync_frequency = config.get('sync_frequency', 1)
         self.amp = config.get('amp', True)
 
