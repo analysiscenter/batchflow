@@ -1,6 +1,5 @@
 """ Utility functions to work with Jupyter Notebooks. """
 import os
-import sys
 import re
 import json
 import time
@@ -214,9 +213,16 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
     start_time = time.time()
     try:
         executor.preprocess(notebook, {'metadata': {'path': working_dir}})
+        exec_failed = False
+    except:
+        exec_failed = True
+
+        if raise_exception:
+            raise
     finally:
         # Check that something gone wrong or not
         failed, error_cell_num, traceback_message = extract_traceback(notebook=notebook)
+        failed = failed or exec_failed
         exec_info = {'failed': failed}
 
         if failed:
@@ -228,9 +234,6 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
                     'See notebook "%s" (cell number %s) for the traceback.' %
                     (path, str(nb_kwargs), out_path_ipynb, error_cell_num))
                 print(msg)
-
-            if raise_exception:
-                raise
 
         # Add execution info
         if add_timestamp:
