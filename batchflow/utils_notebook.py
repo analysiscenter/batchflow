@@ -6,6 +6,7 @@ import json
 import time
 import warnings
 
+import nbformat
 import numpy as np
 
 # Additionally imports 'requests`, 'ipykernel`, `jupyter_server`, `nbconvert`, `pylint`,
@@ -66,7 +67,63 @@ def get_notebook_name():
 
     return os.path.splitext(get_notebook_path())[0].split('/')[-1]
 
+# Methods for traceback extraction from a notebook
+def find_traceback_in_outputs(cell_info):
+    """ Find cell output with a traceback and extract the traceback."""
+    outputs = cell_info.get('outputs', [])
+    traceback_message = ""
+    has_error_traceback = False
 
+    for output in outputs:
+        traceback = output.get('traceback', [])
+
+        if traceback:
+            has_error_traceback = True
+
+            for line in traceback:
+                traceback_message += line
+            break
+
+    return has_error_traceback, traceback_message
+
+def extract_traceback(path_ipynb, cell_num=None):
+    """ Extracts error traceback from tests notebooks.
+
+    Parameters
+    ----------
+    path_ipynb: str
+        Path to a notebook from which extract error traceback.
+    cell_num: int or None
+        A number of an error cell.
+        If None, than we will find cell_num iterating over notebook.
+        If notebook doesn't contain markdown cells than `cell_num` equals to `exec_info`
+        from `seismiqb.batchflow.utils_notebook.run_notebook` in error case.
+    """
+    traceback_message = "TRACEBACK: \n"
+    failed = False
+    has_error_traceback = False
+    out_notebook = nbformat.read(path_ipynb, as_version=4)
+
+    if cell_num is not None:
+        # Get a traceback from a cell directly
+        cell_info = out_notebook['cells'][cell_num]
+
+        has_error_traceback, current_traceback_message = find_traceback_in_outputs(cell_info=cell_info)
+
+    if has_error_traceback:
+        traceback_message += current_traceback_message
+        failed = True
+    else:
+        # Find a cell with a traceback
+        for cell_info in out_notebook['cells']:
+            has_error_traceback, current_traceback_message = find_traceback_in_outputs(cell_info=cell_info)
+
+            if has_error_traceback:
+                traceback_message += current_traceback_message
+                failed = True
+                break
+
+    return failed, traceback_message
 
 def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-1,
                  working_dir='./', execute_kwargs=None,
@@ -122,9 +179,11 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
     """
     # pylint: disable=bare-except, lost-exception
     from IPython.display import display, FileLink
-    import nbformat
     from nbconvert.preprocessors import ExecutePreprocessor
     from nbconvert import HTMLExporter
+    import shelve
+    from dill import Pickler, Unpickler
+    import re
 
     # Prepare paths
     if not os.path.exists(path):
@@ -145,13 +204,36 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
     # Read the master notebook, prepare and insert kwargs cell
     notebook = nbformat.read(path, as_version=4)
     exec_info = True
+
     if hide_input:
         notebook["metadata"].update({"hide_input": True})
     if nb_kwargs:
         header = '# Cell inserted during automated execution.'
-        lines = (f"{key} = {repr(value)}"
-                 for key, value in nb_kwargs.items())
-        code = '\n'.join(lines)
+
+        nb_kwargs_path = f"{os.path.splitext(path)[0]}_nb_kwargs.txt"
+        shelve.Pickler = Pickler
+        shelve.Unpickler = Unpickler
+
+        with shelve.open(nb_kwargs_path) as db:
+            for k, v in nb_kwargs.items():
+                db[k] = v
+
+        code = f"""
+                import os
+                import shelve
+                from dill import Pickler, Unpickler
+
+                shelve.Pickler = Pickler
+                shelve.Unpickler = Unpickler
+
+                with shelve.open('{nb_kwargs_path}') as db:
+                    nb_kwargs = {{**db}}
+                    print("nb_kwargs =", nb_kwargs)
+
+                    locals().update(nb_kwargs)
+        """
+
+        code = re.sub(r' {8}', '', code) # drop extra spaces, that are needed for pretty code string writing
         code_cell = '\n'.join((header, code))
         notebook['cells'].insert(insert_pos, nbformat.v4.new_code_cell(code_cell))
 
@@ -205,6 +287,21 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
             if display_links:
                 display(FileLink(out_path_ipynb))
+
+            # Try to find an error traceback (if exists) and information about failure
+            failed, traceback_message = extract_traceback(out_path_ipynb)
+            failed = failed or exec_info is not True
+        else:
+            failed = exec_info is not True
+            if failed:
+                traceback_message = "For getting a traceback message provide `save_ipynb=True` in the `run_notebook` method."
+
+        if failed:
+            exec_info = {'failed': failed, 'failed cell number': exec_info, 'traceback': traceback_message}
+            print(traceback_message)
+        else:
+            exec_info = {'failed': failed}
+
         if save_html:
             html_exporter = HTMLExporter()
             body, _ = html_exporter.from_notebook_node(notebook)
@@ -212,6 +309,11 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
                 f.write(body)
             if display_links:
                 display(FileLink(out_path_html))
+
+        if nb_kwargs and not failed:
+            # remove shelve files
+            for ext in ['bak', 'dat', 'dir']:
+                os.remove(nb_kwargs_path + '.' + ext)
 
         if return_nb:
             return (exec_info, notebook)
