@@ -154,6 +154,9 @@ class PipelineExecutor:
             notifier = Notifier(**(notifier if isinstance(notifier, dict) else {'bar': notifier}),
                                 batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                 drop_last=drop_last, length=len(self.pipeline))
+            notifier.local = True
+        else:
+            notifier.local = False
         if notifier.total is None:
             notifier.compute_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                    drop_last=drop_last, length=len(self.pipeline))
@@ -240,7 +243,8 @@ class PipelineExecutor:
             self.pipeline.random = random
             self.pipeline.random_seed = pipeline_seed
 
-        notifier.close(success=True)
+        if notifier.local:
+            notifier.close(success=True)
         self.notifier = notifier
 
         if self.pipeline.after:
