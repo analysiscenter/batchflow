@@ -276,6 +276,15 @@ class Notifier:
         else:
             self.bar = self.bar_func(total=self.total)
 
+    def refresh(self):
+        """ Remake the bar, if needed, while keeping the tracked number of passed iterations. """
+        if self.total != self.bar.total:
+            n = self.bar.n
+            self.make_bar()
+
+            if self.bar.n != n:
+                self.bar.update(n)
+
     def disable(self):
         """ Completely disable notifier: progress bar, monitors and graphs. """
         if self.bar is not None:
