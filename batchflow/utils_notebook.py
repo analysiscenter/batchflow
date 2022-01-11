@@ -74,9 +74,9 @@ def extract_traceback(notebook):
     notebook: :class:`nbformat.notebooknode.NotebookNode`
         Executed notebook to find an error traceback.
     """
-    traceback_message = "TRACEBACK: \n"
     failed = False
     error_cell_num = None
+    traceback_message = "TRACEBACK: \n"
 
     for cell_info in notebook['cells']:
         # Find a cell output with a traceback and extract the traceback
@@ -101,7 +101,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
                  working_dir='./', execute_kwargs=None,
                  save_ipynb=True, out_path_ipynb=None, save_html=False, out_path_html=None, suffix='_out',
                  add_timestamp=True, hide_input=False, display_links=True,
-                 raise_exception=False, show_error_info=True, return_nb=False):
+                 raise_exception=False, return_nb=False):
     """ Run a notebook and save the output.
     Additionally, allows to pass `nb_kwargs` arguments, that are used for notebook execution. Under the hood,
     we place all of them into a separate cell, inserted in the notebook; hence, all of the keys must be valid Python
@@ -144,8 +144,6 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
         Whether to display links to the output notebook and html at execution.
     raise_exception : bool
         Whether to re-raise exceptions from the notebook.
-    show_error_info : bool
-        Whether to show a message with information about an error in the output notebook (if an error exists).
     return_nb : bool
         Whether to return the notebook object from this function.
     """
@@ -175,39 +173,32 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
     # Read the master notebook, prepare and insert kwargs cell
     notebook = nbformat.read(path, as_version=4)
-    exec_info = True
 
     if hide_input:
         notebook["metadata"].update({"hide_input": True})
     if nb_kwargs:
-        header = '# Cell inserted during automated execution.'
-
-        nb_kwargs_path = f"{os.path.splitext(path)[0]}_nb_kwargs.txt"
+        nb_kwargs_path = f"{os.path.splitext(path)[0]}_nb_kwargs"
         shelve.Pickler = Pickler
         shelve.Unpickler = Unpickler
 
         with shelve.open(nb_kwargs_path) as nb_locals:
-            for k, v in nb_kwargs.items():
-                nb_locals[k] = v
+            nb_locals.update(nb_kwargs)
 
-        code = f"""
-                import os
-                import shelve
+        code = f"""# Cell inserted during automated execution.
+                import os, shelve
                 from dill import Pickler, Unpickler
 
                 shelve.Pickler = Pickler
                 shelve.Unpickler = Unpickler
 
-                with shelve.open('{nb_kwargs_path}') as nb_additional_locals:
-                    nb_kwargs = {{**nb_additional_locals}}
+                with shelve.open('{nb_kwargs_path}') as nb_locals:
+                    nb_kwargs = {{**nb_locals}}
                     print("nb_kwargs =", nb_kwargs)
 
-                    locals().update(nb_kwargs)
-        """
+                    locals().update(nb_kwargs)"""
 
         code = re.sub(r' {8}', '', code) # drop extra spaces, that are needed for pretty code string writing
-        code_cell = '\n'.join((header, code))
-        notebook['cells'].insert(insert_pos, nbformat.v4.new_code_cell(code_cell))
+        notebook['cells'].insert(insert_pos, nbformat.v4.new_code_cell(code))
 
     # Execute the notebook
     start_time = time.time()
@@ -216,7 +207,6 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
         exec_failed = False
     except:
         exec_failed = True
-
         if raise_exception:
             raise
     finally:
@@ -227,13 +217,6 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
         if failed:
             exec_info.update({'failed cell number': error_cell_num, 'traceback': traceback_message})
-
-            if show_error_info:
-                msg = ('Error executing the notebook "%s".\n'
-                    'Notebook arguments: %s\n\n'
-                    'See notebook "%s" (cell number %s) for the traceback.' %
-                    (path, str(nb_kwargs), out_path_ipynb, error_cell_num))
-                print(msg)
 
         # Add execution info
         if add_timestamp:
@@ -261,7 +244,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
                 display(FileLink(out_path_html))
 
         if nb_kwargs and not failed:
-            # remove shelve files
+            # Remove shelve files
             for ext in ['bak', 'dat', 'dir']:
                 os.remove(nb_kwargs_path + '.' + ext)
 
