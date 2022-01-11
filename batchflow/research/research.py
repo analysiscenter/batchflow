@@ -2,6 +2,7 @@
 """ Research class for muliple parallel experiments. """
 
 import os
+import sys
 import datetime
 import csv
 import itertools
@@ -82,6 +83,10 @@ class Research:
         self.memory_ratio = None
         self.n_gpu_checks = 3
         self.gpu_check_delay = 5
+        self.dump_monitor = True
+
+        self._is_executed = False
+        self._env_meta_to_collect = []
 
     def __getattr__(self, key):
         if self.monitor is not None and key in self.monitor.SHARED_VARIABLES:
@@ -114,33 +119,72 @@ class Research:
         self.domain.set_update(function, when, **kwargs)
         return self
 
-    def attach_env_meta(self, **kwargs):
-        """ Save the information about the current state of project repository: commit, diff, status and others.
+    def _get_env_state(self, cwd='.', dst=None, replace=None, commands=None, *args, **kwargs):
+        """ Execute commands and save output. """
+        if cwd == '.' and dst is None:
+            dst = 'cwd'
+        elif dst is None:
+            dst = os.path.split(os.path.realpath(cwd))[1]
+
+        if isinstance(commands, (tuple, list)):
+            args = [*commands, *args]
+        elif isinstance(commands, dict):
+            kwargs = {**commands, **kwargs}
+
+        all_commands = [('env_state', command) for command in args]
+        all_commands = [*all_commands, *kwargs.items()]
+
+        for filename, command in all_commands:
+            if command.startswith('#'):
+                if command[1:] == 'python':
+                    result = sys.version
+                else:
+                    raise ValueError(f'Unknown env: {command}')
+            else:
+                process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, cwd=cwd)
+                output, _ = process.communicate()
+                result = output.decode('utf')
+            if replace is not None:
+                for key, value in replace.items():
+                    result = re.sub(key, value, result)
+            if self.dump_results:
+                if not os.path.exists(os.path.join(self.name, 'env', dst)):
+                    os.makedirs(os.path.join(self.name, 'env', dst))
+                with open(os.path.join(self.name, 'env', dst, filename + '.txt'), 'a') as file:
+                    file.write(result)
+            else:
+                self._env[os.path.join(dst, filename)] = self._env.get(os.path.join(dst, filename), '') + result
+
+
+    def attach_env_meta(self):
+        """ Get version of packages (by "pip list" and "conda list") and python version. Results will be stored
+        in research folder (if it is created) or in _env attribute.
+        """
+        commands = {
+            'pip': 'pip list',
+            'conda': 'conda list',
+            'python': '#python'
+        }
+        self._env_meta_to_collect.append(dict(commands=commands, cwd='.', dst=''))
+        return self
+
+    def attach_git_meta(self, cwd='.'):
+        """ Get git repo state (current commit, diff and status). Results will be stored
+        in research folder (if it is created) or in _env attribute.
 
         Parameters
         ----------
-        kwargs : dict
-            dict where values are bash commands and keys are names of files to save output of the command.
-            Results will be stored in `env` subfolder of the research.
+        cwd : str, optional
+            path to repo, by default '.'
         """
         commands = {
             'commit': "git log --name-status HEAD^..HEAD",
             'diff': 'git diff',
             'status': 'git status -uno',
-            **kwargs
         }
-
-        for filename, command in commands.items():
-            process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
-            output, _ = process.communicate()
-            result = re.sub('"image/png": ".*?"', '"image/png": "..."', output.decode('utf'))
-            if self.dump_results:
-                if not os.path.exists(os.path.join(self.name, 'env')):
-                    os.makedirs(os.path.join(self.name, 'env'))
-                with open(os.path.join(self.name, 'env', filename + '.txt'), 'w') as file:
-                    print(result, file=file)
-            else:
-                self._env[filename] = result
+        replace = {'"image/png": ".*?"': '"image/png": "..."'}
+        self._env_meta_to_collect.append(dict(cwd=cwd, dst=None, replace=replace, commands=commands))
+        return self
 
     @property
     def env(self):
@@ -231,7 +275,7 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=True, env_meta=None, seed=None, profile=False,
+            debug=False, finalize=True, git_meta=True, env_meta=True, seed=None, profile=False, dump_monitor=False,
             memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5):
         """ Run research.
 
@@ -271,8 +315,10 @@ class Research:
             `parallel=False` and `executor_target='for'`, by default False.
         finalize : bool, optional
             continue experiment iteration after exception in some unit or not, by default True.
-        env_meta : dict or None
-            kwargs for :meth:`.Research.attach_env_meta`.
+        git_meta : bool, optional
+            attach get repo state or not (see :meth:`.Research.attach_git_meta`).
+        env_meta : bool, optional
+            attach env meta or not (see :meth:`.Research.attach_env_meta`).
         seed : bool or int or object with a seed sequence attribute
             see :meth:`~batchflow.utils_random.make_seed_sequence`.
         profile : bool, optional
@@ -313,10 +359,12 @@ class Research:
         self.n_gpu_checks = n_gpu_checks
         self.gpu_check_delay = gpu_check_delay
 
+        self.dump_monitor = dump_monitor
+
         if debug and (parallel or executor_target not in ['f', 'for']):
             raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")
 
-        self.debug = (debug and not parallel)
+        self.debug = debug
         self.finalize = finalize
         self.random_seed = make_seed_sequence(seed)
 
@@ -341,9 +389,17 @@ class Research:
             self.loglevel = loglevel or 'info'
         else:
             self.loglevel = loglevel or 'error'
-
-        self.attach_env_meta(**(env_meta or {}))
         self.create_logger()
+
+        if git_meta:
+            self.attach_git_meta()
+        if env_meta:
+            self.attach_env_meta()
+        for item in self._env_meta_to_collect:
+            args = item.pop('args', [])
+            kwargs = item.pop('kwargs', {})
+            self._get_env_state(*args, **item, **kwargs)
+
         self.logger.info("Research is starting")
 
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
@@ -354,27 +410,46 @@ class Research:
         self.results = ResearchResults(self.name, self.dump_results)
         self.profiler = ResearchProfiler(self.name, self.profile)
 
-        def _run():
-            self.monitor.start(self.dump_results)
+        def _start_distributor():
+            self.monitor.start(self.dump_results and self.dump_monitor)
             self.distributor.run()
             self.monitor.stop()
 
-        if detach:
-            self.process = mp.Process(target=_run)
-            self.process.start()
-            self.logger.info(f"Detach research[pid:{self.process.pid}]")
+        if self.parallel:
+            try:
+                self.process = mp.Process(target=_start_distributor)
+                self.process.start()
+                self.logger.info(f"Create separate research process [pid:{self.process.pid}]")
+                self.monitor.detach(self.process)
+                if not detach:
+                    self.process.join()
+            except KeyboardInterrupt as e:
+                self.logger.info("Research has been stopped by KeyboardInterrupt.")
+                self.terminate()
+                raise e
         else:
-            _run()
+            if detach:
+                warnings.warn("detach can't be enabled when parallel=False")
+            _start_distributor()
         return self
 
-    def terminate(self):
-        """ Kill detached process. """
-        if self.process is not None:
-            self.logger.info(f"Terminate research process[pid:{self.process.pid}]")
-            parent = psutil.Process(self.process.pid)
-            for child in parent.children(recursive=True):
-                child.kill()
-            parent.kill()
+    def terminate(self, kill_processes=False):
+        """ Kill all research processes. """
+        # TODO: killed processes don't release GPU.
+        self.logger.info("Stop research.")
+        if kill_processes and self.monitor is not None:
+            self.logger.info("Terminate research processes")
+            order = {'EXECUTOR': 0, 'WORKER': 1, 'DETACHED_PROCESS': 2}
+            processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
+            print(processes_to_kill)
+            for pid, process_type in processes_to_kill:
+                if pid is not None and psutil.pid_exists(pid):
+                    process = psutil.Process(pid)
+                    process.terminate()
+                    self.logger.info(f"Terminate {process_type} [pid:{pid}]")
+
+        if self.monitor is not None:
+            self.monitor.stop(wait=False)
 
     def create_logger(self):
         """ Create research logger. """
@@ -440,6 +515,11 @@ class Research:
             raise FileNotFoundError(f"Folder {name} doesn't exist.")
         return os.path.isfile(os.path.join(name, 'research.dill'))
 
+    @property
+    def is_finished(self):
+        """ Whether all tasks are completed or not. """
+        return self.monitor.in_queue + self.monitor.remained_experiments == 0
+
     def __str__(self):
         spacing = ' ' * 4
         repr = ''
@@ -476,27 +556,30 @@ class ResearchMonitor:
         use progress bar or not.
     """
     COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid',
-               'finished', 'withdrawn', 'remains']
+               'process_pid', 'finished', 'withdrawn', 'remains']
     SHARED_VARIABLES = ['finished_experiments', 'finished_iterations', 'remained_experiments',
                         'generated_experiments']
 
     def __init__(self, research, path=None, bar=True):
         self.queue = mp.JoinableQueue()
+        self.stop_signal = mp.JoinableQueue()
+        self.exceptions = mp.Manager().list()
+        self.shared_values = mp.Manager().dict()
+        self.current_iterations = mp.Manager().dict()
+        self.processes = mp.Manager().dict()
+
         self.research = research
         self.path = path
-        self.exceptions = mp.Manager().list()
-        self.bar = tqdm.tqdm(disable=(not bar), position = 0, leave = True) if isinstance(bar, bool) else bar
+        self.bar = tqdm.tqdm(disable=(not bar), position=0, leave=True) if isinstance(bar, bool) else bar
 
-        self.shared_values = mp.Manager().dict()
         for key in self.SHARED_VARIABLES:
             self.shared_values[key] = 0
-        self.current_iterations = mp.Manager().dict()
 
         self.n_iters = self.research.n_iters
 
-        self.stop_signal = mp.JoinableQueue()
-
         self.dump = False
+        self.process = None
+        self.stopped = True
 
     def __getattr__(self, key):
         if key in self.SHARED_VARIABLES:
@@ -523,7 +606,7 @@ class ResearchMonitor:
 
     @property
     def in_queue(self):
-        """ The number of experimenys in queue of tasks. """
+        """ The number of experiments in queue of tasks. """
         return self.generated_experiments - self.finished_experiments
 
     def send(self, status, experiment=None, worker=None, **kwargs):
@@ -546,6 +629,12 @@ class ResearchMonitor:
         self.queue.put(signal)
         if 'exception' in signal:
             self.exceptions.append(signal)
+
+    def detach(self, process):
+        self.send('DETACH_PROCESS', process_pid=process.pid)
+
+    def start_worker(self, worker):
+        self.send('START_WORKER', worker=worker)
 
     def start_experiment(self, experiment):
         """" Signal when experiment starts. """
@@ -570,14 +659,18 @@ class ResearchMonitor:
     def handler(self):
         """ Signals handler. """
         signal = self.queue.get()
-        filename = os.path.join(self.path, 'monitor.csv')
         with self.bar as progress:
             while signal is not None:
                 status = signal.get('status')
-                if status == 'TASKS':
+                if status == 'START_WORKER':
+                    self.processes[signal['worker_pid']] = 'WORKER'
+                elif status == 'DETACH_PROCESS':
+                    self.processes[signal['process_pid']] = 'DETACHED_PROCESS'
+                elif status == 'TASKS':
                     self.remained_experiments = signal['remains']
                     self.generated_experiments = signal['generated']
                 elif status == 'START_EXP':
+                    self.processes[signal['pid']] = 'EXECUTOR'
                     self.current_iterations[signal['id']] = 0
                 elif status == 'EXECUTE_IT':
                     self.current_iterations[signal['id']] = signal['it']
@@ -595,7 +688,7 @@ class ResearchMonitor:
                     progress.refresh()
 
                 if self.dump:
-                    with open(filename, 'a') as f:
+                    with open(os.path.join(self.path, 'monitor.csv'), 'a') as f:
                         writer = csv.writer(f)
                         writer.writerow([str(signal.get(column, '')) for column in self.COLUMNS])
                 signal = self.queue.get()
@@ -603,17 +696,23 @@ class ResearchMonitor:
 
     def start(self, dump):
         """ Start handler. """
-        self.dump = dump
-        if self.dump:
-            filename = os.path.join(self.path, 'monitor.csv')
-            if not os.path.exists(filename):
-                with open(filename, 'w') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(self.COLUMNS)
-        mp.Process(target=self.handler).start()
+        if self.stopped:
+            self.dump = dump
+            if self.dump:
+                filename = os.path.join(self.path, 'monitor.csv')
+                if not os.path.exists(filename):
+                    with open(filename, 'w') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(self.COLUMNS)
+            self.process = mp.Process(target=self.handler)
+            self.process.start()
+            self.stopped = False
 
-    def stop(self):
+    def stop(self, wait=True):
         """ Stop handler. """
-        self.queue.put(None)
-        self.stop_signal.get()
+        if not self.stopped:
+            self.queue.put(None)
+            if wait:
+                self.stop_signal.get()
+            self.stopped = True
         tqdm.tqdm._instances.clear() #pylint:disable=protected-access
