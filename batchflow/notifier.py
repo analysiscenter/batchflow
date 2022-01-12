@@ -349,8 +349,9 @@ class Notifier:
                 value = eval_expr(source, pipeline=pipeline, batch=batch)
                 container['data'] = value
 
-            elif isinstance(source, list):
-                container['data'] = source
+            elif isinstance(source, (tuple, list, dict)):
+                value = eval_expr(source, pipeline=pipeline, batch=batch)
+                container['data'] = value
 
             elif callable(source):
                 container['data'] = source()
