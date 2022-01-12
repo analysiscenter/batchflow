@@ -154,6 +154,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
     from nbconvert import HTMLExporter
     import shelve
     from dill import Pickler, Unpickler
+    from textwrap import dedent
 
     # Prepare paths
     if not os.path.exists(path):
@@ -184,7 +185,8 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
         with shelve.open(nb_kwargs_path) as nb_locals:
             nb_locals.update(nb_kwargs)
 
-        code = f"""# Cell inserted during automated execution.
+        code = f"""\
+                # Cell inserted during automated execution.
                 import os, shelve
                 from dill import Pickler, Unpickler
 
@@ -197,7 +199,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
                     locals().update(nb_kwargs)"""
 
-        code = re.sub(r' {8}', '', code) # drop extra spaces, that are needed for pretty code string writing
+        code = dedent(code)
         notebook['cells'].insert(insert_pos, nbformat.v4.new_code_cell(code))
 
     # Execute the notebook
