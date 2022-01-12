@@ -165,7 +165,7 @@ class ExecutableUnit:
         names to save output from unit
     """
     def __init__(self, name, func=None, generator=None, root=False, when=1,
-                 args=None, kwargs=None, save_to=None, **other_kwargs):
+                 args=None, kwargs=None, save_to=None, from_dict=False, **other_kwargs):
         self.name = name
         self.callable = func
         self.generator = generator
@@ -188,6 +188,10 @@ class ExecutableUnit:
         self.iteration = 0
 
         self.save_to = save_to
+        self.from_dict = from_dict
+
+        if self.save_to is not None and self.from_dict:
+            raise ValueError('save_to is not None and from_dict is True.')
 
 
     def set_unit(self, config, experiment):
@@ -244,7 +248,7 @@ class ExecutableUnit:
                     start_time = time.time()
                 self.output = next(self.iterator)
 
-            if self.save_to:
+            if self.save_to or self.from_dict:
                 self.save_output(iteration)
 
             eval_time = time.time() - start_time
@@ -258,15 +262,19 @@ class ExecutableUnit:
 
     def save_output(self, iteration):
         """ Save output of the unit. """
-        if not isinstance(self.save_to, (list, tuple)):
-            src = [self.output]
-            dst = [self.save_to]
+        if self.from_dict:
+            dst = self.output.keys()
+            src = self.output.values()
         else:
-            src = self.output
-            dst = self.save_to
+            if not isinstance(self.save_to, (list, tuple)):
+                src = [self.output]
+                dst = [self.save_to]
+            else:
+                src = self.output
+                dst = self.save_to
 
-        if len(src) != len(dst):
-            raise ValueError(f'Length of src and dst must be the same but src={src} and dst={dst}')
+            if len(src) != len(dst):
+                raise ValueError(f'Length of src and dst must be the same but src={src} and dst={dst}')
 
         for _src, _dst in zip(src, dst):
             if _dst is not None:
@@ -282,7 +290,7 @@ class ExecutableUnit:
 
     def __copy__(self):
         """ Create copy of the unit. """
-        attrs = ['name', 'callable', 'generator', 'root', 'when', 'args', 'kwargs', 'save_to']
+        attrs = ['name', 'callable', 'generator', 'root', 'when', 'args', 'kwargs', 'save_to', 'from_dict']
         params = {attr if attr !='callable' else 'func': copy(getattr(self, attr)) for attr in attrs}
         new_unit = ExecutableUnit(**params, **copy(self.other_kwargs))
         return new_unit
@@ -568,7 +576,7 @@ class Experiment:
             raise ValueError(f'Method {name} was not found in any namespace.')
         return _explicit_call(method, name, self)
 
-    def save(self, src, dst, when=1, copy=False): #pylint:disable=redefined-outer-name
+    def save(self, src, dst, when=1, from_dict=False, copy=False): #pylint:disable=redefined-outer-name
         """ Save something to research results.
 
         Parameters
@@ -584,7 +592,8 @@ class Experiment:
         """
         name = '__save_results' if dst is None else f'__save_results_{dst}'
         name = self.add_postfix(name)
-        self.add_callable(name, _save_results, when=when, _src=src, _dst=dst, experiment=E(), copy=copy)
+        self.add_callable(name, _get_input, x=src, when=when, save_to=dst,
+                          experiment=E(), from_dict=from_dict, copy=copy)
         return self
 
     def dump(self, variable=None, when='last'):
@@ -960,18 +969,9 @@ def _create_instance(experiments, item_name):
     for e in experiments:
         e.instances[item_name] = instance
 
-def _save_results(_src, _dst, experiment, copy): #pylint:disable=redefined-outer-name
-    if not isinstance(_dst, (list, tuple)):
-        _dst = [_dst]
-        _src = [_src]
-
-    if len(_src) != len(_dst):
-        raise ValueError('Length of src and dst must be the same')
-
-    for src, dst in zip(_src, _dst):
-        previous_values = experiment.results.get(dst, OrderedDict())
-        previous_values[experiment.iteration] = deepcopy(src) if copy else src
-        experiment.results[dst] = previous_values
+def _get_input(x, *args, **kwargs):
+    _ = args, kwargs
+    return x
 
 def _dump_results(variable, experiment):
     """ Callable to dump results. """
