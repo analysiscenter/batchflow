@@ -8,7 +8,7 @@ class E(NamedExpression):
     Parameters
     ----------
     unit : str, optional
-        name of unit to, by default None. If None, experiment will be returned.
+        name of unit or instance to get, by default None. If None, experiment will be returned.
     all : bool, optional
         if True, return all experiments in executor, otherwise just one, by default False.
     """
@@ -35,7 +35,12 @@ class E(NamedExpression):
 
     def _transform(self, experiments):
         if self.unit is not None:
-            return [exp[self.unit] for exp in experiments]
+            if self.unit in experiments[0].actions:
+                return [exp.actions[self.unit] for exp in experiments]
+            elif self.unit in experiments[0].instances:
+                return [exp.instances[self.unit] for exp in experiments]
+            else:
+                raise ValueError(f'{self.unit} is not an executable unit or instance.')
         return experiments
 
     def __copy__(self):
