@@ -141,7 +141,7 @@ class Worker:
             os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
             os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(all_devices)
 
-        device_reindexation = {device: i for i, device in enumerate(all_devices)}
+        device_reindexation = {device: str(i) for i, device in enumerate(all_devices)}
         devices = [[device_reindexation.get(i) for i in item] for item in devices]
         devices = [{'device': item[0] if len(item) == 1 else item} for item in devices]
 
@@ -181,7 +181,7 @@ class Worker:
                 )
                 process.join()
             else:
-                executor.run(self)
+                executor.run()
             self.research.monitor.send(worker=self, status='FINISH_TASK', task_idx=task_idx)
             self.tasks.task_done()
         self.research.monitor.send(worker=self, status='STOP_WORKER')
