@@ -18,6 +18,7 @@ class Model:
         self.model_config = {
             'head/layout': C('layout'),
             'head/units': C('units'),
+            'classes': 10,
             'loss': 'ce',
             'device': 'cpu',
             'amp': False
@@ -29,7 +30,7 @@ class Model:
         ppl = (Pipeline()
             .init_model('model', ResNet, 'dynamic', config=self.model_config)
             .to_array(channels='first', src='images', dst='images')
-            .train_model('model', B('images'), B('labels'))
+            .train_model('model', inputs=B('images'), targets=B('labels'))
             .run_later(batch_size=8, n_iters=1, shuffle=True, drop_last=True)
         )
         self.train_ppl = ppl << self.dataset.train
@@ -39,7 +40,7 @@ class Model:
             .import_model('model', self.train_ppl)
             .init_variable('metrics', None)
             .to_array(channels='first', src='images', dst='images')
-            .predict_model('model', B('images'), fetches='predictions', save_to=B('predictions'))
+            .predict_model('model', inputs=B('images'), outputs='predictions', save_to=B('predictions'))
             .gather_metrics('classification', B('labels'), B('predictions'), fmt='logits', axis=-1,
                             num_classes=10, save_to=V('metrics', mode='update'))
             .run_later(batch_size=8, n_iters=2, shuffle=False, drop_last=False)

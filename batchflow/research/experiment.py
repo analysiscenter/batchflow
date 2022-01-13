@@ -535,13 +535,13 @@ class Experiment:
         if branch is None:
             mode = 'func' if run else 'generator'
             pipeline = PipelineWrapper(root if root is not None else name, mode=mode, variables=variables)
-            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), when=when, save_to=save_to, **kwargs)
+            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(full=True), when=when, save_to=save_to, **kwargs)
         else:
             root = PipelineWrapper(root, mode='generator')
             branch = PipelineWrapper(branch, mode='execute_for', variables=variables)
 
-            self.add_generator(f'{name}_root', generator=root, config=EC(), when=when, **kwargs)
-            self.add_callable(f'{name}', func=branch, config=EC(), batch=O(f'{name}_root')[0], save_to=save_to,
+            self.add_generator(f'{name}_root', generator=root, config=EC(full=True), when=when, **kwargs)
+            self.add_callable(f'{name}', func=branch, config=EC(full=True), batch=O(f'{name}_root')[0], save_to=save_to,
                               when=when, **kwargs)
         if variables is not None:
             if dump is not None:
@@ -592,8 +592,8 @@ class Experiment:
         """
         name = '__save_results' if dst is None else f'__save_results_{dst}'
         name = self.add_postfix(name)
-        self.add_callable(name, _get_input, x=src, when=when, save_to=dst,
-                          experiment=E(), from_dict=from_dict, copy=copy)
+        self.add_callable(name, _get_input, x=src, copy=copy, when=when, save_to=dst,
+                          experiment=E(), from_dict=from_dict)
         return self
 
     def dump(self, variable=None, when='last'):
@@ -970,9 +970,9 @@ def _create_instance(experiments, item_name):
     for e in experiments:
         e.instances[item_name] = instance
 
-def _get_input(x, *args, **kwargs):
+def _get_input(x, copy, *args, **kwargs):
     _ = args, kwargs
-    return x
+    return deepcopy(x) if copy else x
 
 def _dump_results(variable, experiment):
     """ Callable to dump results. """
