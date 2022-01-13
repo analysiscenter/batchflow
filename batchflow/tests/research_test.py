@@ -403,6 +403,7 @@ class TestResearch:
             'head/layout': C('layout'),
             'head/units': C('units'),
             'loss': 'ce',
+            'classes': 10,
             'device': 'cpu',
             'amp': False
         }
@@ -415,14 +416,14 @@ class TestResearch:
         branch_ppl = (Pipeline()
             .init_model('model', ResNet, 'dynamic', config=model_config)
             .init_variable('loss', None)
-            .train_model('model', B('images'), B('labels'), fetches='loss', save_to=V('loss'))
+            .train_model('model', inputs=B('images'), targets=B('labels'), outputs='loss', save_to=V('loss'))
         )
 
         test_ppl = (Pipeline()
             .import_model('model', C('import_from'))
             .init_variable('metrics', None)
             .to_array(channels='first', src='images', dst='images')
-            .predict_model('model', B('images'), fetches='predictions', save_to=B('predictions'))
+            .predict_model('model', inputs=B('images'), outputs='predictions', save_to=B('predictions'))
             .gather_metrics('classification', B('labels'), B('predictions'), fmt='logits', axis=-1,
                             num_classes=10, save_to=V('metrics', mode='update'))
             .run_later(batch_size=8, n_iters=2, shuffle=False, drop_last=False)
