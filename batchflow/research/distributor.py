@@ -115,6 +115,10 @@ class Worker:
 
         self.pid = None
 
+        seed = spawn_seed_sequence(research)
+        self.random_seed = seed
+        self.random = make_rng(seed)
+
     def __call__(self):
         self.pid = os.getpid() if self.research.parallel else None
         self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has started.")
@@ -166,11 +170,11 @@ class Worker:
             branches_configs = [config + Config(_devices) for config, _devices in zip(branches_configs, devices)]
             branches_configs = branches_configs[:len(configs)]
 
-            executor = executor_class(experiment, research=self.research, target=target, configs=configs,
+            executor = executor_class(experiment, research=self.research, worker=self, target=target, configs=configs,
                                       branches_configs=branches_configs, executor_config=self.worker_config,
                                       n_iters=n_iters, task_name=name)
             if self.research.parallel:
-                process = mp.Process(target=executor.run, args=(self, ))
+                process = mp.Process(target=executor.run)
                 process.start()
                 self.research.logger.info(
                     f"Worker {self.index} [pid:{self.pid}] has started task {task_idx} [pid:{process.pid}]."
