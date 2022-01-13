@@ -370,6 +370,7 @@ class Notifier:
 
     def update_plots(self, index=0, add_suptitle=False, savepath=None, clear_display=True):
         """ Draw plots anew. """
+        #pylint: disable=protected-access
         num_graphs = len(self.data_containers) - index
         layout = (1, num_graphs) if self.layout.startswith('h') else (num_graphs, 1)
         figsize = self.figsize or ((20, 5) if self.layout.startswith('h') else (20, 5*num_graphs))
@@ -416,8 +417,11 @@ class Notifier:
                 'ncols': 80,
                 'colour': None,
             }
-            title = self.bar.format_meter(**fmt)
-            plt.suptitle(title, y=0.99, fontsize=14)
+            suptitle = self.bar.format_meter(**fmt)
+
+            if fig._suptitle:
+                suptitle = '\n'.join([suptitle, fig._suptitle.get_text()])
+            fig.suptitle(suptitle, y=0.99, fontsize=14)
 
         savepath = savepath or (f'{self.savepath}_{self.bar.n}' if self.savepath is not None else None)
         if savepath:
