@@ -22,6 +22,7 @@ class DynamicQueue:
         self.n_branches = n_branches
 
         self.queue = mp.JoinableQueue()
+        self.done_flag = mp.JoinableQueue()
 
         self.configs_generated = 0
         self.configs_remains = self.domain.size
@@ -81,6 +82,13 @@ class DynamicQueue:
         """ Stop all workers by putting `None` task into queue. """
         for _ in range(n_workers):
             self.put(None)
+
+    def task_done(self):
+        self.queue.task_done()
+        self.done_flag.put(None)
+
+    def wait_for_finished_task(self):
+        self.done_flag.get()
 
     def __getattr__(self, key):
         return getattr(self.queue, key)
@@ -240,7 +248,7 @@ class Distributor:
 
             self.send_state()
             while self.tasks.tasks_in_queue > 0:
-                self.tasks.join()
+                self.tasks.wait_for_finished_task()
                 self.tasks.finished_tasks += 1
                 self.tasks.tasks_in_queue -= 1
 
