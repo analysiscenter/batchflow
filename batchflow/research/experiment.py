@@ -823,6 +823,8 @@ class Executor:
         experiment scheme.
     research : Research, optional
         Research instance to get meta information (if needed), by default None.
+    worker : Worker, optional
+        Worker instance, by default None.
     configs : list, optional
         configs for different branches, by default None.
     executor_config : Config of dict, optional
@@ -836,7 +838,7 @@ class Executor:
     task_name : str, optional
         name of the task, by default None
     """
-    def __init__(self, experiment, research=None, configs=None, executor_config=None, branches_configs=None,
+    def __init__(self, experiment, research=None, worker=None, configs=None, executor_config=None, branches_configs=None,
                  target='threads', n_iters=None, task_name=None, **kwargs):
         if configs is None:
             if branches_configs is None:
@@ -862,16 +864,16 @@ class Executor:
 
         self.kwargs = kwargs
 
-        if research is not None:
-            seed = spawn_seed_sequence(research)
+        self.worker = worker
+        if worker is not None:
+            seed = spawn_seed_sequence(worker)
         else:
             seed = make_seed_sequence()
+
         self.random_seed = seed
         self.random = make_rng(seed)
 
         self.create_experiments()
-
-        self.worker = None
         self.pid = None
 
     def create_experiments(self):
@@ -885,9 +887,8 @@ class Executor:
             experiment.logger.info(f"{self.task_name}[{index}] has been started with config:\n {repr(config)}")
             self.experiments.append(experiment)
 
-    def run(self, worker=None):
+    def run(self):
         """ Run experiments. """
-        self.worker = worker
         self.pid = os.getpid() if self.research and self.research.parallel else None
 
         iterations = range(self.n_iters) if self.n_iters else itertools.count()
