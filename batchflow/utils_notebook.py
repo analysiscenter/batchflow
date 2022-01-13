@@ -97,7 +97,7 @@ def extract_traceback(notebook):
     return failed, error_cell_num, traceback_message
 
 
-def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-1,
+def run_notebook(path, nb_kwargs=None, nb_outputs=None, insert_pos=1, kernel_name=None, timeout=-1,
                  working_dir='./', execute_kwargs=None,
                  save_ipynb=True, out_path_ipynb=None, save_html=False, out_path_html=None, suffix='_out',
                  add_timestamp=True, hide_input=False, display_links=True,
@@ -115,6 +115,8 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
     nb_kwargs : dict, optional
         Additional arguments for notebook execution. Converted into cell of variable assignments and inserted
         into the notebook on `insert_pos` place.
+    nb_outputs : str or iterable of str
+        List of notebook locals names that return to output.
     insert_pos : int
         Position to insert the cell with argument assignments into the notebook.
     kernel_name : str, optional
@@ -150,6 +152,7 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
     # pylint: disable=bare-except, lost-exception
     from IPython.display import display, FileLink
     import nbformat
+    from jupyter_client.manager import KernelManager
     from nbconvert.preprocessors import ExecutePreprocessor
     from nbconvert import HTMLExporter
     import shelve
@@ -164,12 +167,22 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
         out_path_ipynb = os.path.splitext(path)[0] + suffix + '.ipynb'
     if save_html and out_path_html is None:
         out_path_html = os.path.splitext(path)[0] + suffix + '.html'
+    if nb_kwargs or nb_outputs:
+        # Create path to save shelve database for providing inputs/outputs in the notebook
+        if out_path_ipynb is not None:
+            out_path_db = f"{os.path.splitext(out_path_ipynb)[0]}_db"
+        elif out_path_html is not None:
+            out_path_db = f"{os.path.splitext(out_path_html)[0]}_db"
+        else:
+            out_path_db = f"{os.path.splitext(path)[0]}_db"
 
     # Execution arguments
     execute_kwargs = execute_kwargs or {}
     execute_kwargs.update(timeout=timeout)
     if kernel_name:
         execute_kwargs.update(kernel_name=kernel_name)
+
+    kernel_manager = KernelManager()
     executor = ExecutePreprocessor(**execute_kwargs)
 
     # Read the master notebook, prepare and insert kwargs cell
@@ -177,48 +190,89 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
 
     if hide_input:
         notebook["metadata"].update({"hide_input": True})
-    if nb_kwargs:
-        nb_kwargs_path = f"{os.path.splitext(path)[0]}_nb_kwargs"
+
+    if nb_kwargs or nb_outputs:
         shelve.Pickler = Pickler
         shelve.Unpickler = Unpickler
 
-        with shelve.open(nb_kwargs_path) as nb_locals:
-            nb_locals.update(nb_kwargs)
+        with shelve.open(out_path_db) as notebook_db:
+            notebook_db.clear()
 
-        code = f"""\
-                # Cell inserted during automated execution.
-                import os, shelve
-                from dill import Pickler, Unpickler
+        code_header = f"""\
+                       # Cell inserted during automated execution
+                       import os, shelve
+                       from dill import Pickler, Unpickler
 
-                shelve.Pickler = Pickler
-                shelve.Unpickler = Unpickler
+                       shelve.Pickler = Pickler
+                       shelve.Unpickler = Unpickler"""
 
-                with shelve.open('{nb_kwargs_path}') as nb_locals:
-                    nb_kwargs = {{**nb_locals}}
+        code_header = dedent(code_header)
+
+    if nb_kwargs:
+        with shelve.open(out_path_db) as notebook_db:
+            notebook_db.update(nb_kwargs)
+
+        code = f"""\n
+                with shelve.open('{out_path_db}') as notebook_db:
+                    nb_kwargs = {{**notebook_db}}
                     print("nb_kwargs =", nb_kwargs)
 
                     locals().update(nb_kwargs)"""
 
         code = dedent(code)
+        code = code_header + code
+
         notebook['cells'].insert(insert_pos, nbformat.v4.new_code_cell(code))
+
+    if nb_outputs is not None:
+        if np.isscalar(nb_outputs):
+            nb_outputs = [nb_outputs]
+
+        code = f"""
+                # Output dict preparation
+                output = {{}}
+                for value_name in {nb_outputs}:
+                    if value_name in locals():
+                        output[value_name] = locals()[value_name]
+                    else:
+                        output[value_name] = "Executed notebook doesn't contain this variable."
+
+                with shelve.open('{out_path_db}') as notebook_db:
+                    notebook_db['nb_outputs'] = output"""
+
+        code = dedent(code)
+        code = code_header + code
+
+        output_nb = nbformat.v4.new_notebook(metadata=notebook.metadata)
+        output_nb['cells'].append(nbformat.v4.new_code_cell(code))
 
     # Execute the notebook
     start_time = time.time()
     try:
-        executor.preprocess(notebook, {'metadata': {'path': working_dir}})
+        executor.preprocess(notebook, {'metadata': {'path': working_dir}}, km=kernel_manager)
         exec_failed = False
     except:
         exec_failed = True
         if raise_exception:
             raise
     finally:
+        # Save nb_outputs in the shelve db
+        if nb_outputs is not None:
+            executor.preprocess(output_nb, {'metadata': {'path': working_dir}}, km=kernel_manager)
+
         # Check that something gone wrong or not
         failed, error_cell_num, traceback_message = extract_traceback(notebook=notebook)
         failed = failed or exec_failed
-        exec_info = {'failed': failed}
+
+        # Prepare execution results: execution state, notebook return values and error info if exists
+        exec_res = {'failed': failed}
+
+        if nb_outputs is not None:
+            with shelve.open(out_path_db) as notebook_db:
+                exec_res['nb_outputs'] = notebook_db['nb_outputs']
 
         if failed:
-            exec_info.update({'failed cell number': error_cell_num, 'traceback': traceback_message})
+            exec_res.update({'failed cell number': error_cell_num, 'traceback': traceback_message})
 
         # Add execution info
         if add_timestamp:
@@ -245,14 +299,14 @@ def run_notebook(path, nb_kwargs=None, insert_pos=1, kernel_name=None, timeout=-
             if display_links:
                 display(FileLink(out_path_html))
 
-        if nb_kwargs and not failed:
+        if (nb_kwargs or nb_outputs) and not failed:
             # Remove shelve files
             for ext in ['bak', 'dat', 'dir']:
-                os.remove(nb_kwargs_path + '.' + ext)
+                os.remove(out_path_db + '.' + ext)
 
         if return_nb:
-            return (exec_info, notebook)
-        return exec_info
+            return (exec_res, notebook)
+        return exec_res
 
 
 def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, ignore_codes=tuple(),
