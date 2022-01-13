@@ -161,11 +161,14 @@ class ExecutableUnit:
             - If list, must be list of int or str described above.
     args, kwargs : optional
         args and kwargs for unit call, by default None.
-    save_to : str or list, optional
-        names to save output from unit
+    save_to : str, list or None, optional
+        names to save output from unit. Can't be not None with `save_output_dict` which is True.
+    save_output_dict : bool, optional
+        if the output is a dict, use its keys as names of variables to store in results.
+        Can't be True with not None `save_to`
     """
     def __init__(self, name, func=None, generator=None, root=False, when=1,
-                 args=None, kwargs=None, save_to=None, from_dict=False, **other_kwargs):
+                 args=None, kwargs=None, save_to=None, save_output_dict=False, **other_kwargs):
         self.name = name
         self.callable = func
         self.generator = generator
@@ -188,10 +191,10 @@ class ExecutableUnit:
         self.iteration = 0
 
         self.save_to = save_to
-        self.from_dict = from_dict
+        self.save_output_dict = save_output_dict
 
-        if self.save_to is not None and self.from_dict:
-            raise ValueError('save_to is not None and from_dict is True.')
+        if self.save_to is not None and self.save_output_dict:
+            raise ValueError('save_to is not None and save_output_dict is True.')
 
 
     def set_unit(self, config, experiment):
@@ -248,7 +251,7 @@ class ExecutableUnit:
                     start_time = time.time()
                 self.output = next(self.iterator)
 
-            if self.save_to or self.from_dict:
+            if self.save_to or self.save_output_dict:
                 self.save_output(iteration)
 
             eval_time = time.time() - start_time
@@ -262,7 +265,7 @@ class ExecutableUnit:
 
     def save_output(self, iteration):
         """ Save output of the unit. """
-        if self.from_dict:
+        if self.save_output_dict:
             dst = self.output.keys()
             src = self.output.values()
         else:
@@ -290,7 +293,7 @@ class ExecutableUnit:
 
     def __copy__(self):
         """ Create copy of the unit. """
-        attrs = ['name', 'callable', 'generator', 'root', 'when', 'args', 'kwargs', 'save_to', 'from_dict']
+        attrs = ['name', 'callable', 'generator', 'root', 'when', 'args', 'kwargs', 'save_to', 'save_output_dict']
         params = {attr if attr !='callable' else 'func': copy(getattr(self, attr)) for attr in attrs}
         new_unit = ExecutableUnit(**params, **copy(self.other_kwargs))
         return new_unit
@@ -576,7 +579,7 @@ class Experiment:
             raise ValueError(f'Method {name} was not found in any namespace.')
         return _explicit_call(method, name, self)
 
-    def save(self, src, dst, when=1, from_dict=False, copy=False): #pylint:disable=redefined-outer-name
+    def save(self, src, dst, when=1, save_output_dict=False, copy=False): #pylint:disable=redefined-outer-name
         """ Save something to research results.
 
         Parameters
@@ -593,7 +596,7 @@ class Experiment:
         name = '__save_results' if dst is None else f'__save_results_{dst}'
         name = self.add_postfix(name)
         self.add_callable(name, _get_input, x=src, copy=copy, when=when, save_to=dst,
-                          experiment=E(), from_dict=from_dict)
+                          experiment=E(), save_output_dict=save_output_dict)
         return self
 
     def dump(self, variable=None, when='last'):

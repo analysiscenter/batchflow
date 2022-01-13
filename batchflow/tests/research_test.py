@@ -327,12 +327,18 @@ class TestExecutor:
         executor = Executor(experiment, target='f', configs=[{'n': 10}, {'n': 20}], n_iters=None)
         executor.run()
 
-    @pytest.mark.parametrize('save_to', ['a', ['a'], ['a', 'b'], ['a', 'b', 'c']])
-    def test_multiple_output(self, save_to):
+    @pytest.mark.parametrize('save_to, save_output_dict', [
+        ['a', False],
+        [['a'], False],
+        [['a', 'b'], False],
+        [['a', 'b', 'c'], False],
+        [None, True]
+    ])
+    def test_multiple_output(self, save_to, save_output_dict):
         def func():
-            return 1, 2, 3
+            return {'a': 1, 'b': 2, 'c': 3}
 
-        research = Research().add_callable(func, save_to=save_to)
+        research = Research().add_callable(func, save_to=save_to, save_output_dict=save_output_dict)
         research.run(dump_results=False)
 
         if isinstance(save_to, list) and len(save_to) != 3:
