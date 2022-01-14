@@ -441,7 +441,6 @@ class Research:
             self.logger.info("Terminate research processes")
             order = {'EXECUTOR': 0, 'WORKER': 1, 'DETACHED_PROCESS': 2}
             processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
-            print(processes_to_kill)
             for pid, process_type in processes_to_kill:
                 if pid is not None and psutil.pid_exists(pid):
                     process = psutil.Process(pid)
