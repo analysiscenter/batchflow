@@ -538,7 +538,8 @@ class Experiment:
         if branch is None:
             mode = 'func' if run else 'generator'
             pipeline = PipelineWrapper(root if root is not None else name, mode=mode, variables=variables)
-            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(full=True), when=when, save_to=save_to, **kwargs)
+            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(full=True),
+                                     when=when, save_to=save_to, **kwargs)
         else:
             root = PipelineWrapper(root, mode='generator')
             branch = PipelineWrapper(branch, mode='execute_for', variables=variables)
@@ -841,8 +842,8 @@ class Executor:
     task_name : str, optional
         name of the task, by default None
     """
-    def __init__(self, experiment, research=None, worker=None, configs=None, executor_config=None, branches_configs=None,
-                 target='threads', n_iters=None, task_name=None, **kwargs):
+    def __init__(self, experiment, research=None, worker=None, configs=None, executor_config=None,
+                 branches_configs=None, target='threads', n_iters=None, task_name=None, **kwargs):
         if configs is None:
             if branches_configs is None:
                 self.n_branches = 1
@@ -973,7 +974,7 @@ def _create_instance(experiments, item_name):
     for e in experiments:
         e.instances[item_name] = instance
 
-def _get_input(x, copy, *args, **kwargs):
+def _get_input(x, copy, *args, **kwargs): #pylint:disable=redefined-outer-name
     _ = args, kwargs
     return deepcopy(x) if copy else x
 
