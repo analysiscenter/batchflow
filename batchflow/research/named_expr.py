@@ -37,10 +37,9 @@ class E(NamedExpression):
         if self.unit is not None:
             if self.unit in experiments[0].actions:
                 return [exp.actions[self.unit] for exp in experiments]
-            elif self.unit in experiments[0].instances:
+            if self.unit in experiments[0].instances:
                 return [exp.instances[self.unit] for exp in experiments]
-            else:
-                raise ValueError(f'{self.unit} is not an executable unit or instance.')
+            raise ValueError(f'{self.unit} is not an executable unit or instance.')
         return experiments
 
     def __copy__(self):
