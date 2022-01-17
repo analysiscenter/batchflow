@@ -686,7 +686,8 @@ class Experiment:
         if self.research is not None:
             self.id = config.pop_config('id').config()['id']
         else:
-            self.id = generate_id(config, self.random)
+            self.id = generate_id(config, self.random, create_prefix=self.research.domain.create_index)
+        self.pop_index_keys()
         self.config_alias = config
         self.config = config.config()
 
@@ -728,6 +729,9 @@ class Experiment:
             self._profiler = ExperimentProfiler(detailed=False)
         else: # 0, False, None
             self._profiler = None
+
+    def pop_index_keys(self): #TODO
+        pass
 
     def create_logger(self):
         """ Create experiment logger. """

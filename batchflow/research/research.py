@@ -48,13 +48,15 @@ class Research:
     repeat_each : int, optional
         see `repeat_each` of :meth:`domain.Domain.set_iter_params`, by default 100.
     """
-    def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=None):
+    def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=None,
+                 create_index=False):
         self.name = name
         self.domain = Domain(domain)
         self.experiment = experiment or Experiment()
         self.n_configs = n_configs
         self.n_reps = n_reps
         self.repeat_each = repeat_each
+        self.create_index = create_index
 
         self._env = dict() # current state of git repo and other environment information.
 
@@ -376,7 +378,8 @@ class Research:
         if dump_results and os.path.exists(self.name):
             raise ValueError(f"Research with name '{self.name}' already exists")
 
-        self.domain.set_iter_params(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each)
+        self.domain.set_iter_params(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each,
+                                    create_index=self.create_index)
 
         if self.domain.size is None and (self.domain.update_func is None or self.domain.update_each == 'last'):
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
