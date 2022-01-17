@@ -207,7 +207,7 @@ def run_notebook(path, nb_kwargs=None, nb_outputs=None, insert_pos=1, kernel_nam
 
         code = """\n
                with shelve.open(out_path_db) as notebook_db:
-                   nb_kwargs = {{**notebook_db}}
+                   nb_kwargs = {**notebook_db}
 
                    locals().update(nb_kwargs)"""
 
