@@ -205,11 +205,11 @@ def run_notebook(path, nb_kwargs=None, nb_outputs=None, insert_pos=1, kernel_nam
         with shelve.open(out_path_db) as notebook_db:
             notebook_db.update(nb_kwargs)
 
-        code = f"""\n
-                with shelve.open(out_path_db) as notebook_db:
-                    nb_kwargs = {{**notebook_db}}
+        code = """\n
+               with shelve.open(out_path_db) as notebook_db:
+                   nb_kwargs = {{**notebook_db}}
 
-                    locals().update(nb_kwargs)"""
+                   locals().update(nb_kwargs)"""
 
         code = dedent(code)
         code = code_header + code
