@@ -4,7 +4,6 @@ from itertools import product, islice
 from collections import OrderedDict
 from copy import copy, deepcopy
 from pprint import pformat
-from sys import prefix
 import numpy as np
 
 from .utils import must_execute, to_list
@@ -132,6 +131,7 @@ class ConfigAlias:
         return None
 
     def set_prefix(self, keys, n_digits):
+        """ Create prefix from keys. """
         prefix = ''
         for key in keys:
             prefix += self.alias().get('#' + key, 'null') + '_'
@@ -254,6 +254,8 @@ class Domain:
         self.additional = True
         self.create_id_prefix = False
         self.random_state = None
+
+        self._values_indices = None
 
     def _get_all_options_names(self):
         options = []
@@ -454,8 +456,8 @@ class Domain:
 
     def create_iter(self):
         """ Create iterator. """
-        blocks = self._get_sampling_blocks()
         self._values_indices = dict()
+        blocks = self._get_sampling_blocks()
         keys = self._get_all_options_names()
 
         def _iterator():
@@ -482,10 +484,10 @@ class Domain:
                 else:
                     additional = ConfigAlias()
                 while self.n_items is None or i < self.n_items:
-                    res = next(iterator) + additional
+                    res = next(iterator) + additional # pylint: disable=stop-iteration-return
                     if self.create_id_prefix:
                         res.set_prefix(keys, n_digits=int(self.create_id_prefix))
-                    yield res # pylint: disable=stop-iteration-return
+                    yield res
                     i += 1
             else:
                 i = 0
@@ -588,7 +590,7 @@ class Domain:
         res = []
         for value in values:
             if self.create_id_prefix:
-                n_digits = self.create_id_prefix if isinstance(self.create_id_prefix, int) else 1
+                n_digits = self.create_id_prefix if self.create_id_prefix is not True else 1
                 current_index = self._values_indices.get(name.alias, -1) + 1
                 self._values_indices[name.alias] = current_index
                 fmt = ("{:0" + str(n_digits) + "d}").format(current_index)

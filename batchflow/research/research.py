@@ -47,6 +47,8 @@ class Research:
         the number of repetitions for each config (see `n_reps` of :meth:`domain.Domain.set_iter_params`), by default 1.
     repeat_each : int, optional
         see `repeat_each` of :meth:`domain.Domain.set_iter_params`, by default 100.
+    create_id_prefix : bool or int, optional
+        add prefix to experiment id to allow to sort them by order in domain.
     """
     def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=None,
                  create_id_prefix=False):
