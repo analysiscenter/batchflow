@@ -255,7 +255,7 @@ class Domain:
         self.create_id_prefix = False
         self.random_state = None
 
-        self._values_indices = None
+        self.values_indices = dict()
 
     def _get_all_options_names(self):
         options = []
@@ -325,7 +325,7 @@ class Domain:
         if isinstance(when, (int, str)):
             when = [when]
         iter_kwargs = dict()
-        for attr in ['n_items', 'n_reps', 'repeat_each', 'create_id_prefix']:
+        for attr in ['n_items', 'n_reps', 'repeat_each']:
             iter_kwargs[attr] = kwargs.pop(attr) if attr in kwargs else getattr(self, attr)
         self.updates.append({
             'function': function,
@@ -342,8 +342,9 @@ class Domain:
                 domain = update['function'](**kwargs)
                 domain.updates = self.updates
                 domain.n_updates = self.n_updates + 1
-                domain.set_iter_params(produced=generated, additional=self.additional,
-                                       seed=self.random_state, **update['iter_kwargs'])
+                domain.values_indices = self.values_indices
+                domain.set_iter_params(produced=generated, additional=self.additional, seed=self.random_state,
+                                       create_id_prefix=self.create_id_prefix, **update['iter_kwargs'])
                 return domain
         return None
 
@@ -456,7 +457,6 @@ class Domain:
 
     def create_iter(self):
         """ Create iterator. """
-        self._values_indices = dict()
         blocks = self._get_sampling_blocks()
         keys = self._get_all_options_names()
 
@@ -591,8 +591,8 @@ class Domain:
         for value in values:
             if self.create_id_prefix:
                 n_digits = self.create_id_prefix if self.create_id_prefix is not True else 1
-                current_index = self._values_indices.get(name.alias, -1) + 1
-                self._values_indices[name.alias] = current_index
+                current_index = self.values_indices.get(name.alias, -1) + 1
+                self.values_indices[name.alias] = current_index
                 fmt = ("{:0" + str(n_digits) + "d}").format(current_index)
                 res.append(ConfigAlias([[name, value], ["#" + name.alias, fmt]]))
             else:
@@ -618,8 +618,8 @@ class Domain:
         for _ in range(size or 1):
             if self.create_id_prefix:
                 n_digits = self.create_id_prefix if isinstance(self.create_id_prefix, int) else 1
-                current_index = self._values_indices.get(name.alias, -1) + 1
-                self._values_indices[name.alias] = current_index
+                current_index = self.values_indices.get(name.alias, -1) + 1
+                self.values_indices[name.alias] = current_index
                 fmt = ("{:0" + str(n_digits) + "d}").format(current_index)
                 res.append(ConfigAlias([[name, values.sample(1)[0, 0]], ["#" + name.alias, fmt]]))
             else:
