@@ -686,7 +686,7 @@ class Experiment:
         if self.research is not None:
             self.id = config.pop_config('id').config()['id']
         else:
-            self.id = generate_id(config, self.random, create_prefix=self.research.domain.create_index)
+            self.id = generate_id(config, self.random)
         self.pop_index_keys()
         self.config_alias = config
         self.config = config.config()
