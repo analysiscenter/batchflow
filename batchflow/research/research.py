@@ -47,19 +47,15 @@ class Research:
         the number of repetitions for each config (see `n_reps` of :meth:`domain.Domain.set_iter_params`), by default 1.
     repeat_each : int, optional
         see `repeat_each` of :meth:`domain.Domain.set_iter_params`, by default 100.
-    create_id_prefix : bool or int, optional
-        add prefix to experiment id to allow to sort them by the order of parameters in domain. If int,
-        the number of digits for the parameter code formatting.
     """
-    def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=None,
-                 create_id_prefix=False):
+    def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=None):
         self.name = name
         self.domain = Domain(domain)
         self.experiment = experiment or Experiment()
         self.n_configs = n_configs
         self.n_reps = n_reps
         self.repeat_each = repeat_each
-        self.create_id_prefix = create_id_prefix
+        self.create_id_prefix = False
 
         self._env = dict() # current state of git repo and other environment information.
 
@@ -281,7 +277,7 @@ class Research:
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
             debug=False, finalize=True, git_meta=False, env_meta=False, seed=None, profile=False, dump_monitor=False,
-            memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5):
+            memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5, create_id_prefix=False):
         """ Run research.
 
         Parameters
@@ -334,6 +330,9 @@ class Research:
             the number of such checks
         gpu_check_delay : float, optional
             time in seconds between checks.
+        create_id_prefix : bool or int, optional
+            add prefix to experiment id to allow to sort them by the order of parameters in domain. If int,
+            the number of digits for the parameter code formatting.
 
         Returns
         -------
@@ -363,6 +362,7 @@ class Research:
         self.memory_ratio = memory_ratio
         self.n_gpu_checks = n_gpu_checks
         self.gpu_check_delay = gpu_check_delay
+        self.create_id_prefix = create_id_prefix
 
         self.dump_monitor = dump_monitor
 

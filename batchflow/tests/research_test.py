@@ -370,7 +370,8 @@ class TestResearch:
         assert len(research.monitor.exceptions) == 0
         assert len(research.results.df) == 10
 
-    def test_domain_update(self):
+    @pytest.mark.parametrize('create_id_prefix', [False, True])
+    def test_domain_update(self, create_id_prefix):
         def update():
             return Option('x', [4, 5, 6])
 
@@ -379,7 +380,7 @@ class TestResearch:
             .save(O('func'), 'sum')
             .update_domain(update, when=['%5', '%8'], n_reps=2)
         )
-        research.run(n_iters=1, dump_results=False, bar=False)
+        research.run(n_iters=1, dump_results=False, bar=False, create_id_prefix=create_id_prefix)
 
         assert len(research.monitor.exceptions) == 0
         assert len(research.results.df) == 15
@@ -452,8 +453,7 @@ class TestResearch:
 
     @pytest.mark.parametrize('create_id_prefix', [False, True, 4])
     def test_prefixes(self, simple_research, create_id_prefix):
-        simple_research.create_id_prefix = create_id_prefix
-        simple_research.run(dump_results=False, n_iters=1)
+        simple_research.run(dump_results=False, n_iters=1, create_id_prefix=create_id_prefix)
 
         if create_id_prefix is False:
             assert simple_research.results.df.id.apply(lambda x: len(x.split('_')) == 1).all()
