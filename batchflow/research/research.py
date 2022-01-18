@@ -48,7 +48,8 @@ class Research:
     repeat_each : int, optional
         see `repeat_each` of :meth:`domain.Domain.set_iter_params`, by default 100.
     create_id_prefix : bool or int, optional
-        add prefix to experiment id to allow to sort them by order in domain.
+        add prefix to experiment id to allow to sort them by the order of parameters in domain. If int,
+        the number of digits for the parameter code formatting.
     """
     def __init__(self, name='research', domain=None, experiment=None, n_configs=None, n_reps=1, repeat_each=None,
                  create_id_prefix=False):
