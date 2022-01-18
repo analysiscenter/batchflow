@@ -59,7 +59,7 @@ class DynamicQueue:
             try:
                 for _ in range(self.n_branches):
                     config = next(self.domain)
-                    config['id'] = generate_id(config, self.random, self.research.create_index)
+                    config['id'] = generate_id(config, self.random, self.research.create_id_prefix)
                     branches_tasks.append(config)
                 configs.append(branches_tasks)
             except StopIteration:

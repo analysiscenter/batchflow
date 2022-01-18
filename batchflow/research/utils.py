@@ -167,7 +167,7 @@ def parse_name(name):
         raise ValueError(f'name must be "namespace_name.unit_name" but {name} were given')
     return name_components
 
-def generate_id(config, random, create_prefix):
+def generate_id(config, random, create_prefix=False):
     """ Generate id for experiment. """
     name = config.alias()['_prefix'] if create_prefix else ''
     name += hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8]

@@ -131,11 +131,12 @@ class ConfigAlias:
             return ConfigAlias(res)
         return None
 
-    def set_prefix(self, keys):
+    def set_prefix(self, keys, n_digits):
         prefix = ''
         for key in keys:
             prefix += self.alias().get('#' + key, 'null') + '_'
-        self['_prefix'] = prefix + self.alias()['repetition'] + '_'
+        fmt = ("{:0" + str(n_digits) + "d}").format(self.config()['repetition'])
+        self['_prefix'] = prefix + fmt + '_'
         return self
 
     def __getitem__(self, key):
@@ -251,6 +252,7 @@ class Domain:
         self.repeat_each = None
         self.n_updates = 0
         self.additional = True
+        self.create_id_prefix = False
         self.random_state = None
 
     def _get_all_options_names(self):
@@ -277,7 +279,7 @@ class Domain:
         return aliases_options
 
     def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=0, additional=True,
-                        create_index=False, seed=None):
+                        create_id_prefix=False, seed=None):
         """ Set parameters for iterator.
 
         Parameters
@@ -312,7 +314,7 @@ class Domain:
             self.repeat_each = repeat_each or 100
         self.n_produced = produced
         self.additional = additional
-        self.create_index = create_index
+        self.create_id_prefix = create_id_prefix
         self.random_state = make_rng(seed)
         self.reset_iter()
 
@@ -321,7 +323,7 @@ class Domain:
         if isinstance(when, (int, str)):
             when = [when]
         iter_kwargs = dict()
-        for attr in ['n_items', 'n_reps', 'repeat_each', 'create_index']:
+        for attr in ['n_items', 'n_reps', 'repeat_each', 'create_id_prefix']:
             iter_kwargs[attr] = kwargs.pop(attr) if attr in kwargs else getattr(self, attr)
         self.updates.append({
             'function': function,
@@ -481,8 +483,8 @@ class Domain:
                     additional = ConfigAlias()
                 while self.n_items is None or i < self.n_items:
                     res = next(iterator) + additional
-                    if self.create_index:
-                        res.set_prefix(keys)
+                    if self.create_id_prefix:
+                        res.set_prefix(keys, n_digits=int(self.create_id_prefix))
                     yield res # pylint: disable=stop-iteration-return
                     i += 1
             else:
@@ -496,8 +498,8 @@ class Domain:
                             additional = ConfigAlias()
                         for sample in samples:
                             res = sample + additional
-                            if self.create_index:
-                                res.set_prefix(keys)
+                            if self.create_id_prefix:
+                                res.set_prefix(keys, n_digits=int(self.create_id_prefix))
                             yield res
                     i += self.repeat_each
         self._iterator = _iterator_with_repetitions()
@@ -514,7 +516,7 @@ class Domain:
         """ Get domain iterator. """
         if self._iterator is None:
             self.set_iter_params(self.n_items, self.n_reps, self.repeat_each, self.n_produced,
-                                 self.additional, self.random_state)
+                                 self.additional, self.create_id_prefix, self.random_state)
             self.create_iter()
         return self._iterator
 
@@ -585,10 +587,12 @@ class Domain:
             raise TypeError('`values` must be array-like object but {} were given'.format(type(values)))
         res = []
         for value in values:
-            if self.create_index:
+            if self.create_id_prefix:
+                n_digits = self.create_id_prefix if isinstance(self.create_id_prefix, int) else 1
                 current_index = self._values_indices.get(name.alias, -1) + 1
                 self._values_indices[name.alias] = current_index
-                res.append(ConfigAlias([[name, value], ["#" + name.alias, current_index]]))
+                fmt = ("{:0" + str(n_digits) + "d}").format(current_index)
+                res.append(ConfigAlias([[name, value], ["#" + name.alias, fmt]]))
             else:
                 res.append(ConfigAlias([[name, value]]))
         return res
@@ -610,10 +614,12 @@ class Domain:
             raise TypeError('`values` must be Sampler but {} was given'.format(type(values)))
         res = []
         for _ in range(size or 1):
-            if self.create_index:
+            if self.create_id_prefix:
+                n_digits = self.create_id_prefix if isinstance(self.create_id_prefix, int) else 1
                 current_index = self._values_indices.get(name.alias, -1) + 1
                 self._values_indices[name.alias] = current_index
-                res.append(ConfigAlias([[name, values.sample(1)[0, 0]], ["#" + name.alias, current_index]]))
+                fmt = ("{:0" + str(n_digits) + "d}").format(current_index)
+                res.append(ConfigAlias([[name, values.sample(1)[0, 0]], ["#" + name.alias, fmt]]))
             else:
                 res.append(ConfigAlias([[name, values.sample(1)[0, 0]]]))
         if size is None:
