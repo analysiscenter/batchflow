@@ -734,6 +734,7 @@ class Experiment:
             self._profiler = None
 
     def pop_index_keys(self, config):
+        """ Remove auxilary keys used to create prefix. """
         for key in config.keys():
             if key[0] == '#':
                 config.pop_config(key)
