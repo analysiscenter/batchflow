@@ -77,7 +77,10 @@ class PipelineWrapper:
         """ Generator returns batches from pipeline. Generator will stop when StopIteration will be raised. """
         self.reset()
         while True:
-            yield (self.pipeline.next_batch(), *self._get_vars_values())
+            try:
+                yield (self.pipeline.next_batch(), *self._get_vars_values())
+            except StopIteration:
+                return
 
     def _get_vars_values(self):
         return [self.pipeline.v(var) for var in self.variables if var is not None]
@@ -687,7 +690,7 @@ class Experiment:
             self.id = config.pop_config('id').config()['id']
         else:
             self.id = generate_id(config, self.random)
-        self.pop_index_keys()
+        self.pop_index_keys(config)
         self.config_alias = config
         self.config = config.config()
 
@@ -730,8 +733,11 @@ class Experiment:
         else: # 0, False, None
             self._profiler = None
 
-    def pop_index_keys(self): #TODO
-        pass
+    def pop_index_keys(self, config):
+        for key in config.keys():
+            if key[0] == '#':
+                config.pop_config(key)
+        config.pop_config('_prefix')
 
     def create_logger(self):
         """ Create experiment logger. """

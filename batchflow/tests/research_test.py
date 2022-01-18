@@ -447,7 +447,21 @@ class TestResearch:
 
         results = research.results.df.dtypes.values
 
-        assert all(results == [np.dtype(i) for i in ['O', 'O', 'O', 'int64', 'float64', 'float64']])
+        # columns : id,  layout, units, iteration, loss, accuracy
+        assert all(results == [np.dtype(i) for i in ['O', 'O', 'O', 'int64', 'float32', 'float64']])
+
+    @pytest.mark.parametrize('create_id_prefix', [False, True, 4])
+    def test_prefixes(self, simple_research, create_id_prefix):
+        simple_research.create_id_prefix = create_id_prefix
+        simple_research.run(dump_results=False, n_iters=1)
+
+        if create_id_prefix is False:
+            assert simple_research.results.df.id.apply(lambda x: len(x.split('_')) == 1).all()
+        else:
+            assert simple_research.results.df.id.apply(lambda x: len(x.split('_')) == 4).all()
+            parsed_id = simple_research.results.df.id.apply(lambda x: x.split('_'))
+            assert parsed_id.apply(lambda x: all([len(i) == create_id_prefix for i in x[:-1]])).all()
+
 
     def test_remove(self, simple_research):
         simple_research.run(n_iters=1)
