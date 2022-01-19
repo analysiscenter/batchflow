@@ -3,7 +3,7 @@
 
 import os
 import sys
-import datetime
+import time
 import csv
 import itertools
 import subprocess
@@ -417,6 +417,7 @@ class Research:
 
         def _start_distributor():
             self.distributor.run()
+            self.monitor.stop()
 
         self.monitor.start(self.dump_results and self.dump_monitor)
         if self.parallel:
@@ -442,10 +443,11 @@ class Research:
     def terminate(self, kill_processes=False, force=False):
         """ Kill all research processes. """
         # TODO: killed processes don't release GPU.
-        answer = False
         if not force and self.monitor.in_progress:
             answer = input(f'{self.name} is in progress. Are you sure? [y/n]').lower()
             answer = len(answer) > 0 and 'yes'.startswith(answer)
+        else:
+            answer = True
         if force or answer:
             self.logger.info("Stop research.")
             if self.monitor is not None:
@@ -576,7 +578,7 @@ class ResearchMonitor:
     COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid',
                'process_pid', 'finished', 'withdrawn', 'remains']
     SHARED_VARIABLES = ['finished_experiments', 'finished_iterations', 'remained_experiments',
-                        'generated_experiments']
+                        'generated_experiments', 'stopped']
 
     def __init__(self, research, path=None, bar=True):
         self.queue = mp.JoinableQueue()
@@ -627,89 +629,57 @@ class ResearchMonitor:
         """ The number of experiments in queue of tasks. """
         return self.generated_experiments - self.finished_experiments
 
-    def send(self, status, experiment=None, worker=None, **kwargs):
-        """ Send signal to monitor. """
-        signal = {
-            'time': str(datetime.datetime.now()),
-            'status': status,
-            **kwargs
-        }
-        if experiment is not None:
-            signal = {**signal, **{
-                'id': experiment.id,
-                'pid': experiment.executor.pid,
-            }}
-        if worker is not None:
-            signal = {**signal, **{
-                'worker': worker.index,
-                'worker_pid': worker.pid,
-            }}
-        self.queue.put(signal)
-        if 'exception' in signal:
-            self.exceptions.append(signal)
-
     def detach(self, process):
-        self.send('DETACH_PROCESS', process_pid=process.pid)
+        self.processes[process.pid] = 'DETACHED_PROCESS'
 
     def start_worker(self, worker):
-        self.send('START_WORKER', worker=worker)
+        self.processes[worker.pid] = 'WORKER'
 
     def start_experiment(self, experiment):
         """" Signal when experiment starts. """
-        self.send('START_EXP', experiment, experiment.executor.worker)
+        self.processes[experiment.executor.pid] = 'EXECUTOR'
+        self.current_iterations[experiment.id] = 0
+
+    def tasks_info(self, generated, remains):
+        self.generated_experiments = generated
+        self.remained_experiments = remains
 
     def stop_experiment(self, experiment):
         """" Signal when experiment stops. """
-        self.send('FINISH_EXP', experiment, experiment.executor.worker, it=experiment.iteration)
+        self.current_iterations.pop(experiment.id)
+        self.finished_iterations += experiment.iteration + 1
+        self.finished_experiments += 1
 
-    def execute_iteration(self, name, experiment):
+    def execute_iteration(self, experiment):
         """" Signal for iteration execution. """
-        self.send('EXECUTE_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration)
+        self.current_iterations[experiment.id] = experiment.iteration
 
     def fail_item_execution(self, name, experiment, msg):
         """" Signal for iteration execution fail. """
-        self.send('FAIL_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration, exception=msg)
-
-    def stop_iteration(self, name, experiment):
-        """" Signal for StopIteration exception. """
-        self.send('STOP_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration)
+        self.exceptions.append({
+            'id': experiment.id,
+            'pid': experiment.executor.pid,
+            'name': name,
+            'it': experiment.iteration,
+            'exception': msg
+        })
 
     def handler(self):
         """ Signals handler. """
-        signal = self.queue.get()
         with self.bar as progress:
-            while signal is not None:
-                status = signal.get('status')
-                if status == 'START_WORKER':
-                    self.processes[signal['worker_pid']] = 'WORKER'
-                elif status == 'DETACH_PROCESS':
-                    self.processes[signal['process_pid']] = 'DETACHED_PROCESS'
-                elif status == 'TASKS':
-                    self.remained_experiments = signal['remains']
-                    self.generated_experiments = signal['generated']
-                elif status == 'START_EXP':
-                    self.processes[signal['pid']] = 'EXECUTOR'
-                    self.current_iterations[signal['id']] = 0
-                elif status == 'EXECUTE_IT':
-                    self.current_iterations[signal['id']] = signal['it']
-                elif status == 'FINISH_EXP':
-                    self.current_iterations.pop(signal['id'])
-                    self.finished_iterations += signal['it'] + 1
-                    self.finished_experiments += 1
-
-                if status in ['START_EXP', 'EXECUTE_IT', 'FINISH_EXP']:
-                    if self.n_iters:
-                        progress.n = self.finished_iterations + sum(self.current_iterations.values())
-                    else:
-                        progress.n = self.finished_experiments + len(self.current_iterations)
-                    progress.total = self.total
-                    progress.refresh()
-
-                if self.dump:
-                    with open(os.path.join(self.path, 'monitor.csv'), 'a') as f:
-                        writer = csv.writer(f)
-                        writer.writerow([str(signal.get(column, '')) for column in self.COLUMNS])
-                signal = self.queue.get()
+            last_update = False
+            while True:
+                if self.n_iters:
+                    progress.n = self.finished_iterations + sum(self.current_iterations.values())
+                else:
+                    progress.n = self.finished_experiments + len(self.current_iterations)
+                progress.total = self.total
+                progress.refresh()
+                if last_update:
+                    break
+                time.sleep(0.01)
+                if not self.queue.empty():
+                    last_update = True
         self.stop_signal.put(None)
 
     def start(self, dump):

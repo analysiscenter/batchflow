@@ -126,7 +126,6 @@ class Worker:
 
         executor_class = self.research.executor_class
         n_iters = self.research.n_iters
-        self.research.monitor.send(status='START_WORKER', worker=self)
 
         if isinstance(self.research.branches, int):
             branches_configs = [Config() for _ in range(self.research.branches)]
@@ -152,7 +151,6 @@ class Worker:
                       f"don't have enough memory: {bad_memory}"
 
                 self.research.logger.info(msg)
-                self.research.monitor.send(worker=self, devices=all_devices, status='GPU_MEMORY_ERROR')
                 _return = False
                 break
             task = self.tasks.get()
@@ -161,7 +159,6 @@ class Worker:
                 break
             task_idx, configs = task
 
-            self.research.monitor.send(worker=self, status='GET_TASK', task_idx=task_idx)
             name = f"Task {task_idx}"
 
             experiment = self.research.experiment
@@ -182,10 +179,7 @@ class Worker:
                 process.join()
             else:
                 executor.run()
-            self.research.monitor.send(worker=self, status='FINISH_TASK', task_idx=task_idx)
             self.tasks.task_done()
-        self.research.monitor.send(worker=self, status='STOP_WORKER')
-
         self.research.logger.info(f"Worker {self.index} [pid:{self.pid}] has stopped.")
 
         return _return
@@ -280,4 +274,4 @@ class Distributor:
         self.research.logger.info('All workers have finished the work')
 
     def send_state(self):
-        self.research.monitor.send('TASKS', generated=self.tasks.configs_generated, remains=self.tasks.configs_remains)
+        self.research.monitor.tasks_info(generated=self.tasks.configs_generated, remains=self.tasks.configs_remains)

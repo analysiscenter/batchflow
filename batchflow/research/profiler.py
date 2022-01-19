@@ -1,11 +1,9 @@
 #pylint: disable=super-init-not-called
 """ Research profilers. """
 
-from multiprocessing import managers
 import os
 import glob
 import warnings
-from batchflow.research.utils import close_managers
 import multiprocess as mp
 
 try:
@@ -13,6 +11,7 @@ try:
 except ImportError:
     from . import _fake as pd
 
+from .utils import close_managers
 from ..profiler import Profiler
 
 class ExperimentProfiler(Profiler):
