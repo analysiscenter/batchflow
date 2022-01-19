@@ -67,12 +67,22 @@ def get_notebook_name():
 
 
 def extract_traceback(notebook):
-    """ Extracts error traceback from notebooks.
+    """ Extracts information about an error from the notebook.
 
     Parameters
     ----------
     notebook: :class:`nbformat.notebooknode.NotebookNode`
         Executed notebook to find an error traceback.
+
+    Returns
+    -------
+    bool
+        Whether the executed notebook has an error traceback.
+    int or None
+        Number of a cell with a traceback.
+        If None, then the notebook doesn't contain an error traceback.
+    str
+        Error traceback if exists.
     """
     for cell in notebook['cells']:
         # Find a cell output with a traceback and extract the traceback
@@ -85,110 +95,46 @@ def extract_traceback(notebook):
                 traceback = '\n'.join(traceback)
                 return True, cell['execution_count'], traceback
 
-    return False, None, "" # notebook execution wasn't failed
+    return False, None, ""
 
+def prepare_notebook_io(notebook, nb_inputs, nb_outputs, out_path_db, nb_inputs_pos):
+    """ Prepare notebook for execution: add a cell with inputs and create
+    a separate notebook for outputs extraction.
 
-def run_notebook(path, nb_kwargs=None, nb_outputs=None, insert_pos=1, kernel_name=None, timeout=-1,
-                 working_dir='./', execute_kwargs=None,
-                 save_ipynb=True, out_path_ipynb=None, save_html=False, out_path_html=None, suffix='_out',
-                 add_timestamp=True, hide_input=False, display_links=True,
-                 raise_exception=False, return_nb=False):
-    """ Run a notebook and save the output.
-    Additionally, allows to pass `nb_kwargs` arguments, that are used for notebook execution. Under the hood,
-    we place all of them into a separate cell, inserted in the notebook; hence, all of the keys must be valid Python
-    names, and values should be valid for re-creating objects.
-    Heavily inspired by https://github.com/tritemio/nbrun.
+    It is a helper method for the :meth:`run_notebook`.
 
     Parameters
     ----------
-    path : str
-        Path to the notebook to execute.
-    nb_kwargs : dict, optional
-        Additional arguments for notebook execution. Converted into cell of variable assignments and inserted
-        into the notebook on `insert_pos` place.
-    nb_outputs : str or iterable of str
-        List of notebook locals names that return to output.
-    insert_pos : int
-        Position to insert the cell with argument assignments into the notebook.
-    kernel_name : str, optional
-        Name of the kernel to execute the notebook.
-    timeout : int
-        Maximum execution time for each cell. -1 means no constraint.
-    working_dir : str
-        The working folder of starting the kernel.
-    execute_kwargs : dict, optional
-        Other parameters of `:class:ExecutePreprocessor`.
-    save_ipynb : bool
-        Whether to save the output .ipynb file.
-    out_path_ipynb : str, optional
-        Path to save the output .ipynb file. If not provided and `save_ipynb` is set to True, we add `suffix` to `path`.
-    save_html : bool
-        Whether to convert the output notebook to .html.
-    out_path_html : str, optional
-        Path to save the output .html file.
-        If not provided and `save_html` is set to True, we add `suffix` to `path` and change extension.
-    suffix : str
-        Appended to output file names if paths are not explicitly provided.
-    add_timestamp : bool
-        Whether to add cell with execution information in the beginning of the output notebook.
-    hide_input : bool
-        Whether to hide the code cells in the output notebook.
-    display_links : bool
-        Whether to display links to the output notebook and html at execution.
-    raise_exception : bool
-        Whether to re-raise exceptions from the notebook.
-    return_nb : bool
-        Whether to return the notebook object from this function.
+    notebook : :class:`nbformat.notebooknode.NotebookNode`
+        Notebook fr execution.
+    nb_inputs, nb_outputs, nb_inputs_pos
+        Unchanged arguments from :meth:`run_notebook`.
+    out_path_db : str
+        Path to the notebook shelve database for saving inputs/outputs.
+
+    Returns
+    -------
+    notebook : :class:`nbformat.notebooknode.NotebookNode`
+        Provided notebook with the additional cell with the notebook parameters.
+        (if `nb_inputs` is provided).
+    output_notebook : :class:`nbformat.notebooknode.NotebookNode` or None
+        Additional notebook with saving of required outputs from the `notebook`.
+        (if `nb_outputs` is provided).
     """
-    # pylint: disable=bare-except, lost-exception
-    from IPython.display import display, FileLink
     import nbformat
-    from jupyter_client.manager import KernelManager
-    from nbconvert.preprocessors import ExecutePreprocessor
-    from nbconvert import HTMLExporter
     import shelve
     from dill import Pickler, Unpickler
     from textwrap import dedent
 
-    # Prepare paths
-    if not os.path.exists(path):
-        raise FileNotFoundError(f'Path {path} not found.')
-
-    if save_ipynb and out_path_ipynb is None:
-        out_path_ipynb = os.path.splitext(path)[0] + suffix + '.ipynb'
-    if save_html and out_path_html is None:
-        out_path_html = os.path.splitext(path)[0] + suffix + '.html'
-    if nb_kwargs or nb_outputs:
-        # Create path to save shelve database for providing inputs/outputs in the notebook
-        if out_path_ipynb is not None:
-            out_path_db = f"{os.path.splitext(out_path_ipynb)[0]}_db"
-        elif out_path_html is not None:
-            out_path_db = f"{os.path.splitext(out_path_html)[0]}_db"
-        else:
-            out_path_db = f"{os.path.splitext(path)[0]}_db"
-
-    # Execution arguments
-    execute_kwargs = execute_kwargs or {}
-    execute_kwargs.update(timeout=timeout)
-    if kernel_name:
-        execute_kwargs.update(kernel_name=kernel_name)
-
-    kernel_manager = KernelManager()
-    executor = ExecutePreprocessor(**execute_kwargs)
-
-    # Read the master notebook, prepare and insert kwargs cell
-    notebook = nbformat.read(path, as_version=4)
-
-    if hide_input:
-        notebook["metadata"].update({"hide_input": True})
-
-    if nb_kwargs or nb_outputs:
+    if nb_inputs or nb_outputs:
+        # (Re)create a shelve database
         shelve.Pickler = Pickler
         shelve.Unpickler = Unpickler
 
         with shelve.open(out_path_db) as notebook_db:
             notebook_db.clear()
 
+        # Code for work with the shelve database from notebooks
         code_header = f"""\
                        # Cell inserted during automated execution
                        import os, shelve
@@ -197,26 +143,30 @@ def run_notebook(path, nb_kwargs=None, nb_outputs=None, insert_pos=1, kernel_nam
                        shelve.Pickler = Pickler
                        shelve.Unpickler = Unpickler
 
-                       out_path_db = \'{out_path_db}\'"""
+                       out_path_db = {repr(out_path_db)}"""
 
         code_header = dedent(code_header)
 
-    if nb_kwargs:
+    if nb_inputs:
+        # Save `nb_inputs` in the shelve database and create a cell in the `notebook`
+        # for parameters extraction
         with shelve.open(out_path_db) as notebook_db:
-            notebook_db.update(nb_kwargs)
+            notebook_db.update(nb_inputs)
 
         code = """\n
                with shelve.open(out_path_db) as notebook_db:
-                   nb_kwargs = {**notebook_db}
+                   nb_inputs = {**notebook_db}
 
-                   locals().update(nb_kwargs)"""
+                   locals().update(nb_inputs)"""
 
         code = dedent(code)
         code = code_header + code
 
-        notebook['cells'].insert(insert_pos, nbformat.v4.new_code_cell(code))
+        notebook['cells'].insert(nb_inputs_pos, nbformat.v4.new_code_cell(code))
 
     if nb_outputs is not None:
+        # Create a notebook to extract outputs from the main notebook
+        # The `output_notebook` save locals with preferred names in the shelve database
         if isinstance(nb_outputs, str):
             nb_outputs = [nb_outputs]
 
@@ -235,8 +185,120 @@ def run_notebook(path, nb_kwargs=None, nb_outputs=None, insert_pos=1, kernel_nam
         code = dedent(code)
         code = code_header + code
 
-        output_nb = nbformat.v4.new_notebook(metadata=notebook.metadata)
-        output_nb['cells'].append(nbformat.v4.new_code_cell(code))
+        output_notebook = nbformat.v4.new_notebook(metadata=notebook.metadata)
+        output_notebook['cells'].append(nbformat.v4.new_code_cell(code))
+    else:
+        output_notebook = None
+
+    return notebook, output_notebook
+
+
+def run_notebook(path, nb_inputs=None, nb_outputs=None, nb_inputs_pos=1, timeout=-1, execute_kwargs=None,
+                 save_ipynb=True, out_path_ipynb=None, save_html=False, out_path_html=None, suffix='_out',
+                 add_timestamp=True, hide_input=False, display_links=True,
+                 raise_exception=False, return_nb=False):
+    """ Run a notebook and save the execution result.
+
+    Additionally, allows to pass `nb_inputs` arguments, that are used as inputs for notebook execution. Under the hood,
+    we place all of them into a separate cell, inserted in the notebook; hence, all of the keys must be valid Python
+    names, and values should be valid for re-creating objects.
+    Heavily inspired by https://github.com/tritemio/nbrun.
+
+    Also, allows to pass `nb_outputs`, which are used as outputs for notebook execution. Under the hood, we create a
+    separate notebook that saves local variables with names from the `nb_outputs`. After that, we extract
+    output variables in this method and return them.
+
+    Parameters
+    ----------
+    path : str
+        Path to the notebook to execute.
+    nb_inputs : dict, optional
+        Inputs for notebook execution. Converted into a cell of variable assignments and inserted
+        into the notebook on `nb_inputs_pos` place.
+    nb_outputs : str or iterable of str
+        List of notebook local variables that return to output.
+    nb_inputs_pos : int
+        Position to insert the cell with inputs into the notebook.
+    timeout : int
+        Maximum execution time for each cell. -1 means no constraint.
+    execute_kwargs : dict, optional
+        Other parameters of `:class:ExecutePreprocessor`.
+    save_ipynb : bool
+        Whether to save the output .ipynb file.
+    out_path_ipynb : str, optional
+        Path to save the output .ipynb file. If not provided and `save_ipynb` is set to True, we add `suffix` to `path`.
+    save_html : bool
+        Whether to convert the executed notebook to .html.
+    out_path_html : str, optional
+        Path to save the output .html file. If not provided and `save_html` is set to True, we add `suffix` to `path`.
+    suffix : str
+        Appended to output file names if paths are not explicitly provided.
+    add_timestamp : bool
+        Whether to add a cell with execution information at the beginning of the executed notebook.
+    hide_input : bool
+        Whether to hide the code cells in the executed notebook.
+    display_links : bool
+        Whether to display links to the executed notebook and html at execution.
+    raise_exception : bool
+        Whether to re-raise exceptions from the notebook.
+    return_nb : bool
+        Whether to return the notebook object from this function.
+
+    Returns
+    -------
+    exec_res : dict
+        Dictionary with the notebook execution results.
+        It provides next information:
+            - 'failed' : whether the execution was failed;
+            - 'nb_outputs' : the notebook saved outputs;
+            - 'failed cell number': an error cell execution number (if exists);
+            - 'traceback': traceback message from the notebook (if exists).
+    notebook :class:`nbformat.notebooknode.NotebookNode`
+        Executed notebook object.
+        Note that this output is provided only if `return_nb` is True.
+    """
+    # pylint: disable=bare-except, lost-exception
+    from IPython.display import display, FileLink
+    import nbformat
+    from jupyter_client.manager import KernelManager
+    from nbconvert.preprocessors import ExecutePreprocessor
+    from nbconvert import HTMLExporter
+    import shelve
+
+    # Prepare paths
+    if not os.path.exists(path):
+        raise FileNotFoundError(f'Path {path} not found.')
+
+    if save_ipynb and out_path_ipynb is None:
+        out_path_ipynb = os.path.splitext(path)[0] + suffix + '.ipynb'
+    if save_html and out_path_html is None:
+        out_path_html = os.path.splitext(path)[0] + suffix + '.html'
+    if nb_inputs or nb_outputs:
+        # Create a path to save a shelve database for providing inputs/outputs in the notebook
+        if out_path_ipynb is not None:
+            out_path_db = f"{os.path.splitext(out_path_ipynb)[0]}_db"
+        elif out_path_html is not None:
+            out_path_db = f"{os.path.splitext(out_path_html)[0]}_db"
+        else:
+            out_path_db = f"{os.path.splitext(path)[0]}_db"
+
+    # Execution arguments
+    working_dir = './'
+    execute_kwargs = execute_kwargs or {}
+    execute_kwargs.update(timeout=timeout)
+
+    kernel_manager = KernelManager()
+    executor = ExecutePreprocessor(**execute_kwargs)
+
+    # Read the master notebook, insert kwargs cell, and create a notebook for outputs extraction
+    notebook = nbformat.read(path, as_version=4)
+
+    if hide_input:
+        notebook["metadata"].update({"hide_input": True})
+
+    notebook, output_notebook = prepare_notebook_io(notebook=notebook,
+                                                    nb_inputs=nb_inputs, nb_outputs=nb_outputs,
+                                                    out_path_db=out_path_db, nb_inputs_pos=nb_inputs_pos)
 
     # Execute the notebook
     start_time = time.time()
@@ -250,7 +312,7 @@ def run_notebook(path, nb_kwargs=None, nb_outputs=None, insert_pos=1, kernel_nam
     finally:
         # Save nb_outputs in the shelve db
         if nb_outputs is not None:
-            executor.preprocess(output_nb, {'metadata': {'path': working_dir}}, km=kernel_manager)
+            executor.preprocess(output_notebook, {'metadata': {'path': working_dir}}, km=kernel_manager)
 
         # Check that something gone wrong or not
         failed, error_cell_num, traceback_message = extract_traceback(notebook=notebook)
@@ -285,13 +347,15 @@ def run_notebook(path, nb_kwargs=None, nb_outputs=None, insert_pos=1, kernel_nam
         if save_html:
             html_exporter = HTMLExporter()
             body, _ = html_exporter.from_notebook_node(notebook)
+
             with open(out_path_html, 'w') as f:
                 f.write(body)
+
             if display_links:
                 display(FileLink(out_path_html))
 
-        if (nb_kwargs or nb_outputs) and not failed:
-            # Remove shelve files
+        # Remove shelve files if the notebook is successfully executed
+        if (nb_inputs or nb_outputs) and not failed:
             for ext in ['bak', 'dat', 'dir']:
                 os.remove(out_path_db + '.' + ext)
 
