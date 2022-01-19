@@ -8,7 +8,7 @@ import dill
 import multiprocess as mp
 import pandas as pd
 import numpy as np
-from .utils import to_list
+from .utils import to_list, close_managers
 
 class ResearchResults:
     """ Class to collect, load and process research results.
@@ -378,3 +378,6 @@ class ResearchResults:
                 if all(item in _config.items() for item in alias.items()):
                     filtered_ids += [experiment_id]
         return filtered_ids
+
+    def close_managers(self):
+        close_managers(self, ['results', 'configs'])

@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import multiprocess as mp
 
 def to_list(value):
     return value if isinstance(value, list) else [value]
@@ -173,6 +174,21 @@ def generate_id(config, random, create_prefix=False):
     name += hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8]
     name += ''.join(str(i) for i in random.integers(10, size=8))
     return name
+
+def close_managers(instance, managers):
+    mapping = {
+        mp.managers.DictProxy: dict,
+        mp.managers.ListProxy: list
+    }
+    for attr in managers:
+        manager = getattr(instance, attr)
+        if isinstance(manager, tuple(mapping.keys())):
+            try:
+                values = mapping[type(manager)](manager)
+                setattr(instance, attr, values)
+                manager._manager.shutdown()
+            except:
+                pass
 
 def plot_results_by_config(results, variables, figsize=None, layout=None, **kwargs):
     """
