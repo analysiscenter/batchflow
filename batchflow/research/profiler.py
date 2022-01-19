@@ -1,9 +1,11 @@
 #pylint: disable=super-init-not-called
 """ Research profilers. """
 
+from multiprocessing import managers
 import os
 import glob
 import warnings
+from batchflow.research.utils import close_managers
 import multiprocess as mp
 
 try:
@@ -119,3 +121,6 @@ class ResearchProfiler(ExperimentProfiler):
         for path in glob.glob(paths):
             experiment = os.path.basename(os.path.dirname(path))
             self.experiments_info[experiment] = pd.read_feather(path).set_index(['unit', 'id'])
+
+    def close_managers(self):
+        close_managers(self, ['experiments_info'])

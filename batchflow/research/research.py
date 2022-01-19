@@ -20,7 +20,7 @@ from .domain import Domain
 from .distributor import Distributor, DynamicQueue
 from .experiment import Experiment, Executor
 from .results import ResearchResults
-from .utils import create_logger, to_list
+from .utils import create_logger, to_list, close_managers
 from .profiler import ResearchProfiler
 
 from ..utils_random import make_seed_sequence
@@ -344,7 +344,6 @@ class Research:
         If `update_domain` callable is defined, domain will be updated with the corresponding function
         accordingly to `when` parameter of :meth:`~.Research.update_domain`.
         """
-
         self.name = name or self.name
 
         self.workers = workers
@@ -417,10 +416,9 @@ class Research:
         self.profiler = ResearchProfiler(self.name, self.profile)
 
         def _start_distributor():
-            self.monitor.start(self.dump_results and self.dump_monitor)
             self.distributor.run()
-            self.monitor.stop()
 
+        self.monitor.start(self.dump_results and self.dump_monitor)
         if self.parallel:
             try:
                 self.process = mp.Process(target=_start_distributor)
@@ -429,6 +427,7 @@ class Research:
                 self.monitor.detach(self.process)
                 if not detach:
                     self.process.join()
+                    self.terminate()
             except KeyboardInterrupt as e:
                 self.logger.info("Research has been stopped by KeyboardInterrupt.")
                 self.terminate()
@@ -437,24 +436,38 @@ class Research:
             if detach:
                 warnings.warn("detach can't be enabled when parallel=False")
             _start_distributor()
+            self.terminate()
         return self
 
-    def terminate(self, kill_processes=False):
+    def terminate(self, kill_processes=False, force=False):
         """ Kill all research processes. """
         # TODO: killed processes don't release GPU.
-        self.logger.info("Stop research.")
-        if kill_processes and self.monitor is not None:
-            self.logger.info("Terminate research processes")
-            order = {'EXECUTOR': 0, 'WORKER': 1, 'DETACHED_PROCESS': 2}
-            processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
-            for pid, process_type in processes_to_kill:
-                if pid is not None and psutil.pid_exists(pid):
-                    process = psutil.Process(pid)
-                    process.terminate()
-                    self.logger.info(f"Terminate {process_type} [pid:{pid}]")
+        answer = False
+        if not force and self.monitor.in_progress:
+            answer = input(f'{self.name} is in progress. Are you sure? [y/n]').lower()
+            answer = len(answer) > 0 and 'yes'.startswith(answer)
+        if force or answer:
+            self.logger.info("Stop research.")
+            if self.monitor is not None:
+                self.monitor.stop(wait=True)
 
-        if self.monitor is not None:
-            self.monitor.stop(wait=False)
+            self.monitor.close_managers()
+            self.results.close_managers()
+            self.profiler.close_managers()
+
+            if self.detach:
+                kill_processes = True
+
+            if kill_processes and self.monitor is not None:
+                self.logger.info("Terminate research processes")
+
+                order = {'EXECUTOR': 1, 'WORKER': 2, 'DETACHED_PROCESS': 3, 'MONITOR': 4}
+                processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
+                for pid, process_type in processes_to_kill:
+                    if pid is not None and psutil.pid_exists(pid):
+                        process = psutil.Process(pid)
+                        process.terminate()
+                        self.logger.info(f"Terminate {process_type} [pid:{pid}]")
 
     def create_logger(self):
         """ Create research logger. """
@@ -545,7 +558,7 @@ class Research:
         return repr
 
     def __del__(self):
-        self.terminate()
+        self.terminate(force=True)
 
 class ResearchMonitor:
     #pylint:disable=attribute-defined-outside-init
@@ -711,6 +724,7 @@ class ResearchMonitor:
                         writer.writerow(self.COLUMNS)
             self.process = mp.Process(target=self.handler)
             self.process.start()
+            self.processes[self.process.pid] = 'MONITOR'
             self.stopped = False
 
     def stop(self, wait=True):
@@ -721,3 +735,6 @@ class ResearchMonitor:
                 self.stop_signal.get()
             self.stopped = True
         tqdm.tqdm._instances.clear() #pylint:disable=protected-access
+
+    def close_managers(self):
+        close_managers(self, ['exceptions', 'shared_values', 'current_iterations', 'processes'])

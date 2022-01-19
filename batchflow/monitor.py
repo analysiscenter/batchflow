@@ -109,6 +109,7 @@ class ResourceMonitor:
             self.stop_queue.put(True)
             self.process.join()
             self.running = False
+            self.manager.shutdown()
 
     def __enter__(self):
         self.start()
