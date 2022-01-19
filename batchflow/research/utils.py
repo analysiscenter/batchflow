@@ -176,6 +176,7 @@ def generate_id(config, random, create_prefix=False):
     return name
 
 def close_managers(instance, managers):
+    """ Close multiprocess.Manager instances from list. """
     mapping = {
         mp.managers.DictProxy: dict,
         mp.managers.ListProxy: list
@@ -183,12 +184,9 @@ def close_managers(instance, managers):
     for attr in managers:
         manager = getattr(instance, attr)
         if isinstance(manager, tuple(mapping.keys())):
-            try:
-                values = mapping[type(manager)](manager)
-                setattr(instance, attr, values)
-                manager._manager.shutdown()
-            except:
-                pass
+            values = mapping[type(manager)](manager)
+            setattr(instance, attr, values)
+            manager._manager.shutdown() # pylint: disable=protected-access
 
 def plot_results_by_config(results, variables, figsize=None, layout=None, **kwargs):
     """

@@ -770,8 +770,6 @@ class Experiment:
                 self.last = True
                 if isinstance(e, StopIteration):
                     self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
-                    if self.monitor:
-                        self.monitor.stop_iteration(name, self)
                 else:
                     self.exception = e
                     ex_traceback = e.__traceback__
@@ -781,7 +779,7 @@ class Experiment:
                         self.monitor.fail_item_execution(name, self, msg)
             else:
                 if self.monitor:
-                    self.monitor.execute_iteration(name, self)
+                    self.monitor.execute_iteration(self)
             if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
                 self.is_alive = False
 
