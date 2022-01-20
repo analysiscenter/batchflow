@@ -275,7 +275,7 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=True, git_meta=True, env_meta=True, seed=None, profile=False, dump_monitor=False,
+            debug=False, finalize=True, git_meta=False, env_meta=False, seed=None, profile=False, dump_monitor=False,
             memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5):
         """ Run research.
 
@@ -441,7 +441,6 @@ class Research:
             self.logger.info("Terminate research processes")
             order = {'EXECUTOR': 0, 'WORKER': 1, 'DETACHED_PROCESS': 2}
             processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
-            print(processes_to_kill)
             for pid, process_type in processes_to_kill:
                 if pid is not None and psutil.pid_exists(pid):
                     process = psutil.Process(pid)

@@ -239,6 +239,8 @@ def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, 
     ignore_codes : sequence
         Pylint errors to ignore.
         By default, `invalid-name`, `import-error` and `wrong-import-position` are disabled.
+    use_pylintrc : bool
+        Whether to use the `BatchFlow` pylint configuration.
     keep_script : bool
         Whether to keep temporal `.py` file after command execution.
     return_report : bool
@@ -255,7 +257,8 @@ def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, 
     path = path or get_notebook_path()
     options = options if options.startswith(' ') else ' ' + options
     ignore_codes = set(ignore_codes)
-    ignore_codes.update({'invalid-name', 'import-error', 'wrong-import-position', 'trailing-whitespace'})
+    ignore_codes.update({'import-error', 'wrong-import-position', 'invalid-name',
+                         'unnecessary-semicolon', 'trailing-whitespace', 'trailing-newlines'})
 
     # Try to add `pylintrc` configuration file to options
     if use_pylintrc and 'rcfile' not in options:

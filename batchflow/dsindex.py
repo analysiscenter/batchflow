@@ -445,9 +445,14 @@ class DatasetIndex(Baseset):
                 notifier = Notifier(**(notifier if isinstance(notifier, dict) else {'bar': notifier}),
                                     total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                     drop_last=drop_last, length=len(self._dataset.index))
+                notifier.local = True
             else:
-                notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                                      drop_last=drop_last, length=len(self._dataset.index))
+                notifier.local = False
+
+            if notifier.total is None:
+                notifier.compute_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                       drop_last=drop_last, length=len(self._dataset.index))
+                notifier.make_bar()
             iter_params['notifier'] = notifier
 
 

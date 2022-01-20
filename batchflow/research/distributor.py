@@ -22,6 +22,7 @@ class DynamicQueue:
         self.n_branches = n_branches
 
         self.queue = mp.JoinableQueue()
+        self.done_flag = mp.JoinableQueue()
 
         self.configs_generated = 0
         self.configs_remains = self.domain.size
@@ -82,6 +83,13 @@ class DynamicQueue:
         for _ in range(n_workers):
             self.put(None)
 
+    def task_done(self):
+        self.queue.task_done()
+        self.done_flag.put(None)
+
+    def wait_for_finished_task(self):
+        self.done_flag.get()
+
     def __getattr__(self, key):
         return getattr(self.queue, key)
 
@@ -107,6 +115,10 @@ class Worker:
 
         self.pid = None
 
+        seed = spawn_seed_sequence(research)
+        self.random_seed = seed
+        self.random = make_rng(seed)
+
     def __call__(self):
         self.pid = os.getpid() if self.research.parallel else None
         self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has started.")
@@ -129,7 +141,7 @@ class Worker:
             os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
             os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(all_devices)
 
-        device_reindexation = {device: i for i, device in enumerate(all_devices)}
+        device_reindexation = {device: str(i) for i, device in enumerate(all_devices)}
         devices = [[device_reindexation.get(i) for i in item] for item in devices]
         devices = [{'device': item[0] if len(item) == 1 else item} for item in devices]
 
@@ -158,18 +170,18 @@ class Worker:
             branches_configs = [config + Config(_devices) for config, _devices in zip(branches_configs, devices)]
             branches_configs = branches_configs[:len(configs)]
 
-            executor = executor_class(experiment, research=self.research, target=target, configs=configs,
+            executor = executor_class(experiment, research=self.research, worker=self, target=target, configs=configs,
                                       branches_configs=branches_configs, executor_config=self.worker_config,
                                       n_iters=n_iters, task_name=name)
             if self.research.parallel:
-                process = mp.Process(target=executor.run, args=(self, ))
+                process = mp.Process(target=executor.run)
                 process.start()
                 self.research.logger.info(
                     f"Worker {self.index} [pid:{self.pid}] has started task {task_idx} [pid:{process.pid}]."
                 )
                 process.join()
             else:
-                executor.run(self)
+                executor.run()
             self.research.monitor.send(worker=self, status='FINISH_TASK', task_idx=task_idx)
             self.tasks.task_done()
         self.research.monitor.send(worker=self, status='STOP_WORKER')
@@ -240,7 +252,7 @@ class Distributor:
 
             self.send_state()
             while self.tasks.tasks_in_queue > 0:
-                self.tasks.join()
+                self.tasks.wait_for_finished_task()
                 self.tasks.finished_tasks += 1
                 self.tasks.tasks_in_queue -= 1
 
