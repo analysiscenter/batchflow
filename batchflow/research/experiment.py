@@ -777,9 +777,6 @@ class Experiment:
                     self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
                     if self.monitor:
                         self.monitor.fail_item_execution(name, self, msg)
-            else:
-                if self.monitor:
-                    self.monitor.execute_iteration(self)
             if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
                 self.is_alive = False
 
@@ -917,7 +914,10 @@ class Executor:
                     self.parallel_call(iteration, unit_name, target=self.target, debug=self.debug) #pylint:disable=unexpected-keyword-arg
             if not any([experiment.is_alive for experiment in self.experiments]):
                 break
-
+            if self.research:
+                for experiment in self.experiments:
+                    if experiment.is_alive:
+                        self.research.monitor.execute_iteration(experiment)
         for index, experiment in enumerate(self.experiments):
             if self.research:
                 self.research.monitor.stop_experiment(experiment)
