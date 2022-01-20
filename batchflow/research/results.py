@@ -43,7 +43,7 @@ class ResearchResults:
             self.load_artifacts(**kwargs)
         self.results = dict(self.results)
         self.configs = dict(self.configs)
-        self.close_managers()
+        self.close_manager()
 
     def load_configs(self):
         """ Load all experiment configs. """
@@ -383,7 +383,8 @@ class ResearchResults:
                     filtered_ids += [experiment_id]
         return filtered_ids
 
-    def close_managers(self):
+    def close_manager(self):
+        """ Close manager. """
         self.results = dict(self.results)
         self.configs = dict(self.configs)
         self._manager.shutdown()

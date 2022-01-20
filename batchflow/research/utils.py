@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-import multiprocess as mp
 
 def to_list(value):
     return value if isinstance(value, list) else [value]

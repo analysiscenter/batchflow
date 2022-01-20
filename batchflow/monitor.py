@@ -48,6 +48,8 @@ class ResourceMonitor:
         self.pid = os.getpid()
         self.running = False
 
+        self.manager = None
+
         self.stop_queue = None
         self.shared_list = None
         self.process = None
