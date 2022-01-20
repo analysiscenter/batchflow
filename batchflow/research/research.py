@@ -86,6 +86,7 @@ class Research:
         self.gpu_check_delay = 5
         self.dump_monitor = True
 
+        self._is_loaded = False
         self._is_executed = False
         self._env_meta_to_collect = []
 
@@ -429,7 +430,7 @@ class Research:
                     self.terminate()
             except KeyboardInterrupt as e:
                 self.logger.info("Research has been stopped by KeyboardInterrupt.")
-                self.terminate()
+                self.terminate(force=True, wait=False)
                 raise e
         else:
             if detach:
@@ -438,36 +439,37 @@ class Research:
             self.terminate()
         return self
 
-    def terminate(self, kill_processes=False, force=False):
+    def terminate(self, kill_processes=False, force=False, wait=True):
         """ Kill all research processes. """
         # TODO: killed processes don't release GPU.
-        if not force and self.monitor.in_progress:
-            answer = input(f'{self.name} is in progress. Are you sure? [y/n]').lower()
-            answer = len(answer) > 0 and 'yes'.startswith(answer)
-        else:
-            answer = True
-        if force or answer:
-            self.logger.info("Stop research.")
-            if self.monitor is not None:
-                self.monitor.stop(wait=True)
+        if not self._is_loaded:
+            if not force and self.monitor.in_progress:
+                answer = input(f'{self.name} is in progress. Are you sure? [y/n]').lower()
+                answer = len(answer) > 0 and 'yes'.startswith(answer)
+            else:
+                answer = True
+            if force or answer:
+                self.logger.info("Stop research.")
+                if self.monitor is not None:
+                    self.monitor.stop(wait=wait)
 
-            self.monitor.close_managers()
-            self.results.close_managers()
-            self.profiler.close_managers()
+                self.monitor.close_managers()
+                self.results.close_managers()
+                self.profiler.close_managers()
 
-            if self.detach:
-                kill_processes = True
+                if self.detach:
+                    kill_processes = True
 
-            if kill_processes and self.monitor is not None:
-                self.logger.info("Terminate research processes")
+                if kill_processes and self.monitor is not None:
+                    self.logger.info("Terminate research processes")
 
-                order = {'EXECUTOR': 1, 'WORKER': 2, 'DETACHED_PROCESS': 3, 'MONITOR': 4}
-                processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
-                for pid, process_type in processes_to_kill:
-                    if pid is not None and psutil.pid_exists(pid):
-                        process = psutil.Process(pid)
-                        process.terminate()
-                        self.logger.info(f"Terminate {process_type} [pid:{pid}]")
+                    order = {'EXECUTOR': 1, 'WORKER': 2, 'DETACHED_PROCESS': 3, 'MONITOR': 4}
+                    processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
+                    for pid, process_type in processes_to_kill:
+                        if pid is not None and psutil.pid_exists(pid):
+                            process = psutil.Process(pid)
+                            process.terminate()
+                            self.logger.info(f"Terminate {process_type} [pid:{pid}]")
 
     def create_logger(self):
         """ Create research logger. """
@@ -498,6 +500,7 @@ class Research:
             research.profiler = ResearchProfiler(research.name, research.profile)
             research.results.load()
             research.profiler.load()
+            research._is_loaded = True
         return research
 
     @classmethod
