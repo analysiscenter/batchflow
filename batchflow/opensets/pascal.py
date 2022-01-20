@@ -104,10 +104,10 @@ class PascalSegmentation(BasePascal):
             train_ids = self._extract_ids(archive, 'train')
             test_ids = self._extract_ids(archive, 'val')
 
-            images = np.array([self._extract_image(archive, self._image_path(name)) \
-                               for name in  [*train_ids, *test_ids]], dtype=object)
-            masks = np.array([self._extract_image(archive, self._mask_path(name)) \
-                              for name in [*train_ids, *test_ids]], dtype=object)
+            images = self.create_array([self._extract_image(archive, self._image_path(name)) \
+                                        for name in  [*train_ids, *test_ids]])
+            masks = self.create_array([self._extract_image(archive, self._mask_path(name)) \
+                                       for name in [*train_ids, *test_ids]])
             preloaded = images, masks
 
             train_len, test_len = len(train_ids), len(test_ids)
@@ -160,8 +160,8 @@ class PascalClassification(BasePascal):
             train_ids = self._extract_ids(archive, 'train')
             test_ids = self._extract_ids(archive, 'val')
 
-            images = np.array([self._extract_image(archive, self._image_path(name))
-                               for name in [*train_ids, *test_ids]], dtype=object)
+            images = self.create_array([self._extract_image(archive, self._image_path(name))
+                                        for name in [*train_ids, *test_ids]])
 
             targets = np.array([d[self._name(name)] for name in [*train_ids, *test_ids]])
             labels = self._process_targets(targets)

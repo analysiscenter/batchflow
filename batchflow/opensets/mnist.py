@@ -118,7 +118,7 @@ class MNIST(ImagesOpenset):
             buf = bytestream.read(rows * cols * num_images)
             data = np.frombuffer(buf, dtype=np.uint8)
             data = data.reshape(num_images, rows, cols)
-            return np.array([PIL.Image.fromarray(image) for image in data], dtype=object)
+            return self.create_array([PIL.Image.fromarray(image) for image in data])
 
     def _extract_labels(self, f):
         """Extract the labels into a 1D uint8 numpy array [index].
