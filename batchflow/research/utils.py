@@ -175,19 +175,6 @@ def generate_id(config, random, create_prefix=False):
     name += ''.join(str(i) for i in random.integers(10, size=8))
     return name
 
-def close_managers(instance, managers):
-    """ Close multiprocess.Manager instances from list. """
-    mapping = {
-        mp.managers.DictProxy: dict,
-        mp.managers.ListProxy: list
-    }
-    for attr in managers:
-        manager = getattr(instance, attr)
-        if isinstance(manager, tuple(mapping.keys())):
-            values = mapping[type(manager)](manager)
-            setattr(instance, attr, values)
-            manager._manager.shutdown() # pylint: disable=protected-access
-
 def plot_results_by_config(results, variables, figsize=None, layout=None, **kwargs):
     """
     Given results from Research.run() draws plots of specified variables for all configs
