@@ -276,7 +276,7 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=True, git_meta=False, env_meta=False, seed=None, profile=False, dump_monitor=False,
+            debug=False, finalize=True, git_meta=False, env_meta=False, seed=None, profile=False,
             memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5, create_id_prefix=False):
         """ Run research.
 
@@ -363,8 +363,6 @@ class Research:
         self.gpu_check_delay = gpu_check_delay
         self.create_id_prefix = create_id_prefix
 
-        self.dump_monitor = dump_monitor
-
         if debug and (parallel or executor_target not in ['f', 'for']):
             raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")
 
@@ -419,7 +417,7 @@ class Research:
             self.distributor.run()
             self.monitor.stop()
 
-        self.monitor.start(self.dump_results and self.dump_monitor)
+        self.monitor.start()
         if self.parallel:
             try:
                 self.process = mp.Process(target=_start_distributor)
@@ -621,6 +619,13 @@ class ResearchMonitor:
         return self.finished_experiments + self.in_queue + self.remained_experiments
 
     @property
+    def n(self):
+        """ Current iteration. """
+        if self.n_iters:
+            return self.finished_iterations + sum(self.current_iterations.values())
+        return self.finished_experiments + len(self.current_iterations)
+
+    @property
     def in_progress(self):
         """ The number of experiments in progress. """
         return len(self.current_iterations)
@@ -670,12 +675,10 @@ class ResearchMonitor:
         with self.bar as progress:
             last_update = False
             while True:
-                if self.n_iters:
-                    progress.n = self.finished_iterations + sum(self.current_iterations.values())
-                else:
-                    progress.n = self.finished_experiments + len(self.current_iterations)
-                progress.total = self.total
-                progress.refresh()
+                if (progress.n != self.n) or (progress.total != self.total):
+                    progress.n = self.n
+                    progress.total = self.total
+                    progress.refresh()
                 if last_update:
                     break
                 time.sleep(0.01)
@@ -683,16 +686,9 @@ class ResearchMonitor:
                     last_update = True
         self.stop_signal.put(None)
 
-    def start(self, dump):
+    def start(self):
         """ Start handler. """
         if self.stopped:
-            self.dump = dump
-            if self.dump:
-                filename = os.path.join(self.path, 'monitor.csv')
-                if not os.path.exists(filename):
-                    with open(filename, 'w') as f:
-                        writer = csv.writer(f)
-                        writer.writerow(self.COLUMNS)
             self.process = mp.Process(target=self.handler)
             self.process.start()
             self.processes[self.process.pid] = 'MONITOR'
