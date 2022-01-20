@@ -8,7 +8,7 @@ import dill
 import multiprocess as mp
 import pandas as pd
 import numpy as np
-from .utils import to_list, close_managers
+from .utils import to_list
 
 class ResearchResults:
     """ Class to collect, load and process research results.
@@ -23,8 +23,9 @@ class ResearchResults:
     def __init__(self, name, dump_results=True, **kwargs):
         self.name = name
         self.dump_results = dump_results
-        self.results = mp.Manager().dict()
-        self.configs = mp.Manager().dict()
+        self._manager = mp.Manager()
+        self.results = self._manager.dict()
+        self.configs = self._manager.dict()
         self.artifacts = dict()
 
         self.kwargs = kwargs
@@ -40,6 +41,9 @@ class ResearchResults:
             self.load_configs()
             self.load_results(**kwargs)
             self.load_artifacts(**kwargs)
+        self.results = dict(self.results)
+        self.configs = dict(self.configs)
+        self.close_managers()
 
     def load_configs(self):
         """ Load all experiment configs. """
@@ -380,4 +384,4 @@ class ResearchResults:
         return filtered_ids
 
     def close_managers(self):
-        close_managers(self, ['results', 'configs'])
+        self._manager.shutdown()

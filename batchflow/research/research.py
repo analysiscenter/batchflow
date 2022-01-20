@@ -20,7 +20,7 @@ from .domain import Domain
 from .distributor import Distributor, DynamicQueue
 from .experiment import Experiment, Executor
 from .results import ResearchResults
-from .utils import create_logger, to_list, close_managers
+from .utils import create_logger, to_list
 from .profiler import ResearchProfiler
 
 from ..utils_random import make_seed_sequence
@@ -583,10 +583,11 @@ class ResearchMonitor:
     def __init__(self, research, path=None, bar=True):
         self.queue = mp.JoinableQueue()
         self.stop_signal = mp.JoinableQueue()
-        self.exceptions = mp.Manager().list()
-        self.shared_values = mp.Manager().dict()
-        self.current_iterations = mp.Manager().dict()
-        self.processes = mp.Manager().dict()
+        self._manager = mp.Manager()
+        self.exceptions = self._manager.list()
+        self.shared_values = self._manager.dict()
+        self.current_iterations = self._manager.dict()
+        self.processes = self._manager.dict()
 
         self.research = research
         self.path = path
@@ -707,4 +708,4 @@ class ResearchMonitor:
         tqdm.tqdm._instances.clear() #pylint:disable=protected-access
 
     def close_managers(self):
-        close_managers(self, ['exceptions', 'shared_values', 'current_iterations', 'processes'])
+        self._manager.shutdown()

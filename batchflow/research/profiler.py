@@ -11,7 +11,6 @@ try:
 except ImportError:
     from . import _fake as pd
 
-from .utils import close_managers
 from ..profiler import Profiler
 
 class ExperimentProfiler(Profiler):
@@ -105,7 +104,8 @@ class ResearchProfiler(ExperimentProfiler):
     def __init__(self, research_name, detailed=True):
         self.research_name = research_name
         self.detailed = detailed
-        self.experiments_info = mp.Manager().dict()
+        self._manager = mp.Manager()
+        self.experiments_info = self._manager.dict()
 
     def put(self, experiment, df):
         self.experiments_info[experiment] = df
@@ -122,4 +122,4 @@ class ResearchProfiler(ExperimentProfiler):
             self.experiments_info[experiment] = pd.read_feather(path).set_index(['unit', 'id'])
 
     def close_managers(self):
-        close_managers(self, ['experiments_info'])
+        self._manager.shutdown()
