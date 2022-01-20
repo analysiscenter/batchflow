@@ -3,6 +3,7 @@
 import os
 from contextlib import ExitStack as does_not_raise
 import pytest
+import psutil
 
 import numpy as np
 
@@ -450,6 +451,9 @@ class TestResearch:
 
         # columns : id,  layout, units, iteration, loss, accuracy
         assert all(results == [np.dtype(i) for i in ['O', 'O', 'O', 'int64', 'float32', 'float64']])
+
+        process = psutil.Process(os.getpid())
+        assert len(process.children()) <= 1
 
     @pytest.mark.parametrize('create_id_prefix', [False, True, 4])
     def test_prefixes(self, simple_research, create_id_prefix):
