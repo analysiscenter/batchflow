@@ -384,4 +384,6 @@ class ResearchResults:
         return filtered_ids
 
     def close_managers(self):
+        self.results = dict(self.results)
+        self.configs = dict(self.configs)
         self._manager.shutdown()

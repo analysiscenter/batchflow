@@ -122,4 +122,5 @@ class ResearchProfiler(ExperimentProfiler):
             self.experiments_info[experiment] = pd.read_feather(path).set_index(['unit', 'id'])
 
     def close_managers(self):
+        self.experiments_info = dict(self.experiments_info)
         self._manager.shutdown()
