@@ -4,7 +4,6 @@
 import os
 import sys
 import time
-import csv
 import itertools
 import subprocess
 import re
@@ -453,9 +452,9 @@ class Research:
                 if self.monitor is not None:
                     self.monitor.stop(wait=wait)
 
-                self.monitor.close_managers()
-                self.results.close_managers()
-                self.profiler.close_managers()
+                self.monitor.close_manager()
+                self.results.close_manager()
+                self.profiler.close_manager()
 
                 if self.detach:
                     kill_processes = True
@@ -500,7 +499,7 @@ class Research:
             research.profiler = ResearchProfiler(research.name, research.profile)
             research.results.load()
             research.profiler.load()
-            research._is_loaded = True
+            research._is_loaded = True # pylint: disable=protected-access
         return research
 
     @classmethod
@@ -706,7 +705,8 @@ class ResearchMonitor:
             self.stopped = True
         tqdm.tqdm._instances.clear() #pylint:disable=protected-access
 
-    def close_managers(self):
+    def close_manager(self):
+        """ Close manager. """
         self.exceptions = list(self.exceptions)
         self.shared_values = dict(self.shared_values)
         self.current_iterations = dict(self.current_iterations)
