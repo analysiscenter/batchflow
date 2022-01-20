@@ -1,4 +1,7 @@
 """ Contains the base class for open datasets """
+import numpy as np
+import PIL
+
 from .. import Dataset, DatasetIndex
 from .. import ImagesBatch
 
@@ -38,6 +41,12 @@ class Openset(Dataset):
         train_index = DatasetIndex(list(range(train_len)))
         test_index = DatasetIndex(list(range(train_len, total_len)))
         return index, train_index, test_index
+
+    def create_array(self, images):
+        array = np.empty(len(images), dtype=object)
+        for i, image in enumerate(images):
+            array[i] = image
+        return array
 
 
 class ImagesOpenset(Openset):
