@@ -704,4 +704,8 @@ class ResearchMonitor:
         tqdm.tqdm._instances.clear() #pylint:disable=protected-access
 
     def close_managers(self):
+        self.exceptions = list(self.exceptions)
+        self.shared_values = dict(self.shared_values)
+        self.current_iterations = dict(self.current_iterations)
+        self.processes = dict(self.processes)
         self._manager.shutdown()
