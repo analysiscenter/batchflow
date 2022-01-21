@@ -69,7 +69,7 @@ class Imagenette(ImagesOpenset):
             return member.isfile() and _extract(archive, member).mode == 'RGB'
 
         def _gather_extracted(archive, files):
-            images = np.array([_extract(archive, file) for file in files], dtype=object)
+            images = self.create_array([_extract(archive, file) for file in files])
             labels = np.array([_image_class(file.name) for file in files])
             _, labels_encoded = np.unique(labels, return_inverse=True)
             return images, labels_encoded
