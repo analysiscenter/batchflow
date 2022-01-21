@@ -11,7 +11,7 @@ from batchflow import Dataset, Pipeline, B, V, C
 from batchflow import NumpySampler as NS
 from batchflow.models.torch import ResNet
 from batchflow.opensets import CIFAR10
-from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults, Alias
+from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults, Alias, experiment
 
 class Model:
     def __init__(self):
@@ -328,24 +328,22 @@ class TestExecutor:
         executor = Executor(experiment, target='f', configs=[{'n': 10}, {'n': 20}], n_iters=None)
         executor.run()
 
-    @pytest.mark.parametrize('save_to, save_output_dict', [
-        ['a', False],
-        [['a'], False],
-        [['a', 'b'], False],
-        [['a', 'b', 'c'], False],
-        [None, True]
+    @pytest.mark.parametrize('save_to, save_output_dict, expectation', [
+        ['a', False, does_not_raise()],
+        [['a'], False, pytest.raises(ValueError)],
+        [['a', 'b'], False, pytest.raises(ValueError)],
+        [['a', 'b', 'c'], False, does_not_raise()],
+        [None, True, does_not_raise()]
     ])
-    def test_multiple_output(self, save_to, save_output_dict):
+    def test_multiple_output(self, save_to, save_output_dict, expectation):
         def func():
             return {'a': 1, 'b': 2, 'c': 3}
 
-        research = Research().add_callable(func, save_to=save_to, save_output_dict=save_output_dict)
-        research.run(dump_results=False)
+        experiment = Experiment().add_callable(func, save_to=save_to, save_output_dict=save_output_dict)
+        executor = Executor(experiment, target='f', n_iters=1, debug=True)
 
-        if isinstance(save_to, list) and len(save_to) != 3:
-            assert len(research.monitor.exceptions) != 0
-        else:
-            assert len(research.monitor.exceptions) == 0
+        with expectation:
+            executor.run()
 
 class TestResearch:
     @pytest.mark.parametrize('parallel', [False, True])
