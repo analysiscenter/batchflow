@@ -1,33 +1,68 @@
 """ Basic Torch layers. """
-import numpy as np
 import torch
 import torch.nn as nn
 
-from ..utils import get_shape, get_num_channels, get_num_dims, safe_eval
+from ..utils import get_num_channels, get_num_dims, safe_eval
 
 
 
 class Flatten(nn.Module):
-    """ A module which reshapes inputs into 2-dimension (batch_items, features). """
-    def forward(self, x):
-        return x.view(x.size(0), -1)
+    """ Flatten input, optionaly keeping provided dimensions.
+    Batch dimension is always preserved """
+    def __init__(self, keep_dims=0):
+        super().__init__()
+        if isinstance(keep_dims, int):
+            keep_dims = (keep_dims, )
+        if 0 not in keep_dims:
+            keep_dims = (0, ) + keep_dims
+        self.keep_dims = sorted(set(keep_dims))
 
+    def forward(self, x):
+        if self.keep_dims[-1] >= x.ndim:
+            msg = f'Not enough dimensions in input! keep_dims={self.keep_dims}, but input shape is {x.shape}'
+            raise ValueError(msg)
+
+        if len(self.keep_dims) == x.ndim:
+            return x
+
+        for dim1, dim2 in enumerate(self.keep_dims):
+            x = x.transpose(dim1, dim2)
+        new_shape = [x.size(i) for i in range(len(self.keep_dims))]
+        return x.reshape(*new_shape, -1)
 
 
 class Dense(nn.Module):
-    """ Dense layer. """
-    def __init__(self, units=None, bias=True, inputs=None):
+    """ Dense layer.
+
+    Parameters
+    ----------
+    units : int or srt
+        Out_features in linear layer. see :meth:`~..utils.safe_eval` for details on str values.
+
+    bias : bool, optional
+        Whether to learn  an additive bias by default True.
+
+    flatten : bool, optional
+        Whether to flatten input prior to feeding it to linear layer, by default True.
+
+    keep_dims : int, optional
+        Dimensions to keep while flattening input, see :class:`~.Flatten`, by default 0.
+    """
+    def __init__(self, units, bias=True, inputs=None, flatten=True, keep_dims=0):
         super().__init__()
 
-        in_units = np.prod(get_shape(inputs)[1:])
+        self.flatten = Flatten(keep_dims) if flatten else nn.Identity()
+
+        inputs = self.flatten(inputs)
+        in_units = inputs.size(-1)
+
         if isinstance(units, str):
             units = safe_eval(units, in_units)
 
         self.linear = nn.Linear(in_units, units, bias)
 
     def forward(self, x):
-        if x.dim() > 2:
-            x = Flatten()(x)
+        x = self.flatten(x)
         return self.linear(x)
 
 

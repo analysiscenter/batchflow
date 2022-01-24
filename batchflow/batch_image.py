@@ -973,6 +973,7 @@ class ImagesBatch(BaseImagesBatch):
         _ = args, kwargs
         new_items = np.concatenate(patches)
         setattr(self, dst, new_items)
+        return self
 
     @action
     @inbatch_parallel(init='indices', post='_assemble_patches')
@@ -1008,11 +1009,11 @@ class ImagesBatch(BaseImagesBatch):
         def _iterate_columns(row_from, row_to):
             column = 0
             while column < image_shape[1]-patch_shape[1]+1:
-                patches.append(PIL.Image.fromarray(image[row_from:row_to, column:column+patch_shape[1]]))
+                patches.append(PIL.Image.fromarray(image[column:column+patch_shape[1], row_from:row_to]))
                 column += stride[1]
             if not drop_last and column + patch_shape[1] != image_shape[1]:
-                patches.append(PIL.Image.fromarray(image[row_from:row_to,
-                                                         image_shape[1]-patch_shape[1]:image_shape[1]]))
+                patches.append(PIL.Image.fromarray(image[image_shape[1]-patch_shape[1]:image_shape[1],
+                                                         row_from:row_to]))
 
         row = 0
         while row < image_shape[0]-patch_shape[0]+1:
@@ -1021,7 +1022,10 @@ class ImagesBatch(BaseImagesBatch):
         if not drop_last and row + patch_shape[0] != image_shape[0]:
             _iterate_columns(image_shape[0]-patch_shape[0], image_shape[0])
 
-        return np.array(patches, dtype=object)
+        array = np.empty(len(patches), dtype=object)
+        for i, patch in enumerate(patches):
+            array[i] = patch
+        return array
 
     @apply_parallel
     def additive_noise(self, image, noise, clip=False, preserve_type=False):

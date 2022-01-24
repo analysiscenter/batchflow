@@ -161,11 +161,14 @@ class ExecutableUnit:
             - If list, must be list of int or str described above.
     args, kwargs : optional
         args and kwargs for unit call, by default None.
-    save_to : str or list, optional
-        names to save output from unit
+    save_to : str, list or None, optional
+        names to save output from unit. Can't be not None with `save_output_dict` which is True.
+    save_output_dict : bool, optional
+        if the output is a dict, use its keys as names of variables to store in results.
+        Can't be True with not None `save_to`
     """
     def __init__(self, name, func=None, generator=None, root=False, when=1,
-                 args=None, kwargs=None, save_to=None, **other_kwargs):
+                 args=None, kwargs=None, save_to=None, save_output_dict=False, **other_kwargs):
         self.name = name
         self.callable = func
         self.generator = generator
@@ -188,6 +191,10 @@ class ExecutableUnit:
         self.iteration = 0
 
         self.save_to = save_to
+        self.save_output_dict = save_output_dict
+
+        if self.save_to is not None and self.save_output_dict:
+            raise ValueError('save_to is not None and save_output_dict is True.')
 
 
     def set_unit(self, config, experiment):
@@ -244,7 +251,7 @@ class ExecutableUnit:
                     start_time = time.time()
                 self.output = next(self.iterator)
 
-            if self.save_to:
+            if self.save_to or self.save_output_dict:
                 self.save_output(iteration)
 
             eval_time = time.time() - start_time
@@ -258,15 +265,19 @@ class ExecutableUnit:
 
     def save_output(self, iteration):
         """ Save output of the unit. """
-        if not isinstance(self.save_to, (list, tuple)):
-            src = [self.output]
-            dst = [self.save_to]
+        if self.save_output_dict:
+            dst = self.output.keys()
+            src = self.output.values()
         else:
-            src = self.output
-            dst = self.save_to
+            if not isinstance(self.save_to, (list, tuple)):
+                src = [self.output]
+                dst = [self.save_to]
+            else:
+                src = self.output
+                dst = self.save_to
 
-        if len(src) != len(dst):
-            raise ValueError(f'Length of src and dst must be the same but src={src} and dst={dst}')
+            if len(src) != len(dst):
+                raise ValueError(f'Length of src and dst must be the same but src={src} and dst={dst}')
 
         for _src, _dst in zip(src, dst):
             if _dst is not None:
@@ -282,7 +293,7 @@ class ExecutableUnit:
 
     def __copy__(self):
         """ Create copy of the unit. """
-        attrs = ['name', 'callable', 'generator', 'root', 'when', 'args', 'kwargs', 'save_to']
+        attrs = ['name', 'callable', 'generator', 'root', 'when', 'args', 'kwargs', 'save_to', 'save_output_dict']
         params = {attr if attr !='callable' else 'func': copy(getattr(self, attr)) for attr in attrs}
         new_unit = ExecutableUnit(**params, **copy(self.other_kwargs))
         return new_unit
@@ -527,13 +538,14 @@ class Experiment:
         if branch is None:
             mode = 'func' if run else 'generator'
             pipeline = PipelineWrapper(root if root is not None else name, mode=mode, variables=variables)
-            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(), when=when, save_to=save_to, **kwargs)
+            self.add_executable_unit(name, src=pipeline, mode=mode, config=EC(full=True),
+                                     when=when, save_to=save_to, **kwargs)
         else:
             root = PipelineWrapper(root, mode='generator')
             branch = PipelineWrapper(branch, mode='execute_for', variables=variables)
 
-            self.add_generator(f'{name}_root', generator=root, config=EC(), when=when, **kwargs)
-            self.add_callable(f'{name}', func=branch, config=EC(), batch=O(f'{name}_root')[0], save_to=save_to,
+            self.add_generator(f'{name}_root', generator=root, config=EC(full=True), when=when, **kwargs)
+            self.add_callable(f'{name}', func=branch, config=EC(full=True), batch=O(f'{name}_root')[0], save_to=save_to,
                               when=when, **kwargs)
         if variables is not None:
             if dump is not None:
@@ -568,7 +580,7 @@ class Experiment:
             raise ValueError(f'Method {name} was not found in any namespace.')
         return _explicit_call(method, name, self)
 
-    def save(self, src, dst, when=1, copy=False): #pylint:disable=redefined-outer-name
+    def save(self, src, dst, when=1, save_output_dict=False, copy=False): #pylint:disable=redefined-outer-name
         """ Save something to research results.
 
         Parameters
@@ -584,7 +596,8 @@ class Experiment:
         """
         name = '__save_results' if dst is None else f'__save_results_{dst}'
         name = self.add_postfix(name)
-        self.add_callable(name, _save_results, when=when, _src=src, _dst=dst, experiment=E(), copy=copy)
+        self.add_callable(name, _get_input, x=src, copy=copy, when=when, save_to=dst,
+                          experiment=E(), save_output_dict=save_output_dict)
         return self
 
     def dump(self, variable=None, when='last'):
@@ -814,6 +827,8 @@ class Executor:
         experiment scheme.
     research : Research, optional
         Research instance to get meta information (if needed), by default None.
+    worker : Worker, optional
+        Worker instance, by default None.
     configs : list, optional
         configs for different branches, by default None.
     executor_config : Config of dict, optional
@@ -827,8 +842,8 @@ class Executor:
     task_name : str, optional
         name of the task, by default None
     """
-    def __init__(self, experiment, research=None, configs=None, executor_config=None, branches_configs=None,
-                 target='threads', n_iters=None, task_name=None, **kwargs):
+    def __init__(self, experiment, research=None, worker=None, configs=None, executor_config=None,
+                 branches_configs=None, target='threads', n_iters=None, task_name=None, **kwargs):
         if configs is None:
             if branches_configs is None:
                 self.n_branches = 1
@@ -853,16 +868,16 @@ class Executor:
 
         self.kwargs = kwargs
 
-        if research is not None:
-            seed = spawn_seed_sequence(research)
+        self.worker = worker
+        if worker is not None:
+            seed = spawn_seed_sequence(worker)
         else:
             seed = make_seed_sequence()
+
         self.random_seed = seed
         self.random = make_rng(seed)
 
         self.create_experiments()
-
-        self.worker = None
         self.pid = None
 
     def create_experiments(self):
@@ -876,9 +891,8 @@ class Executor:
             experiment.logger.info(f"{self.task_name}[{index}] has been started with config:\n {repr(config)}")
             self.experiments.append(experiment)
 
-    def run(self, worker=None):
+    def run(self):
         """ Run experiments. """
-        self.worker = worker
         self.pid = os.getpid() if self.research and self.research.parallel else None
 
         iterations = range(self.n_iters) if self.n_iters else itertools.count()
@@ -960,18 +974,9 @@ def _create_instance(experiments, item_name):
     for e in experiments:
         e.instances[item_name] = instance
 
-def _save_results(_src, _dst, experiment, copy): #pylint:disable=redefined-outer-name
-    if not isinstance(_dst, (list, tuple)):
-        _dst = [_dst]
-        _src = [_src]
-
-    if len(_src) != len(_dst):
-        raise ValueError('Length of src and dst must be the same')
-
-    for src, dst in zip(_src, _dst):
-        previous_values = experiment.results.get(dst, OrderedDict())
-        previous_values[experiment.iteration] = deepcopy(src) if copy else src
-        experiment.results[dst] = previous_values
+def _get_input(x, copy, *args, **kwargs): #pylint:disable=redefined-outer-name
+    _ = args, kwargs
+    return deepcopy(x) if copy else x
 
 def _dump_results(variable, experiment):
     """ Callable to dump results. """

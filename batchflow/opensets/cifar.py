@@ -41,7 +41,7 @@ class BaseCIFAR(ImagesOpenset):
 
         def _gather_extracted(all_res):
             images = np.concatenate([res[b'data'] for res in all_res]).reshape((-1, 3, 32, 32)).transpose((0, 2, 3, 1))
-            images = np.array([PIL.Image.fromarray(image) for image in images], dtype=object)
+            images = self.create_array([PIL.Image.fromarray(image) for image in images])
             labels = np.concatenate([res[self.LABELS_KEY] for res in all_res])
             return images, labels
 

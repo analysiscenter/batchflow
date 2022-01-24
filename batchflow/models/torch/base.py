@@ -1042,7 +1042,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 # Update config with shapes
                 self.inputs_shapes = inputs_shapes
                 self.targets_shapes = targets_shapes
-                if not self.classes:
+                if not self.classes and len(targets_shapes) > 2:
                     self.classes = [shape[1] for shape in targets_shapes]
 
                 self.update_config()
