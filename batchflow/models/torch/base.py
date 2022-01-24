@@ -534,16 +534,18 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         self.callbacks = [callback.set_model(self) for callback in config.get('callbacks', [])]
 
-        # Parse operations, that should be applied to model predictions, into a dictionary
-        operations = config['output']
+        self._parse_outputs()
+        self._parse_devices()
+        self._parse_placeholder_shapes()
+
+    def _parse_outputs(self):
+        """ Parse operations, that should be applied to model predictions, into a dictionary. """
+        operations = self.config['output']
         if not isinstance(operations, dict):
             operations = operations or []
             operations = list(operations) if isinstance(operations, (tuple, list)) else [operations]
             operations = {'' : operations}
         self.operations = operations
-
-        self._parse_devices()
-        self._parse_placeholder_shapes()
 
     def _parse_devices(self):
         """ Extract `devices` and `benchmark` from config.
@@ -1575,6 +1577,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             setattr(self, item, checkpoint.get(item))
         self.config = self.config + load_config
 
+        self._parse_outputs()
         self.model_to_device()
 
         if eval:
