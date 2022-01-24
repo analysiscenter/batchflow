@@ -81,7 +81,7 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
 
     if (inputs or outputs) and out_path_db is None:
         raise ValueError(
-            """Invalid value for `out_path_db` argument: 
+            """Invalid value for `out_path_db` argument:
             If `inputs` or `outputs` are provided, then you need to provide `out_path_db` argument."""
         )
 
