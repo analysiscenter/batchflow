@@ -551,7 +551,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         """ Extract `devices` and `benchmark` from config.
         If the config value is not set, use the best available accelerator.
         """
-        devices = self.config.get('device')
+        if hasattr(self, 'config'):
+            config = self.config
+        else:
+            config = self.external_config
+        devices = config.get('device')
 
         if devices is None:
             if torch.cuda.is_available():
@@ -578,7 +582,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                             if device not in self.devices[:i]]
             self.device = self.devices[0]
 
-        torch.backends.cudnn.benchmark = self.config.get('benchmark', 'cuda' in self.device.type)
+        torch.backends.cudnn.benchmark = config.get('benchmark', 'cuda' in self.device.type)
 
     def _parse_placeholder_shapes(self):
         """ Extract `inputs_shapes`, `targets_shapes`, `classes` from config. """
