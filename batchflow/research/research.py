@@ -179,7 +179,7 @@ class Research:
             path to repo, by default '.'
         """
         commands = {
-            'commit': "git log --name-status HEAD^..HEAD",
+            'commit': "git log -1",
             'diff': 'git diff',
             'status': 'git status -uno',
         }
