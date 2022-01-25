@@ -11,7 +11,7 @@ from batchflow import Dataset, Pipeline, B, V, C
 from batchflow import NumpySampler as NS
 from batchflow.models.torch import ResNet
 from batchflow.opensets import CIFAR10
-from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults, Alias, experiment
+from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults, Alias
 
 class Model:
     def __init__(self):
