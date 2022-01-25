@@ -35,13 +35,13 @@ def pipeline():
 
     test_pipeline = (Pipeline()
                      .init_variable('current_loss')
-                     .init_model('dynamic', C('model_class'),
-                                 'model', C('model_config'))
+                     .init_model('model', C('model_class'),
+                                 'dynamic', C('model_config'))
                      .to_array(dtype='float32')
                      .train_model('model',
-                                  B('images'),
-                                  B('labels'),
-                                  fetches='loss',
+                                  inputs=B('images'),
+                                  targets=B('labels'),
+                                  outputs='loss',
                                   save_to=V('current_loss'))
                      )
     return test_pipeline
@@ -49,7 +49,7 @@ def pipeline():
 
 @pytest.mark.slow
 @pytest.mark.parametrize('model, image_shape', list(zip(MODELS, IM_SHAPE)))
-class Test_models:
+class TestModels:
     """ Ensure that a model can be built and trained.
 
     There is a following pattern in every test:
@@ -83,10 +83,10 @@ class Test_models:
                     .init_variable('current_loss', [])
                     .init_variable('predictions', [])
                     .init_variable('output', [])
-                    .init_model('dynamic', C('model_class'),
-                                'model', C('model_config'))
+                    .init_model('model', C('model_class'),
+                                'dynamic', C('model_config'))
                     .to_array(dtype='float32')
-                    .train_model('model', B('images'), B('labels'), fetches=fetches, save_to=save_to)
+                    .train_model('model', inputs=B('images'), targets=B('labels'), outputs=fetches, save_to=save_to)
                     )
 
         batch_size = 4

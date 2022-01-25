@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from batchflow import Dataset, B, V
-from batchflow.research import Research
+from batchflow.research import Research, E, get_metrics
 
 
 np.random.seed(2020)
@@ -13,7 +13,7 @@ NUM_ITEMS = 10
 DATA = np.random.sample(NUM_ITEMS)
 
 
-@pytest.mark.skip(reason="check pytest failure in github actions")
+# @pytest.mark.skip(reason="check pytest failure in github actions")
 @pytest.mark.parametrize('batch_size', [4, 5])
 class TestTestLoss:
     """
@@ -39,11 +39,11 @@ class TestTestLoss:
                )
 
         research = (Research()
-                    .add_pipeline(ppl, name='ppl', execute='last', run=True)
-                    .get_metrics(pipeline='ppl', metrics_var='metric_test_loss', metrics_name='loss',
-                                 returns='test_loss', execute='last')
+                    .add_pipeline('ppl', ppl, when='last', run=True)
+                    .add_callable(get_metrics, pipeline=E('ppl').pipeline, metrics_var='metric_test_loss', metrics_name='loss',
+                                 save_to='test_loss', when='last')
                     )
 
-        research.run(1, name=research_path)
+        research.run(name=research_path, n_iters=1)
 
-        assert np.allclose(DATA.mean(), research.load_results().df.test_loss[0])
+        assert np.allclose(DATA.mean(), research.results.df.test_loss[0])

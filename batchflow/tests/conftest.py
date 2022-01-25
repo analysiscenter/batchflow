@@ -37,9 +37,7 @@ def model_setup_images_clf():
                           batch_class=ImagesBatch,
                           preloaded=data)
 
-        model_config = {'inputs/images/shape': image_shape,
-                        'inputs/labels/classes': num_classes,
-                        'initial_block/inputs': 'images'}
+        model_config = {'classes': 10}
         return dataset, model_config
 
     return _model_setup
