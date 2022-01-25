@@ -13,7 +13,6 @@ NUM_ITEMS = 10
 DATA = np.random.sample(NUM_ITEMS)
 
 
-# @pytest.mark.skip(reason="check pytest failure in github actions")
 @pytest.mark.parametrize('batch_size', [4, 5])
 class TestTestLoss:
     """
@@ -40,8 +39,8 @@ class TestTestLoss:
 
         research = (Research()
                     .add_pipeline('ppl', ppl, when='last', run=True)
-                    .add_callable(get_metrics, pipeline=E('ppl').pipeline, metrics_var='metric_test_loss', metrics_name='loss',
-                                 save_to='test_loss', when='last')
+                    .add_callable(get_metrics, pipeline=E('ppl').pipeline, metrics_var='metric_test_loss',
+                                  metrics_name='loss', save_to='test_loss', when='last')
                     )
 
         research.run(name=research_path, n_iters=1)
