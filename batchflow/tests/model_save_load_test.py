@@ -11,7 +11,7 @@ import numpy as np
 from batchflow import Pipeline
 from batchflow import B, V, C, I
 
-from batchflow.models.torch import VGG7 as TORCH_VGG7
+from batchflow.models.torch import TorchModel, VGG7
 
 PATH = 'my_mdl'
 BATCH_SIZE = 20
@@ -19,7 +19,7 @@ BATCH_SIZE = 20
 
 @pytest.mark.slow
 @pytest.mark.parametrize('model_class',
-                         [pytest.param(TORCH_VGG7, id='torch')])
+                         [pytest.param(VGG7, id='torch')])
 class TestModelSaveLoad:
     """
     Ensure that a model can be saved and loaded.
@@ -39,26 +39,23 @@ class TestModelSaveLoad:
         make pipelines for model loading and saving, that are compatible with given `model_class`
         """
         def _pipelines(model_class):
-            config = {}
+            config = {'model_class': model_class}
             dataset, model_config = model_setup_images_clf(data_format='channels_first')
 
-            save_pipeline = (Pipeline()
-                             .init_variable('predictions', default=[])
-                             .init_model('dynamic', model_class, 'model', model_config)
-                             .to_array(dtype='float32')
-                             .predict_model('model', B.images,
-                                            fetches='predictions',
-                                            save_to=V('predictions', mode='a')))
-            load_pipeline = (Pipeline()
-                             .init_variable('predictions', default=[])
-                             .to_array(dtype=C('dtype'))
-                             .predict_model('model', B.images,
-                                            fetches='predictions',
-                                            save_to=V('predictions', mode='a')))
+            train_pipeline = (Pipeline()
+                .init_model('model', model_class, 'dynamic', model_config)
+                .to_array(dtype='float32')
+                .train_model('model', inputs=B('images'), targets=B('labels'), outputs='loss')
+            )
 
-            save_pipeline = (save_pipeline << dataset) << config
-            load_pipeline = (load_pipeline << dataset) << config
-            return save_pipeline, load_pipeline
+            predict_pipeline = (Pipeline()
+                .init_variable('predictions', default=[])
+                .to_array(dtype='float32')
+                .predict_model('model', inputs=B.images,
+                            outputs='predictions',
+                            save_to=V('predictions', mode='a'))
+            )
+            return (train_pipeline + predict_pipeline) << dataset << config, predict_pipeline << dataset << config
 
         return _pipelines
 
@@ -77,22 +74,23 @@ class TestModelSaveLoad:
 
         Predictions from save_pipeline and from load_pipeline should be equal
         """
-        save_pipeline, load_pipeline = pipelines(model_class)
-
         save_tmpl = (Pipeline()
                      .save_model('model', path=save_path + I("current").str())
-                     .train_model('model', B('images'), B('labels'), fetches='loss'))
-
-        save_pipeline = save_pipeline + save_tmpl
-        save_pipeline.run(BATCH_SIZE, n_epochs=1, bar=True)
-        saved_predictions = save_pipeline.get_variable('predictions')
+                    )
 
         load_tmpl = (Pipeline()
-                     .load_model('dynamic', C('model_class'), 'model', path=save_path + I("current").str()))
+                     .load_model('model', C('model_class'), 'dynamic', path=save_path + I("current").str())
+                    )
 
-        load_pipeline = load_tmpl + load_pipeline
-        load_pipeline.run(BATCH_SIZE, n_epochs=1, bar=True)
-        loaded_predictions = load_pipeline.get_variable('predictions')
+        train_pipeline, predict_pipeline = pipelines(model_class)
+
+        train_pipeline = train_pipeline + save_tmpl
+        train_pipeline.run(BATCH_SIZE, n_epochs=1)
+        saved_predictions = train_pipeline.v('predictions')
+
+        predict_pipeline = load_tmpl + predict_pipeline
+        predict_pipeline.run(BATCH_SIZE, n_epochs=1)
+        loaded_predictions = predict_pipeline.v('predictions')
 
         assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
 
@@ -100,36 +98,61 @@ class TestModelSaveLoad:
         """
         Test model loading and saving with `save_model_now`  and `load_model_now`
         """
-        save_pipeline, load_pipeline = pipelines(model_class)
+        train_pipeline, predict_pipeline = pipelines(model_class)
 
-        save_pipeline.run(BATCH_SIZE, n_epochs=1)
-        saved_predictions = save_pipeline.get_variable('predictions')
-        save_pipeline.save_model_now('model', path=save_path)
+        train_pipeline.run(BATCH_SIZE, n_epochs=1)
+        saved_predictions = train_pipeline.v('predictions')
+        train_pipeline.save_model_now('model', path=save_path)
 
-        load_pipeline.load_model_now('dynamic', C('model_class'), 'model', path=save_path)
-        load_pipeline.run(BATCH_SIZE, n_epochs=1)
-        loaded_predictions = load_pipeline.get_variable('predictions')
+        predict_pipeline.load_model_now('model', C('model_class'), 'dynamic', path=save_path)
+        print(predict_pipeline.get_model_by_name('model'))
+        predict_pipeline.run(BATCH_SIZE, n_epochs=1)
+        loaded_predictions = predict_pipeline.v('predictions')
 
-        assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
+        assert (saved_predictions[-1] == loaded_predictions[-1]).all()
 
     def test_after_before(self, save_path, pipelines, model_class):
         """
         Test model saving in pipeline.after and loading in pipeline.before
         """
-        save_pipeline, load_pipeline = pipelines(model_class)
+        train_pipeline, predict_pipeline = pipelines(model_class)
 
-        save_pipeline.after.save_model('model', path=save_path)
-        save_pipeline.run(BATCH_SIZE, n_epochs=1)
-        saved_predictions = save_pipeline.get_variable('predictions')
+        train_pipeline.after.save_model('model', path=save_path)
+        train_pipeline.run(BATCH_SIZE, n_epochs=1)
+        saved_predictions = train_pipeline.get_variable('predictions')
 
-        load_pipeline.before.load_model('dynamic', C('model_class'), 'model', path=save_path)
-        load_pipeline.run(BATCH_SIZE, n_epochs=1)
-        loaded_predictions = load_pipeline.get_variable('predictions')
+        predict_pipeline.before.load_model('model', C('model_class'), 'dynamic', path=save_path)
+        predict_pipeline.run(BATCH_SIZE, n_epochs=1)
+        loaded_predictions = predict_pipeline.get_variable('predictions')
 
-        assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
+        assert (saved_predictions[-1] == loaded_predictions[-1]).all()
+
+    def test_outer(self, save_path, pipelines, model_class):
+        """
+        Test model saving in pipeline.after and loading from created Model instance.
+        """
+        train_pipeline, predict_pipeline = pipelines(model_class)
+
+        train_pipeline.after.save_model('model', path=save_path)
+        train_pipeline.run(BATCH_SIZE, n_epochs=1)
+        saved_predictions = train_pipeline.get_variable('predictions')
+
+        model = TorchModel(config={'load/path': save_path})
+
+        load_tmpl = (Pipeline()
+                     .init_model('model', source=model)
+                    )
+
+        predict_pipeline = load_tmpl + predict_pipeline
+
+        predict_pipeline.run(BATCH_SIZE, n_epochs=1)
+        loaded_predictions = predict_pipeline.get_variable('predictions')
+
+        assert (saved_predictions[-1] == loaded_predictions[-1]).all()
 
     @pytest.mark.parametrize('pickle_module', [None, dill, pickle])
-    def test_bare_model(self, save_path, model_class, pickle_module):
+    @pytest.mark.parametrize('outputs', ['predictions', 'sigmoid'])
+    def test_bare_model(self, save_path, model_class, pickle_module, outputs):
         """
         Test model saving and loading without pipeline
         """
@@ -139,16 +162,19 @@ class TestModelSaveLoad:
         dataset_size = 10
         image_shape = (2, 100, 100)
 
-        model_config = {'inputs/images/shape': image_shape,
-                        'inputs/labels/classes': num_classes,
-                        'initial_block/inputs': 'images'}
+        model_config = {
+            'classes': num_classes,
+            'inputs_shapes': image_shape,
+            'output': 'sigmoid'
+        }
+
         model_save = model_class(config=model_config)
 
         batch_shape = (dataset_size, *image_shape)
         images_array = np.random.random(batch_shape)
 
         args = (images_array.astype('float32'),)
-        kwargs = dict(fetches='predictions')
+        kwargs = dict(outputs=outputs)
 
         saved_predictions = model_save.predict(*args, **kwargs)
         model_save.save(path=save_path, **pickle_args)

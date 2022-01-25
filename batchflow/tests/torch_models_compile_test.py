@@ -35,9 +35,7 @@ MODELS_SEG = [
 def base_config_clf():
     """ Fixture to hold default configuration for classification. """
     config = {
-        'inputs/images/shape': (1, 64, 64),
-        'inputs/labels/classes': 10,
-        'initial_block/inputs': 'images',
+        'classes': 10,
         'loss': 'ce',
     }
     return config
@@ -47,10 +45,9 @@ def base_config_clf():
 def base_config_segment():
     """ Fixture to hold default configuration for segmentation. """
     config = {
-        'inputs/images/shape': (1, 64, 64),
-        'inputs/masks/shape': (1, 64, 64),
-        'initial_block/inputs': 'images',
-        'loss': 'mse'
+        'inputs_shapes': (1, 64, 64),
+        'classes': 10,
+        'loss': 'ce'
     }
     return config
 
