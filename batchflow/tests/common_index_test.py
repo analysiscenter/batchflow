@@ -118,7 +118,7 @@ def test_shuffle_bool_false(index):
 def test_shuffle_bool_true(index):
     index, values = index
     right = np.arange(len(values))
-    left = index.shuffle(shuffle=True)
+    left = index.shuffle(shuffle=42)
     assert (left != right).any()
 
 def test_shuffle_int(index):
