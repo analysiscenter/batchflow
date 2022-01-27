@@ -4,7 +4,7 @@ import time
 
 
 def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None, execute_kwargs=None,
-                 out_path_ipynb=None, out_path_html=None, add_timestamp=True, hide_input=False, display_links=True,
+                 out_path_ipynb=None, out_path_html=None, add_timestamp=True, hide_code_cells=False, display_links=True,
                  raise_exception=False, return_notebook=False):
     """ Run a notebook and save the execution result.
 
@@ -14,8 +14,8 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
     Heavily inspired by https://github.com/tritemio/nbrun.
 
     Also, allows to pass `outputs` parameter, which is a list of local variables that you need to return from
-    the executed notebook. Under the hood, we create a separate notebook that saves local variables with names
-    from the `outputs`. After that, we extract output variables in this method and return them.
+    the executed notebook. Under the hood, we create a separate notebook on the same kernel that saves local variables
+    with names from the `outputs`. After that, we extract output variables in this method and return them.
     The separate notebook helps to extract outputs in error case.
 
     Parameters
@@ -31,7 +31,8 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
         Position to insert the cell with inputs into the notebook.
     out_path_db : str, optional
         Path to save the shelve database files. There is no need in files extension.
-        It is a required argument if inputs or outputs are provided.
+        If None and `inputs` or `outputs` are provided, than `out_path_db` is created from `out_path_ipynb` or
+        `out_path_html`. So, one of `out_path_*` must be provided if `inputs` or `outputs` are not None.
     execute_kwargs : dict, optional
         Other parameters of `:class:ExecutePreprocessor`.
     out_path_ipynb : str, optional
@@ -40,7 +41,7 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
         Path to save the output .html file.
     add_timestamp : bool
         Whether to add a cell with execution information at the beginning of the executed notebook.
-    hide_input : bool
+    hide_code_cells : bool
         Whether to hide the code cells in the executed notebook.
     display_links : bool
         Whether to display links to the executed notebook and html at execution.
@@ -59,31 +60,40 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
             - 'outputs' : dict
                The notebook saved outputs.
             - 'failed cell number': int
-              An error cell execution number (if exists).
-            - 'traceback': str
-              Traceback message from the notebook (if exists).
-    notebook :class:`nbformat.notebooknode.NotebookNode`
-        Executed notebook object.
-        Note that this output is provided only if `return_notebook` is True.
+               An error cell execution number (if exists).
+            - 'traceback' : str
+               Traceback message from the notebook (if exists).
+            - 'notebook' : :class:`nbformat.notebooknode.NotebookNode`
+               Executed notebook object.
+               Note that this output is provided only if `return_notebook` is True.
     """
     # pylint: disable=bare-except, lost-exception
-    from IPython.display import display, FileLink
     import nbformat
     from jupyter_client.manager import KernelManager
     from nbconvert.preprocessors import ExecutePreprocessor
-    from nbconvert import HTMLExporter
     import shelve
     from dill import Pickler, Unpickler
     from textwrap import dedent
 
-    if not os.path.exists(path):
-        raise FileNotFoundError(f'Path {path} not found.')
+    if inputs or outputs:
+        # Set `out_path_db` value
+        if out_path_db is None:
+            if out_path_ipynb:
+                out_path_db = os.path.splitext(out_path_ipynb)[0] + '_db'
+            elif out_path_html:
+                out_path_db = os.path.splitext(out_path_html)[0] + '_db'
+            else:
+                raise ValueError(
+                    """Invalid value for `out_path_db` argument:
+                    If `inputs` or `outputs` are provided, then you need to provide `out_path_db` argument."""
+                )
 
-    if (inputs or outputs) and out_path_db is None:
-        raise ValueError(
-            """Invalid value for `out_path_db` argument:
-            If `inputs` or `outputs` are provided, then you need to provide `out_path_db` argument."""
-        )
+        # (Re)create a shelve database
+        shelve.Pickler = Pickler
+        shelve.Unpickler = Unpickler
+
+        with shelve.open(out_path_db) as notebook_db:
+            notebook_db.clear()
 
     if isinstance(outputs, str):
         outputs = [outputs]
@@ -97,17 +107,10 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
     # Read the notebook, insert cell with inputs, create a notebook for outputs extraction
     notebook = nbformat.read(path, as_version=4)
 
-    if hide_input:
+    if hide_code_cells:
         notebook["metadata"].update({"hide_input": True})
 
     if inputs or outputs:
-        # (Re)create a shelve database
-        shelve.Pickler = Pickler
-        shelve.Unpickler = Unpickler
-
-        with shelve.open(out_path_db) as notebook_db:
-            notebook_db.clear()
-
         # Code for work with the shelve database from notebooks
         code_header = f"""\
                        # Cell inserted during automated execution
@@ -139,8 +142,10 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
         notebook['cells'].insert(inputs_pos, nbformat.v4.new_code_cell(code))
 
     if outputs:
-        # Create a notebook to extract outputs from the main notebook
-        # The `output_notebook` save locals with preferred names in the shelve database
+        # Create a separate notebook to extract outputs from the main notebook
+        # The `output_notebook` save locals from the main notebook with preferred names in the shelve database
+        # The separate notebook will extract outputs in error case too
+        # This behavior is helpful in case when outputs contain logs
         code = f"""
                 # Output dict preparation
                 output = {{}}
@@ -154,16 +159,16 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
                     notebook_db['outputs'] = output"""
 
         code = dedent(code)
-        code = code_header + code
+        code = (code_header if not inputs else "") + code
 
         output_notebook = nbformat.v4.new_notebook(metadata=notebook.metadata)
         output_notebook['cells'].append(nbformat.v4.new_code_cell(code))
 
     # Execute the notebook
     start_time = time.time()
+    exec_failed = False
     try:
         executor.preprocess(notebook, {'metadata': {'path': working_dir}}, km=kernel_manager)
-        exec_failed = False
     except:
         exec_failed = True
         if raise_exception:
@@ -173,14 +178,15 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
         if outputs is not None:
             executor.preprocess(output_notebook, {'metadata': {'path': working_dir}}, km=kernel_manager)
 
-        # Check that something gone wrong or not
+        # Check if something went wrong
         failed, error_cell_num, traceback_message = extract_traceback(notebook=notebook)
         failed = failed or exec_failed
 
         # Prepare execution results: execution state, notebook outputs and error info (if exists)
-        exec_res = {'failed': failed}
         if failed:
-            exec_res.update({'failed cell number': error_cell_num, 'traceback': traceback_message})
+            exec_res = {'failed': failed, 'failed cell number': error_cell_num, 'traceback': traceback_message}
+        else:
+            exec_res = {'failed': failed, 'failed cell number': None, 'traceback': ''}
 
         if outputs is not None:
             with shelve.open(out_path_db) as notebook_db:
@@ -195,21 +201,9 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
 
         # Save the executed notebook/HTML to disk
         if out_path_ipynb:
-            with open(out_path_ipynb, 'w', encoding='utf-8') as file:
-                nbformat.write(notebook, file)
-
-            if display_links:
-                display(FileLink(out_path_ipynb))
-
+            save_notebook(notebook=notebook, out_path_ipynb=out_path_ipynb, display_links=display_links)
         if out_path_html:
-            html_exporter = HTMLExporter()
-            body, _ = html_exporter.from_notebook_node(notebook)
-
-            with open(out_path_html, 'w') as f:
-                f.write(body)
-
-            if display_links:
-                display(FileLink(out_path_html))
+            notebook_to_html(notebook=notebook, out_path_html=out_path_html, display_links=display_links)
 
         # Remove shelve files if the notebook is successfully executed
         if out_path_db and not failed:
@@ -217,8 +211,34 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
                 os.remove(out_path_db + '.' + ext)
 
         if return_notebook:
-            return (exec_res, notebook)
+            exec_res['notebook'] = notebook
         return exec_res
+
+# Save notebook functions
+def save_notebook(notebook, out_path_ipynb, display_links):
+    """ Save notebook as ipynb file."""
+    import nbformat
+    from IPython.display import display, FileLink
+
+    with open(out_path_ipynb, 'w', encoding='utf-8') as file:
+        nbformat.write(notebook, file)
+
+    if display_links:
+        display(FileLink(out_path_ipynb))
+
+def notebook_to_html(notebook, out_path_html, display_links):
+    """ Save notebook as ipynb file."""
+    from nbconvert import HTMLExporter
+    from IPython.display import display, FileLink
+
+    html_exporter = HTMLExporter()
+    body, _ = html_exporter.from_notebook_node(notebook)
+
+    with open(out_path_html, 'w') as f:
+        f.write(body)
+
+    if display_links:
+        display(FileLink(out_path_html))
 
 
 def extract_traceback(notebook):
