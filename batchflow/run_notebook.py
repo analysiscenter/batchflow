@@ -31,8 +31,7 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
         Position to insert the cell with inputs into the notebook.
     out_path_db : str, optional
         Path to save the shelve database files. There is no need in files extension.
-        If None and `inputs` or `outputs` are provided, than `out_path_db` is created from `out_path_ipynb` or
-        `out_path_html`. So, one of `out_path_*` must be provided if `inputs` or `outputs` are not None.
+        If None and `inputs` or `outputs` are provided, than `out_path_db` is created from `out_path_ipynb`.
     execute_kwargs : dict, optional
         Other parameters of `:class:ExecutePreprocessor`.
     out_path_ipynb : str, optional
@@ -80,13 +79,12 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
         if out_path_db is None:
             if out_path_ipynb:
                 out_path_db = os.path.splitext(out_path_ipynb)[0] + '_db'
-            elif out_path_html:
-                out_path_db = os.path.splitext(out_path_html)[0] + '_db'
             else:
-                raise ValueError(
-                    """Invalid value for `out_path_db` argument:
-                    If `inputs` or `outputs` are provided, then you need to provide `out_path_db` argument."""
-                )
+                error_message = """\
+                                Invalid value for `out_path_db` argument. If `inputs` or `outputs` are provided,
+                                then you need to provide `out_path_db` or `out_path_ipynb` arguments."""
+                error_message = dedent(error_message)
+                raise ValueError(error_message)
 
         # (Re)create a shelve database
         shelve.Pickler = Pickler
@@ -201,9 +199,9 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
 
         # Save the executed notebook/HTML to disk
         if out_path_ipynb:
-            save_notebook(notebook=notebook, out_path_ipynb=out_path_ipynb, display_links=display_links)
+            save_notebook(notebook=notebook, out_path_ipynb=out_path_ipynb, display_link=display_links)
         if out_path_html:
-            notebook_to_html(notebook=notebook, out_path_html=out_path_html, display_links=display_links)
+            notebook_to_html(notebook=notebook, out_path_html=out_path_html, display_link=display_links)
 
         # Remove shelve files if the notebook is successfully executed
         if out_path_db and not failed:
@@ -215,7 +213,7 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
         return exec_res
 
 # Save notebook functions
-def save_notebook(notebook, out_path_ipynb, display_links):
+def save_notebook(notebook, out_path_ipynb, display_link):
     """ Save notebook as ipynb file."""
     import nbformat
     from IPython.display import display, FileLink
@@ -223,10 +221,10 @@ def save_notebook(notebook, out_path_ipynb, display_links):
     with open(out_path_ipynb, 'w', encoding='utf-8') as file:
         nbformat.write(notebook, file)
 
-    if display_links:
+    if display_link:
         display(FileLink(out_path_ipynb))
 
-def notebook_to_html(notebook, out_path_html, display_links):
+def notebook_to_html(notebook, out_path_html, display_link):
     """ Save notebook as ipynb file."""
     from nbconvert import HTMLExporter
     from IPython.display import display, FileLink
@@ -237,7 +235,7 @@ def notebook_to_html(notebook, out_path_html, display_links):
     with open(out_path_html, 'w') as f:
         f.write(body)
 
-    if display_links:
+    if display_link:
         display(FileLink(out_path_html))
 
 
