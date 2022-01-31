@@ -182,7 +182,7 @@ class TestModelSaveLoad:
         saved_predictions = model_save.predict(*args, **kwargs)
         model_save.save(path=save_path, **pickle_args)
 
-        model_load = model_class(config=model_config)
+        model_load = model_class()
         model_load.load(path=save_path, **pickle_args)
         loaded_predictions = model_load.predict(*args, **kwargs)
 

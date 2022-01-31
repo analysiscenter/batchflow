@@ -366,7 +366,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         'sync_counter', 'microbatch_size',
         'iteration', 'last_train_info', 'last_predict_info',
         'lr_list', 'syncs', 'decay_iters',
-        '_loss_list', 'loss_list',
+        '_loss_list', 'loss_list', 'operations'
     ]
 
     def __init__(self, config=None):
@@ -534,12 +534,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         self.callbacks = [callback.set_model(self) for callback in config.get('callbacks', [])]
 
-        self._parse_outputs()
-        self._parse_devices()
-        self._parse_placeholder_shapes()
-
-    def _parse_outputs(self):
-        """ Parse operations, that should be applied to model predictions, into a dictionary. """
+        # Parse operations, that should be applied to model predictions, into a dictionary
         operations = self.config['output']
         if not isinstance(operations, dict):
             operations = operations or []
@@ -547,14 +542,15 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             operations = {'' : operations}
         self.operations = operations
 
+        self._parse_devices()
+        self._parse_placeholder_shapes()
+
+
     def _parse_devices(self):
         """ Extract `devices` and `benchmark` from config.
         If the config value is not set, use the best available accelerator.
         """
-        if hasattr(self, 'config'):
-            config = self.config
-        else:
-            config = self.external_config
+        config = self.external_config
         devices = config.get('device')
 
         if devices is None:
@@ -1581,7 +1577,6 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             setattr(self, item, checkpoint.get(item))
         self.config = self.config + load_config
 
-        self._parse_outputs()
         self.model_to_device()
 
         if eval:
