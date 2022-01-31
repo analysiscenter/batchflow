@@ -19,7 +19,7 @@ BATCH_SIZE = 20
 
 @pytest.mark.slow
 @pytest.mark.parametrize('model_class',
-                         [pytest.param(VGG7, id='torch')])
+                         [VGG7])
 class TestModelSaveLoad:
     """
     Ensure that a model can be saved and loaded.
