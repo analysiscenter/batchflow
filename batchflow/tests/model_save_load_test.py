@@ -42,20 +42,24 @@ class TestModelSaveLoad:
             config = {'model_class': model_class}
             dataset, model_config = model_setup_images_clf(data_format='channels_first')
 
-            train_pipeline = (Pipeline()
+            train_template = (Pipeline()
                 .init_model('model', model_class, 'dynamic', model_config)
                 .to_array(dtype='float32')
                 .train_model('model', inputs=B('images'), targets=B('labels'), outputs='loss')
             )
 
-            predict_pipeline = (Pipeline()
+            predict_template = (Pipeline()
                 .init_variable('predictions', default=[])
                 .to_array(dtype='float32')
-                .predict_model('model', inputs=B.images,
+                .predict_model('model', inputs=B('images'),
                             outputs='predictions',
                             save_to=V('predictions', mode='a'))
             )
-            return (train_pipeline + predict_pipeline) << dataset << config, predict_pipeline << dataset << config
+
+            train_pipeline = (train_template + predict_template) << dataset << config
+            inference_pipeline = predict_template << dataset << config
+
+            return train_pipeline, inference_pipeline
 
         return _pipelines
 
@@ -96,20 +100,19 @@ class TestModelSaveLoad:
 
     def test_now(self, save_path, pipelines, model_class):
         """
-        Test model loading and saving with `save_model_now`  and `load_model_now`
+        Test model loading and saving with `save_model_now`  and `load_model_now`.
         """
         train_pipeline, predict_pipeline = pipelines(model_class)
 
-        train_pipeline.run(BATCH_SIZE, n_epochs=1)
+        train_pipeline.next_batch(BATCH_SIZE, n_epochs=1)
         saved_predictions = train_pipeline.v('predictions')
         train_pipeline.save_model_now('model', path=save_path)
 
         predict_pipeline.load_model_now('model', C('model_class'), 'dynamic', path=save_path)
-        print(predict_pipeline.get_model_by_name('model'))
-        predict_pipeline.run(BATCH_SIZE, n_epochs=1)
+        predict_pipeline.next_batch(BATCH_SIZE, n_epochs=1)
         loaded_predictions = predict_pipeline.v('predictions')
 
-        assert (saved_predictions[-1] == loaded_predictions[-1]).all()
+        assert (saved_predictions[0] == loaded_predictions[0]).all()
 
     def test_after_before(self, save_path, pipelines, model_class):
         """

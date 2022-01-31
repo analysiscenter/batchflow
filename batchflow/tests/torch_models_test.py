@@ -59,11 +59,9 @@ class TestModels:
         to build and train it with a small batch.
     """
 
-    @pytest.mark.parametrize('decay', [None, {'name':'exp', 'frequency': 25}])
-    def test_data_format(self, model, image_shape, decay, model_setup_images_clf, pipeline):
+    def test_data_format(self, model, image_shape, model_setup_images_clf, pipeline):
         """ We can explicitly pass 'data_format' to inputs or common."""
         dataset, model_config = model_setup_images_clf('channels_first', image_shape=image_shape)
-        model_config.update(decay=decay)
         config = {'model_class': model, 'model_config': model_config}
         test_pipeline = (pipeline << dataset) << config
         batch = test_pipeline.next_batch(2, n_epochs=None)
