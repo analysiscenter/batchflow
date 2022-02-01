@@ -757,7 +757,7 @@ class Experiment:
     def call(self, name, iteration, n_iters=None):
         """ Execute one iteration of the experiment. """
         if self.redirect_stdout in [2, 3] and self.dump_results:
-            if self.redirect_stdout == 1:
+            if self.redirect_stdout == 2:
                 filename = os.path.join(self.full_path, 'stdout.txt')
                 context_manager = contextlib.redirect_stdout(open(filename, 'a'))
             else:
