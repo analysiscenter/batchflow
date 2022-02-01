@@ -14,9 +14,9 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
     Heavily inspired by https://github.com/tritemio/nbrun.
 
     Also, allows to pass `outputs` parameter, which is a list of local variables that you need to return from
-    the executed notebook. Under the hood, we create a separate notebook on the same kernel that saves local variables
-    with names from the `outputs`. After that, we extract output variables in this method and return them.
-    The separate notebook helps to extract outputs in error case.
+    the executed notebook. Under the hood, we insert a cell that saves local variables with names from the `outputs`
+    in the shelve db. If the notebook failed, then the cell is executed directly. After that, we extract output
+    variables in this method and return them.
 
     Parameters
     ----------
@@ -54,17 +54,17 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
     exec_res : dict
         Dictionary with the notebook execution results.
         It provides next information:
-            - 'failed' : bool
-               Whether the execution was failed.
-            - 'outputs' : dict
-               The notebook saved outputs.
-            - 'failed cell number': int
-               An error cell execution number (if exists).
-            - 'traceback' : str
-               Traceback message from the notebook (if exists).
-            - 'notebook' : :class:`nbformat.notebooknode.NotebookNode`
-               Executed notebook object.
-               Note that this output is provided only if `return_notebook` is True.
+        - 'failed' : bool
+           Whether the execution was failed.
+        - 'outputs' : dict
+          The notebook saved outputs.
+        - 'failed cell number': int
+          An error cell execution number (if exists).
+        - 'traceback' : str
+          Traceback message from the notebook (if exists).
+        - 'notebook' : :class:`nbformat.notebooknode.NotebookNode`
+          Executed notebook object.
+          Note that this output is provided only if `return_notebook` is True.
     """
     # pylint: disable=bare-except, lost-exception
     import nbformat
@@ -102,16 +102,16 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
     kernel_manager = KernelManager()
 
     # Notebook preparation:
-    # Read the notebook, insert cell with inputs, create a notebook for outputs extraction
+    # Read the notebook, insert a cell with inputs, insert another cell for outputs extraction
     notebook = nbformat.read(path, as_version=4)
 
     if hide_code_cells:
         notebook["metadata"].update({"hide_input": True})
 
     if inputs or outputs:
-        # Code for work with the shelve database from notebooks
+        # Code for work with the shelve database from the notebook
+        comment_header = "# Cell inserted during automated execution\n"
         code_header = f"""\
-                       # Cell inserted during automated execution
                        import os, shelve
                        from dill import Pickler, Unpickler
 
@@ -123,28 +123,28 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
         code_header = dedent(code_header)
 
     if inputs:
-        # Save `inputs` in the shelve database and create a cell in the `notebook`
+        # Save `inputs` in the shelve database and create a cell in the notebook
         # for parameters extraction
         with shelve.open(out_path_db) as notebook_db:
             notebook_db.update(inputs)
 
         code = """\n
-               with shelve.open(out_path_db) as notebook_db:
-                   inputs = {**notebook_db}
+                # Inputs loading
+                with shelve.open(out_path_db) as notebook_db:
+                    inputs = {**notebook_db}
 
-                   locals().update(inputs)"""
+                    locals().update(inputs)"""
 
         code = dedent(code)
-        code = code_header + code
+        code = comment_header + code_header + code
 
         notebook['cells'].insert(inputs_pos, nbformat.v4.new_code_cell(code))
 
     if outputs:
-        # Create a separate notebook to extract outputs from the main notebook
-        # The `output_notebook` save locals from the main notebook with preferred names in the shelve database
-        # The separate notebook will extract outputs in error case too
-        # This behavior is helpful in case when outputs contain logs
-        code = f"""
+        # Create a cell to extract outputs from the notebook
+        # It saves locals from the notebook with preferred names in the shelve database
+        # This cell will be executed in error case too
+        code = f"""\n
                 # Output dict preparation
                 output = {{}}
                 outputs = {outputs}
@@ -157,10 +157,10 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
                     notebook_db['outputs'] = output"""
 
         code = dedent(code)
-        code = (code_header if not inputs else "") + code
+        code = comment_header + (code_header if not inputs else "") + code
 
-        output_notebook = nbformat.v4.new_notebook(metadata=notebook.metadata)
-        output_notebook['cells'].append(nbformat.v4.new_code_cell(code))
+        output_cell = nbformat.v4.new_code_cell(code)
+        notebook['cells'].append(output_cell)
 
     # Execute the notebook
     start_time = time.time()
@@ -169,13 +169,15 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
         executor.preprocess(notebook, {'metadata': {'path': working_dir}}, km=kernel_manager)
     except:
         exec_failed = True
+
+        # Save notebook outputs in the shelve db
+        if outputs is not None:
+            executor.kc = kernel_manager.client() # For compatibility with 5.x.x version
+            executor.preprocess_cell(output_cell, {'metadata': {'path': working_dir}}, -1)
+
         if raise_exception:
             raise
     finally:
-        # Save notebook outputs in the shelve db
-        if outputs is not None:
-            executor.preprocess(output_notebook, {'metadata': {'path': working_dir}}, km=kernel_manager)
-
         # Check if something went wrong
         failed, error_cell_num, traceback_message = extract_traceback(notebook=notebook)
         failed = failed or exec_failed
@@ -188,7 +190,7 @@ def run_notebook(path, inputs=None, outputs=None, inputs_pos=1, out_path_db=None
 
         if outputs is not None:
             with shelve.open(out_path_db) as notebook_db:
-                exec_res['outputs'] = notebook_db['outputs']
+                exec_res['outputs'] = notebook_db.get('outputs', {})
 
         if add_timestamp:
             timestamp = (f"**Executed:** {time.ctime(start_time)}<br>"
