@@ -1,7 +1,9 @@
 """ Tests for Research and correspong classes. """
 # pylint: disable=no-name-in-module, missing-docstring, redefined-outer-name
 import os
+import sys
 from contextlib import ExitStack as does_not_raise
+from batchflow import research
 import pytest
 import psutil
 
@@ -502,6 +504,36 @@ class TestResearch:
 
         assert research.results.df.iloc[0].a == f(2)
         assert research.results.df.iloc[0].b == f(3)
+
+    @pytest.mark.parametrize('redirect_stdout', [0, 1, 2, 3])
+    @pytest.mark.parametrize('redirect_stderr', [0, 1, 2, 3])
+    def test_redirect_stdout(self, redirect_stdout, redirect_stderr, tmp_path):
+        def f(a):
+            print(a)
+            print(a, file=sys.stderr)
+
+        research = (Research()
+            .add_callable(f, a=2)
+        )
+
+        research.run(name=os.path.join(tmp_path, 'research'), n_iters=2,
+                     redirect_stdout=redirect_stdout, redirect_stderr=redirect_stderr)
+
+        for param, filename in zip([redirect_stdout, redirect_stderr], ['stdout.txt', 'stderr.txt']):
+            n_files = len(research.results.artifacts_to_df(name=filename))
+            assert (filename in os.listdir(research.name)) is (param in [1, 3])
+            assert (n_files == len(research.results.configs)) is (param in [2, 3])
+
+            if param in [1, 3]:
+                with open(os.path.join(research.name, filename)) as file:
+                    lines = ''.join(file.readlines())
+                    assert lines == '2\n' * 2
+
+            if param in [2, 3]:
+                for full_path in research.results.artifacts_to_df(name=filename)['full_path']:
+                        with open(full_path) as file:
+                            lines = ''.join(file.readlines())
+                            assert lines == '2\n' * 2
 
 
 class TestResults:

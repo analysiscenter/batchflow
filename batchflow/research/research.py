@@ -56,6 +56,7 @@ class Research:
         self.repeat_each = repeat_each
         self.create_id_prefix = False
         self.redirect_stdout = True
+        self.redirect_stderr = True
 
         self._env = dict() # current state of git repo and other environment information.
 
@@ -278,7 +279,8 @@ class Research:
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
             debug=False, finalize=True, git_meta=False, env_meta=False, seed=None, profile=False,
-            memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5, create_id_prefix=False, redirect_stdout=True):
+            memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5, create_id_prefix=False,
+            redirect_stdout=True, redirect_stderr=True):
         """ Run research.
 
         Parameters
@@ -334,11 +336,11 @@ class Research:
         create_id_prefix : bool or int, optional
             add prefix to experiment id to allow to sort them by the order of parameters in domain. If int,
             the number of digits for the parameter code formatting.
-        redirect_stdout : int or bool, optional
-            how to redirect stdout to files:
+        redirect_stdout, redirect_stderr : int or bool, optional
+            how to redirect stdout/stderr to files:
                 0 or False - no redirection,
-                1 or True - redirect to common research file "stdout.txt"
-                2 - redirect outputs of experiments into separate file in experiments folders
+                1 or True - redirect to common research file "stdout.txt"/"stderr.txt"
+                2 - redirect output streams of experiments into separate file in experiments folders
                 3 - redirect to common file and to separate experiments files
             Is applicable only with `dump_results=True`.
 
@@ -371,6 +373,7 @@ class Research:
         self.gpu_check_delay = gpu_check_delay
         self.create_id_prefix = create_id_prefix
         self.redirect_stdout = redirect_stdout
+        self.redirect_stderr = redirect_stderr
 
         if debug and (parallel or executor_target not in ['f', 'for']):
             raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")

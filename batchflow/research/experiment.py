@@ -703,7 +703,8 @@ class Experiment:
             'monitor': None,
             'debug': False,
             'profile': False,
-            'redirect_stdout': True
+            'redirect_stdout': True,
+            'redirect_stderr': True
         }
         for attr in defaults:
             if self.research:
@@ -754,23 +755,46 @@ class Experiment:
         """ Close experiment logger. """
         self.logger.removeHandler(self.logger.handlers[0])
 
-    def call(self, name, iteration, n_iters=None):
-        """ Execute one iteration of the experiment. """
+    def create_stdout_stream(self):
+        """ Redirect sys.stdout into file. """
         if self.redirect_stdout in [2, 3] and self.dump_results:
             if self.redirect_stdout == 2:
                 filename = os.path.join(self.full_path, 'stdout.txt')
-                context_manager = contextlib.redirect_stdout(open(filename, 'a'))
+                context_manager_stdout = contextlib.redirect_stdout(open(filename, 'a'))
             else:
                 filename_exp = os.path.join(self.full_path, 'stdout.txt')
                 filename_res = os.path.join(self.name, 'stdout.txt')
-                context_manager = contextlib.redirect_stdout(MultiOut(
+                context_manager_stdout = contextlib.redirect_stdout(MultiOut(
                     open(filename_exp, 'a'),
                     open(filename_res, 'a'),
                 ))
         else:
-            context_manager = contextlib.nullcontext()
+            context_manager_stdout = contextlib.nullcontext()
+        return context_manager_stdout
 
-        with context_manager:
+    def create_stderr_stream(self):
+        """ Redirect sys.stderr into file. """
+        if self.dump_results and self.redirect_stderr > 0:
+            streams = []
+            if self.redirect_stderr in [2, 3]:
+                filename = os.path.join(self.full_path, 'stderr.txt')
+                streams.append(open(filename, 'a'))
+            if self.redirect_stderr in [1, 3]:
+                filename = os.path.join(self.name, 'stderr.txt')
+                streams.append(open(filename, 'a'))
+
+            if len(streams) > 0:
+                context_manager_stdout = contextlib.redirect_stderr(MultiOut(*streams))
+        else:
+            context_manager_stdout = contextlib.nullcontext()
+        return context_manager_stdout
+
+    def call(self, name, iteration, n_iters=None):
+        """ Execute one iteration of the experiment. """
+        context_manager_out = self.create_stdout_stream()
+        context_manager_err = self.create_stderr_stream()
+
+        with context_manager_out, context_manager_err:
             if self.is_alive or name.startswith('__'):
                 if self._profiler:
                     self._profiler.enable()
