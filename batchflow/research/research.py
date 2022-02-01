@@ -55,7 +55,7 @@ class Research:
         self.n_reps = n_reps
         self.repeat_each = repeat_each
         self.create_id_prefix = False
-        self.redirect_stdout = False
+        self.redirect_stdout = True
 
         self._env = dict() # current state of git repo and other environment information.
 
