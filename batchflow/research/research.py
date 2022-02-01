@@ -277,7 +277,7 @@ class Research:
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
             debug=False, finalize=True, git_meta=False, env_meta=False, seed=None, profile=False,
-            memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5, create_id_prefix=False):
+            memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5, create_id_prefix=False, redirect_stdout=True):
         """ Run research.
 
         Parameters
@@ -333,6 +333,8 @@ class Research:
         create_id_prefix : bool or int, optional
             add prefix to experiment id to allow to sort them by the order of parameters in domain. If int,
             the number of digits for the parameter code formatting.
+        redirect_stdout : bool or optional
+            redirect stdout to file or not
 
         Returns
         -------
@@ -362,6 +364,7 @@ class Research:
         self.n_gpu_checks = n_gpu_checks
         self.gpu_check_delay = gpu_check_delay
         self.create_id_prefix = create_id_prefix
+        self.redirect_stdout = redirect_stdout
 
         if debug and (parallel or executor_target not in ['f', 'for']):
             raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")
