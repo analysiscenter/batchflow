@@ -326,11 +326,13 @@ class ResearchResults:
             for experiment_id in self.artifacts:
                 artifacts = self.artifacts[experiment_id]
                 df += [pd.DataFrame({'id': [experiment_id], **artifact}) for artifact in artifacts]
-            df = pd.concat(df)
-            if include_config:
-                df = pd.merge(self.configs_to_df(use_alias, concat_config, remove_auxilary, drop_columns),
-                              df, how='inner', on='id')
-            return df
+            if len(df) > 0:
+                df = pd.concat(df)
+                if include_config:
+                    df = pd.merge(self.configs_to_df(use_alias, concat_config, remove_auxilary, drop_columns),
+                                df, how='inner', on='id')
+                return df
+            return pd.DataFrame({})
         raise ValueError("Research without dump can't have artifacts.")
 
     def filter_ids_by_configs(self, config=None, alias=None, domain=None, **kwargs):
