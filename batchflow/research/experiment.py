@@ -17,7 +17,7 @@ from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify
+from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify, MultiOut
 from .profiler import ExperimentProfiler, ExecutorProfiler
 
 class PipelineWrapper:
@@ -756,11 +756,19 @@ class Experiment:
 
     def call(self, name, iteration, n_iters=None):
         """ Execute one iteration of the experiment. """
-        if self.redirect_stdout and self.dump_results:
-            filename = os.path.join(self.full_path, 'stdout.txt')
-            context_manager = contextlib.redirect_stdout(open(filename, 'a'))
+        if self.redirect_stdout in [2, 3] and self.dump_results:
+            if self.redirect_stdout == 1:
+                filename = os.path.join(self.full_path, 'stdout.txt')
+                context_manager = contextlib.redirect_stdout(open(filename, 'a'))
+            else:
+                filename_exp = os.path.join(self.full_path, 'stdout.txt')
+                filename_res = os.path.join(self.name, 'stdout.txt')
+                context_manager = contextlib.redirect_stdout(MultiOut(
+                    open(filename_exp, 'a'),
+                    open(filename_res, 'a'),
+                ))
         else:
-            context_manager = contextlib.suppress()
+            context_manager = contextlib.nullcontext()
 
         with context_manager:
             if self.is_alive or name.startswith('__'):
@@ -908,30 +916,41 @@ class Executor:
 
     def run(self):
         """ Run experiments. """
-        self.pid = os.getpid() if self.research and self.research.parallel else None
+        redirect_stdout = self.experiments[0].redirect_stdout
+        dump_results = self.experiments[0].dump_results
+        path = self.experiments[0].name
 
-        iterations = range(self.n_iters) if self.n_iters else itertools.count()
-        for experiment in self.experiments:
-            if self.research:
-                self.research.monitor.start_experiment(experiment)
+        if redirect_stdout == 1 and dump_results:
+            filename = os.path.join(path, 'stdout.txt')
+            context_manager = contextlib.redirect_stdout(open(filename, 'a'))
+        else:
+            context_manager = contextlib.nullcontext()
 
-        for iteration in iterations:
-            for unit_name, unit in self.experiment_template.actions.items():
-                if unit.root or len(self.experiments) == 1:
-                    self.call_root(iteration, unit_name)
-                else:
-                    self.parallel_call(iteration, unit_name, target=self.target, debug=self.debug) #pylint:disable=unexpected-keyword-arg
-            if not any([experiment.is_alive for experiment in self.experiments]):
-                break
-            if self.research:
-                for experiment in self.experiments:
-                    if experiment.is_alive:
-                        self.research.monitor.execute_iteration(experiment)
-        for index, experiment in enumerate(self.experiments):
-            if self.research:
-                self.research.monitor.stop_experiment(experiment)
-            experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
-            experiment.close_logger()
+        with context_manager:
+            self.pid = os.getpid() if self.research and self.research.parallel else None
+
+            iterations = range(self.n_iters) if self.n_iters else itertools.count()
+            for experiment in self.experiments:
+                if self.research:
+                    self.research.monitor.start_experiment(experiment)
+
+            for iteration in iterations:
+                for unit_name, unit in self.experiment_template.actions.items():
+                    if unit.root or len(self.experiments) == 1:
+                        self.call_root(iteration, unit_name)
+                    else:
+                        self.parallel_call(iteration, unit_name, target=self.target, debug=self.debug) #pylint:disable=unexpected-keyword-arg
+                if not any([experiment.is_alive for experiment in self.experiments]):
+                    break
+                if self.research:
+                    for experiment in self.experiments:
+                        if experiment.is_alive:
+                            self.research.monitor.execute_iteration(experiment)
+            for index, experiment in enumerate(self.experiments):
+                if self.research:
+                    self.research.monitor.stop_experiment(experiment)
+                experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
+                experiment.close_logger()
         self.send_results()
         self.dump_profile_info()
 

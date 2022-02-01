@@ -15,6 +15,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+class MultiOut:
+    """ Wrapper for several outputs streams. """
+    def __init__(self, *args):
+        self.handles = args
+
+    def write(self, s):
+        for f in self.handles:
+            f.write(s)
+
 def to_list(value):
     return value if isinstance(value, list) else [value]
 
