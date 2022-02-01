@@ -6,6 +6,7 @@ import sys
 from copy import copy, deepcopy
 import itertools
 import traceback
+import contextlib
 from collections import OrderedDict
 import json
 import time
@@ -701,7 +702,8 @@ class Experiment:
             'name': 'executor',
             'monitor': None,
             'debug': False,
-            'profile': False
+            'profile': False,
+            'redirect_stdout': True
         }
         for attr in defaults:
             if self.research:
@@ -754,31 +756,38 @@ class Experiment:
 
     def call(self, name, iteration, n_iters=None):
         """ Execute one iteration of the experiment. """
-        if self.is_alive or name.startswith('__'):
-            if self._profiler:
-                self._profiler.enable()
+        if self.redirect_stdout and self.dump_results:
+            filename = os.path.join(self.full_path, 'stdout.txt')
+            context_manager = contextlib.redirect_stdout(open(filename, 'a'))
+        else:
+            context_manager = contextlib.suppress()
 
-            self.last = self.last or (iteration + 1 == n_iters)
-            self.iteration = iteration
+        with context_manager:
+            if self.is_alive or name.startswith('__'):
+                if self._profiler:
+                    self._profiler.enable()
 
-            self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
-            exception = (StopIteration, KeyboardInterrupt) if self.debug else Exception
-            try:
-                self.outputs[name], unit_time = self.actions[name](iteration, n_iters, last=self.last)
-            except exception as e: #pylint:disable=broad-except
-                self.is_failed = True
-                self.last = True
-                if isinstance(e, StopIteration):
-                    self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
-                else:
-                    self.exception = e
-                    ex_traceback = e.__traceback__
-                    msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
-                    self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
-                    if self.monitor:
-                        self.monitor.fail_item_execution(name, self, msg)
-            if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
-                self.is_alive = False
+                self.last = self.last or (iteration + 1 == n_iters)
+                self.iteration = iteration
+
+                self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
+                exception = (StopIteration, KeyboardInterrupt) if self.debug else Exception
+                try:
+                    self.outputs[name], unit_time = self.actions[name](iteration, n_iters, last=self.last)
+                except exception as e: #pylint:disable=broad-except
+                    self.is_failed = True
+                    self.last = True
+                    if isinstance(e, StopIteration):
+                        self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
+                    else:
+                        self.exception = e
+                        ex_traceback = e.__traceback__
+                        msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
+                        self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
+                        if self.monitor:
+                            self.monitor.fail_item_execution(name, self, msg)
+                if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
+                    self.is_alive = False
 
         if self._profiler:
             self._profiler.disable(iteration, name, unit_time=unit_time, experiment=self.id)
