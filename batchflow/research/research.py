@@ -55,6 +55,7 @@ class Research:
         self.n_reps = n_reps
         self.repeat_each = repeat_each
         self.create_id_prefix = False
+        self.redirect_stdout = False
 
         self._env = dict() # current state of git repo and other environment information.
 
@@ -333,8 +334,13 @@ class Research:
         create_id_prefix : bool or int, optional
             add prefix to experiment id to allow to sort them by the order of parameters in domain. If int,
             the number of digits for the parameter code formatting.
-        redirect_stdout : bool or optional
-            redirect stdout to file or not
+        redirect_stdout : int or bool, optional
+            how to redirect stdout to files:
+                0 or False - no redirection,
+                1 or True - redirect to common research file "stdout.txt"
+                2 - redirect outputs of experiments into separate file in experiments folders
+                3 - redirect to common file and to separate experiments files
+            Is applicable only with `dump_results=True`.
 
         Returns
         -------
