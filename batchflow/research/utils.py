@@ -6,6 +6,7 @@ import logging
 import hashlib
 import itertools
 import json
+import contextlib
 from collections import OrderedDict
 from copy import deepcopy
 import dill
@@ -18,11 +19,11 @@ import matplotlib.colors as mcolors
 class MultiOut:
     """ Wrapper for several outputs streams. """
     def __init__(self, *args):
-        self.handles = args
+        self.handlers = args
 
     def write(self, s):
-        for f in self.handles:
-            f.write(s)
+        for f in self.handlers:
+            f.write(s + '\n' + '-' * 30 + '\n')
 
 def to_list(value):
     return value if isinstance(value, list) else [value]
@@ -182,6 +183,19 @@ def generate_id(config, random, create_prefix=False):
     name += hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8]
     name += ''.join(str(i) for i in random.integers(10, size=8))
     return name
+
+def create_output_stream(dump_results, redirect, filename, path, common=True):
+    """ Create stream to redirect stdout/stderr. """
+    if bool(redirect):
+        values = [1, 3] if common else [2, 3]
+        if dump_results and redirect in values:
+            filename = os.path.join(path, filename)
+            file = open(filename, 'a')
+        else:
+            file = open(os.devnull, 'w')
+    else:
+        file = contextlib.nullcontext()
+    return file
 
 def plot_results_by_config(results, variables, figsize=None, layout=None, **kwargs):
     """

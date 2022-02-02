@@ -391,7 +391,7 @@ class Research:
             raise ValueError(f"Research with name '{self.name}' already exists")
 
         self.domain.set_iter_params(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each,
-                                    create_id_prefix=self.create_id_prefix)
+                                    create_id_prefix=self.create_id_prefix, seed=self.random_seed)
 
         if self.domain.size is None and (self.domain.update_func is None or self.domain.update_each == 'last'):
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",

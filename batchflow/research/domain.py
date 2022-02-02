@@ -262,7 +262,7 @@ class Domain:
         for cube in self.cubes:
             for option in cube:
                 alias = option[0].alias
-                if alias not in options:
+                if alias not in options and alias != 'repetition':
                     options.append(alias)
         return options
 

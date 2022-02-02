@@ -21,6 +21,10 @@ class DynamicQueue:
         self.research = research
         self.n_branches = n_branches
 
+        seed = spawn_seed_sequence(research)
+        self.random_seed = seed
+        self.random = make_rng(seed)
+
         self.queue = mp.JoinableQueue()
         self.done_flag = mp.JoinableQueue()
 
@@ -30,16 +34,13 @@ class DynamicQueue:
         self.finished_tasks = 0
         self.tasks_in_queue = 0
 
-        seed = spawn_seed_sequence(research)
-        self.random_seed = seed
-        self.random = make_rng(seed)
-
     @property
     def domain(self):
         """ Get (or create if needed) domain. """
         if self._domain.size == 0:
             domain = Domain({'repetition': [None]}) # the value of repetition will be rewritten
-            domain.set_iter_params(n_reps=self._domain.n_reps, produced=self._domain.n_produced)
+            domain.set_iter_params(n_reps=self._domain.n_reps, produced=self._domain.n_produced,
+                                   create_id_prefix=self._domain.create_id_prefix, seed=self.random_seed)
             self._domain = domain
         return self._domain
 
