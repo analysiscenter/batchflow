@@ -17,7 +17,8 @@ from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify, MultiOut
+from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify, \
+                   MultiOut, create_output_stream
 from .profiler import ExperimentProfiler, ExecutorProfiler
 
 class PipelineWrapper:
@@ -371,6 +372,8 @@ class Experiment:
         self.random = None
 
         self._profiler = None
+        self.stdout_file = None
+        self.stderr_file = None
 
     @property
     def is_alive(self):
@@ -717,6 +720,11 @@ class Experiment:
             self.create_folder()
             self.dump_config()
 
+        self.stdout_file = create_output_stream(self.dump_results, self.redirect_stdout,
+                                                 'stdout.txt', self.full_path, common=False)
+        self.stderr_file = create_output_stream(self.dump_results, self.redirect_stderr,
+                                                 'stderr.txt', self.full_path, common=False)
+
         self.instances = OrderedDict()
 
         root_experiment = executor.experiments[0] if len(executor.experiments) > 0 else None
@@ -755,44 +763,19 @@ class Experiment:
         """ Close experiment logger. """
         self.logger.removeHandler(self.logger.handlers[0])
 
-    def create_stdout_stream(self):
-        """ Redirect sys.stdout into file. """
-        if self.redirect_stdout in [2, 3] and self.dump_results:
-            if self.redirect_stdout == 2:
-                filename = os.path.join(self.full_path, 'stdout.txt')
-                context_manager_stdout = contextlib.redirect_stdout(open(filename, 'a'))
-            else:
-                filename_exp = os.path.join(self.full_path, 'stdout.txt')
-                filename_res = os.path.join(self.name, 'stdout.txt')
-                context_manager_stdout = contextlib.redirect_stdout(MultiOut(
-                    open(filename_exp, 'a'),
-                    open(filename_res, 'a'),
-                ))
-        else:
-            context_manager_stdout = contextlib.nullcontext()
-        return context_manager_stdout
-
-    def create_stderr_stream(self):
-        """ Redirect sys.stderr into file. """
-        if self.dump_results and self.redirect_stderr > 0:
-            streams = []
-            if self.redirect_stderr in [2, 3]:
-                filename = os.path.join(self.full_path, 'stderr.txt')
-                streams.append(open(filename, 'a'))
-            if self.redirect_stderr in [1, 3]:
-                filename = os.path.join(self.name, 'stderr.txt')
-                streams.append(open(filename, 'a'))
-
-            if len(streams) > 0:
-                context_manager_stdout = contextlib.redirect_stderr(MultiOut(*streams))
-        else:
-            context_manager_stdout = contextlib.nullcontext()
-        return context_manager_stdout
+    def create_stream(self, name, *streams):
+        """ Create contextmanager to redirect stdout/stderr. """
+        streams = [stream for stream in streams if not isinstance(stream, contextlib.nullcontext)]
+        if len(streams) > 0:
+            if name == 'stdout':
+                return contextlib.redirect_stdout(MultiOut(*streams))
+            return contextlib.redirect_stderr(MultiOut(*streams)) # 'stderr'
+        return contextlib.nullcontext()
 
     def call(self, name, iteration, n_iters=None):
         """ Execute one iteration of the experiment. """
-        context_manager_out = self.create_stdout_stream()
-        context_manager_err = self.create_stderr_stream()
+        context_manager_out = self.create_stream('stdout', self.stdout_file, self.executor.common_stdout)
+        context_manager_err = self.create_stream('stderr', self.stderr_file, self.executor.common_stderr)
 
         with context_manager_out, context_manager_err:
             if self.is_alive or name.startswith('__'):
@@ -858,6 +841,13 @@ class Experiment:
                 repr += spacing * 2 + f"kwargs={kwargs}\n" + spacing + ")\n"
 
         return repr
+
+    def close_files(self):
+        """ Close stdout/stderr files (if rederection was performed. """
+        if not isinstance(self.stdout_file, (contextlib.nullcontext, type(None))):
+            self.stdout_file.close()
+        if not isinstance(self.stderr_file, (contextlib.nullcontext, type(None))):
+            self.stderr_file.close()
 
     def __getstate__(self):
         return self.__dict__
@@ -926,6 +916,8 @@ class Executor:
 
         self.create_experiments()
         self.pid = None
+        self.common_stdout = None
+        self.common_stderr = None
 
     def create_experiments(self):
         """ Initialize experiments. """
@@ -941,16 +933,14 @@ class Executor:
     def run(self):
         """ Run experiments. """
         redirect_stdout = self.experiments[0].redirect_stdout
+        redirect_stderr = self.experiments[0].redirect_stderr
         dump_results = self.experiments[0].dump_results
         path = self.experiments[0].name
 
-        if redirect_stdout == 1 and dump_results:
-            filename = os.path.join(path, 'stdout.txt')
-            context_manager = contextlib.redirect_stdout(open(filename, 'a'))
-        else:
-            context_manager = contextlib.nullcontext()
+        self.common_stdout = create_output_stream(dump_results, redirect_stdout, 'stdout.txt', path, common=True)
+        self.common_stderr = create_output_stream(dump_results, redirect_stderr, 'stderr.txt', path, common=True)
 
-        with context_manager:
+        with self.common_stdout, self.common_stderr:
             self.pid = os.getpid() if self.research and self.research.parallel else None
 
             iterations = range(self.n_iters) if self.n_iters else itertools.count()
@@ -975,6 +965,7 @@ class Executor:
                     self.research.monitor.stop_experiment(experiment)
                 experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
                 experiment.close_logger()
+                experiment.close_files()
         self.send_results()
         self.dump_profile_info()
 

@@ -3,7 +3,6 @@
 import os
 import sys
 from contextlib import ExitStack as does_not_raise
-from batchflow import research
 import pytest
 import psutil
 
@@ -458,7 +457,8 @@ class TestResearch:
     @pytest.mark.parametrize('create_id_prefix', [False, True, 4])
     @pytest.mark.parametrize('domain', [
         Domain(x=[1, 2], y=[2, 3, 4]),
-        Domain(x=[1, 2]) @ Domain(y=[2, 3])
+        Domain(x=[1, 2]) @ Domain(y=[2, 3]),
+        None
     ])
     def test_prefixes(self, tmp_path, create_id_prefix, domain):
         research = (
@@ -468,10 +468,15 @@ class TestResearch:
         research.run(dump_results=True, n_iters=1, create_id_prefix=create_id_prefix)
 
         if create_id_prefix is False:
+            # id includes only hash
             assert research.results.df.id.apply(lambda x: len(x.split('_')) == 1).all()
         else:
-            assert research.results.df.id.apply(lambda x: len(x.split('_')) == 4).all()
+            # id includes prefix for each parameter, repetition index and hash
+            n_params = 2 if domain is not None else 0
+            assert research.results.df.id.apply(lambda x: len(x.split('_')) == n_params + 2).all()
             parsed_id = research.results.df.id.apply(lambda x: x.split('_'))
+
+            # check the number of digits for each prefix code
             assert parsed_id.apply(lambda x: all([len(i) == create_id_prefix for i in x[:-1]])).all()
 
 
@@ -532,16 +537,18 @@ class TestResearch:
             assert (filename in os.listdir(research.name)) is (param in [1, 3])
             assert (n_files == len(research.results.configs)) is (param in [2, 3])
 
+            output = '2\n' + '-' * 30 + '\n\n\n' + '-'*30 + '\n'
+
             if param in [1, 3]:
                 with open(os.path.join(research.name, filename)) as file:
                     lines = ''.join(file.readlines())
-                    assert lines == '2\n' * 2
+                    assert lines == output * 2
 
             if param in [2, 3]:
                 for full_path in research.results.artifacts_to_df(name=filename)['full_path']:
-                        with open(full_path) as file:
-                            lines = ''.join(file.readlines())
-                            assert lines == '2\n' * 2
+                    with open(full_path) as file:
+                        lines = ''.join(file.readlines())
+                        assert lines == output * 2
 
 
 class TestResults:
