@@ -456,14 +456,22 @@ class TestResearch:
         assert len(process.children()) <= 1
 
     @pytest.mark.parametrize('create_id_prefix', [False, True, 4])
-    def test_prefixes(self, simple_research, create_id_prefix):
-        simple_research.run(dump_results=False, n_iters=1, create_id_prefix=create_id_prefix)
+    @pytest.mark.parametrize('domain', [
+        Domain(x=[1, 2], y=[2, 3, 4]),
+        Domain(x=[1, 2]) @ Domain(y=[2, 3])
+    ])
+    def test_prefixes(self, tmp_path, create_id_prefix, domain):
+        research = (
+            Research(name=os.path.join(tmp_path, 'research'), domain=domain)
+            .add_callable(lambda: 1, save_to='a')
+        )
+        research.run(dump_results=True, n_iters=1, create_id_prefix=create_id_prefix)
 
         if create_id_prefix is False:
-            assert simple_research.results.df.id.apply(lambda x: len(x.split('_')) == 1).all()
+            assert research.results.df.id.apply(lambda x: len(x.split('_')) == 1).all()
         else:
-            assert simple_research.results.df.id.apply(lambda x: len(x.split('_')) == 4).all()
-            parsed_id = simple_research.results.df.id.apply(lambda x: x.split('_'))
+            assert research.results.df.id.apply(lambda x: len(x.split('_')) == 4).all()
+            parsed_id = research.results.df.id.apply(lambda x: x.split('_'))
             assert parsed_id.apply(lambda x: all([len(i) == create_id_prefix for i in x[:-1]])).all()
 
 
