@@ -591,8 +591,10 @@ class Domain:
         for value in values:
             if self.create_id_prefix:
                 n_digits = self.create_id_prefix if self.create_id_prefix is not True else 1
-                current_index = self.values_indices.get(name.alias, -1) + 1
-                self.values_indices[name.alias] = current_index
+                option_values = self.values_indices.get(name.alias, dict())
+                current_index = option_values.get(value.alias, len(option_values))
+                option_values[value.alias] = current_index
+                self.values_indices[name.alias] = option_values
                 fmt = ("{:0" + str(n_digits) + "d}").format(current_index)
                 res.append(ConfigAlias([[name, value], ["#" + name.alias, fmt]]))
             else:
@@ -617,7 +619,7 @@ class Domain:
         res = []
         for _ in range(size or 1):
             if self.create_id_prefix:
-                n_digits = self.create_id_prefix if isinstance(self.create_id_prefix, int) else 1
+                n_digits = self.create_id_prefix if self.create_id_prefix is not True else 1
                 current_index = self.values_indices.get(name.alias, -1) + 1
                 self.values_indices[name.alias] = current_index
                 fmt = ("{:0" + str(n_digits) + "d}").format(current_index)
