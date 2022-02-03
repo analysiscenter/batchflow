@@ -25,6 +25,13 @@ class MultiOut:
         for f in self.handlers:
             f.write(s + '\n' + '-' * 30 + '\n')
 
+    def flush(self):
+        for f in self.handlers:
+            f.flush()
+
+    def __getattr__(self, attr):
+        return getattr(self.handlers[0], attr)
+
 def to_list(value):
     return value if isinstance(value, list) else [value]
 
