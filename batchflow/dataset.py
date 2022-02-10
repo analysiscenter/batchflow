@@ -236,7 +236,7 @@ class Dataset(Baseset):
             index = self.index.create_batch(index, pos, *args, **kwargs)
         return self.batch_class(index, dataset=self, preloaded=self.data, copy=self._copy, **kwargs)
 
-    def pipeline(self, config=None):
+    def pipeline(self, *args, **kwargs):
         """ Start a new data processing workflow
 
             Parameters
@@ -249,7 +249,7 @@ class Dataset(Baseset):
             -------
             Pipeline
         """
-        return Pipeline(self, config=config)
+        return Pipeline(self, *args, **kwargs)
 
     @property
     def p(self):
