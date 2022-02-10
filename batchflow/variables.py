@@ -52,8 +52,9 @@ class Variable:
 
 class VariableDirectory:
     """ Storage for pipeline variables """
-    def __init__(self):
+    def __init__(self, strict=False):
         self.variables = {}
+        self.strict = strict
         self._lock = threading.Lock()
 
     def __getstate__(self):
@@ -87,6 +88,7 @@ class VariableDirectory:
     def __copy__(self):
         """ Make a shallow copy of the directory """
         new_dir = VariableDirectory()
+        new_dir.strict = self.strict
         new_dir.variables = {**self.variables}
         return new_dir
 
@@ -94,6 +96,7 @@ class VariableDirectory:
         """ Make a deep copy of the directory """
         _ = memo
         new_dir = VariableDirectory()
+        new_dir.strict = self.strict
         new_dir.create_many(self)
         return new_dir
 
@@ -143,21 +146,26 @@ class VariableDirectory:
             for v in self.variables:
                 self.variables[v].initialize(pipeline=pipeline)
 
-    def get(self, name, *args, create=False, pipeline=None, **kwargs):
-        """ Return a variable value """
-        create = create or len(args) + len(kwargs) > 0
+    def _should_create(self, name, create=False):
+        create = not self.strict or create
         if not self.exists(name):
             if create:
-                self.create(name, *args, pipeline=pipeline, **kwargs)
+                logging.warning("Variable '%s' has not been initialized", name)
             else:
                 raise KeyError("Variable '%s' does not exists" % name)
+        return create
+
+    def get(self, name, *args, create=False, pipeline=None, **kwargs):
+        """ Return a variable value """
+        if self._should_create(name, create or len(args) + len(kwargs) > 0):
+            self.create(name, *args, pipeline=pipeline, **kwargs)
         var = self.variables[name].get()
         return var
 
-    def set(self, name, value):
+    def set(self, name, value, pipeline=None):
         """ Set a variable value """
-        if not self.exists(name):
-            raise KeyError("Variable '%s' does not exist" % name)
+        if self._should_create(name):
+            self.create(name, pipeline=pipeline)
         self.variables[name].set(value)
 
     def delete(self, name):

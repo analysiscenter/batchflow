@@ -53,7 +53,7 @@ def hashable(x):
 
 class Pipeline:
     """ Pipeline """
-    def __init__(self, dataset=None, config=None, pipeline=None, actions=None, proba=None, repeat=None):
+    def __init__(self, dataset=None, config=None, pipeline=None, actions=None, strict=False, proba=None, repeat=None):
         # pylint: disable=protected-access
 
         if pipeline is None:
@@ -62,7 +62,8 @@ class Pipeline:
             self._actions = actions or []
             self._lazy_run = None
             self.models = ModelDirectory()
-            self.variables = VariableDirectory()
+            self.variables = VariableDirectory(strict)
+            self.strict = strict
             self.before = OncePipeline(self)
             self.after = OncePipeline(self)
             self._namespaces = []
@@ -81,6 +82,7 @@ class Pipeline:
                         self._actions[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
             self._lazy_run = pipeline._lazy_run
             self.variables = pipeline.variables.copy()
+            self.strict = pipeline.strict
             self.models = pipeline.models.copy()
             self._namespaces = pipeline._namespaces
             self.before = pipeline.before.copy()
@@ -587,13 +589,9 @@ class Pipeline:
         """
         V(name, mode=mode).set(value, batch=batch, pipeline=self)
 
-    def assign_variable(self, name, value, **kwargs):
+    def assign_variable(self, name, value):
         """ Assign a value to a variable """
-        _ = kwargs
-        if not self.has_variable(name):
-            logging.warning("Pipeline variable '%s' has not been initialized", name)
-            self.init_variable(name)
-        self.variables.set(name, value)
+        self.variables.set(name, value, pipeline=self)
 
     def delete_variable(self, name):
         """ Delete a variable
