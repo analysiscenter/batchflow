@@ -21,6 +21,7 @@ from .experiment import Experiment, Executor
 from .results import ResearchResults
 from .utils import create_logger, to_list
 from .profiler import ResearchProfiler
+from .storage import ResearchStorage
 
 from ..utils_random import make_seed_sequence
 
@@ -387,8 +388,8 @@ class Research:
         else:
             self.n_iters = n_iters
 
-        if dump_results and os.path.exists(self.name):
-            raise ValueError(f"Research with name '{self.name}' already exists")
+        # if dump_results and os.path.exists(self.name):
+        #     raise ValueError(f"Research with name '{self.name}' already exists")
 
         self.domain.set_iter_params(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each,
                                     create_id_prefix=self.create_id_prefix, seed=self.random_seed)
@@ -397,14 +398,17 @@ class Research:
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
                           stacklevel=2)
 
+        self.storage = ResearchStorage(dump_results)
+
         if self.dump_results:
-            self.create_research_folder()
+            # self.create_research_folder()
             self.experiment = self.experiment.dump() # add final dump of experiment results
-            self.dump_research()
+            # self.dump_research()
             self.loglevel = loglevel or 'info'
         else:
             self.loglevel = loglevel or 'error'
-        self.create_logger()
+        # self.create_logger()
+        self.logger = self.storage.create_logger(self.name, loglevel)
 
         if git_meta:
             self.attach_git_meta()
@@ -413,7 +417,7 @@ class Research:
         for item in self._env_meta_to_collect:
             args = item.pop('args', [])
             kwargs = item.pop('kwargs', {})
-            self._get_env_state(*args, **item, **kwargs)
+            self.storage._get_env_state(*args, **item, **kwargs)
 
         self.logger.info("Research is starting")
 
@@ -421,7 +425,7 @@ class Research:
         self.tasks_queue = DynamicQueue(self.domain, self, n_branches)
         self.distributor = Distributor(self.tasks_queue, self)
 
-        self.monitor = ResearchMonitor(self, self.name, bar=self.bar) # process execution signals
+        self.monitor = ResearchMonitor(self, bar=self.bar) # process execution signals
         self.results = ResearchResults(self.name, self.dump_results)
         self.profiler = ResearchProfiler(self.name, self.profile)
 
@@ -592,7 +596,7 @@ class ResearchMonitor:
     SHARED_VARIABLES = ['finished_experiments', 'finished_iterations', 'remained_experiments',
                         'generated_experiments', 'stopped']
 
-    def __init__(self, research, path=None, bar=True):
+    def __init__(self, research, bar=True):
         self.queue = mp.JoinableQueue()
         self.stop_signal = mp.JoinableQueue()
         self._manager = mp.Manager()
@@ -602,7 +606,6 @@ class ResearchMonitor:
         self.processes = self._manager.dict()
 
         self.research = research
-        self.path = path
         self.bar = tqdm.tqdm(disable=(not bar), position=0, leave=True) if isinstance(bar, bool) else bar
 
         for key in self.SHARED_VARIABLES:
