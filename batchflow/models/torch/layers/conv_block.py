@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .core import Dense, BatchNorm, Dropout, AlphaDropout
+from .core import Dense, BatchNorm, LayerNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
@@ -198,6 +198,7 @@ class BaseConvBlock(nn.ModuleDict):
         'P': 'global_pooling',
         'V': 'global_pooling',
         'n': 'batch_norm',
+        'l': 'layer_norm',
         'd': 'dropout',
         'D': 'alpha_dropout',
         'S': 'self_attention',
@@ -222,6 +223,7 @@ class BaseConvBlock(nn.ModuleDict):
         'pooling': Pool,
         'global_pooling': GlobalPool,
         'batch_norm': BatchNorm,
+        'layer_norm': LayerNorm,
         'dropout': Dropout,
         'alpha_dropout': AlphaDropout,
         'self_attention': SelfAttention,

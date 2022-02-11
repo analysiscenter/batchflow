@@ -1,7 +1,9 @@
 """ Contains blocks for various deep network architectures."""
+import torch
+from torch import nn
 import numpy as np
 
-from .layers import ConvBlock
+from .layers import ConvBlock, DropPath
 from .utils import get_num_channels, safe_eval
 
 
@@ -398,3 +400,50 @@ class ResNeStBlock(ConvBlock):
         super().__init__(*layer_params, inputs=inputs, layout=layout, attention='sac',
                          self_attention=self_attention, kernel_size=1,
                          filters=[block_filters, filters*scaling_factor])
+
+
+
+class ConvNeXtBlock(nn.Module):
+    """ ConvNeXt block: simple conv-only adaptation of Transformer's improvements over the years.
+    General idea is to use:
+        - larger kernels
+        - depthwise -> pointwise convolutions in inverted order
+        - GELU instead of RELU, fewer activations over the network
+        - LayerNorm instead of BatchNorm, fewer normalizations over the network
+        - bias in the convolutions
+        - StochasticDepth and layer scale
+
+    Outside of this block, it is proposed to use `layer_norm -> 2x2 convolution` for downsampling, instead of pooling.
+    Also, a number of improvements to training procedure should be used in tandem:
+        - RandAugment, Mixup, Cutmix
+        - Label Smoothing
+        - AdamW, EMA
+
+    Zhuang Liu et al. "`A ConvNet for the 2020s <https://arxiv.org/abs/2201.03545>`_"
+    """
+    def __init__(self, inputs=None, kernel_size=7, strides=1, drop_path=0.0, layer_scale=1e-6):
+        super().__init__()
+
+        filters = get_num_channels(inputs)
+
+        self.layer = ConvBlock(inputs=inputs, layout='wlcac', activation='GELU',
+                               filters=[filters, filters * 4, filters],
+                               strides=[strides, 1, 1],
+                               bias=True,
+                               kernel_size=[kernel_size, 1, 1],
+                               layer_norm={'data_format':'channels_first'})
+
+        self.drop_path = DropPath(drop_prob=drop_path)
+
+        if layer_scale != 0.0:
+            gamma_shape = (1, filters) + (1,) * (inputs.ndim - 2)
+            self.gamma = nn.Parameter(layer_scale * torch.ones(gamma_shape, device=inputs.device), requires_grad=True)
+        else:
+            self.gamma = None
+
+    def forward(self, x):
+        input = x
+        x = self.layer(x)
+        x = x if self.gamma is None else self.gamma * x
+        x = input + self.drop_path(x)
+        return x
