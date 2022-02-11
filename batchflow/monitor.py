@@ -175,7 +175,7 @@ class RSSMonitor(ResourceMonitor):
         """ Track non-swapped physical memory usage. """
         _ = kwargs
         process = psutil.Process(pid)
-        return process.memory_info().rss / (1024 ** 2) # mbytes
+        return process.memory_info().rss / (1024 ** 3) # gbytes
 
 
 class VMSMonitor(ResourceMonitor):

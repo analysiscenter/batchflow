@@ -1,7 +1,7 @@
 """ PyTorch custom layers. """
 # pylint: disable=wildcard-import
 from .conv_block import BaseConvBlock, ConvBlock, update_layers
-from .core import Flatten, Dense, Dropout, AlphaDropout, BatchNorm
+from .core import Flatten, Dense, Dropout, AlphaDropout, DropPath, BatchNorm, LayerNorm
 from .activation import Activation
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, SeparableConv, SeparableConvTranspose
 from .pooling import MaxPool, AvgPool, Pool, AdaptiveMaxPool, AdaptiveAvgPool, AdaptivePool, \

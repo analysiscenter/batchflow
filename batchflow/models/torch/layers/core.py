@@ -1,8 +1,9 @@
 """ Basic Torch layers. """
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-from ..utils import get_num_channels, get_num_dims, safe_eval
+from ..utils import get_shape, get_num_channels, get_num_dims, safe_eval
 
 
 
@@ -84,6 +85,34 @@ class BatchNorm(nn.Module):
         return self.layer(x)
 
 
+class LayerNorm(nn.Module):
+    """ Layer normalization layer. Works with both `channels_first` and `channels_last` format. """
+    def __init__(self, inputs=None, eps=1e-6, data_format="channels_first"):
+        super().__init__()
+        self.data_format = data_format
+        if data_format == 'channels_last':
+            self.channels = get_shape(inputs)[-1]
+        else:
+            self.channels = get_num_channels(inputs)
+
+        self.weight = nn.Parameter(torch.ones(self.channels))
+        self.bias = nn.Parameter(torch.zeros(self.channels))
+        self.eps = eps
+
+
+    def forward(self, x):
+        if self.data_format == "channels_last":
+            return F.layer_norm(x, (self.channels, ), self.weight, self.bias, self.eps)
+
+        u = x.mean(1, keepdim=True)
+        s = (x - u).pow(2).mean(1, keepdim=True)
+        x = (x - u) / torch.sqrt(s + self.eps)
+        x = self.weight[:, None, None] * x + self.bias[:, None, None]
+        return x
+
+    def extra_repr(self):
+        return f'data_format={self.data_format}'
+
 
 class Dropout(nn.Module):
     """ Multi-dimensional dropout layer.
@@ -155,3 +184,26 @@ class AlphaDropout(Dropout):
         2: nn.AlphaDropout,
         3: nn.AlphaDropout,
     }
+
+
+class DropPath(nn.Module):
+    """ Drop paths per sample, also known as Stochastic Depth. Usually applied in blocks with residuals. """
+    def __init__(self, drop_prob=0.0, scale=True):
+        super().__init__()
+        self.drop_prob = drop_prob
+        self.scale = scale
+
+    def forward(self, x):
+        if self.drop_prob == 0.0 or not self.training:
+            return x
+
+        keep_prob = 1 - self.drop_prob
+        shape = (x.shape[0], ) + (1,) * (x.ndim - 1)
+        mask = x.new_empty(shape).bernoulli_(keep_prob)
+
+        if keep_prob > 0.0 and self.scale:
+            mask.div_(keep_prob)
+        return x * mask
+
+    def extra_repr(self):
+        return f'drop_prob={self.drop_prob}'

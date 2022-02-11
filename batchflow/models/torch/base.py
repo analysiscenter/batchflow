@@ -1559,7 +1559,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         The model will be moved to device specified in the model config by key `device`.
         """
         _ = args
-        self._parse_devices()
+        self.parse_attributes()
 
         if kwargs.get('pickle_module') is None:
             kwargs['pickle_module'] = dill

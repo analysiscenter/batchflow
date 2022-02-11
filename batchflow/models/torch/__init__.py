@@ -18,4 +18,5 @@ from .densenet import SegmentationDenseNet, DenseNetFC56, DenseNetFC67, DenseNet
 from .efficientnet import EfficientNetB0, EfficientNetB1, EfficientNetB2, EfficientNetB3, EfficientNetB4, \
                           EfficientNetB5, EfficientNetB6, EfficientNetB7
 from .utils import get_shape, get_num_channels, get_num_dims, calc_padding, unpack_fn_from_config, safe_eval
-from .blocks import DefaultBlock, XceptionBlock, VGGBlock, ResBlock, ResNeStBlock, DenseBlock, MBConvBlock, InvResBlock
+from .blocks import (DefaultBlock, XceptionBlock, VGGBlock, ResBlock, ResNeStBlock, DenseBlock,
+                     MBConvBlock, InvResBlock, ConvNeXtBlock)
