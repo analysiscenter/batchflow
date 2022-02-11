@@ -102,11 +102,11 @@ class LayerNorm(nn.Module):
 
     def forward(self, x):
         if self.data_format == "channels_last":
-            return F.layer_norm(x, (self.channels, ), self.weight, self.bias, self.eps)
+            return F.layer_norm(x, (self.channels,), self.weight, self.bias, self.eps)
 
-        u = x.mean(1, keepdim=True)
-        s = (x - u).pow(2).mean(1, keepdim=True)
-        x = (x - u) / torch.sqrt(s + self.eps)
+        mean = x.mean(1, keepdim=True)
+        s = (x - mean).pow(2).mean(1, keepdim=True)
+        x = (x - mean) / torch.sqrt(s + self.eps)
         x = self.weight[:, None, None] * x + self.bias[:, None, None]
         return x
 
