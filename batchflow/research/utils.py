@@ -191,11 +191,11 @@ def generate_id(config, random, create_prefix=False):
     name += ''.join(str(i) for i in random.integers(10, size=8))
     return name
 
-def create_output_stream(dump_results, redirect, filename, path, common=True):
+def create_output_stream(redirect, dump=False, filename=None, path=None, common=True):
     """ Create stream to redirect stdout/stderr. """
     if bool(redirect):
         values = [1, 3] if common else [2, 3]
-        if dump_results and redirect in values:
+        if dump and redirect in values:
             filename = os.path.join(path, filename)
             file = open(filename, 'a')
         else:

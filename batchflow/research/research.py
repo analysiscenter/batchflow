@@ -21,7 +21,7 @@ from .experiment import Experiment, Executor
 from .results import ResearchResults
 from .utils import create_logger, to_list
 from .profiler import ResearchProfiler
-from .storage import ResearchStorage
+from .storage import LocalResearchStorage, MemoryResearchStorage
 
 from ..utils_random import make_seed_sequence
 
@@ -75,7 +75,6 @@ class Research:
         self.tasks_queue = None
         self.distributor = None
         self.monitor = None
-        self.results = None
         self.logger = None
         self.process = None
         self.debug = False
@@ -388,9 +387,6 @@ class Research:
         else:
             self.n_iters = n_iters
 
-        # if dump_results and os.path.exists(self.name):
-        #     raise ValueError(f"Research with name '{self.name}' already exists")
-
         self.domain.set_iter_params(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each,
                                     create_id_prefix=self.create_id_prefix, seed=self.random_seed)
 
@@ -398,40 +394,35 @@ class Research:
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
                           stacklevel=2)
 
-        self.storage = ResearchStorage(dump_results)
+        if self.dump_results:
+            self.storage = LocalResearchStorage(self, self.loglevel)
+        else:
+            self.storage = MemoryResearchStorage(self, self.loglevel)
 
         if self.dump_results:
-            # self.create_research_folder()
             self.experiment = self.experiment.dump() # add final dump of experiment results
-            # self.dump_research()
-            self.loglevel = loglevel or 'info'
-        else:
-            self.loglevel = loglevel or 'error'
-        # self.create_logger()
-        self.logger = self.storage.create_logger(self.name, loglevel)
+
+        self.logger = self.storage.logger
 
         if git_meta:
             self.attach_git_meta()
         if env_meta:
             self.attach_env_meta()
-        for item in self._env_meta_to_collect:
-            args = item.pop('args', [])
-            kwargs = item.pop('kwargs', {})
-            self.storage._get_env_state(*args, **item, **kwargs)
 
-        self.logger.info("Research is starting")
+        self.storage.collect_env_state(self._env_meta_to_collect)
 
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
         self.tasks_queue = DynamicQueue(self.domain, self, n_branches)
         self.distributor = Distributor(self.tasks_queue, self)
 
         self.monitor = ResearchMonitor(self, bar=self.bar) # process execution signals
-        self.results = ResearchResults(self.name, self.dump_results)
         self.profiler = ResearchProfiler(self.name, self.profile)
 
         def _start_distributor():
             self.distributor.run()
             self.monitor.stop()
+
+        self.logger.info("Research is starting")
 
         self.monitor.start()
         if self.parallel:
@@ -454,6 +445,10 @@ class Research:
             self.terminate()
         return self
 
+    @property
+    def results(self):
+        return self.storage.results
+
     def terminate(self, kill_processes=False, force=False, wait=True):
         """ Kill all research processes. """
         # TODO: killed processes don't release GPU.
@@ -469,7 +464,7 @@ class Research:
                     self.monitor.stop(wait=wait)
 
                 self.monitor.close_manager()
-                self.results.close_manager()
+                self.storage.close()
                 self.profiler.close_manager()
 
                 if self.detach:
@@ -486,19 +481,19 @@ class Research:
                             process.terminate()
                             self.logger.info(f"Terminate {process_type} [pid:{pid}]")
 
-    def create_logger(self):
-        """ Create research logger. """
-        name = f"{self.name}"
-        path = os.path.join(self.name, 'research.log') if self.dump_results else None
+    # def create_logger(self):
+    #     """ Create research logger. """
+    #     name = f"{self.name}"
+    #     path = os.path.join(self.name, 'research.log') if self.dump_results else None
 
-        self.logger = create_logger(name, path, self.loglevel)
+    #     self.logger = create_logger(name, path, self.loglevel)
 
-    def dump_research(self):
-        """ Dump research object. """
-        with open(os.path.join(self.name, 'research.dill'), 'wb') as f:
-            dill.dump(self, f)
-        with open(os.path.join(self.name, 'research.txt'), 'w') as f:
-            f.write(str(self))
+    # def dump_research(self):
+    #     """ Dump research object. """
+    #     with open(os.path.join(self.name, 'research.dill'), 'wb') as f:
+    #         dill.dump(self, f)
+    #     with open(os.path.join(self.name, 'research.txt'), 'w') as f:
+    #         f.write(str(self))
 
     @classmethod
     def load(cls, name):
@@ -511,9 +506,10 @@ class Research:
         with open(os.path.join(name, 'research.dill'), 'rb') as f:
             research = dill.load(f)
         if research.dump_results:
-            research.results = ResearchResults(research.name, research.dump_results)
+            research.storage = LocalResearchStorage(research, research.loglevel, mode='r')
+            research.storage.results = ResearchResults(research.name, research.dump_results)
             research.profiler = ResearchProfiler(research.name, research.profile)
-            research.results.load()
+            research.storage.results.load()
             research.profiler.load()
             research._is_loaded = True # pylint: disable=protected-access
         return research
