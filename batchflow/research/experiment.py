@@ -678,7 +678,7 @@ class Experiment:
         with open(os.path.join(self.name, self.experiment_path, 'config.dill'), 'wb') as file:
             dill.dump(self.config_alias, file)
         with open(os.path.join(self.name, self.experiment_path, 'config.json'), 'w') as file:
-            json.dump(jsonify(self.config.config), file)
+            json.dump(jsonify(self.config_alias.alias().config), file)
 
     def init(self, index, config, executor=None):
         """ Create all instances of units to start experiment. """
