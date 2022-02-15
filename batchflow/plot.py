@@ -1,18 +1,19 @@
 """ Plot functions. """
-from socket import AF_PPPOX
-import numpy as np
-
 from colorsys import rgb_to_hls, hls_to_rgb
 from copy import copy
 from datetime import datetime
 from functools import reduce
+from numbers import Number
+
+import numpy as np
+
 from IPython.display import display
 from matplotlib import patheffects
 from matplotlib import pyplot as plt
 from matplotlib.colors import ColorConverter, ListedColormap, is_color_like
+from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 from mpl_toolkits import axes_grid1
-from numbers import Number
 
 from .utils import to_list
 
@@ -48,7 +49,7 @@ class LoopedList(list):
         return super().__getitem__(idx)
 
 class preprocess_and_imshow:
-    """ !!. """
+    """ TODO """
     def __init__(self, ax, X, *args, mask_values=(), order_axes=None, vmin=None, vmax=None, **kwargs):
         self.mask_values = to_list(mask_values) if mask_values is not None else []
         self.order_axes = order_axes
@@ -67,6 +68,7 @@ class preprocess_and_imshow:
         return X_new
 
     def set_data(self, A):
+        """ TODO """
         vmin_new = np.nanmin(A) if self.vmin is None else self.vmin
         vmax_new = np.nanmax(A) if self.vmax is None else self.vmax
         clim = [vmin_new, vmax_new]
@@ -181,7 +183,7 @@ class plot:
 
     @staticmethod
     def parse_data(data, combine):
-        """ !!. """
+        """ TODO """
         if isinstance(data, int):
             data_list = [None] * data
         elif data is None or isinstance(data, (tuple, np.ndarray)):
@@ -220,7 +222,8 @@ class plot:
         return shapes, data, combine, np.cumsum(none)[:-1]
 
     def make_default_config(self, mode, ncols=None, nrows=None, figsize=None, scale=1, ratio=None,
-                            xlim=(None, None), ylim=(None, None), max_fig_width=25, max_fig_height=15, **kwargs):
+                            xlim=(None, None), ylim=(None, None), min_fig_width=4, min_fig_height=4,
+                            max_fig_width=25, max_fig_height=15, **kwargs):
         """ Infer default figure params from shapes of provided data. """
         config = {'tight_layout': True, 'facecolor': 'snow'}
 
@@ -254,26 +257,27 @@ class plot:
                 if not isinstance(ylim, list):
                     ylim = [ylim] * self.n_subplots
 
-                subplots_shapes = []
-
+                widths = []
+                heights = []
                 for idx, shape in enumerate(self.shapes):
                     order_axes = self.filter_dict(kwargs, 'order_axes', index=idx)
                     order_axes = order_axes or self.IMSHOW_DEFAULTS['order_axes']
 
                     min_height = xlim[idx][0] or 0
-                    max_height = xlim[idx][1] or shape[order_axes[1]]
+                    max_height = xlim[idx][1] or shape[order_axes[0]]
                     subplot_height = abs(max_height - min_height)
+                    heights.append(subplot_height)
 
-                    min_width = ylim[idx][0] or shape[order_axes[0]]
+                    min_width = ylim[idx][0] or shape[order_axes[1]]
                     max_width = ylim[idx][1] or 0
                     subplot_width = abs(max_width - min_width)
-                    subplots_shapes.append((subplot_width, subplot_height))
+                    widths.append(subplot_width)
 
-                subplots_shapes += [(0, 0)] * (ncols * nrows - len(subplots_shapes))
-
-                heights, widths = np.array(subplots_shapes).reshape((nrows, ncols, 2)).transpose(2, 0, 1)
-                max_height, max_width = heights.max(axis=1).sum(), widths.max(axis=0).sum()
-                ratio = max_height / max_width
+                mean_height, mean_width = np.mean(heights), np.mean(widths)
+                if mean_height == 0 or mean_width == 0:
+                    ratio = 1
+                else:
+                    ratio = (mean_height * 1.05 * nrows) / (mean_width * 1.05 * ncols)
 
             elif mode == 'hist':
                 ratio = 2 / 3 / ncols * nrows
@@ -295,6 +299,13 @@ class plot:
                 fig_width = max_fig_width
                 fig_height = fig_width * ratio
 
+            if fig_height < min_fig_height:
+                fig_height = min_fig_height
+                fig_width = fig_height / ratio
+
+            if fig_width < min_fig_width:
+                fig_width = min_fig_width
+                fig_height = fig_width * ratio
 
             figsize = (fig_width, fig_height)
 
@@ -325,9 +336,9 @@ class plot:
         return fig, axes, config
 
     def plot(self, data=None, mode='imshow', combine=None, save=False, axes_idx=None, **kwargs):
-        """ !!.
+        """ TODO
 
-        TODO: Explain `abs_idx` and `rel_idx`.
+        Notes to self: Explain `abs_idx` and `rel_idx`.
         """
         if data is not None:
             self.shapes, self.data, self.combine, self.rel_idx_corrections = self.parse_data(data=data, combine=combine)
@@ -343,7 +354,7 @@ class plot:
             else:
                 plot_method = getattr(self, f"ax_{mode}")
                 axes_objects, ax_config = plot_method(ax=ax, idx=rel_idx)
-                self.ax_annotate(ax=ax, ax_config=ax_config, ax_image=axes_objects[0], idx=rel_idx)
+                self.ax_annotate(ax=ax, ax_config=ax_config, ax_image=axes_objects[0], idx=rel_idx, mode=mode)
 
                 self.axes_objects[abs_idx] = axes_objects
                 self.axes_configs[abs_idx] = ax_config
@@ -362,7 +373,7 @@ class plot:
     def __repr__(self):
         return repr(self.fig).replace('Figure', 'Batchflow Figure')
 
-    def ax_annotate(self, ax, ax_config, ax_image, idx):
+    def ax_annotate(self, ax, ax_config, ax_image, idx, mode):
         """ Apply requested annotation functions to given axis with chosen parameters. """
         # pylint: disable=too-many-branches
         text_keys = ['fontsize', 'family', 'color']
@@ -439,10 +450,10 @@ class plot:
         # legend
         keys = ['label', 'size', 'cmap', 'color', 'loc', 'legend', 'ha', 'va']
         params = self.filter_dict(ax_config, keys, prefix='legend_')
-        params['color'] = params.pop('cmap', None) or params.get('color')
+        params['color'] = params.pop('color', params.pop('cmap', None))
         params['label'] = params.pop('legend', None) or params.get('label')
         if params.get('label') is not None:
-            self.add_legend(ax, **params)
+            self.add_legend(ax, mode=mode, **params)
 
         # grid
         keys = ['grid', 'b', 'which', 'axis']
@@ -521,7 +532,7 @@ class plot:
     }
 
     def ax_imshow(self, ax, idx):
-        """ !!. """
+        """ TODO """
         subplot_idx = None if self.combine == 'overlay' else idx - self.rel_idx_corrections[idx]
         config = self.filter_dict(self.config, index=subplot_idx)
         images = []
@@ -590,7 +601,7 @@ class plot:
     }
 
     def ax_hist(self, ax, idx):
-        """ !!. """
+        """ TODO """
         subplot_idx = None if self.combine == 'overlay' else idx - self.rel_idx_corrections[idx]
         config = self.filter_dict(self.config, index=subplot_idx)
         objects = []
@@ -643,7 +654,7 @@ class plot:
     }
 
     def ax_curve(self, ax, idx):
-        """ !!. """
+        """ TODO """
         subplot_idx = None if self.combine == 'overlay' else idx - self.rel_idx_corrections[idx]
         config = self.filter_dict(self.config, index=subplot_idx)
         objects = []
@@ -768,19 +779,40 @@ class plot:
             ax_image.axes.created_colorbar = colorbar
 
     @staticmethod
-    def add_legend(ax, color, label, size, loc, facecolor='white', ha=None, va=None):
-        """ Add patches to legend. All invalid colors are filtered. """
-        handles = getattr(ax.get_legend(), 'legendHandles', [])
+    def add_legend(ax, mode, color, label, size, loc, facecolor='white', ha=None, va=None, **kwargs):
+        """ TODO Add patches to legend. All invalid colors are filtered.
+
+        Notes to self: Rewrite doc, explain line/patches parametrization.
+        """
+        legend = ax.get_legend()
+        handles = getattr(legend, 'legendHandles', [])
+        texts = getattr(legend, 'get_texts', lambda: [])()
+        labels = [t._text for t in texts]
+
         colors = [color for color in to_list(color) if is_color_like(color)]
-        labels = to_list(label)
-        new_patches = [Patch(color=color, label=label) for color, label in zip(colors, labels) if label]
-        handles += new_patches
-        if handles:
-            legend = ax.legend(handles=handles, loc=loc, prop={'size': size}, facecolor=facecolor)
-            if ha is not None:
-                _ = [text.set_ha(ha) for text in legend.get_texts()]
-            if va is not None:
-                _ = [text.set_ha(va) for text in legend.get_texts()]
+        if mode in ('imshow', 'hist', 'wiggle'):
+            patch_config = {
+                **kwargs
+            }
+            handles += [Patch(color=color, **patch_config) for color in colors]
+        elif mode in ('curve', ):
+            line_config = {
+                'xdata': np.array([0, 2]) * size,
+                'ydata': np.array([0.35, 0.35]) * size,
+                'linewidth': 1.5,
+                'linestyle': '-',
+                **kwargs
+                }
+            handles += [Line2D(color=color, **line_config) for color in colors]
+
+        labels += to_list(label)
+
+        legend = ax.legend(handles=handles, labels=labels, loc=loc, prop={'size': size}, facecolor=facecolor)
+
+        if ha is not None:
+            _ = [text.set_ha(ha) for text in legend.get_texts()]
+        if va is not None:
+            _ = [text.set_ha(va) for text in legend.get_texts()]
 
 
 
