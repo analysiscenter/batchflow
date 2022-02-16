@@ -373,7 +373,7 @@ class Notifier:
         #pylint: disable=protected-access
         num_graphs = len(self.data_containers) - index
         layout = (1, num_graphs) if self.layout.startswith('h') else (num_graphs, 1)
-        figsize = self.figsize or ((20, 5) if self.layout.startswith('h') else (20, 5*num_graphs))
+        figsize = self.figsize or ((20, 6) if self.layout.startswith('h') else (20, 6*num_graphs))
 
         if clear_display:
             display.clear_output(wait=True)
@@ -548,7 +548,7 @@ class Notifier:
 
     def __getattr__(self, key):
         """ Redirect everything to the underlying bar. """
-        if not key in self.__dict__ and hasattr(self.bar, key):
+        if not key.endswith('state__') and key not in self.__dict__ and hasattr(self.bar, key):
             return getattr(self.bar, key)
         raise AttributeError(key)
 

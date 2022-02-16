@@ -370,6 +370,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     ]
 
     def __init__(self, config=None):
+        if isinstance(config, str):
+            config = {'load/path': config}
+
         self.full_config = Config(config)
         self.model_lock = Lock()
 
@@ -616,7 +619,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         """ Create a sequence of tensor, based on the parsed `inputs_shapes`. """
         batch_size = batch_size or self.placeholder_batch_size
 
-        data = [np.zeros((batch_size, *shape[1:]), dtype=np.float32)
+        data = [np.random.random((batch_size, *shape[1:])).astype(np.float32)
                 for shape in self.inputs_shapes]
         return data
 
@@ -1531,6 +1534,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         if kwargs.get('pickle_module') is None:
             kwargs['pickle_module'] = dill
 
+        if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
+            self.model = self.model.module
+
         torch.save({item: getattr(self, item) for item in self.PRESERVE}, path, **kwargs)
 
     def load(self, path, *args, eval=False, **kwargs):
@@ -1559,7 +1565,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         The model will be moved to device specified in the model config by key `device`.
         """
         _ = args
-        self.parse_attributes()
+        self._parse_devices()
 
         if kwargs.get('pickle_module') is None:
             kwargs['pickle_module'] = dill

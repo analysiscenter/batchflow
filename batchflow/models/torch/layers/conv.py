@@ -11,7 +11,7 @@ class BaseConv(nn.Module):
     LAYERS = {}
     TRANSPOSED = False
 
-    def __init__(self, filters, kernel_size=3, strides=1, padding='same',
+    def __init__(self, filters, kernel_size=3, strides=1, padding='same', custom_padding=False,
                  dilation_rate=1, groups=1, bias=False, inputs=None):
         super().__init__()
 
@@ -28,21 +28,31 @@ class BaseConv(nn.Module):
             'bias': bias,
         }
 
-        padding = calc_padding(inputs, padding=padding, transposed=self.TRANSPOSED, **args)
+        if custom_padding:
+            padding = calc_padding(inputs, padding=padding, transposed=self.TRANSPOSED, **args)
 
-        if isinstance(padding, tuple) and isinstance(padding[0], tuple):
-            args['padding'] = 0
-            self.padding = sum(padding, ())
+            if isinstance(padding, tuple) and isinstance(padding[0], tuple):
+                args['padding'] = 0
+                self.padding = sum(padding, ())
+            else:
+                args['padding'] = padding
+                self.padding = 0
         else:
-            args['padding'] = padding
-            self.padding = 0
+            if padding == 'same':
+                args['padding'] = kernel_size // 2
+            else:
+                args['padding'] = padding
+            self.padding = None
 
-        self.layer = self.LAYERS[get_num_dims(inputs)](**args)
+        self.layer = self.LAYERS[get_num_dims(inputs)](**args, )
 
     def forward(self, x):
-        if self.padding:
+        if self.padding is not None:
             x = F.pad(x, self.padding[::-1])
         return self.layer(x)
+
+    def extra_repr(self):
+        return f'custom_padding={self.padding is not None}'
 
 
 class Conv(BaseConv):
