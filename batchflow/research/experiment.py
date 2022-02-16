@@ -20,7 +20,7 @@ from .named_expr import E, O, EC
 from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify, \
                    MultiOut, create_output_stream
 from .profiler import ExperimentProfiler, ExecutorProfiler
-from .storage import LocalExperimentStorage, LocalResearchStorage, MemoryExperimentStorage, MemoryResearchStorage
+from .storage import ExperimentStorage, ResearchStorage
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -702,10 +702,8 @@ class Experiment:
             value = getattr(self.executor, attr)#, defaults[attr])
             setattr(self, attr, value)
 
-        if self.dump_results:
-            self.storage = LocalExperimentStorage(self)
-        else:
-            self.storage = MemoryExperimentStorage(self)
+        storage = 'local' if self.dump_results else 'memory'
+        self.storage = ExperimentStorage(self, storage=storage)
 
         self.storage.create_streams()
         self.logger = self.storage.logger
@@ -886,10 +884,8 @@ class Executor:
         if self.research is not None:
             self.storage = self.research.storage
         else:
-            if self.dump_results:
-                self.storage = LocalResearchStorage(self)
-            else:
-                self.storage = MemoryResearchStorage(self)
+            storage = 'local' if self.dump_results else 'memory'
+            self.storage = ResearchStorage(self, storage=storage)
 
         self.create_experiments()
 

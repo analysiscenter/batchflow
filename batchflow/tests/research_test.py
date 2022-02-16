@@ -2,6 +2,7 @@
 # pylint: disable=no-name-in-module, missing-docstring, redefined-outer-name
 import os
 import sys
+import glob
 from contextlib import ExitStack as does_not_raise
 import pytest
 import psutil
@@ -503,6 +504,19 @@ class TestResearch:
         simple_research.run(n_iters=3, dump_results=False, profile=profile)
 
         assert simple_research.profiler.profile_info.shape[1] == shape
+
+    def test_logging(self, tmp_path, simple_research):
+        path = os.path.join(tmp_path, 'research')
+        simple_research.run(name=path, n_iters=3, dump_results=True)
+
+        with open(os.path.join(path, 'research.log')) as file:
+            lines = file.readlines()
+            assert len(lines) == 20
+
+        for path in glob.glob(os.path.join(path, 'experiments', '*')):
+            with open(os.path.join(path, 'experiment.log')) as file:
+                lines = file.readlines()
+                assert len(lines) == 7
 
     def test_coincided_names(self):
         def f(a):

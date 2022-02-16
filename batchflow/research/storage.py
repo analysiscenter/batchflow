@@ -9,12 +9,18 @@ import subprocess
 import contextlib
 from collections import OrderedDict
 
-from .profiler import ExperimentProfiler
+from .profiler import ExperimentProfiler, ResearchProfiler
 from .results import ResearchResults
 from .utils import to_list, create_logger, jsonify, create_output_stream
 
 class ExperimentStorage:
-    def __init__(self, experiment, loglevel=None):
+    def __new__(cls, *args, storage='memory', **kwargs):
+        if storage == 'local':
+            return super().__new__(LocalExperimentStorage)
+        if storage == 'memory':
+            return super().__new__(MemoryExperimentStorage)
+
+    def __init__(self, experiment, loglevel=None, storage='memory'):
         self.experiment = experiment
         self.loglevel = loglevel or 'error'
         self.results = None
@@ -38,7 +44,7 @@ class ExperimentStorage:
     def close(self):
         experiment = self.experiment
         if experiment.research is not None:
-            experiment.research.storage.results.put(experiment.id, experiment.results, experiment.config_alias)
+            experiment.research.results.put(experiment.id, experiment.results, experiment.config_alias)
             if self._profiler is not None:
                 experiment.research.profiler.put(experiment.id, self._profiler.profile_info)
 
@@ -65,8 +71,8 @@ class ExperimentStorage:
         self.logger.removeHandler(self.logger.handlers[0])
 
 class MemoryExperimentStorage(ExperimentStorage):
-    def __init__(self, experiment, loglevel=None):
-        super().__init__(experiment, loglevel)
+    def __init__(self, experiment, loglevel=None, storage='memory'):
+        super().__init__(experiment, loglevel, storage)
 
         self.results = OrderedDict()
 
@@ -83,8 +89,8 @@ class MemoryExperimentStorage(ExperimentStorage):
         self.stderr_file = create_output_stream(self.experiment.redirect_stderr, False, common=False)
 
 class LocalExperimentStorage(ExperimentStorage):
-    def __init__(self, experiment, loglevel=None):
-        super().__init__(experiment, loglevel)
+    def __init__(self, experiment, loglevel=None,  storage='local'):
+        super().__init__(experiment, loglevel, storage)
 
         self.loglevel = loglevel or 'info'
 
@@ -156,11 +162,18 @@ class LocalExperimentStorage(ExperimentStorage):
             self._profiler.profile_info.reset_index().to_feather(path)
 
 class ResearchStorage:
-    def __init__(self, research=None, loglevel=None):
+    def __new__(cls, *args, storage='memory', **kwargs):
+        if storage == 'local':
+            return super().__new__(LocalResearchStorage)
+        if storage == 'memory':
+            return super().__new__(MemoryResearchStorage)
+
+    def __init__(self, research=None, loglevel=None, storage='memory'):
         self.research = research
         self.loglevel = loglevel or 'error'
 
         self.results = None
+        self.profiler = ResearchProfiler(self.research.name, self.research.profile)
 
     def collect_env_state(self, env_meta_to_collect):
         for item in env_meta_to_collect:
@@ -213,10 +226,11 @@ class ResearchStorage:
 
     def close(self):
         self.results.close_manager()
+        self.profiler.close_manager()
 
 class MemoryResearchStorage(ResearchStorage):
-    def __init__(self, research=None, loglevel=None):
-        super().__init__(research)
+    def __init__(self, research=None, loglevel=None, storage='memory'):
+        super().__init__(research, storage)
         self.loglevel = loglevel or 'error'
 
         self.create_logger()
@@ -240,8 +254,8 @@ class MemoryResearchStorage(ResearchStorage):
         self.stderr_file = create_output_stream(self.research.redirect_stderr, False, common=True)
 
 class LocalResearchStorage(ResearchStorage):
-    def __init__(self, research, loglevel, mode='w'):
-        super().__init__(research)
+    def __init__(self, research, loglevel, mode='w', storage='local'):
+        super().__init__(research, storage)
 
         self.loglevel = loglevel or 'info'
         self.path = research.name

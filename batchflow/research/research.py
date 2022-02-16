@@ -21,7 +21,7 @@ from .experiment import Experiment, Executor
 from .results import ResearchResults
 from .utils import create_logger, to_list
 from .profiler import ResearchProfiler
-from .storage import LocalResearchStorage, MemoryResearchStorage
+from .storage import ResearchStorage
 
 from ..utils_random import make_seed_sequence
 
@@ -81,7 +81,7 @@ class Research:
         self.finalize = True
         self.random_seed = None
         self.profile = False
-        self.profiler = None
+        # self.profiler = None
         self.memory_ratio = None
         self.n_gpu_checks = 3
         self.gpu_check_delay = 5
@@ -394,10 +394,8 @@ class Research:
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
                           stacklevel=2)
 
-        if self.dump_results:
-            self.storage = LocalResearchStorage(self, self.loglevel)
-        else:
-            self.storage = MemoryResearchStorage(self, self.loglevel)
+        storage = 'local' if self.dump_results else 'memory'
+        self.storage = ResearchStorage(self, self.loglevel, storage=storage)
 
         if self.dump_results:
             self.experiment = self.experiment.dump() # add final dump of experiment results
@@ -416,7 +414,6 @@ class Research:
         self.distributor = Distributor(self.tasks_queue, self)
 
         self.monitor = ResearchMonitor(self, bar=self.bar) # process execution signals
-        self.profiler = ResearchProfiler(self.name, self.profile)
 
         def _start_distributor():
             self.distributor.run()
@@ -449,6 +446,10 @@ class Research:
     def results(self):
         return self.storage.results
 
+    @property
+    def profiler(self):
+        return self.storage.profiler
+
     def terminate(self, kill_processes=False, force=False, wait=True):
         """ Kill all research processes. """
         # TODO: killed processes don't release GPU.
@@ -463,9 +464,8 @@ class Research:
                 if self.monitor is not None:
                     self.monitor.stop(wait=wait)
 
-                self.monitor.close_manager()
+                self.monitor.close()
                 self.storage.close()
-                self.profiler.close_manager()
 
                 if self.detach:
                     kill_processes = True
@@ -481,20 +481,6 @@ class Research:
                             process.terminate()
                             self.logger.info(f"Terminate {process_type} [pid:{pid}]")
 
-    # def create_logger(self):
-    #     """ Create research logger. """
-    #     name = f"{self.name}"
-    #     path = os.path.join(self.name, 'research.log') if self.dump_results else None
-
-    #     self.logger = create_logger(name, path, self.loglevel)
-
-    # def dump_research(self):
-    #     """ Dump research object. """
-    #     with open(os.path.join(self.name, 'research.dill'), 'wb') as f:
-    #         dill.dump(self, f)
-    #     with open(os.path.join(self.name, 'research.txt'), 'w') as f:
-    #         f.write(str(self))
-
     @classmethod
     def load(cls, name):
         """ Load research object. """
@@ -506,7 +492,7 @@ class Research:
         with open(os.path.join(name, 'research.dill'), 'rb') as f:
             research = dill.load(f)
         if research.dump_results:
-            research.storage = LocalResearchStorage(research, research.loglevel, mode='r')
+            research.storage = ResearchStorage(research, research.loglevel, mode='r', storage='local')
             research.storage.results = ResearchResults(research.name, research.dump_results)
             research.profiler = ResearchProfiler(research.name, research.profile)
             research.storage.results.load()
@@ -716,7 +702,7 @@ class ResearchMonitor:
             self.stopped = True
         tqdm.tqdm._instances.clear() #pylint:disable=protected-access
 
-    def close_manager(self):
+    def close(self):
         """ Close manager. """
         self.exceptions = list(self.exceptions)
         self.shared_values = dict(self.shared_values)
