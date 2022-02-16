@@ -6,6 +6,7 @@ import logging
 import hashlib
 import itertools
 import json
+import io
 import contextlib
 from collections import OrderedDict
 from copy import deepcopy
@@ -195,9 +196,12 @@ def create_output_stream(redirect, dump=False, filename=None, path=None, common=
     """ Create stream to redirect stdout/stderr. """
     if bool(redirect):
         values = [1, 3] if common else [2, 3]
-        if dump and redirect in values:
-            filename = os.path.join(path, filename)
-            file = open(filename, 'a')
+        if redirect in values:
+            if dump:
+                filename = os.path.join(path, filename)
+                file = open(filename, 'a')
+            else:
+                file = io.StringIO()
         else:
             file = open(os.devnull, 'w')
     else:

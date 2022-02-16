@@ -3,7 +3,7 @@
 import os
 import time
 import itertools
-
+import traceback
 import multiprocess as mp
 
 import numpy as np
@@ -88,8 +88,13 @@ class DynamicQueue:
         self.queue.task_done()
         self.done_flag.put(None)
 
+    def worker_failed(self):
+        self.queue.task_done()
+        self.done_flag.put('error')
+
     def wait_for_finished_task(self):
-        self.done_flag.get()
+        flag = self.done_flag.get()
+        return 0 if flag is None else 1
 
     def __getattr__(self, key):
         return getattr(self.queue, key)
@@ -121,66 +126,74 @@ class Worker:
         self.random = make_rng(seed)
 
     def __call__(self):
-        self.pid = os.getpid() if self.research.parallel else None
-        self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has started.")
-        _return = True
+        exception = KeyboardInterrupt if self.research.debug else Exception
+        try:
+            self.pid = os.getpid() if self.research.parallel else None
+            self.research.logger.info(f"Worker {self.index}[pid:{self.pid}] has started.")
+            _return = True
 
-        executor_class = self.research.executor_class
-        n_iters = self.research.n_iters
+            executor_class = self.research.executor_class
+            n_iters = self.research.n_iters
 
-        if isinstance(self.research.branches, int):
-            branches_configs = [Config() for _ in range(self.research.branches)]
-        else:
-            branches_configs = self.research.branches
-        n_branches = len(branches_configs)
-        devices = self.research.devices[self.index]
-
-        all_devices = np.unique([device for i in range(n_branches) for device in devices[i] if device is not None])
-
-        if len(all_devices) > 0:
-            os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-            os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(all_devices)
-
-        device_reindexation = {device: str(i) for i, device in enumerate(all_devices)}
-        devices = [[device_reindexation.get(i) for i in item] for item in devices]
-        devices = [{'device': item[0] if len(item) == 1 else item} for item in devices]
-
-        while True:
-            bad_devices, bad_memory = self._check_memory(all_devices)
-            if len(bad_devices) > 0:
-                msg = f"Worker {self.index}[pid:{self.pid}]: devices {bad_devices} " \
-                      f"don't have enough memory: {bad_memory}"
-
-                self.research.logger.info(msg)
-                _return = False
-                break
-            task = self.tasks.get()
-            if task is None:
-                self.tasks.task_done()
-                break
-            task_idx, configs = task
-
-            name = f"Task {task_idx}"
-
-            experiment = self.research.experiment
-            target = self.research.executor_target # 'for' or 'thread' for branches execution
-
-            branches_configs = [config + Config(_devices) for config, _devices in zip(branches_configs, devices)]
-            branches_configs = branches_configs[:len(configs)]
-
-            executor = executor_class(experiment, research=self.research, worker=self, target=target, configs=configs,
-                                      branches_configs=branches_configs, executor_config=self.worker_config,
-                                      n_iters=n_iters, task_name=name)
-            if self.research.parallel:
-                process = mp.Process(target=executor.run)
-                process.start()
-                self.research.logger.info(
-                    f"Worker {self.index} [pid:{self.pid}] has started task {task_idx} [pid:{process.pid}]."
-                )
-                process.join()
+            if isinstance(self.research.branches, int):
+                branches_configs = [Config() for _ in range(self.research.branches)]
             else:
-                executor.run()
-            self.tasks.task_done()
+                branches_configs = self.research.branches
+            n_branches = len(branches_configs)
+            devices = self.research.devices[self.index]
+
+            all_devices = np.unique([device for i in range(n_branches) for device in devices[i] if device is not None])
+
+            if len(all_devices) > 0:
+                os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+                os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(all_devices)
+
+            device_reindexation = {device: str(i) for i, device in enumerate(all_devices)}
+            devices = [[device_reindexation.get(i) for i in item] for item in devices]
+            devices = [{'device': item[0] if len(item) == 1 else item} for item in devices]
+
+            while True:
+                bad_devices, bad_memory = self._check_memory(all_devices)
+                if len(bad_devices) > 0:
+                    msg = f"Worker {self.index}[pid:{self.pid}]: devices {bad_devices} " \
+                        f"don't have enough memory: {bad_memory}"
+
+                    self.research.logger.info(msg)
+                    _return = False
+                    break
+                task = self.tasks.get()
+                if task is None:
+                    self.tasks.task_done()
+                    break
+                task_idx, configs = task
+
+                name = f"Task {task_idx}"
+
+                experiment = self.research.experiment
+                target = self.research.executor_target # 'for' or 'thread' for branches execution
+
+                branches_configs = [config + Config(_devices) for config, _devices in zip(branches_configs, devices)]
+                branches_configs = branches_configs[:len(configs)]
+
+                executor = executor_class(experiment, research=self.research, worker=self, target=target,
+                                          configs=configs, branches_configs=branches_configs,
+                                          executor_config=self.worker_config, n_iters=n_iters, task_name=name)
+                if self.research.parallel:
+                    process = mp.Process(target=executor.run)
+                    process.start()
+                    self.research.logger.info(
+                        f"Worker {self.index} [pid:{self.pid}] has started task {task_idx} [pid:{process.pid}]."
+                    )
+                    process.join()
+                else:
+                    executor.run()
+                self.tasks.task_done()
+        except exception as e: #pylint: disable=broad-exception
+            ex_traceback = e.__traceback__
+            msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
+            self.research.logger.error(f"Fail worker {self.index}[pid:{self.pid}]: Exception\n{msg}")
+            self.tasks.worker_failed()
+            self.research.monitor.fail_worker_execution(self, msg)
         self.research.logger.info(f"Worker {self.index} [pid:{self.pid}] has stopped.")
 
         return _return
@@ -246,8 +259,7 @@ class Distributor:
                 processes.append(process)
 
             self.send_state()
-            while self.tasks.tasks_in_queue > 0:
-                self.tasks.wait_for_finished_task()
+            while self.tasks.tasks_in_queue > 0 and self.tasks.wait_for_finished_task() == 0:
                 self.tasks.finished_tasks += 1
                 self.tasks.tasks_in_queue -= 1
 
@@ -258,6 +270,7 @@ class Distributor:
             self.tasks.stop_workers(len(workers))
             for process in processes:
                 process.join()
+
         else:
             self.send_state()
             _workers = itertools.cycle(workers)

@@ -18,9 +18,7 @@ import tqdm
 from .domain import Domain
 from .distributor import Distributor, DynamicQueue
 from .experiment import Experiment, Executor
-from .results import ResearchResults
-from .utils import create_logger, to_list
-from .profiler import ResearchProfiler
+from .utils import to_list
 from .storage import ResearchStorage
 
 from ..utils_random import make_seed_sequence
@@ -58,6 +56,7 @@ class Research:
         self.create_id_prefix = False
         self.redirect_stdout = True
         self.redirect_stderr = True
+        self.storage = None
 
         self._env = dict() # current state of git repo and other environment information.
 
@@ -339,10 +338,11 @@ class Research:
         redirect_stdout, redirect_stderr : int or bool, optional
             how to redirect stdout/stderr to files:
                 0 or False - no redirection,
-                1 or True - redirect to common research file "stdout.txt"/"stderr.txt"
+                True - redirect to common research file "stdout.txt"/"stderr.txt" when `dump_results=True`
+                       or to separate items in `research.storage.experiments_stdout` when `dump_results=False`
+                1 - redirect to common research file "stdout.txt"/"stderr.txt" (only when dump_results=True)
                 2 - redirect output streams of experiments into separate file in experiments folders
-                3 - redirect to common file and to separate experiments files
-            Is applicable only with `dump_results=True`.
+                3 - redirect to common file and to separate experiments files (only when dump_results=True)
 
         Returns
         -------
@@ -372,11 +372,24 @@ class Research:
         self.n_gpu_checks = n_gpu_checks
         self.gpu_check_delay = gpu_check_delay
         self.create_id_prefix = create_id_prefix
+
+        if redirect_stdout is True and not dump_results:
+            redirect_stdout = 2
+
+        if redirect_stderr is True and not dump_results:
+            redirect_stderr = 2
+
         self.redirect_stdout = redirect_stdout
         self.redirect_stderr = redirect_stderr
 
         if debug and (parallel or executor_target not in ['f', 'for']):
             raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")
+
+        if not dump_results and (redirect_stdout == 1 or redirect_stdout == 3):
+            raise ValueError("`redirect_stdout` can be 0 or 2 only when `dump_results` is False")
+
+        if not dump_results and (redirect_stderr == 1 or redirect_stderr == 3):
+            raise ValueError("`redirect_stderr` can be 0 or 2 only when `dump_results` is False")
 
         self.debug = debug
         self.finalize = finalize
@@ -454,24 +467,27 @@ class Research:
         """ Kill all research processes. """
         # TODO: killed processes don't release GPU.
         if not self._is_loaded:
-            if not force and self.monitor.in_progress:
+            if not force and self.monitor and self.monitor.in_progress:
                 answer = input(f'{self.name} is in progress. Are you sure? [y/n]').lower()
                 answer = len(answer) > 0 and 'yes'.startswith(answer)
             else:
                 answer = True
-            if force or answer:
-                self.logger.info("Stop research.")
-                if self.monitor is not None:
-                    self.monitor.stop(wait=wait)
 
-                self.monitor.close()
-                self.storage.close()
+            if force or answer:
+                if self.logger:
+                    self.logger.info("Stop research.")
+                if self.monitor:
+                    self.monitor.stop(wait=wait)
+                    self.monitor.close()
+                if self.storage:
+                    self.storage.close()
 
                 if self.detach:
                     kill_processes = True
 
-                if kill_processes and self.monitor is not None:
-                    self.logger.info("Terminate research processes")
+                if kill_processes and self.monitor:
+                    if self.logger:
+                        self.logger.info("Terminate research processes")
 
                     order = {'EXECUTOR': 1, 'WORKER': 2, 'DETACHED_PROCESS': 3, 'MONITOR': 4}
                     processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
@@ -479,7 +495,8 @@ class Research:
                         if pid is not None and psutil.pid_exists(pid):
                             process = psutil.Process(pid)
                             process.terminate()
-                            self.logger.info(f"Terminate {process_type} [pid:{pid}]")
+                            if self.logger:
+                                self.logger.info(f"Terminate {process_type} [pid:{pid}]")
 
     @classmethod
     def load(cls, name):
@@ -493,10 +510,7 @@ class Research:
             research = dill.load(f)
         if research.dump_results:
             research.storage = ResearchStorage(research, research.loglevel, mode='r', storage='local')
-            research.storage.results = ResearchResults(research.name, research.dump_results)
-            research.profiler = ResearchProfiler(research.name, research.profile)
-            research.storage.results.load()
-            research.profiler.load()
+            research.storage.load()
             research._is_loaded = True # pylint: disable=protected-access
         return research
 
@@ -585,7 +599,7 @@ class ResearchMonitor:
         self.exceptions = self._manager.list()
         self.shared_values = self._manager.dict()
         self.current_iterations = self._manager.dict()
-        self.processes = self._manager.dict()
+        self.processes = self._manager.dict({self._manager._process.pid: "MANAGER"})
 
         self.research = research
         self.bar = tqdm.tqdm(disable=(not bar), position=0, leave=True) if isinstance(bar, bool) else bar
@@ -669,12 +683,23 @@ class ResearchMonitor:
             'exception': msg
         })
 
+    def fail_worker_execution(self, worker, msg):
+        self.exceptions.append({
+            'index': worker.index,
+            'pid': worker.pid,
+            'exception': msg
+        })
+
     def handler(self):
         """ Signals handler. """
         with self.bar as progress:
             last_update = False
+            exceptions = 0
             while True:
-                if (progress.n != self.n) or (progress.total != self.total):
+                if (progress.n != self.n) or (progress.total != self.total) or (len(self.exceptions) != exceptions):
+                    if len(self.exceptions) != exceptions:
+                        exceptions = len(self.exceptions)
+                        progress.set_description_str(f"Exceptions: {exceptions}")
                     progress.n = self.n
                     progress.total = self.total
                     progress.refresh()

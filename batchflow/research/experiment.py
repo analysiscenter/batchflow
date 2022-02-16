@@ -8,18 +8,15 @@ import itertools
 import traceback
 import contextlib
 from collections import OrderedDict
-import json
 import time
-import dill
 
 from .. import Config, Pipeline, parallel, spawn_seed_sequence, make_rng, make_seed_sequence
 from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify, \
-                   MultiOut, create_output_stream
-from .profiler import ExperimentProfiler, ExecutorProfiler
+from .utils import generate_id, must_execute, to_list, parse_name, MultiOut
+from .profiler import ExecutorProfiler
 from .storage import ExperimentStorage, ResearchStorage
 
 class PipelineWrapper:
@@ -350,13 +347,12 @@ class Experiment:
 
         self.last = False
         self.outputs = dict()
-
+        self.storage = None
         self.has_dump = False # does unit has any dump actions or not
         self.name = None # name of the executor/research
         self.dump_results = None
         self.loglevel = None
         self.monitor = None
-
         self.id = None #pylint:disable=invalid-name
         self.experiment_path = None
         self.full_path = None
@@ -371,8 +367,7 @@ class Experiment:
         self.exception = None
         self.random_seed = None
         self.random = None
-
-        self._profiler = None
+        self.profiler = None
         self.stdout_file = None
         self.stderr_file = None
 
@@ -688,26 +683,17 @@ class Experiment:
         self.config = config.config()
 
         # Get attributes from research or kwargs of executor
-        params = {
-            'loglevel': 'debug',
-            'name': 'executor',
-            'monitor': None,
-            'debug': False,
-            'profile': False,
-            'redirect_stdout': True,
-            'redirect_stderr': True,
-            'dump_results': False
-        }
-        for attr in params.keys():
+        params = ['loglevel', 'name', 'monitor', 'debug', 'profile',
+                  'redirect_stdout', 'redirect_stderr', 'dump_results']
+
+        for attr in params:
             value = getattr(self.executor, attr)#, defaults[attr])
             setattr(self, attr, value)
 
         storage = 'local' if self.dump_results else 'memory'
-        self.storage = ExperimentStorage(self, storage=storage)
-
-        self.storage.create_streams()
+        self.storage = ExperimentStorage(self, loglevel=self.loglevel, storage=storage)
         self.logger = self.storage.logger
-        self._profiler = self.storage._profiler
+        self.profiler = self.storage.profiler
 
         self.instances = OrderedDict()
 
@@ -727,14 +713,6 @@ class Experiment:
                 config.pop_config(key)
         config.pop_config('_prefix')
 
-    # def create_logger(self):
-    #     """ Create experiment logger. """
-    #     name = f"{self.name}." if self.name else ""
-    #     name += f"{self.id}"
-    #     path = os.path.join(self.full_path, 'experiment.log') if self.dump_results else None
-
-    #     self.logger = create_logger(name, path, self.loglevel)
-
     def create_stream(self, name, *streams):
         """ Create contextmanager to redirect stdout/stderr. """
         streams = [stream for stream in streams if not isinstance(stream, contextlib.nullcontext)]
@@ -752,12 +730,11 @@ class Experiment:
         context_manager_err = self.create_stream(
             'stderr', self.storage.stderr_file, self.executor.storage.stderr_file
         )
-        # import pdb; pdb.set_trace()
 
         with context_manager_out, context_manager_err:
             if self.is_alive or name.startswith('__'):
-                if self._profiler:
-                    self._profiler.enable()
+                if self.profiler:
+                    self.profiler.enable()
 
                 self.last = self.last or (iteration + 1 == n_iters)
                 self.iteration = iteration
@@ -781,18 +758,18 @@ class Experiment:
                 if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
                     self.is_alive = False
 
-        if self._profiler:
-            self._profiler.disable(iteration, name, unit_time=unit_time, experiment=self.id)
+        if self.profiler:
+            self.profiler.disable(iteration, name, unit_time=unit_time, experiment=self.id)
 
     def show_profile_info(self, **kwargs):
-        return self._profiler.show_profile_info(**kwargs)
+        return self.profiler.show_profile_info(**kwargs)
 
     @property
     def profile_info(self):
-        return self._profiler.profile_info
+        return self.profiler.profile_info
 
     def dump_profile_info(self):
-        if self.dump_results and self._profiler is not None:
+        if self.dump_results and self.profiler is not None:
             self.profile_info.reset_index().to_feather(os.path.join(self.full_path, 'profiler.feather'))
 
     def __str__(self):
@@ -925,7 +902,7 @@ class Executor:
 
     def run(self):
         """ Run experiments. """
-        self.storage.create_streams()
+        self.storage.create_redirection_files()
 
         with self.storage.stdout_file, self.storage.stderr_file:
             self.pid = os.getpid() if self.research and self.research.parallel else None
@@ -981,7 +958,7 @@ class Executor:
                     setattr(experiment, attr, getattr(self.experiments[0], attr))
 
     @property
-    def _profiler(self):
+    def profiler(self):
         if self.experiments[0].profile:
             return ExecutorProfiler(self.experiments)
         return None
@@ -989,12 +966,12 @@ class Executor:
     @property
     def profile_info(self):
         """ Profile info. """
-        if self._profiler:
-            return self._profiler.profile_info
+        if self.profiler:
+            return self.profiler.profile_info
         return None
 
     def show_profile_info(self, **kwargs):
-        return self._profiler.show_profile_info(**kwargs)
+        return self.profiler.show_profile_info(**kwargs)
 
 def _create_instance(experiments, item_name):
     if not isinstance(experiments, list):

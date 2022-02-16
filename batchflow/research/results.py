@@ -90,7 +90,7 @@ class ResearchResults:
                     name_results = experiment_results[_name]
                     new_values = self.load_iteration_files(path, iterations)
                     experiment_results[_name] = OrderedDict([*name_results.items(), *new_values.items()])
-        self.results = mp.Manager().dict(**results)
+        self.results = results
 
     def load_artifacts(self, experiment_id=None, name=None, config=None, alias=None, domain=None, **kwargs):
         """ Load and filter experiment artifacts (all files/folders in experiment folder except standart

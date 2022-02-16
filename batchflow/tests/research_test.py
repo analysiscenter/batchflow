@@ -453,6 +453,8 @@ class TestResearch:
         assert all(results == [np.dtype(i) for i in ['O', 'O', 'O', 'int64', 'float32', 'float64']])
 
         process = psutil.Process(os.getpid())
+        # for p in process.children():
+        #     print(p, research.monitor.processes.get(p.pid, 'unknown'))
         assert len(process.children()) <= 1
 
     @pytest.mark.parametrize('create_id_prefix', [False, True, 4])
@@ -505,18 +507,19 @@ class TestResearch:
 
         assert simple_research.profiler.profile_info.shape[1] == shape
 
-    def test_logging(self, tmp_path, simple_research):
+    @pytest.mark.parametrize('loglevel, length_res, length_exp', list(zip(['info', 'debug'], [62, 116], [7, 16])))
+    def test_logging(self, loglevel, length_res, length_exp, tmp_path, simple_research):
         path = os.path.join(tmp_path, 'research')
-        simple_research.run(name=path, n_iters=3, dump_results=True)
+        simple_research.run(name=path, n_iters=3, dump_results=True, loglevel=loglevel)
 
         with open(os.path.join(path, 'research.log')) as file:
             lines = file.readlines()
-            assert len(lines) == 20
+            assert len(lines) == length_res
 
         for path in glob.glob(os.path.join(path, 'experiments', '*')):
             with open(os.path.join(path, 'experiment.log')) as file:
                 lines = file.readlines()
-                assert len(lines) == 7
+                assert len(lines) == length_exp
 
     def test_coincided_names(self):
         def f(a):
@@ -532,9 +535,10 @@ class TestResearch:
         assert research.results.df.iloc[0].a == f(2)
         assert research.results.df.iloc[0].b == f(3)
 
-    @pytest.mark.parametrize('redirect_stdout', [0, 1, 2, 3])
-    @pytest.mark.parametrize('redirect_stderr', [0, 1, 2, 3])
-    def test_redirect_stdout(self, redirect_stdout, redirect_stderr, tmp_path):
+    @pytest.mark.parametrize('dump_results', [False, True])
+    @pytest.mark.parametrize('redirect_stdout', [True, 0, 1, 2, 3])
+    @pytest.mark.parametrize('redirect_stderr', [True, 0, 1, 2, 3])
+    def test_redirect_stdout(self, dump_results, redirect_stdout, redirect_stderr, tmp_path):
         def f(a):
             print(a)
             print(a, file=sys.stderr)
@@ -543,27 +547,49 @@ class TestResearch:
             .add_callable(f, a=2)
         )
 
-        research.run(name=os.path.join(tmp_path, 'research'), n_iters=2,
-                     redirect_stdout=redirect_stdout, redirect_stderr=redirect_stderr)
+        will_success = False
 
-        for param, filename in zip([redirect_stdout, redirect_stderr], ['stdout.txt', 'stderr.txt']):
-            n_files = len(research.results.artifacts_to_df(name=filename))
-            assert (filename in os.listdir(research.name)) is (param in [1, 3])
-            assert (n_files == len(research.results.configs)) is (param in [2, 3])
+        if dump_results:
+            will_success = True
+        else:
+            if not dump_results:
+                if redirect_stdout in [0, 2] or redirect_stdout is True:
+                    if redirect_stderr in [0, 2] or redirect_stderr is True:
+                        will_success = True
+        expectation = does_not_raise() if will_success else pytest.raises(ValueError)
 
-            output = '2\n' + '-' * 30 + '\n\n\n' + '-'*30 + '\n'
+        with expectation:
+            research.run(name=os.path.join(tmp_path, 'research'), n_iters=2, dump_results=dump_results,
+                        redirect_stdout=redirect_stdout, redirect_stderr=redirect_stderr)
 
-            if param in [1, 3]:
-                with open(os.path.join(research.name, filename)) as file:
-                    lines = ''.join(file.readlines())
+        if will_success:
+            for param, name in zip([redirect_stdout, redirect_stderr], ['stdout', 'stderr']):
+                output = '2\n' + '-' * 30 + '\n\n\n' + '-'*30 + '\n'
+                filename = name + '.txt'
+
+                if dump_results:
+                    n_files = len(research.results.artifacts_to_df(name=filename))
+                    assert (filename in os.listdir(research.name)) is (param in [1, 3])
+                    assert (n_files == len(research.results.configs)) is (param in [2, 3])
+
+                if param in [True, 1, 3]:
+                    if dump_results:
+                        with open(os.path.join(research.name, filename)) as file:
+                            lines = ''.join(file.readlines())
+                    else:
+                        lines = list(getattr(research.storage, 'experiments_'+name).values())[0]
                     assert lines == output * 2
 
-            if param in [2, 3]:
-                for full_path in research.results.artifacts_to_df(name=filename)['full_path']:
-                    with open(full_path) as file:
-                        lines = ''.join(file.readlines())
-                        assert lines == output * 2
+                if dump_results and param in [2, 3]:
+                    for full_path in research.results.artifacts_to_df(name=filename)['full_path']:
+                        with open(full_path) as file:
+                            lines = ''.join(file.readlines())
+                            assert lines == output * 2
 
+    def test_domain_with_objects(self, tmp_path):
+        domain = Domain(a=[print, Research])
+        research = Research(domain=domain).add_callable(lambda: 1)
+        research.run(name=os.path.join(tmp_path, 'research'), parallel=False)
 
 class TestResults:
     @pytest.mark.parametrize('parallel', [False, True])
@@ -611,5 +637,5 @@ class TestResults:
 
         assert len(df) == 1
 
-# #TODO: logging tests, test that exceptions in one branch don't affect other bracnhes,
+# #TODO: test that exceptions in one branch don't affect other bracnhes,
 # #      devices splitting, ...
