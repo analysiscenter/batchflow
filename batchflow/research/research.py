@@ -407,7 +407,11 @@ class Research:
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
                           stacklevel=2)
 
-        storage = 'local' if self.dump_results else 'memory'
+        if isinstance(self.dump_results, bool):
+            storage = 'local' if self.dump_results else 'memory'
+        else:
+            storage = self.dump_results
+
         self.storage = ResearchStorage(self, self.loglevel, storage=storage)
 
         if self.dump_results:
@@ -508,6 +512,7 @@ class Research:
     def _load(name):
         with open(os.path.join(name, 'research.dill'), 'rb') as f:
             research = dill.load(f)
+
         if research.dump_results:
             research.storage = ResearchStorage(research, research.loglevel, mode='r', storage='local')
             research.storage.load()

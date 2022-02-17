@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import re
@@ -21,6 +22,9 @@ class ExperimentStorage:
             return super().__new__(LocalExperimentStorage)
         if storage == 'memory':
             return super().__new__(MemoryExperimentStorage)
+        if storage == 'clearml':
+            return super().__new__(ClearMLExperimentStorage)
+
         raise ValueError(f'Unknown storage mode: {storage}')
 
     def __init__(self, experiment, loglevel=None, storage='memory'):
@@ -34,9 +38,17 @@ class ExperimentStorage:
         self.stderr_file = None
         self.profiler = None
 
-        self.create_profiler()
+        self._create_profiler()
 
-    def create_profiler(self):
+    @property
+    def name(self):
+        if self.experiment.research:
+            name = self.experiment.research.name
+        else:
+            name = self.experiment.executor.name
+        return name
+
+    def _create_profiler(self):
         profile = self.experiment.profile
         if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
             self.profiler = ExperimentProfiler(detailed=True)
@@ -59,7 +71,8 @@ class ExperimentStorage:
 
     def close_logger(self):
         """ Close experiment logger. """
-        self.logger.removeHandler(self.logger.handlers[0])
+        if len(self.logger.handlers) > 0:
+            self.logger.removeHandler(self.logger.handlers[0])
 
 class MemoryExperimentStorage(ExperimentStorage):
     def __init__(self, experiment, loglevel=None, storage='memory'):
@@ -71,11 +84,7 @@ class MemoryExperimentStorage(ExperimentStorage):
         self.create_redirection_files()
 
     def create_logger(self):
-        if self.experiment.research:
-            name = self.experiment.research.name
-        else:
-            name = self.experiment.executor.name
-        logger_name = name + '.' + self.experiment.id
+        logger_name = self.name + '.' + self.experiment.id
         self.logger = create_logger(logger_name, None, self.loglevel)
 
     def create_redirection_files(self):
@@ -83,7 +92,6 @@ class MemoryExperimentStorage(ExperimentStorage):
         self.stderr_file = create_output_stream(self.experiment.redirect_stderr, False, common=False)
 
     def close(self):
-        self.copy_results_to_research_storage()
         self.close_files()
         self.close_logger()
 
@@ -92,7 +100,7 @@ class MemoryExperimentStorage(ExperimentStorage):
         for name in ['stdout', 'stderr']:
             file = getattr(self, name+'_file')
             if not isinstance(file, (contextlib.nullcontext, type(None))):
-                if isinstance(file, io.StringIO):
+                if isinstance(file, io.StringIO) and not file.closed:
                     content = file.getvalue()
                     if self.experiment.research is not None:
                         getattr(self.experiment.research.storage, 'experiments_'+name)[self.experiment.id] = content
@@ -100,6 +108,56 @@ class MemoryExperimentStorage(ExperimentStorage):
                         setattr(self, name+'_content', content)
                 file.close()
 
+class ClearMLExperimentStorage(ExperimentStorage):
+    def __init__(self, experiment, loglevel=None, storage='clearml'):
+        from clearml import Task
+
+        super().__init__(experiment, loglevel, storage)
+        self.task = Task.create(
+            project_name=self.name,
+            task_name=self.experiment.id,
+            add_task_init_call=True,
+        )
+        self.task.connect_configuration(self.experiment.config.config)
+
+        self.create_logger()
+        self.create_redirection_files()
+
+    def create_redirection_files(self):
+        self.stdout_file = create_output_stream(True, False, common=False)
+        self.stderr_file = create_output_stream(True, False, common=False)
+
+    def create_logger(self):
+        self.logger = ClearMLLogger(self.task.get_logger())
+
+    # def update_variable(self, name, value):
+    #     iteration = self.experiment.iteration
+    #     self.logger.report_scalar('', name, value, iteration)
+
+    def close(self):
+        self.task.close()
+        pass
+
+    def copy_results_to_research_storage(self):
+        pass
+
+    def close_logger(self):
+        pass
+
+    def dump_results(self, variable=None):
+        """ Callable to dump results. """
+        variables_to_dump = list(self.results.keys()) if variable is None else to_list(variable)
+        for var in variables_to_dump:
+            values = self.results[var]
+            # variable_path = os.path.join(self.full_path, 'results', var)
+            # if not os.path.exists(variable_path):
+            #     os.makedirs(variable_path)
+            # filename = os.path.join(variable_path, str(iteration))
+            # with open(filename, 'wb') as file:
+            #     dill.dump(values, file)
+            for iteration, value in values.items():
+                self.logger.report_scalar('', variable, value, iteration)
+            del self.results[var]
 class LocalExperimentStorage(ExperimentStorage):
     def __init__(self, experiment, loglevel=None,  storage='local'):
         super().__init__(experiment, loglevel, storage)
@@ -149,7 +207,7 @@ class LocalExperimentStorage(ExperimentStorage):
         )
 
     def close(self):
-        self.copy_results_to_research_storage()
+        # self.copy_results_to_research_storage()
         self.dump_results()
         self.dump_profile()
         self.close_files()
@@ -188,6 +246,9 @@ class ResearchStorage:
             return super().__new__(LocalResearchStorage)
         if storage == 'memory':
             return super().__new__(MemoryResearchStorage)
+        if storage == 'clearml':
+            return super().__new__(ClearMLResearchStorage)
+
         raise ValueError(f'Unknown storage mode: {storage}')
 
     def __init__(self, research=None, loglevel=None, storage='memory'):
@@ -197,14 +258,9 @@ class ResearchStorage:
         self.logger = None
 
         self.results = None
-        self.profiler = ResearchProfiler(self.research.name, self.research.profile)
 
         self.stdout_file = None
         self.stderr_file = None
-
-        self._manager = mp.Manager()
-        self.experiments_stdout = self._manager.dict()
-        self.experiments_stderr = self._manager.dict()
 
     def collect_env_state(self, env_meta_to_collect):
         for item in env_meta_to_collect:
@@ -255,12 +311,15 @@ class ResearchStorage:
             if not isinstance(file, (contextlib.nullcontext, type(None))):
                 file.close()
 
+    def close_logger(self):
+        """ Close experiment logger. """
+        if len(self.logger.handlers) > 0:
+            self.logger.removeHandler(self.logger.handlers[0])
+
     def close(self):
         self.results.close_manager()
         self.profiler.close_manager()
-        self.experiments_stdout = dict(self.experiments_stdout)
-        self.experiments_stderr = dict(self.experiments_stderr)
-        self._manager.shutdown()
+        self.close_logger()
 
 class MemoryResearchStorage(ResearchStorage):
     def __init__(self, research=None, loglevel=None, storage='memory'):
@@ -270,6 +329,11 @@ class MemoryResearchStorage(ResearchStorage):
         self.create_logger()
         self.create_redirection_files()
         self.results = ResearchResults(self.research.name, False)
+        self.profiler = ResearchProfiler(self.research.name, self.research.profile)
+
+        self._manager = mp.Manager()
+        self.experiments_stdout = self._manager.dict()
+        self.experiments_stderr = self._manager.dict()
 
         self._env = dict()
 
@@ -288,6 +352,12 @@ class MemoryResearchStorage(ResearchStorage):
         self.stdout_file = create_output_stream(self.research.redirect_stdout, False, common=True)
         self.stderr_file = create_output_stream(self.research.redirect_stderr, False, common=True)
 
+    def close(self):
+        super().close()
+        self.experiments_stdout = dict(self.experiments_stdout)
+        self.experiments_stderr = dict(self.experiments_stderr)
+        self._manager.shutdown()
+
 class LocalResearchStorage(ResearchStorage):
     def __init__(self, research, loglevel, mode='w', storage='local'):
         super().__init__(research, storage)
@@ -296,10 +366,11 @@ class LocalResearchStorage(ResearchStorage):
         self.path = research.name
         if mode == 'w':
             self.create_folder()
-        self.dump_research(research)
-        self.create_logger()
-        self.create_redirection_files()
+            self.dump_research(research)
+            self.create_logger()
+            self.create_redirection_files()
         self.results = ResearchResults(self.research.name, True)
+        self.profiler = ResearchProfiler(self.research.name, self.research.profile)
 
     def create_folder(self):
         """ Create storage folder. """
@@ -348,7 +419,45 @@ class LocalResearchStorage(ResearchStorage):
         )
 
     def load(self):
-        self.results = ResearchResults(self.research.name, self.research.dump_results)
-        self.profiler = ResearchProfiler(self.research.name, self.research.profile)
         self.results.load()
         self.profiler.load()
+
+class ClearMLResearchStorage(ResearchStorage):
+    def __init__(self, research, loglevel, mode='w', storage='clearml'):
+        from clearml import Task
+
+        super().__init__(research, storage)
+        self.task = Task.create(
+            project_name=self.research.name,
+            task_name='research',
+            # add_task_init_call=True,
+        )
+
+        self.create_logger()
+        self.create_redirection_files()
+
+    def create_redirection_files(self):
+        self.stdout_file = create_output_stream(True, False, common=True)
+        self.stderr_file = create_output_stream(True, False, common=True)
+
+    def collect_env_state(self, *args, **kwargs):
+        pass
+
+    def create_logger(self):
+        self.logger = ClearMLLogger(self.task.get_logger())
+
+    def close(self):
+        self.task.close()
+
+    def close_logger(self):
+        pass
+
+class ClearMLLogger:
+    def __init__(self, logger):
+        self.logger = logger
+
+    def __getattr__(self, name):
+        if name in ['info', 'debug', 'error', 'critical']:
+            loglevel = getattr(logging, name.upper())
+            return lambda x: self.logger.report_text(x, level=loglevel, print_console=False)
+        return getattr(self.logger, name)

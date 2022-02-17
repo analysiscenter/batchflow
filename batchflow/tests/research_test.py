@@ -347,6 +347,11 @@ class TestExecutor:
         with expectation:
             executor.run()
 
+        executor.close()
+
+        process = psutil.Process(os.getpid())
+        assert len(process.children()) <= 1
+
 class TestResearch:
     @pytest.mark.parametrize('parallel', [False, True])
     @pytest.mark.parametrize('dump_results', [False, True])
@@ -354,6 +359,9 @@ class TestResearch:
     @pytest.mark.parametrize('branches, target', [[1, 'f'], [3, 'f'], [3, 't']])
     def test_simple_research(self, parallel, dump_results, target, workers, branches, simple_research):
         n_iters = 3
+
+        process = psutil.Process(os.getpid())
+        assert len(process.children()) <= 1
         simple_research.run(n_iters=n_iters, workers=workers, branches=branches, parallel=parallel,
                             dump_results=dump_results, executor_target=target)
 
@@ -363,6 +371,9 @@ class TestResearch:
         if dump_results:
             loaded_research = Research.load(simple_research.name)
             assert len(loaded_research.results.df) == 18
+
+        process = psutil.Process(os.getpid())
+        assert len(process.children()) <= 1
 
     def test_empty_domain(self):
         research = Research().add_callable('func', lambda: 100).save(O('func'), 'sum')
@@ -391,11 +402,16 @@ class TestResearch:
     def test_research_with_controller(self, workers, research_with_controller):
         research_with_controller.run(dump_results=True, parallel=True, workers=workers, bar=False, finalize=True)
 
+        process = psutil.Process(os.getpid())
+
         assert len(research_with_controller.monitor.exceptions) == 0
         assert len(research_with_controller.results.df) == 4
+        assert len(process.children()) <= 1
 
         loaded_research = Research.load(research_with_controller.name)
         assert len(loaded_research.results.df) == 4
+
+        assert len(process.children()) <= 1
 
     @pytest.mark.slow
     @pytest.mark.parametrize('branches', [False, True])
@@ -453,8 +469,8 @@ class TestResearch:
         assert all(results == [np.dtype(i) for i in ['O', 'O', 'O', 'int64', 'float32', 'float64']])
 
         process = psutil.Process(os.getpid())
-        # for p in process.children():
-        #     print(p, research.monitor.processes.get(p.pid, 'unknown'))
+        for p in process.children():
+            print(p, research.monitor.processes.get(p.pid, 'unknown'))
         assert len(process.children()) <= 1
 
     @pytest.mark.parametrize('create_id_prefix', [False, True, 4])
@@ -507,7 +523,7 @@ class TestResearch:
 
         assert simple_research.profiler.profile_info.shape[1] == shape
 
-    @pytest.mark.parametrize('loglevel, length_res, length_exp', list(zip(['info', 'debug'], [62, 116], [7, 16])))
+    @pytest.mark.parametrize('loglevel, length_res, length_exp', list(zip(['info', 'debug'], [62, 104], [7, 16])))
     def test_logging(self, loglevel, length_res, length_exp, tmp_path, simple_research):
         path = os.path.join(tmp_path, 'research')
         simple_research.run(name=path, n_iters=3, dump_results=True, loglevel=loglevel)

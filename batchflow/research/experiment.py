@@ -238,6 +238,8 @@ class ExecutableUnit:
             self.transform_method()
 
         if self.must_execute(iteration, n_iters, last):
+            self.experiment.logger.debug(f"Execute '{self.name}' [{iteration}/{n_iters - 1}]")
+
             self.iteration = iteration
             args = eval_expr(self.args, experiment=self.experiment)
             kwargs = eval_expr(self.kwargs, experiment=self.experiment)
@@ -690,7 +692,11 @@ class Experiment:
             value = getattr(self.executor, attr)#, defaults[attr])
             setattr(self, attr, value)
 
-        storage = 'local' if self.dump_results else 'memory'
+        if isinstance(self.dump_results, bool):
+            storage = 'local' if self.dump_results else 'memory'
+        else:
+            storage = self.dump_results
+
         self.storage = ExperimentStorage(self, loglevel=self.loglevel, storage=storage)
         self.logger = self.storage.logger
         self.profiler = self.storage.profiler
@@ -739,7 +745,6 @@ class Experiment:
                 self.last = self.last or (iteration + 1 == n_iters)
                 self.iteration = iteration
 
-                self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
                 exception = (StopIteration, KeyboardInterrupt) if self.debug else Exception
                 try:
                     self.outputs[name], unit_time = self.actions[name](iteration, n_iters, last=self.last)
@@ -929,10 +934,19 @@ class Executor:
                 if self.research:
                     self.research.monitor.stop_experiment(experiment)
                 experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
+                experiment.storage.copy_results_to_research_storage()
 
-                experiment.storage.close()
+        self.close()
 
+    def close(self):
+        for experiment in self.experiments:
+            experiment.storage.close()
         self.storage.close_files()
+        if self.research is None:
+            self.storage.close()
+
+    def __del__(self):
+        self.close()
 
     @parallel(init='_parallel_init_call')
     def parallel_call(self, experiment, iteration, unit_name):
