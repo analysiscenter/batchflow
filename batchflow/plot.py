@@ -48,34 +48,35 @@ class LoopedList(list):
             idx = pos + (idx - pos) % (len(self) - pos)
         return super().__getitem__(idx)
 
+# pylint: disable=invalid-name
 class preprocess_and_imshow:
     """ TODO """
-    def __init__(self, ax, X, *args, mask_values=(), order_axes=None, vmin=None, vmax=None, **kwargs):
+    def __init__(self, ax, array, *args, mask_values=(), order_axes=None, vmin=None, vmax=None, **kwargs):
         self.mask_values = to_list(mask_values) if mask_values is not None else []
         self.order_axes = order_axes
         self.vmin, self.vmax = vmin, vmax
 
-        X_new = self._preprocess(X)
-        self.im = ax.imshow(X_new, *args, vmin=vmin, vmax=vmax, **kwargs)
+        new_array = self._preprocess(array)
+        self.im = ax.imshow(new_array, *args, vmin=vmin, vmax=vmax, **kwargs)
 
-    def _preprocess(self, X):
-        masks = [X == m if isinstance(m, Number) else m(X) for m in self.mask_values]
-        mask = reduce(np.logical_or, masks, np.isnan(X))
-        X_new = np.ma.array(X, mask=mask)
+    def _preprocess(self, array):
+        masks = [array == m if isinstance(m, Number) else m(array) for m in self.mask_values]
+        mask = reduce(np.logical_or, masks, np.isnan(array))
+        new_array = np.ma.array(array, mask=mask)
 
-        order_axes = self.order_axes[:X.ndim]
-        X_new = np.transpose(X_new, order_axes)
-        return X_new
+        order_axes = self.order_axes[:array.ndim]
+        new_array = np.transpose(new_array, order_axes)
+        return new_array
 
-    def set_data(self, A):
+    def set_data(self, array):
         """ TODO """
-        vmin_new = np.nanmin(A) if self.vmin is None else self.vmin
-        vmax_new = np.nanmax(A) if self.vmax is None else self.vmax
+        vmin_new = np.nanmin(array) if self.vmin is None else self.vmin
+        vmax_new = np.nanmax(array) if self.vmax is None else self.vmax
         clim = [vmin_new, vmax_new]
         self.im.set_clim(clim)
 
-        A_new = self._preprocess(A)
-        self.im.set_data(A_new)
+        new_array = self._preprocess(array)
+        self.im.set_data(new_array)
 
     def __getattr__(self, key):
         if self.im is None:
@@ -569,7 +570,7 @@ class plot:
 
             # Use a proxy for imshow calls that fixes data preprocessing parameters
             # and re-applies them to axes image before `set_data` calls
-            image = preprocess_and_imshow(ax=ax, X=image, **imshow_params)
+            image = preprocess_and_imshow(ax=ax, array=image, **imshow_params)
             images.append(image)
 
         return images, config
@@ -616,13 +617,12 @@ class plot:
             mask_values = self.filter_dict(config, 'mask_values', index=layer_idx) or []
             masks = [array == m if isinstance(m, Number) else m(array) for m in mask_values]
             mask = reduce(np.logical_or, masks, np.isnan(array))
-            array_new = np.ma.array(array, mask=mask).flatten()
+            new_array = np.ma.array(array, mask=mask).flatten()
 
-            obj = ax.hist(array_new, **hist_params)
+            obj = ax.hist(new_array, **hist_params)
             objects.append(obj)
 
         return objects, config
-
 
 
     CURVE_COLORS = ['skyblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
@@ -787,7 +787,7 @@ class plot:
         legend = ax.get_legend()
         handles = getattr(legend, 'legendHandles', [])
         texts = getattr(legend, 'get_texts', lambda: [])()
-        labels = [t._text for t in texts]
+        labels = [t._text for t in texts] # pylint: disable=protected-access
 
         colors = [color for color in to_list(color) if is_color_like(color)]
         if mode in ('imshow', 'hist', 'wiggle'):
