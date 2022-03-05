@@ -19,32 +19,36 @@ from .utils import to_list
 
 
 
-class LoopedList(list):
-    """ List that loops from given position (default is 0).
+class CycledList(list):
+    """ List that repeats itself from desired position (default is 0).
 
         Examples
         --------
-        >>> l = LoopedList(['a', 'b', 'c'])
+        >>> l = CycledList(['a', 'b', 'c'])
         >>> [l[i] for i in range(9)]
         ['a', 'b', 'c', 'a', 'b', 'c', 'a', 'b', 'c']
 
-        >>> l = LoopedList(['a', 'b', 'c', 'd'], loop_from=2)
+        >>> l = CycledList(['a', 'b', 'c', 'd'], cycle_from=2)
         >>> [l[i] for i in range(9)]
         ['a', 'b', 'c', 'd', 'c', 'd', 'c', 'd', 'c']
 
-        >>> l = LoopedList(['a', 'b', 'c', 'd', 'e'], loop_from=-1)
+        >>> l = CycledList(['a', 'b', 'c', 'd', 'e'], cycle_from=-1)
         >>> [l[i] for i in range(9)]
         ['a', 'b', 'c', 'd', 'e', 'e', 'e', 'e', 'e']
+
+        Notes
+        -----
+        Contrary to `chain(lst, cycle(lst[cycle_from:]))` itertools solution this one is indexable.
     """
-    def __init__(self, *args, loop_from=0, **kwargs):
-        self.loop_from = loop_from
+    def __init__(self, *args, cycle_from=0, **kwargs):
+        self.cycle_from = cycle_from
         super().__init__(*args, **kwargs)
 
     def __getitem__(self, idx):
         if idx >= len(self):
-            pos = self.loop_from + len(self) * (self.loop_from < 0)
+            pos = self.cycle_from + len(self) * (self.cycle_from < 0)
             if pos < 0:
-                raise IndexError(f"List of length {len(self)} is looped from {self.loop_from} index")
+                raise IndexError(f"List of length {len(self)} is looped from {self.cycle_from} index")
             idx = pos + (idx - pos) % (len(self) - pos)
         return super().__getitem__(idx)
 
@@ -90,7 +94,122 @@ class preprocess_and_imshow:
 
 
 class plot:
-    """ Plotting backend for matplotlib.
+    """ Multiple images plotter.
+
+    General parameters
+    ----------
+    data : np.ndarray or a list of np.ndarray objects or a list of lists of np.ndarray
+        If list if flat, 'overlay/separate' logic is handled via `combine` parameter.
+        If list is nested, outer level defines subplots order while inner one defines layers order.
+        Shape of data items must match chosen plotting mode (see below).
+    mode : 'imshow', 'wiggle', 'hist', 'loss'
+        If 'imshow' plot given arrays as images.
+        If 'wiggle' plot 1d subarrays of given array as signals.
+        Subarrays are extracted from given data with fixed step along vertical axis.
+        If 'hist' plot histogram of flattened array.
+        If 'loss' plot given arrays as loss curves.
+    combine : 'overlay', 'separate' or 'mixed'
+        Whether overlay images on a single axis, show them on separate ones or use mixed approach.
+        Note, that 'wiggle' plot mode is incompatible with `combine='separate'`.
+    kwargs :
+        - For one of `imshow`, 'wiggle`, `hist` or `loss` methods (depending on chosen mode).
+            Parameters and data nestedness levels must match.
+            Every param with 'imshow_', 'wiggle_', 'hist_' or 'loss_' prefix is redirected to corresponding method.
+            See detailed parameters listings below.
+        - For `annotate_axis`.
+            Every param with 'title_', 'suptitle_', 'xlabel_', 'ylabel_', 'xticks_', 'yticks_', 'xlim_', 'ylim_',
+            colorbar_', 'legend_' or 'grid_' prefix is redirected to corresponding matplotlib method.
+            Also 'facecolor', 'set_axisbelow', 'disable_axes' arguments are accepted.
+
+    Parameters for figure creation
+    ------------------------------
+    figsize : tuple
+        Size of displayed figure. If not provided, infered from data shapes.
+    facecolor : valid matplotlib color
+        Figure background color.
+
+    Parameters for 'imshow' mode
+    ----------------------------
+    cmap : valid matplotlib colormap or color
+        Defines colormap to display single-channel images with.
+    alpha : number in (0, 1) range
+        Image opacity (0 means fully transparent, i.e. invisible, and 1 - totally opaque).
+        Useful when `combine='overlay'`.
+    order_axes: tuple
+        Order of axes for displayed images.
+    mask_values : number or tuple of numbers
+        Values that should be masked on image display.
+    mask_color : valid matplotlib color
+        Color to display masked values with.
+    imshow_{parameter} : misc
+        Any parameter valid for `plt.imshow`.
+
+    Parameters for 'hist' mode
+    ----------------------------
+    color : valid matplotlib color
+        Defines color to display histogram with.
+    alpha : number in (0, 1) range
+        Hisotgram opacity (0 means fully transparent, i.e. invisible, and 1 - totally opaque).
+        Useful when `combine='overlay'`.
+    bins : int
+        Number of bins for histogram.
+    mask_values : number or tuple of numbers
+        Values that should be masked on image display.
+    mask_color : valid matplotlib color
+        Color to display masked values with.
+    hist_{parameter} : misc
+        Any parameter valid for `plt.hist`.
+
+    Parameters for 'loss' mode
+    ----------------------------
+    color : valid matplotlib color
+        Defines color to display loss curve with.
+    alpha : number in (0, 1) range
+        Loss curve opacity (0 means fully transparent, i.e. invisible, and 1 - totally opaque).
+        Useful when `combine='overlay'`.
+    rolling_mean : number
+
+    rolling_final : number
+
+    loss_{parameter} : misc
+        Any parameter valid for `plt.plot`.
+
+    Parameters for axes annotation
+    ------------------------------
+    {text_object}_label: str
+        Value of axes text object.
+        Valid objects are 'suptitle', 'title', 'xlabel', 'ylabel', 'legend'.
+    {text_object}_color : str or tuple
+        Color of axes text object.
+        Valid objects are 'suptitle', 'title', 'xlabel', 'ylabel', 'legend'.
+        If str, must be valid matplotlib colormap.
+        If tuple, must be a valid rgb color.
+    {text_object}_size : number
+        Size of axes text object.
+        Valid objects are 'suptitle', 'title', 'xlabel', 'ylabel', 'legend'.
+    colorbar : bool
+        Toggle for colorbar.
+    colorbar_width : number
+        The width of colorbar as a percentage of the subplot width.
+    colorbar_pad : number
+        The pad of colorbar as a percentage of the subplot width.
+    legend_loc : number
+        Codes legend position in matplotlib terms (must be from 0-9 range).
+    grid: bool
+        Grid toggle.
+    {object}_{parameter} : misc
+        Any parameter with prefix of desired object that is valid for corresponding method:
+        title : `plt.set_title`
+        suptitle : `plt.suptitle`
+        xlabel : `plt.set_xlabel`
+        ylabel : `plt.set_ylabel`
+        xticks : `plt.set_xticks`
+        yticks : `plt.set_yticks`
+        tick : `plt.tick_params`
+        xlim : `plt.set_xlim`
+        ylim : `plt.set_ylim`
+        legend : `plt.legend`
+        grid : `plt.grid`
 
     Overall idea
     ------------
@@ -99,7 +218,8 @@ class plot:
 
     The logic behind the process is the following:
     1. Parse data:
-        - Calculate subplots shapes data.
+        - Calculate subplots sizes - look through all data items
+          and estimate every subplot shape taking max of all its layers shapes.
         - Put provided arrays into double nested list.
           Nestedness levels define subplot and layer data order correspondingly.
         - Infer images combination mode.
@@ -133,11 +253,11 @@ class plot:
     The list of parameters expected by specific plot method is rather short.
     But there is a way to provide parameter to a plot method, even if it's not hard-coded.
     One must use specific prefix for that.
-    Address docs of `imshow`, `wiggle`, `hist`, `curve` and `annotate_axis` for details.
+    Address docs of `imshow`, `wiggle`, `hist`, `loss` and `annotate_axis` for details.
 
     This also allows one to pass arguments of the same name for different plotting steps.
-    E.g. `plt.set_title` and `plt.set_xlabel` both require `fontsize` argument.
-    Providing `{'fontsize': 30}` in kwargs will affect both title and x-axis labels.
+    E.g. `plt.set_title` and `plt.set_xlabel` both require `size` argument.
+    Providing `{'size': 30}` in kwargs will affect both title and x-axis labels.
     To change parameter for title only, one can provide {'title_fontsize': 30}` instead.
     """
     def __init__(self, data=None, combine='overlay', mode='imshow', **kwargs):
@@ -145,38 +265,10 @@ class plot:
 
         Parses axes from kwargs if provided, else creates them.
         Filters parameters and calls chosen plot method for every axis-data pair.
-
-        Parameters
-        ----------
-        data : np.ndarray or a list of np.ndarray objects (possibly nested)
-            If list has level 1 nestedness, 'overlay/separate' logic is handled via `combine` parameter.
-            If list has level 2 nestedness, outer level defines subplots order while inner one defines layers order.
-            Shape of data items depends on chosen mode (see below).
-        mode : 'imshow', 'wiggle', 'hist', 'curve'
-            If 'imshow' plot given arrays as images.
-            If 'wiggle' plot 1d subarrays of given array as signals.
-            Subarrays are extracted from given data with fixed step along vertical axis.
-            If 'hist' plot histogram of flattened array.
-            If 'curve' plot given arrays as curves.
-        combine : 'overlay', 'separate' or 'mixed'
-            Whether overlay images on a single axis, show them on separate ones or use mixed approach.
-            Note, that 'wiggle' plot mode is incompatible with `combine='separate'`.
-        return_figure : bool
-            Whether return created figure or not.
-        show : bool
-            Whether display created figure or not.
-        kwargs :
-            - For one of `imshow`, 'wiggle`, `hist` or `curve` (depending on chosen mode).
-              Parameters and data nestedness levels must match.
-              Every param with 'imshow_', 'wiggle_', 'hist_' or 'curve_' prefix is redirected to corresponding method.
-            - For `annotate_axis`.
-              Every param with 'title_', 'suptitle_', 'xlabel_', 'ylabel_', 'xticks_', 'yticks_', 'xlim_', 'ylim_',
-              colorbar_', 'legend_' or 'grid_' prefix is redirected to corresponding matplotlib method.
-              Also 'facecolor', 'set_axisbelow', 'disable_axes' arguments are accepted.
         """
         self.shapes, self.data, self.combine, self.rel_idx_corrections = self.parse_data(data=data, combine=combine)
         self.n_subplots = len(self.shapes)
-        self.fig, self.axes, self.fig_config = self.parse_axes(mode=mode, **kwargs)
+        self.fig, self.axes, self.fig_config = self.make_figure(mode=mode, **kwargs)
         self.axes_configs = np.full(len(self.axes), None)
         self.axes_objects = np.full(len(self.axes), None)
 
@@ -230,7 +322,7 @@ class plot:
 
         if mode in ('imshow', 'hist', 'wiggle'):
             default_ncols = 4
-        elif mode in ('curve',):
+        elif mode in ('loss',):
             default_ncols = 1
 
         # Make ncols/nrows
@@ -247,7 +339,7 @@ class plot:
 
         if mode in ('imshow', 'hist', 'wiggle'):
             fig_width = 8 * ncols * scale
-        elif mode in ('curve',):
+        elif mode in ('loss',):
             fig_width = 16 * ncols * scale
 
         # Make figsize
@@ -286,7 +378,7 @@ class plot:
             elif mode == 'wiggle':
                 ratio = 1 / ncols * nrows
 
-            elif mode == 'curve':
+            elif mode == 'loss':
                 ratio = 1 / 3 / ncols * nrows
 
         if figsize is None:
@@ -314,7 +406,7 @@ class plot:
 
         return config
 
-    def parse_axes(self, mode, axes=None, axis=None, ax=None, **kwargs):
+    def make_figure(self, mode, axes=None, axis=None, ax=None, **kwargs):
         """ Create figure and axes if needed. """
         axes = axes or axis or ax
 
@@ -377,7 +469,7 @@ class plot:
     def ax_annotate(self, ax, ax_config, ax_image, idx, mode):
         """ Apply requested annotation functions to given axis with chosen parameters. """
         # pylint: disable=too-many-branches
-        text_keys = ['fontsize', 'family', 'color']
+        text_keys = ['size', 'family', 'color']
 
         # title
         keys = ['title', 'y'] + text_keys
@@ -391,6 +483,7 @@ class plot:
         params = self.filter_dict(ax_config, keys, prefix='suptitle_')
         params['t'] = params.pop('t', params.pop('suptitle', params.pop('label', None)))
         if params:
+            print(params)
             ax.figure.suptitle(**params)
 
         # xlabel
@@ -441,7 +534,7 @@ class plot:
 
         # colorbar
         if any(to_list(self.config['colorbar'])):
-            keys = ['colorbar', 'size', 'pad', 'fake', 'ax_image']
+            keys = ['colorbar', 'width', 'pad', 'fake', 'ax_image']
             params = self.filter_dict(ax_config, keys, prefix='colorbar_', index=idx)
             params['ax_image'] = ax_image
             # if colorbar is disabled for subplot, add param to plot fake axis instead to keep proportions
@@ -501,7 +594,7 @@ class plot:
 
     IMSHOW_DEFAULTS = {
         # image
-        'cmap': LoopedList(['Greys_r', *MASK_COLORS], loop_from=1),
+        'cmap': CycledList(['Greys_r', *MASK_COLORS], cycle_from=1),
         'facecolor': 'snow',
         # suptitle
         'suptitle_color': 'k',
@@ -511,7 +604,7 @@ class plot:
         'xlabel': '', 'ylabel': '',
         # colorbar
         'colorbar': False,
-        'colorbar_size': 5,
+        'colorbar_width': 5,
         'colorbar_pad': None,
         # ticks
         'labeltop': True,
@@ -521,13 +614,10 @@ class plot:
         'legend_loc': 0,
         'legend_size': 10,
         'legend_label': None,
-        # common
-        'fontsize': 20,
         # grid
         'grid': False,
         # axes order
         'order_axes': (0, 1, 2),
-        'transpose': False,
         # values masking
         'mask_color': (0, 0, 0, 0),
     }
@@ -579,7 +669,7 @@ class plot:
     HIST_DEFAULTS = {
         # hist
         'bins': 50,
-        'color': LoopedList(MASK_COLORS),
+        'color': CycledList(MASK_COLORS),
         'alpha': 0.8,
         'facecolor': 'snow',
         # suptitle
@@ -597,7 +687,6 @@ class plot:
         'grid': True,
         # common
         'set_axisbelow': True,
-        'fontsize': 20,
         'colorbar': False
     }
 
@@ -625,16 +714,16 @@ class plot:
         return objects, config
 
 
-    CURVE_COLORS = ['skyblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
+    LOSS_COLORS = ['skyblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
                     'forestgreen', 'navy', 'gold', 'red', 'turquoise', 'darkorchid',
                     'darkkhaki', 'royalblue', 'yellow', 'chocolate', 'darkslategray', 'wheat']
 
-    CURVE_DEFAULTS = {
+    LOSS_DEFAULTS = {
         # main
         'rolling_mean': None,
         'rolling_final': None,
         # curve
-        'color': LoopedList(CURVE_COLORS),
+        'color': CycledList(LOSS_COLORS),
         'facecolor': 'snow',
         # suptitle
         'suptitle_color': 'k',
@@ -648,12 +737,11 @@ class plot:
         'legend_size': 10,
         'legend_label': None,
         # common
-        'fontsize': 20,
         'grid': True,
         'colorbar': False
     }
 
-    def ax_curve(self, ax, idx):
+    def ax_loss(self, ax, idx):
         """ TODO """
         subplot_idx = None if self.combine == 'overlay' else idx - self.rel_idx_corrections[idx]
         config = self.filter_dict(self.config, index=subplot_idx)
@@ -691,10 +779,10 @@ class plot:
                 line_y = [mean] * line_len
                 ax.plot(line_x, line_y, linestyle='--', linewidth=1.2, color=mean_color)
 
-                fontsize = 10
+                size = 10
                 text_x = curve_len + line_len
-                text_y = mean - fontsize / 300
-                text = ax.text(text_x, text_y, f"{mean:.3f}", fontsize=fontsize)
+                text_y = mean - size / 300
+                text = ax.text(text_x, text_y, f"{mean:.3f}", size=size)
                 text.set_path_effects([patheffects.Stroke(linewidth=3, foreground='white'), patheffects.Normal()])
 
                 config['xlim'] = (0, text_x)
@@ -766,11 +854,11 @@ class plot:
         return new_color
 
     @staticmethod
-    def add_colorbar(ax_image, size=5, pad=None, color='black', fake=False):
+    def add_colorbar(ax_image, width=5, pad=None, color='black', fake=False):
         """ Append colorbar to the image on the right. """
         divider = axes_grid1.make_axes_locatable(ax_image.axes)
-        pad = size * 1.5 if pad is None else pad
-        cax = divider.append_axes("right", size=f"{size}%", pad=f"{pad}%")
+        pad = width * 1.5 if pad is None else pad
+        cax = divider.append_axes("right", size=f"{width}%", pad=f"{pad}%")
         if fake:
             cax.set_axis_off()
         else:
@@ -795,7 +883,7 @@ class plot:
                 **kwargs
             }
             handles += [Patch(color=color, **patch_config) for color in colors]
-        elif mode in ('curve', ):
+        elif mode in ('loss', ):
             line_config = {
                 'xdata': np.array([0, 2]) * size,
                 'ydata': np.array([0.35, 0.35]) * size,
@@ -827,4 +915,4 @@ def plot_loss(data, title=None, **kwargs):
         'final_mean': 100,
         **kwargs
     }
-    return plot(data, mode='curve', backend='matplotlib', **kwargs)
+    return plot(data, mode='loss', backend='matplotlib', **kwargs)
