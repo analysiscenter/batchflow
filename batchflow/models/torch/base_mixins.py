@@ -3,14 +3,13 @@ import sys
 from ast import literal_eval
 from pprint import pformat as _pformat
 import matplotlib.pyplot as plt
-from matplotlib.ticker import AutoMinorLocator
 
 import numpy as np
 import torch
-from scipy.ndimage import convolve
 
 from ...monitor import GPUMemoryMonitor
 from ...notifier import Notifier
+from ...plot import plot
 
 # Also imports `tensorboard`, if necessary
 
@@ -136,102 +135,63 @@ class VisualizationMixin:
         writer.close()
 
 
-    def show_lr(self):
+    def show_lr(self, **kwargs):
         """ Plot graph of learning rate over iterations. """
-        plt.figure(figsize=(8, 6))
-        plt.plot(self.lr_list)
+        params = {
+            'title': 'Learning rate',
+            'xlabel': 'Iterations',
+            'ylabel': r'$\lambda$',
+            'ylabel_rotation': 0,
+            'ylabel_size': 20,
+            'legend': False,
+            'grid': 'major',
+            **kwargs
+        }
+        return plot(data=self.lr_list, mode='curve', **params)
 
-        plt.title('Learning rate', fontsize=18)
-        plt.xlabel('Iterations', fontsize=12)
-        plt.ylabel(r'$\lambda$', fontsize=18, rotation=0)
-        plt.grid(True)
-        plt.show()
-
-    def show_loss(self, overlay_lr=True, figsize=(12, 6), window=20, final_window=50, minor_tick_frequency=4,
-                  log_loss=False, log_lr=False, show=True, return_figure=False, savepath=None, save_kwargs=None):
+    def show_loss(self, overlay_lr=True, **kwargs):
         """ Plot loss and learning rate over the same figure.
 
         Parameters
-        figsize : tuple of ints
-            Size of the figure.
-        window : int or None
-            If int, then averaged graph of loss values is displayed over the regular one.
-            The average for each point is computed as the mean value of the kernel with the center in this point.
-            Around the edges of loss graph (in the beginning and at the end) we use the nearest value to pad.
-            If None, no additional graphs are displayed.
-        final_window : int or None
-            If int, then we additionally display the mean value of the last `final_window` iterations in the legend.
-            If None, no additional info is displayed.
-        minor_tick_frequency : int or None
-            If int, then number of minor ticks on yaxis between major ticks.
-            If None, no minor ticks are added.
-        log_loss, log_lr : bool
-            Whether to take the log of respective graph values.
-        return figure : bool
-            Whether to return the figure.
-        savepath : str or None
-            If str, then path to save the figure.
-            If None, the figure is not saved to disk.
-        save_kwargs : dict or None
-            If dict, then additional parameters for figure saving.
+        ----------
+        overlay_lr : bool
+            Whether show learning rate on the same plot with loss or not.
+        kwargs : misc
+            For `plot` in `mode='loss'`:
+
+            figsize : tuple of ints
+                Size of the figure.
+            window : int or None
+                If int, then averaged graph of loss values is displayed over the regular one.
+                The average for each point is computed as the mean value of the kernel with the center in this point.
+                Around the edges of loss graph (in the beginning and at the end) we use the nearest value to pad.
+                If None, no additional graphs are displayed.
+            final_window : int or None
+                If int, then we additionally display the mean value of the last `final_window` iterations in the legend.
+                If None, no additional info is displayed.
+            minor_grix_x_n : int or None
+                If int, then number of minor ticks on xaxis between major ticks.
+                If None, no minor ticks are added.
+            minor_grix_y_n : int or None
+                If int, then number of minor ticks on yaxis between major ticks.
+                If None, no minor ticks are added.
+            log_loss, log_lr : bool
+                Whether to take the log of respective graph values.
+            return figure : bool
+                Whether to return the figure.
+            savepath : str or None
+                If str, then path to save the figure.
+                If None, the figure is not saved to disk.
+            save_kwargs : dict or None
+                If dict, then additional parameters for figure saving.
         """
-        # Legends
-        loss_label = f'loss ⟶ {self.loss_list[-1]:2.3f}'
-        if final_window is not None:
-            final_window = min(final_window, self.iteration)
-            loss_label += f'\nmean over last {final_window} iterations={np.mean(self.loss_list[-final_window:]):2.3f}'
+        data = (self.loss_list, self.lr_list) if overlay_lr else (self.loss_list,)
+        kwargs['title'] = 'Loss values and learning rate' if overlay_lr else 'Loss values'
+        if 'final_window' in kwargs:
+            kwargs['final_window'] = min(kwargs['final_window'], self.iteration)
 
-        # Main plots: loss and lr
-        fig, ax1 = plt.subplots(1, 1, figsize=figsize)
-        ax1.plot(self.loss_list, label=loss_label, color='blue', alpha=0.5 if window is not None else 1.)
+        return plot(data=data, mode='loss', **kwargs)
 
-        if overlay_lr:
-            ax2 = ax1.twinx()
-            ax2.plot(self.lr_list, label=f'learning rate ⟶ {self.lr_list[-1][0]:1.5f}', color='orange', alpha=1.)
-
-        # Averaged loss plot
-        if window is not None:
-            averaged_loss = convolve(self.loss_list, np.ones(window), mode='nearest') / window
-            ax1.plot(averaged_loss, label='loss running mean', color='blue', alpha=1.)
-
-        # Change scale of axis, if needed
-        if log_loss:
-            ax1.set_yscale('log')
-        if overlay_lr and log_lr:
-            ax2.set_yscale('log')
-
-        # Annotations
-        lines = [line for ax in fig.axes for line in ax.lines]
-        ax1.legend(lines, [line.get_label() for line in lines])
-
-        ax1.set_title('Loss values and learning rate', fontsize=18)
-        ax1.set_xlabel('Iterations', fontsize=12)
-        ax1.set_ylabel('Loss', fontsize=12)
-        if overlay_lr:
-            ax2.set_ylabel('Learning rate', fontsize=12)
-
-        # Grid over the figure
-        if minor_tick_frequency is not None:
-            ax1.yaxis.set_minor_locator(AutoMinorLocator(minor_tick_frequency))
-            ax1.grid(which='minor', color='#CCCCCC', linestyle='--')
-        ax1.grid(which='major', color='#CCCCCC')
-
-        # Finalize
-        if savepath is not None:
-            save_kwargs = {'bbox_inches': 'tight',
-                           'pad_inches': 0, 'dpi': 100,
-                           **(save_kwargs or {})}
-            fig.savefig(savepath, **save_kwargs)
-
-        if show:
-            fig.show()
-            plt.show()
-        else:
-            plt.close()
-
-        if return_figure:
-            return fig
-        return None
 
     plot_loss = show_loss
 
