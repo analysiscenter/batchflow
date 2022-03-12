@@ -8,11 +8,11 @@ from numbers import Number
 import numpy as np
 
 from IPython.display import display
-from matplotlib import patheffects
+from scipy.ndimage import convolve
 from matplotlib import pyplot as plt
 from matplotlib.colors import ColorConverter, ListedColormap, is_color_like
-from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+from matplotlib.ticker import MaxNLocator, AutoMinorLocator
 from mpl_toolkits import axes_grid1
 
 from .utils import to_list
@@ -266,8 +266,12 @@ class plot:
         Parses axes from kwargs if provided, else creates them.
         Filters parameters and calls chosen plot method for every axis-data pair.
         """
-        self.shapes, self.data, self.combine, self.rel_idx_corrections = self.parse_data(data=data, combine=combine)
-        self.n_subplots = len(self.shapes)
+        data, combine, n_subplots, empty_subplots = self.parse_data(data=data, combine=combine, mode=mode)
+        self.data = data
+        self.combine = combine
+        self.n_subplots = n_subplots
+        self.empty_subplots = empty_subplots
+        self.idx_fix = np.cumsum([0] + empty_subplots)
         self.fig, self.axes, self.fig_config = self.make_figure(mode=mode, **kwargs)
         self.axes_configs = np.full(len(self.axes), None)
         self.axes_objects = np.full(len(self.axes), None)
@@ -275,54 +279,89 @@ class plot:
         self.plot(mode=mode, **kwargs)
 
     @staticmethod
-    def parse_data(data, combine):
+    def parse_data(data, combine, mode):
         """ TODO """
-        if isinstance(data, int):
-            data_list = [None] * data
-        elif data is None or isinstance(data, (tuple, np.ndarray)):
-            data_list = [data]
+        contains_numbers = lambda x: isinstance(x[0], Number)
+
+        def process_tuple(data):
+            if mode not in ('curve', 'loss'):
+                msg = "Tuple is a valid data item only in modes ('curve', 'loss')."
+                raise ValueError(msg)
+            return tuple(np.array(item) for item in data)
+
+        def process_array(data):
+            if data.ndim > 1 and mode in ('curve', 'loss'):
+                msg = f"In `mode={mode}` array must be 1-dimensional, got array with ndim={data.ndim} instead."
+                raise ValueError(msg)
+            return data
+
+        empty_subplots = []
+        n_subplots = 0
+
+        if data is None:
+            data_list = [None]
+            n_subplots = 1
+        elif isinstance(data, tuple):
+            data_list = [[process_tuple(data)]]
+            n_subplots = 1
+        elif isinstance(data, np.ndarray):
+            data_list = [[process_array(data)]]
+            n_subplots = 1
+        elif isinstance(data, list) and contains_numbers(data):
+            data_list = [[np.array(data)]]
+            n_subplots = 1
         elif isinstance(data, list):
-            if isinstance(data[0], Number):
-                data_list = [np.array(data)]
-            if all(isinstance(item, np.ndarray) for item in data):
-                data_list = [[item] for item in data] if combine == 'separate' else [data]
-            else:
+            if any(isinstance(item, list) and not contains_numbers(item) for item in data):
                 combine = 'mixed'
-                data_list = data
 
-        shapes = []
-        data = []
-        none = [0]
+            data_list = []
+            for item in data:
+                empty = 0
 
-        for item in data_list:
-            if item is None:
-                shapes += [(0, 0)]
-                data += [None]
-                none.append(1)
-            elif isinstance(item, tuple):
-                shapes += [item]
-                data += [None]
-                none.append(1)
-            if isinstance(item, np.ndarray):
-                shapes += [item.shape]
-                data += [[item]]
-                none.append(0)
-            elif isinstance(item, list):
-                shapes += [tuple(np.max([subitem.shape for subitem in item], axis=0))]
-                data += [item]
-                none.append(0)
+                if item is None:
+                    if combine == 'overlay':
+                        msg = "`None` is a placeholder future subplots. It makes not sense when `combine='overlay'`."
+                        raise ValueError(msg)
+                    data_item = None
+                    empty = 1
+                elif isinstance(item, tuple):
+                    data_item = [process_tuple(item)]
+                elif isinstance(item, np.ndarray):
+                    data_item = [process_array(item)]
+                elif isinstance(item, list) and contains_numbers(item):
+                    data_item = [np.array(item)]
+                elif isinstance(item, list):
+                    if combine == 'separate':
+                        raise ValueError("Data list items cant be lists themselves when `combine='separate'`")
+                    data_item = [np.array(subitem) if contains_numbers(subitem) else subitem for subitem in item]
+                else:
+                    msg = f"Valid data items are None, tuple, array or list of those, got {type(item)} instead."
+                    raise ValueError(msg)
 
-        return shapes, data, combine, np.cumsum(none)[:-1]
+                if combine in ('overlay',):
+                    data_list.extend(data_item)
+                elif combine in ('separate', 'mixed'):
+                    data_list.append(data_item)
+                    n_subplots += 1
+                else:
+                    msg = f"Valid combine modes are 'overlay', 'separate', 'mixed', got {combine} instead."
+                    raise ValueError(msg)
 
-    def make_default_config(self, mode, ncols=None, nrows=None, figsize=None, scale=1, ratio=None,
-                            xlim=(None, None), ylim=(None, None), min_fig_width=4, min_fig_height=4,
-                            max_fig_width=25, max_fig_height=15, **kwargs):
+                empty_subplots.append(empty)
+
+            if combine == 'overlay':
+                data_list = [data_list]
+                n_subplots = 1
+
+        return data_list, combine, n_subplots, empty_subplots
+
+    def make_default_config(self, mode, ncols=None, nrows=None, **_):
         """ Infer default figure params from shapes of provided data. """
         config = {'tight_layout': True, 'facecolor': 'snow'}
 
         if mode in ('imshow', 'hist', 'wiggle'):
             default_ncols = 4
-        elif mode in ('loss',):
+        elif mode in ('curve', 'loss'):
             default_ncols = 1
 
         # Make ncols/nrows
@@ -337,36 +376,50 @@ class plot:
 
         config['ncols'], config['nrows'] = ncols, nrows
 
+        return config
+
+    def make_figure(self, mode, axes=None, axis=None, ax=None, **kwargs):
+        """ Create figure and axes if needed. """
+        axes = axes or axis or ax
+
+        if axes is None:
+            config = self.make_default_config(mode=mode, **kwargs)
+            subplots_keys = ['figsize', 'facecolor', 'dpi', 'ncols', 'nrows', 'tight_layout', 'gridspec_kw']
+            config = self.filter_config(kwargs, subplots_keys, prefix='figure_', save_to=config)
+
+            with plt.ioff():
+                fig, axes = plt.subplots(**config)
+            axes = to_list(axes)
+        else:
+            axes = to_list(axes)
+            fig = axes[0].figure
+            config = {}
+
+            if len(axes) < len(self.n_subplots):
+                raise ValueError(f"Not enough axes provided — got ({len(axes)}) for {len(self.n_subplots)} subplots.")
+
+        return fig, axes, config
+
+    def adjust_figsize(self, mode, ncols, nrows, figsize=None, ratio=None, scale=1,
+                       min_fig_width=4, min_fig_height=4, max_fig_width=25, max_fig_height=15, **_):
+        """ TODO """
         if mode in ('imshow', 'hist', 'wiggle'):
             fig_width = 8 * ncols * scale
-        elif mode in ('loss',):
+        elif mode in ('curve', 'loss'):
             fig_width = 16 * ncols * scale
 
         # Make figsize
         if figsize is None and ratio is None:
             if mode == 'imshow':
-                if not isinstance(xlim, list):
-                    xlim = [xlim] * self.n_subplots
-                if not isinstance(ylim, list):
-                    ylim = [ylim] * self.n_subplots
+                # redraw figure so that latest plots are applied to obtain correct axes sizes
+                self.fig.canvas.draw_idle()
 
-                widths = []
-                heights = []
-                for idx, shape in enumerate(self.shapes):
-                    order_axes = self.filter_dict(kwargs, 'order_axes', index=idx)
-                    order_axes = order_axes or self.IMSHOW_DEFAULTS['order_axes']
+                bboxes = [ax.get_window_extent() for ax in self.axes]
 
-                    min_height = xlim[idx][0] or 0
-                    max_height = xlim[idx][1] or shape[order_axes[0]]
-                    subplot_height = abs(max_height - min_height)
-                    heights.append(subplot_height)
-
-                    min_width = ylim[idx][0] or shape[order_axes[1]]
-                    max_width = ylim[idx][1] or 0
-                    subplot_width = abs(max_width - min_width)
-                    widths.append(subplot_width)
-
+                widths = [bbox.width if bbox is not None else 0 for bbox in bboxes]
+                heights = [bbox.height if bbox is not None else 0 for bbox in bboxes]
                 mean_height, mean_width = np.mean(heights), np.mean(widths)
+
                 if mean_height == 0 or mean_width == 0:
                     ratio = 1
                 else:
@@ -378,7 +431,7 @@ class plot:
             elif mode == 'wiggle':
                 ratio = 1 / ncols * nrows
 
-            elif mode == 'loss':
+            elif mode in ('curve', 'loss'):
                 ratio = 1 / 3 / ncols * nrows
 
         if figsize is None:
@@ -402,31 +455,7 @@ class plot:
 
             figsize = (fig_width, fig_height)
 
-        config['figsize'] = figsize
-
-        return config
-
-    def make_figure(self, mode, axes=None, axis=None, ax=None, **kwargs):
-        """ Create figure and axes if needed. """
-        axes = axes or axis or ax
-
-        if axes is None:
-            config = self.make_default_config(mode=mode, **kwargs)
-            subplots_keys = ['figsize', 'facecolor', 'dpi', 'ncols', 'nrows', 'tight_layout', 'gridspec_kw']
-            config = self.filter_dict(kwargs, subplots_keys, prefix='figure_', save_to=config)
-
-            with plt.ioff():
-                fig, axes = plt.subplots(**config)
-            axes = to_list(axes)
-        else:
-            axes = to_list(axes)
-            fig = axes[0].figure
-            config = {}
-
-            if len(axes) < len(self.shapes):
-                raise ValueError(f"Not enough axes provided — got ({len(axes)}) for {len(self.shapes)} subplots.")
-
-        return fig, axes, config
+        self.fig.set_size_inches(figsize)
 
     def plot(self, data=None, mode='imshow', combine=None, save=False, axes_idx=None, **kwargs):
         """ TODO
@@ -434,23 +463,33 @@ class plot:
         Notes to self: Explain `abs_idx` and `rel_idx`.
         """
         if data is not None:
-            self.shapes, self.data, self.combine, self.rel_idx_corrections = self.parse_data(data=data, combine=combine)
+            data, combine, n_subplots, empty_subplots = self.parse_data(data=data, combine=combine, mode=mode)
+            self.data = data
+            self.combine = combine
+            self.n_subplots = n_subplots
+            self.idx_fix = np.cumsum([0] + empty_subplots)
 
         mode_defaults = getattr(self, f"{mode.upper()}_DEFAULTS")
-        self.config = {**mode_defaults, **kwargs}
+        self.config = {**self.ANNOTATION_DEFAULTS, **mode_defaults, **kwargs}
 
         axes_indices = range(len(self.axes)) if axes_idx is None else to_list(axes_idx)
         for rel_idx, abs_idx in enumerate(axes_indices):
             ax = self.axes[abs_idx]
             if rel_idx >= len(self.data) or self.data[rel_idx] is None:
-                ax.set_axis_off()
+                if self.axes_objects[rel_idx] is None:
+                    ax.set_axis_off()
             else:
                 plot_method = getattr(self, f"ax_{mode}")
-                axes_objects, ax_config = plot_method(ax=ax, idx=rel_idx)
-                self.ax_annotate(ax=ax, ax_config=ax_config, ax_image=axes_objects[0], idx=rel_idx, mode=mode)
+                ax_objects, ax_config = plot_method(ax=ax, idx=rel_idx)
+                self.ax_annotate(ax=ax, ax_config=ax_config, ax_objects=ax_objects, idx=rel_idx, mode=mode)
 
-                self.axes_objects[abs_idx] = axes_objects
+                self.axes_objects[abs_idx] = ax_objects
                 self.axes_configs[abs_idx] = ax_config
+
+        figsize_keys = ['ncols', 'nrows', 'figsize', 'ratio', 'scale',
+                        'min_fig_width', 'min_fig_height', 'max_fig_width', 'max_fig_height']
+        figsize_config = self.filter_config({**self.fig_config, **self.config}, figsize_keys)
+        self.adjust_figsize(mode=mode, **figsize_config)
 
         if save or 'savepath' in kwargs:
             self.save(kwargs)
@@ -466,47 +505,66 @@ class plot:
     def __repr__(self):
         return repr(self.fig).replace('Figure', 'Batchflow Figure')
 
-    def ax_annotate(self, ax, ax_config, ax_image, idx, mode):
+    ANNOTATION_DEFAULTS = {
+        'facecolor': 'snow',
+        # suptitle
+        'suptitle_color': 'k',
+        'suptitle_size': 25,
+        # title
+        'title_color' : 'k',
+        'title_size': 20,
+        # axis labels
+        'xlabel': '', 'ylabel': '',
+        'xlabel_color' : 'k', 'ylabel_color' : 'k',
+        'xlabel_size': '12', 'ylabel_size': '12',
+        # colorbar
+        'colorbar': False,
+        # grid
+        'minor_grid_color': '#CCCCCC',
+        'minor_grid_linestyle': '--',
+        'major_grid_color': '#CCCCCC',
+    }
+
+    def ax_annotate(self, ax, ax_config, ax_objects, idx, mode):
         """ Apply requested annotation functions to given axis with chosen parameters. """
         # pylint: disable=too-many-branches
         text_keys = ['size', 'family', 'color']
 
         # title
         keys = ['title', 'y'] + text_keys
-        params = self.filter_dict(ax_config, keys, prefix='title_')
+        params = self.filter_config(ax_config, keys, prefix='title_')
         params['label'] = params.pop('title', params.pop('label', None))
         if params:
             ax.set_title(**params)
 
         # suptitle
         keys = ['suptitle', 't', 'y'] + text_keys
-        params = self.filter_dict(ax_config, keys, prefix='suptitle_')
+        params = self.filter_config(ax_config, keys, prefix='suptitle_')
         params['t'] = params.pop('t', params.pop('suptitle', params.pop('label', None)))
         if params:
-            print(params)
             ax.figure.suptitle(**params)
 
         # xlabel
         keys = ['xlabel'] + text_keys
-        params = self.filter_dict(ax_config, keys, prefix='xlabel_', index=idx)
+        params = self.filter_config(ax_config, keys, prefix='xlabel_', index=idx)
         if params:
             ax.set_xlabel(**params)
 
         # ylabel
         keys = ['ylabel'] + text_keys
-        params = self.filter_dict(ax_config, keys, prefix='ylabel_', index=idx)
+        params = self.filter_config(ax_config, keys, prefix='ylabel_', index=idx)
         if params:
             ax.set_ylabel(**params)
 
         # xticks
-        params = self.filter_dict(ax_config, ['xticks'], prefix='xticks_', index=idx)
+        params = self.filter_config(ax_config, ['xticks'], prefix='xticks_', index=idx)
         if 'xticks' in params:
             params['ticks'] = params.get('ticks', params.pop('xticks'))
         if params:
             ax.set_xticks(**params)
 
         # yticks
-        params = self.filter_dict(ax_config, ['yticks'], prefix='yticks_', index=idx)
+        params = self.filter_config(ax_config, ['yticks'], prefix='yticks_', index=idx)
         if 'yticks' in params:
             params['ticks'] = params.get('ticks', params.pop('yticks'))
         if params:
@@ -514,19 +572,19 @@ class plot:
 
         # ticks
         keys = ['labeltop', 'labelright', 'labelcolor', 'direction']
-        params = self.filter_dict(ax_config, keys, prefix='tick_', index=idx)
+        params = self.filter_config(ax_config, keys, prefix='tick_', index=idx)
         if params:
             ax.tick_params(**params)
 
         # xlim
-        params = self.filter_dict(ax_config, ['xlim'], prefix='xlim_', index=idx)
+        params = self.filter_config(ax_config, ['xlim'], prefix='xlim_', index=idx)
         if 'xlim' in params:
             params['left'] = params.get('left', params.pop('xlim'))
         if params:
             ax.set_xlim(**params)
 
         # ylim
-        params = self.filter_dict(ax_config, ['ylim'], prefix='ylim_', index=idx)
+        params = self.filter_config(ax_config, ['ylim'], prefix='ylim_', index=idx)
         if 'ylim' in params:
             params['bottom'] = params.get('bottom', params.pop('ylim'))
         if params:
@@ -534,27 +592,36 @@ class plot:
 
         # colorbar
         if any(to_list(self.config['colorbar'])):
-            keys = ['colorbar', 'width', 'pad', 'fake', 'ax_image']
-            params = self.filter_dict(ax_config, keys, prefix='colorbar_', index=idx)
-            params['ax_image'] = ax_image
+            keys = ['colorbar', 'width', 'pad', 'fake', 'ax_objects']
+            params = self.filter_config(ax_config, keys, prefix='colorbar_', index=idx)
+            params['ax_image'] = ax_objects[0]
             # if colorbar is disabled for subplot, add param to plot fake axis instead to keep proportions
             params['fake'] = not params.pop('colorbar', True)
             self.add_colorbar(**params)
 
         # legend
-        keys = ['label', 'size', 'cmap', 'color', 'loc', 'legend', 'ha', 'va']
-        params = self.filter_dict(ax_config, keys, prefix='legend_')
-        params['color'] = params.pop('color', params.pop('cmap', None))
-        params['label'] = params.pop('legend', None) or params.get('label')
-        if params.get('label') is not None:
+        legend = self.filter_config(ax_config, 'legend')
+        keys = ['label', 'size', 'loc', 'ha', 'va']
+        params = self.filter_config(ax_config, keys, prefix='legend_')
+        if legend or params:
+            if mode == 'imshow':
+                color = self.filter_config(ax_config, keys=['color', 'cmap'], prefix='legend_')
+                params['color'] = list(color.values())[0]
+            elif mode in ('curve', 'loss'):
+                params['handles'] = ax_objects
             self.add_legend(ax, mode=mode, **params)
 
         # grid
-        keys = ['grid', 'b', 'which', 'axis']
-        params = self.filter_dict(ax_config, keys, prefix='grid_', index=idx)
-        params['b'] = params.pop('grid', params.pop('b', 'False'))
-        if params:
-            ax.grid(**params)
+        grid = self.filter_config(ax_config, 'grid', index=idx)
+        grid_keys = ['color', 'linestyle', 'freq']
+
+        minor_params = self.filter_config(ax_config, grid_keys, prefix='minor_grid_', index=idx)
+        if grid in ('minor', 'both') and minor_params:
+            self.add_grid(ax, grid_type='minor', **minor_params)
+
+        major_params = self.filter_config(ax_config, grid_keys, prefix='major_grid_', index=idx)
+        if grid in ('major', 'both') and minor_params:
+            self.add_grid(ax, grid_type='major', **major_params)
 
         facecolor = ax_config.get('facecolor', None)
         if facecolor is not None:
@@ -580,7 +647,7 @@ class plot:
         }
 
         save_keys = ['savepath', 'bbox_inches', 'pad_inches', 'dpi']
-        save_params = self.filter_dict(kwargs, save_keys, prefix='save_')
+        save_params = self.filter_config(kwargs, save_keys, prefix='save_')
         save_params = {**default_params, **save_params}
         savepath = save_params.pop('savepath')
 
@@ -595,50 +662,37 @@ class plot:
     IMSHOW_DEFAULTS = {
         # image
         'cmap': CycledList(['Greys_r', *MASK_COLORS], cycle_from=1),
-        'facecolor': 'snow',
-        # suptitle
-        'suptitle_color': 'k',
-        # title
-        'title_color' : 'k',
-        # axis labels
-        'xlabel': '', 'ylabel': '',
-        # colorbar
-        'colorbar': False,
         'colorbar_width': 5,
         'colorbar_pad': None,
         # ticks
         'labeltop': True,
         'labelright': True,
         'direction': 'inout',
-        # legend
-        'legend_loc': 0,
-        'legend_size': 10,
-        'legend_label': None,
-        # grid
-        'grid': False,
         # axes order
         'order_axes': (0, 1, 2),
         # values masking
         'mask_color': (0, 0, 0, 0),
+        # grid
+        'grid': False,
     }
 
     def ax_imshow(self, ax, idx):
         """ TODO """
-        subplot_idx = None if self.combine == 'overlay' else idx - self.rel_idx_corrections[idx]
-        config = self.filter_dict(self.config, index=subplot_idx)
+        subplot_idx = None if self.combine == 'overlay' else idx - self.idx_fix[idx]
+        config = self.filter_config(self.config, index=subplot_idx)
         images = []
 
         for image_idx, image in enumerate(self.data[idx]):
 
             layer_idx = image_idx
             if self.combine == 'separate':
-                layer_idx += idx - self.rel_idx_corrections[idx]
+                layer_idx += idx - self.idx_fix[idx]
 
             imshow_keys = ['vmin', 'vmax', 'interpolation', 'alpha', 'extent', 'order_axes', 'mask_values']
-            imshow_params = self.filter_dict(config, imshow_keys, prefix='imshow_', index=layer_idx)
+            imshow_params = self.filter_config(config, imshow_keys, prefix='imshow_', index=layer_idx)
 
-            # Assemble colormap from given `cmap` and `mask_color` arguments
-            cmap = self.filter_dict(config, 'cmap', index=layer_idx)
+            # Assemble colormap from given parameters
+            cmap = self.filter_config(config, 'cmap', index=layer_idx)
             # If a single color provided, prepend 'white' color, so that a resulting list defines binary colormap
             if is_color_like(cmap):
                 cmap = ['white', cmap]
@@ -648,7 +702,7 @@ class plot:
             else:
                 cmap = copy(plt.get_cmap(cmap))
             # Set a color for nan/masked values display to colormap if provided
-            mask_color = self.filter_dict(config, 'mask_color', index=layer_idx)
+            mask_color = self.filter_config(config, 'mask_color', index=layer_idx)
             cmap.set_bad(color=mask_color)
             # Add created cmap to a dict of imshow params
             imshow_params['cmap'] = cmap
@@ -671,128 +725,185 @@ class plot:
         'bins': 50,
         'color': CycledList(MASK_COLORS),
         'alpha': 0.8,
-        'facecolor': 'snow',
-        # suptitle
-        'suptitle_color': 'k',
-        # title
-        'title_color' : 'k',
         # axis labels
-        'xlabel': 'Values', 'ylabel': 'Counts',
-        'xlabel_color' : 'k', 'ylabel_color' : 'k',
-        # legend
-        'legend_size': 10,
-        'legend_label': None,
-        'legend_loc': 0,
-        # grid
-        'grid': True,
+        'xlabel': 'Values',
+        'ylabel': 'Counts',
         # common
         'set_axisbelow': True,
-        'colorbar': False
+        'colorbar': False,
+        # grid
+        'grid': 'major',
     }
 
     def ax_hist(self, ax, idx):
         """ TODO """
-        subplot_idx = None if self.combine == 'overlay' else idx - self.rel_idx_corrections[idx]
-        config = self.filter_dict(self.config, index=subplot_idx)
+        subplot_idx = None if self.combine == 'overlay' else idx - self.idx_fix[idx]
+        config = self.filter_config(self.config, index=subplot_idx)
         objects = []
 
         for array_idx, array in enumerate(self.data[idx]):
             layer_idx = array_idx
             if self.combine == 'separate':
-                layer_idx += idx - self.rel_idx_corrections[idx]
+                layer_idx += idx - self.idx_fix[idx]
 
-            hist_params = self.filter_dict(config, ['bins', 'color', 'alpha'], prefix='hist_', index=layer_idx)
+            hist_keys = ['bins', 'color', 'alpha', 'label']
+            hist_params = self.filter_config(config, hist_keys, prefix='hist_', index=layer_idx)
 
-            mask_values = self.filter_dict(config, 'mask_values', index=layer_idx) or []
+            mask_values = self.filter_config(config, 'mask_values', index=layer_idx) or []
             masks = [array == m if isinstance(m, Number) else m(array) for m in mask_values]
             mask = reduce(np.logical_or, masks, np.isnan(array))
             new_array = np.ma.array(array, mask=mask).flatten()
 
-            obj = ax.hist(new_array, **hist_params)
+            _, _, obj = ax.hist(new_array, **hist_params)
             objects.append(obj)
 
         return objects, config
 
 
-    LOSS_COLORS = ['skyblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
+    CURVE_COLORS = ['cornflowerblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
                     'forestgreen', 'navy', 'gold', 'red', 'turquoise', 'darkorchid',
                     'darkkhaki', 'royalblue', 'yellow', 'chocolate', 'darkslategray', 'wheat']
 
+    CURVE_DEFAULTS = {
+        # curve
+        'color': CycledList(CURVE_COLORS),
+        # axis labels
+        'xlabel': 'x',
+        'ylabel': 'y',
+        # common
+        'colorbar': False,
+        # grid
+        'grid': 'both',
+    }
+
+    def ax_curve(self, ax, idx):
+        """ TODO """
+        subplot_idx = None if self.combine == 'overlay' else idx - self.idx_fix[idx]
+        config = self.filter_config(self.config, index=subplot_idx)
+        objects = []
+
+        for array_idx, arrays in enumerate(self.data[idx]):
+            if isinstance(arrays, np.ndarray):
+                if arrays.ndim == 1:
+                    x = range(len(arrays))
+                    y = arrays
+                else:
+                    x, y = arrays
+            elif isinstance(arrays, tuple):
+                if len(arrays) == 1:
+                    x = range(len(arrays))
+                    y = arrays
+                else:
+                    x, y = arrays
+            else:
+                raise ValueError('Valid data object is either np.array or tuple of np.arrays')
+
+            layer_idx = array_idx
+            if self.combine == 'separate':
+                layer_idx += idx - self.idx_fix[idx]
+
+            curve_keys = ['color', 'linestyle', 'alpha', 'label']
+            curve_params = self.filter_config(config, curve_keys, prefix='curve_', index=layer_idx)
+            curve_line = ax.plot(x, y, **curve_params)
+            objects.extend(curve_line)
+
+            # Change scale of axis, if needed
+            if config.get('log'):
+                ax.set_yscale('log')
+
+        return objects, config
+
+
     LOSS_DEFAULTS = {
         # main
-        'rolling_mean': None,
-        'rolling_final': None,
+        'window': 20,
+        'final_window': 50,
         # curve
-        'color': CycledList(LOSS_COLORS),
-        'facecolor': 'snow',
-        # suptitle
-        'suptitle_color': 'k',
+        'color': CycledList(CURVE_COLORS[::2]),
+        # learning rate
+        'lr_color': CycledList(CURVE_COLORS[1::2]),
         # title
-        'title_color': 'k',
+        'title_label': 'Loss values and learning rate',
         # axis labels
-        'xlabel': 'x', 'ylabel': 'y',
-        'xlabel_color': 'k', 'ylabel_color': 'k',
-        # legend
-        'legend_loc': 0,
-        'legend_size': 10,
-        'legend_label': None,
+        'xlabel': 'Iterations', 'ylabel': 'Loss',
         # common
-        'grid': True,
-        'colorbar': False
+        'colorbar': False,
+        # grid
+        'grid': 'both',
+        'minor_grid_y_n': 4,
+        # legend
+        'legend': True,
     }
 
     def ax_loss(self, ax, idx):
         """ TODO """
-        subplot_idx = None if self.combine == 'overlay' else idx - self.rel_idx_corrections[idx]
-        config = self.filter_dict(self.config, index=subplot_idx)
+        subplot_idx = None if self.combine == 'overlay' else idx - self.idx_fix[idx]
+        config = self.filter_config(self.config, index=subplot_idx)
         objects = []
 
-        for array_idx, array in enumerate(self.data[idx]):
+        lr_ax = None
+        for array_idx, arrays in enumerate(self.data[idx]):
+            if isinstance(arrays, np.ndarray):
+                if arrays.ndim == 1:
+                    loss = arrays
+                    lr = None
+                else:
+                    loss, lr = arrays
+            elif isinstance(arrays, tuple):
+                if len(arrays) == 1:
+                    loss = arrays[0]
+                    lr = None
+                else:
+                    loss, lr = arrays
+            else:
+                raise ValueError('Valid data object is either np.array or tuple of np.arrays')
+
             layer_idx = array_idx
             if self.combine == 'separate':
-                layer_idx += idx - self.rel_idx_corrections[idx]
+                layer_idx += idx - self.idx_fix[idx]
 
-            curve_keys = ['color', 'linestyle', 'alpha']
-            curve_params = self.filter_dict(config, curve_keys, prefix='curve_', index=layer_idx)
-            obj = ax.plot(array, **curve_params)
-            objects.append(obj)
+            label = self.filter_config(config, 'label') or f'loss №{array_idx}'
+            loss_label = label + f' ⟶ {loss[-1]:2.3f}'
+            final_window = self.filter_config(self.config, 'final_window')
+            if final_window is not None:
+                final = np.mean(loss[-final_window:]) #pylint: disable=invalid-unary-operand-type
+                loss_label += f"\nmean over last {final_window} iterations={final:2.3f}"
 
-            mean_color = self.scale_lightness(curve_params['color'], scale=.5)
+            curve_keys = ['color', 'linestyle', 'linewidth', 'alpha']
+            loss_params = self.filter_config(config, curve_keys, prefix='curve_', index=layer_idx)
+            loss_line = ax.plot(loss, label=loss_label, **loss_params)
+            objects.extend(loss_line)
 
-            rolling_mean = config.get('rolling_mean')
-            if rolling_mean:
-                averaged = array.copy()
-                window = min(10 if rolling_mean is True else rolling_mean, len(array))
-                if window > len(averaged * 2):
-                    break
-                averaged[(window // 2):(-window // 2 + 1)] = np.convolve(array, np.ones(window) / window, mode='valid')
-                ax.plot(averaged, color=mean_color, linestyle='--')
+            window = self.filter_config(config, 'window', index=layer_idx)
+            if window:
+                averaged = convolve(loss, np.ones(window), mode='nearest') / window
+                mean_color = self.scale_lightness(loss_params['color'], scale=.5)
+                averaged_loss_label = label + ' running mean'
+                average_line = ax.plot(averaged, label=averaged_loss_label, color=mean_color, linestyle='--')
+                objects.extend(average_line)
 
-            final_mean = config.get('final_mean')
-            if final_mean:
-                window = 100 if final_mean is True else final_mean
-                mean = np.mean(array[-window:])
+            # Change scale of axis, if needed
+            if config.get('log_loss'):
+                ax.set_yscale('log')
 
-                line_len = len(array) // 20
-                curve_len = len(array)
-                line_x = np.arange(line_len) + curve_len
-                line_y = [mean] * line_len
-                ax.plot(line_x, line_y, linestyle='--', linewidth=1.2, color=mean_color)
+            if lr is not None:
+                if lr_ax is None:
+                    lr_ax = ax.twinx()
+                lr_label = f'learning rate №{array_idx} ⟶ {lr[-1]:.0e}'
+                lr_params = self.filter_config(config, curve_keys, prefix='lr_', index=layer_idx)
+                lr_line = lr_ax.plot(lr, label=lr_label, **lr_params)
+                lr_ax.set_ylabel('Learning rate', fontsize=12)
+                objects.extend(lr_line)
 
-                size = 10
-                text_x = curve_len + line_len
-                text_y = mean - size / 300
-                text = ax.text(text_x, text_y, f"{mean:.3f}", size=size)
-                text.set_path_effects([patheffects.Stroke(linewidth=3, foreground='white'), patheffects.Normal()])
-
-                config['xlim'] = (0, text_x)
+            if lr is not None and config.get('log_lr'):
+                lr_ax.set_yscale('log')
 
         return objects, config
 
     # Supplementary methods
 
     @staticmethod
-    def filter_dict(params, keys=None, prefix='', index=None, save_to=None):
+    def filter_config(params, keys=None, prefix='', index=None, save_to=None):
         """ Make a subdictionary of parameters with required keys.
 
         Parameter are retrieved if:
@@ -867,52 +978,66 @@ class plot:
             ax_image.axes.created_colorbar = colorbar
 
     @staticmethod
-    def add_legend(ax, mode, color, label, size, loc, facecolor='white', ha=None, va=None, **kwargs):
+    def add_legend(ax, mode, handles=None, label=None, color=None, size=10, ha=None, va=None, **kwargs):
         """ TODO Add patches to legend. All invalid colors are filtered.
 
         Notes to self: Rewrite doc, explain line/patches parametrization.
         """
         legend = ax.get_legend()
-        handles = getattr(legend, 'legendHandles', [])
+        old_handles = getattr(legend, 'legendHandles', [])
         texts = getattr(legend, 'get_texts', lambda: [])()
-        labels = [t._text for t in texts] # pylint: disable=protected-access
+        old_labels = [t._text for t in texts] # pylint: disable=protected-access
 
-        colors = [color for color in to_list(color) if is_color_like(color)]
-        if mode in ('imshow', 'hist', 'wiggle'):
-            patch_config = {
-                **kwargs
-            }
-            handles += [Patch(color=color, **patch_config) for color in colors]
-        elif mode in ('loss', ):
-            line_config = {
-                'xdata': np.array([0, 2]) * size,
-                'ydata': np.array([0.35, 0.35]) * size,
-                'linewidth': 1.5,
-                'linestyle': '-',
-                **kwargs
-                }
-            handles += [Line2D(color=color, **line_config) for color in colors]
+        if mode in ('imshow', 'wiggle'):
+            colors = [color for color in to_list(color) if is_color_like(color)]
+            new_handles = [Patch(color=color) for color in colors]
+            new_labels = to_list(label)
+        elif mode in ('curve', 'loss'):
+            new_handles = handles
+            new_labels = [line.get_label() for line in handles]
 
-        labels += to_list(label)
+        kwargs['handles'] = old_handles + new_handles
+        kwargs['labels'] = old_labels + new_labels
 
-        legend = ax.legend(handles=handles, labels=labels, loc=loc, prop={'size': size}, facecolor=facecolor)
+        legend = ax.legend(prop={'size': size}, **kwargs)
 
         if ha is not None:
             _ = [text.set_ha(ha) for text in legend.get_texts()]
         if va is not None:
             _ = [text.set_ha(va) for text in legend.get_texts()]
 
+    @staticmethod
+    def add_grid(ax, grid_type, x_n=None, y_n=None, zorder=0, **kwargs):
+        """ TODO """
+        if grid_type == 'minor':
+            locator = AutoMinorLocator
+        elif grid_type == 'major':
+            locator = MaxNLocator
+
+        if x_n is not None:
+            set_locator = getattr(ax.xaxis, f'set_{grid_type}_locator')
+            set_locator(locator(x_n))
+
+        if y_n is not None:
+            set_locator = getattr(ax.yaxis, f'set_{grid_type}_locator')
+            set_locator(locator(y_n))
+
+        ax.grid(which=grid_type, zorder=zorder, **kwargs)
 
 
-def plot_loss(data, title=None, **kwargs):
+
+def plot_image(data, **kwargs):
+    """ Shorthand for image plotting. """
+    return plot(data, mode='imshow', **kwargs)
+
+def plot_hist(data, **kwargs):
+    """ Shorthand for histogram plotting. """
+    return plot(data, mode='hist', **kwargs)
+
+def plot_curve(data, **kwargs):
+    """ Shorthand for curve plotting. """
+    return plot(data, mode='curve', **kwargs)
+
+def plot_loss(data, **kwargs):
     """ Shorthand for loss plotting. """
-    kwargs = {
-        'xlabel': 'Iterations',
-        'ylabel': 'Loss',
-        'label': title or 'Loss graph',
-        'xlim': (0, None),
-        'rolling_mean': 10,
-        'final_mean': 100,
-        **kwargs
-    }
-    return plot(data, mode='loss', backend='matplotlib', **kwargs)
+    return plot(data, mode='loss', **kwargs)
