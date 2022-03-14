@@ -557,16 +557,22 @@ class plot:
             ax.set_ylabel(**params)
 
         # xticks
-        params = self.filter_config(ax_config, ['xticks'], prefix='xticks_', index=idx)
-        if 'xticks' in params:
-            params['ticks'] = params.get('ticks', params.pop('xticks'))
+        params = self.filter_config(ax_config, [], prefix='xticks_', index=idx)
+        ticks = self.filter_config(ax_config, 'ticks', index=idx)
+        xticks = self.filter_config(ax_config, 'xticks', index=idx)
+        xticks = ticks if ticks is not None else xticks
+        if xticks is not None:
+            params['ticks'] = xticks
         if params:
             ax.set_xticks(**params)
 
         # yticks
-        params = self.filter_config(ax_config, ['yticks'], prefix='yticks_', index=idx)
-        if 'yticks' in params:
-            params['ticks'] = params.get('ticks', params.pop('yticks'))
+        params = self.filter_config(ax_config, [], prefix='yticks_', index=idx)
+        ticks = self.filter_config(ax_config, 'ticks', index=idx)
+        yticks = self.filter_config(ax_config, 'yticks', index=idx)
+        yticks = ticks if ticks is not None else yticks
+        if yticks is not None:
+            params['ticks'] = yticks
         if params:
             ax.set_yticks(**params)
 
@@ -942,9 +948,13 @@ class plot:
         result = {} if save_to is None else save_to
 
         for key in keys:
-            value = params.get(prefix + key, params.get(key))
-            if value is not None:
-                result[key] = maybe_index(value, index)
+            if prefix + key in params:
+                value = params[prefix + key]
+            elif key in params:
+                value = params[key]
+            else:
+                continue
+            result[key] = maybe_index(value, index)
 
         return result
 
