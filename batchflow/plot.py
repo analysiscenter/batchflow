@@ -527,7 +527,7 @@ class plot:
         text_params = self.filter_config(ax_config, text_keys, prefix='text_')
 
         # title
-        keys = ['title', 'y'] + text_keys
+        keys = ['title', 'y']
         params = self.filter_config(ax_config, keys, prefix='title_')
         params['label'] = params.pop('title', params.pop('label', None))
         params = {**text_params, **params}
@@ -535,7 +535,7 @@ class plot:
             ax.set_title(**params)
 
         # suptitle
-        keys = ['suptitle', 't', 'y'] + text_keys
+        keys = ['suptitle', 't', 'y']
         params = self.filter_config(ax_config, keys, prefix='suptitle_')
         params['t'] = params.pop('t', params.pop('suptitle', params.pop('label', None)))
         params = {**text_params, **params}
@@ -543,14 +543,14 @@ class plot:
             ax.figure.suptitle(**params)
 
         # xlabel
-        keys = ['xlabel'] + text_keys
+        keys = ['xlabel']
         params = self.filter_config(ax_config, keys, prefix='xlabel_', index=idx)
         params = {**text_params, **params}
         if params:
             ax.set_xlabel(**params)
 
         # ylabel
-        keys = ['ylabel'] + text_keys
+        keys = ['ylabel']
         params = self.filter_config(ax_config, keys, prefix='ylabel_', index=idx)
         params = {**text_params, **params}
         if params:
@@ -998,7 +998,7 @@ class plot:
         texts = getattr(legend, 'get_texts', lambda: [])()
         old_labels = [t._text for t in texts] # pylint: disable=protected-access
 
-        if mode in ('imshow', 'wiggle'):
+        if mode in ('imshow', 'hist', 'wiggle'):
             colors = [color for color in to_list(color) if is_color_like(color)]
             new_handles = [Patch(color=color) for color in colors]
             new_labels = to_list(label)
