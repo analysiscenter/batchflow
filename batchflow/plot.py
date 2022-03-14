@@ -400,8 +400,7 @@ class plot:
 
         return fig, axes, config
 
-    def adjust_figsize(self, mode, ncols, nrows, figsize=None, ratio=None, scale=1,
-                       min_fig_width=4, min_fig_height=4, max_fig_width=25, max_fig_height=15, **_):
+    def adjust_figsize(self, mode, ncols, nrows, figsize=None, ratio=None, scale=1, max_fig_width=25, **_):
         """ TODO """
         if mode in ('imshow', 'hist', 'wiggle'):
             fig_width = 8 * ncols * scale
@@ -414,16 +413,25 @@ class plot:
                 # redraw figure so that latest plots are applied to obtain correct axes sizes
                 self.fig.canvas.draw_idle()
 
-                bboxes = [ax.get_window_extent() for ax in self.axes]
-
-                widths = [bbox.width if bbox is not None else 0 for bbox in bboxes]
-                heights = [bbox.height if bbox is not None else 0 for bbox in bboxes]
+                axes_bboxes = [ax.get_window_extent() for ax in self.axes]
+                widths = [bbox.width if bbox is not None else 0 for bbox in axes_bboxes]
+                heights = [bbox.height if bbox is not None else 0 for bbox in axes_bboxes]
                 mean_height, mean_width = np.mean(heights), np.mean(widths)
+
+                colorbar_bboxes = [ax_objects[0].colorbar.ax.get_window_extent()
+                                   if (ax_objects is not None and ax_objects[0].colorbar is not None) else None
+                                   for ax_objects in self.axes_objects]
+                colorbar_widths = [bbox.width if bbox is not None else 0 for bbox in colorbar_bboxes]
+                colorbar_heights = [bbox.height if bbox is not None else 0 for bbox in colorbar_bboxes]
+                colorbar_mean_height, colorbar_mean_width = np.mean(colorbar_heights), np.mean(colorbar_widths)
+
+                mean_height += colorbar_mean_height
+                mean_width += colorbar_mean_width
 
                 if mean_height == 0 or mean_width == 0:
                     ratio = 1
                 else:
-                    ratio = (mean_height * 1.05 * nrows) / (mean_width * 1.05 * ncols)
+                    ratio = (mean_height * nrows) / (mean_width * ncols)
 
             elif mode == 'hist':
                 ratio = 2 / 3 / ncols * nrows
@@ -437,20 +445,8 @@ class plot:
         if figsize is None:
             fig_height = fig_width * ratio
 
-            if fig_height > max_fig_height:
-                fig_height = max_fig_height
-                fig_width = fig_height / ratio
-
             if fig_width > max_fig_width:
                 fig_width = max_fig_width
-                fig_height = fig_width * ratio
-
-            if fig_height < min_fig_height:
-                fig_height = min_fig_height
-                fig_width = fig_height / ratio
-
-            if fig_width < min_fig_width:
-                fig_width = min_fig_width
                 fig_height = fig_width * ratio
 
             figsize = (fig_width, fig_height)
@@ -507,15 +503,14 @@ class plot:
 
     ANNOTATION_DEFAULTS = {
         'facecolor': 'snow',
+        # text
+        'text_color': 'k',
         # suptitle
-        'suptitle_color': 'k',
         'suptitle_size': 25,
         # title
-        'title_color' : 'k',
         'title_size': 20,
         # axis labels
         'xlabel': '', 'ylabel': '',
-        'xlabel_color' : 'k', 'ylabel_color' : 'k',
         'xlabel_size': '12', 'ylabel_size': '12',
         # colorbar
         'colorbar': False,
@@ -529,11 +524,13 @@ class plot:
         """ Apply requested annotation functions to given axis with chosen parameters. """
         # pylint: disable=too-many-branches
         text_keys = ['size', 'family', 'color']
+        text_params = self.filter_config(ax_config, text_keys, prefix='text_')
 
         # title
         keys = ['title', 'y'] + text_keys
         params = self.filter_config(ax_config, keys, prefix='title_')
         params['label'] = params.pop('title', params.pop('label', None))
+        params = {**text_params, **params}
         if params:
             ax.set_title(**params)
 
@@ -541,18 +538,21 @@ class plot:
         keys = ['suptitle', 't', 'y'] + text_keys
         params = self.filter_config(ax_config, keys, prefix='suptitle_')
         params['t'] = params.pop('t', params.pop('suptitle', params.pop('label', None)))
+        params = {**text_params, **params}
         if params:
             ax.figure.suptitle(**params)
 
         # xlabel
         keys = ['xlabel'] + text_keys
         params = self.filter_config(ax_config, keys, prefix='xlabel_', index=idx)
+        params = {**text_params, **params}
         if params:
             ax.set_xlabel(**params)
 
         # ylabel
         keys = ['ylabel'] + text_keys
         params = self.filter_config(ax_config, keys, prefix='ylabel_', index=idx)
+        params = {**text_params, **params}
         if params:
             ax.set_ylabel(**params)
 
