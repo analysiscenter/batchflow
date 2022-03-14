@@ -395,13 +395,17 @@ class plot:
             fig = axes[0].figure
             config = {}
 
-            if len(axes) < len(self.n_subplots):
+            if len(axes) < self.n_subplots:
                 raise ValueError(f"Not enough axes provided — got ({len(axes)}) for {len(self.n_subplots)} subplots.")
 
         return fig, axes, config
 
-    def adjust_figsize(self, mode, ncols, nrows, figsize=None, ratio=None, scale=1, max_fig_width=25, **_):
+    def adjust_figsize(self, mode, ratio=None, scale=1, max_fig_width=25, **_):
         """ TODO """
+        ncols = self.fig_config['ncols']
+        nrows = self.fig_config['nrows']
+        figsize = self.fig_config.get('figsize')
+
         if mode in ('imshow', 'hist', 'wiggle'):
             fig_width = 8 * ncols * scale
         elif mode in ('curve', 'loss'):
@@ -412,21 +416,31 @@ class plot:
             if mode == 'imshow':
                 # redraw figure so that latest plots are applied to obtain correct axes sizes
                 self.fig.canvas.draw_idle()
+                renderer = self.fig.canvas.get_renderer()
 
-                axes_bboxes = [ax.get_window_extent() for ax in self.axes]
-                widths = [bbox.width if bbox is not None else 0 for bbox in axes_bboxes]
-                heights = [bbox.height if bbox is not None else 0 for bbox in axes_bboxes]
+                widths, heights = [], []
+                for ax in self.axes:
+                    if ax.axison:
+                        ax_bbox = ax.get_tightbbox(renderer=renderer)
+                        width = ax_bbox.width
+                        height = ax_bbox.height
+
+                        colorbar = ax.images[0].colorbar
+                        if colorbar is not None:
+                            colorbar_bbox = colorbar.ax.get_window_extent(renderer=renderer)
+                            width += colorbar_bbox.width
+
+                        heights.append(height)
+                        widths.append(width)
+
                 mean_height, mean_width = np.mean(heights), np.mean(widths)
 
-                colorbar_bboxes = [ax_objects[0].colorbar.ax.get_window_extent()
-                                   if (ax_objects is not None and ax_objects[0].colorbar is not None) else None
-                                   for ax_objects in self.axes_objects]
-                colorbar_widths = [bbox.width if bbox is not None else 0 for bbox in colorbar_bboxes]
-                colorbar_heights = [bbox.height if bbox is not None else 0 for bbox in colorbar_bboxes]
-                colorbar_mean_height, colorbar_mean_width = np.mean(colorbar_heights), np.mean(colorbar_widths)
+                suptitle = self.fig_objects.get('suptitle')
+                if suptitle is not None:
+                    suptitle_bbox = suptitle.get_window_extent()
+                    suptitle_height = suptitle_bbox.height
 
-                mean_height += colorbar_mean_height
-                mean_width += colorbar_mean_width
+                mean_height += suptitle_height / nrows
 
                 if mean_height == 0 or mean_width == 0:
                     ratio = 1
@@ -481,10 +495,10 @@ class plot:
 
                 self.axes_objects[abs_idx] = ax_objects
                 self.axes_configs[abs_idx] = ax_config
+        self.fig_objects = self.fig_annotate()
 
-        figsize_keys = ['ncols', 'nrows', 'figsize', 'ratio', 'scale',
-                        'min_fig_width', 'min_fig_height', 'max_fig_width', 'max_fig_height']
-        figsize_config = self.filter_config({**self.fig_config, **self.config}, figsize_keys)
+        figsize_keys = ['ratio', 'scale', 'min_fig_width', 'min_fig_height', 'max_fig_width', 'max_fig_height']
+        figsize_config = self.filter_config(self.config, figsize_keys)
         self.adjust_figsize(mode=mode, **figsize_config)
 
         if save or 'savepath' in kwargs:
@@ -533,14 +547,6 @@ class plot:
         params = {**text_params, **params}
         if params:
             ax.set_title(**params)
-
-        # suptitle
-        keys = ['suptitle', 't', 'y']
-        params = self.filter_config(ax_config, keys, prefix='suptitle_')
-        params['t'] = params.pop('t', params.pop('suptitle', params.pop('label', None)))
-        params = {**text_params, **params}
-        if params:
-            ax.figure.suptitle(**params)
 
         # xlabel
         keys = ['xlabel']
@@ -639,6 +645,25 @@ class plot:
             ax.set_axis_off()
         elif not ax.axison:
             ax.set_axis_on()
+
+        return ax_config
+
+    def fig_annotate(self):
+        """ TODO """
+        fig_objects = {}
+
+        text_keys = ['size', 'family', 'color']
+        text_params = self.filter_config(self.config, text_keys, prefix='text_')
+
+        # suptitle
+        keys = ['suptitle', 't', 'y']
+        params = self.filter_config(self.config, keys, prefix='suptitle_')
+        params['t'] = params.pop('t', params.pop('suptitle', params.pop('label', None)))
+        params = {**text_params, **params}
+        if params:
+            fig_objects['suptitle'] = self.fig.suptitle(**params)
+
+        return fig_objects
 
     def show(self):
         display(self.fig)
@@ -755,7 +780,12 @@ class plot:
             hist_keys = ['bins', 'color', 'alpha', 'label']
             hist_params = self.filter_config(config, hist_keys, prefix='hist_', index=layer_idx)
 
-            mask_values = self.filter_config(config, 'mask_values', index=layer_idx) or []
+            mask_values = self.filter_config(config, 'mask_values', index=layer_idx)
+            if mask_values is None:
+                mask_values = []
+            else:
+                mask_values = to_list(mask_values)
+
             masks = [array == m if isinstance(m, Number) else m(array) for m in mask_values]
             mask = reduce(np.logical_or, masks, np.isnan(array))
             new_array = np.ma.array(array, mask=mask).flatten()
