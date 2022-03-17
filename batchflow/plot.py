@@ -214,7 +214,7 @@ class plot:
     Overall idea
     ------------
     Simply provide data, plot mode and parameters to the `plot` initialization
-    and the class takes care of redirecting params to methods they are meant for.
+    and the class takes care of redirecting parameters to methods they are meant for.
 
     The logic behind the process is the following:
     1. Parse data:
@@ -225,10 +225,10 @@ class plot:
         - Infer images combination mode.
         - Calculate indices corrections for empty subplots.
     2. Parse figure axes if provided, else create them with either parsed parameters or inferred ones.
-    3. Obtain default params for chosen mode and merge them with provided params.
+    3. Obtain default config for chosen mode and merge them with provided config.
     4. For every axis-data pair:
         - If no data provided for axis, set if off.
-        - Else filter params relevant for ax, plot data relevant to the ax and annotate it.
+        - Else filter config relevant for ax, plot data relevant to the ax and annotate it.
     6. Save figure if needed.
 
     Data display scenarios
@@ -566,92 +566,106 @@ class plot:
 
         # title
         keys = ['title', 'y']
-        params = self.filter_config(ax_config, keys, prefix='title_')
-        params['label'] = params.pop('title', params.pop('label', None))
-        params = {**text_config, **params}
-        if params:
-            ax_objects['title'] = ax.set_title(**params)
+        title_config = self.filter_config(ax_config, keys, prefix='title_')
+        label = None
+        if 'label' in title_config:
+            label = title_config.pop('label')
+        if 'title' in title_config:
+            label = title_config.pop('title')
+        title_config['label'] = label
+        title_config = {**text_config, **title_config}
+        if title_config:
+            ax_objects['title'] = ax.set_title(**title_config)
         else:
             ax_objects['title'] = None
 
         # xlabel
         keys = ['xlabel']
-        params = self.filter_config(ax_config, keys, prefix='xlabel_', index=idx)
-        params = {**text_config, **params}
-        if params:
-            ax_objects['xlabel'] = ax.set_xlabel(**params)
+        xlabel_config = self.filter_config(ax_config, keys, prefix='xlabel_', index=idx)
+        xlabel_config = {**text_config, **xlabel_config}
+        if xlabel_config:
+            ax_objects['xlabel'] = ax.set_xlabel(**xlabel_config)
         else:
             ax_objects['xlabel'] = None
 
         # ylabel
         keys = ['ylabel']
-        params = self.filter_config(ax_config, keys, prefix='ylabel_', index=idx)
-        params = {**text_config, **params}
-        if params:
-            ax_objects['ylabel'] = ax.set_ylabel(**params)
+        ylabel_config = self.filter_config(ax_config, keys, prefix='ylabel_', index=idx)
+        ylabel_config = {**text_config, **ylabel_config}
+        if ylabel_config:
+            ax_objects['ylabel'] = ax.set_ylabel(**ylabel_config)
         else:
             ax_objects['ylabel'] = None
 
         # xticks
-        params = self.filter_config(ax_config, [], prefix='xticks_', index=idx)
+        xticks_config = self.filter_config(ax_config, [], prefix='xticks_', index=idx)
         ticks = self.filter_config(ax_config, 'ticks', index=idx)
         xticks = self.filter_config(ax_config, 'xticks', index=idx)
         xticks = ticks if ticks is not None else xticks
         if xticks is not None:
-            params['ticks'] = xticks
-        if params:
-            ax.set_xticks(**params)
+            xticks_config['ticks'] = xticks
+        if xticks_config:
+            ax.set_xticks(**xticks_config)
 
         # yticks
-        params = self.filter_config(ax_config, [], prefix='yticks_', index=idx)
+        yticks_config = self.filter_config(ax_config, [], prefix='yticks_', index=idx)
         ticks = self.filter_config(ax_config, 'ticks', index=idx)
         yticks = self.filter_config(ax_config, 'yticks', index=idx)
         yticks = ticks if ticks is not None else yticks
         if yticks is not None:
-            params['ticks'] = yticks
-        if params:
-            ax.set_yticks(**params)
+            yticks_config['ticks'] = yticks
+        if yticks_config:
+            ax.set_yticks(**yticks_config)
 
         # ticks
         keys = ['labeltop', 'labelright', 'labelcolor', 'direction']
-        params = self.filter_config(ax_config, keys, prefix='tick_', index=idx)
-        if params:
-            ax.tick_params(**params)
+        tick_config = self.filter_config(ax_config, keys, prefix='tick_', index=idx)
+        if tick_config:
+            ax.tick_params(**tick_config)
 
         # xlim
-        params = self.filter_config(ax_config, ['xlim'], prefix='xlim_', index=idx)
-        if 'xlim' in params:
-            params['left'] = params.get('left', params.pop('xlim'))
-        if params:
-            ax.set_xlim(**params)
+        xlim_config = self.filter_config(ax_config, ['xlim'], prefix='xlim_', index=idx)
+        if 'xlim' in xlim_config:
+            xlim_config['left'] = xlim_config.get('left', xlim_config.pop('xlim'))
+        if xlim_config:
+            ax.set_xlim(**xlim_config)
 
         # ylim
-        params = self.filter_config(ax_config, ['ylim'], prefix='ylim_', index=idx)
-        if 'ylim' in params:
-            params['bottom'] = params.get('bottom', params.pop('ylim'))
-        if params:
-            ax.set_ylim(**params)
+        ylim_config = self.filter_config(ax_config, ['ylim'], prefix='ylim_', index=idx)
+        if 'ylim' in ylim_config:
+            ylim_config['bottom'] = ylim_config.get('bottom', ylim_config.pop('ylim'))
+        if ylim_config:
+            ax.set_ylim(**ylim_config)
 
         # colorbar
         if any(to_list(self.config['colorbar'])):
             keys = ['colorbar', 'width', 'pad', 'fake', 'ax_objects']
-            params = self.filter_config(ax_config, keys, prefix='colorbar_', index=idx)
-            params['ax_image'] = ax_objects['images'][0]
+            colorbar_config = self.filter_config(ax_config, keys, prefix='colorbar_', index=idx)
+            colorbar_config['ax_image'] = ax_objects['images'][0]
             # if colorbar is disabled for subplot, add param to plot fake axis instead to keep proportions
-            params['fake'] = not params.pop('colorbar', True)
-            ax_objects['colorbar'] = self.add_colorbar(**params)
+            colorbar_config['fake'] = not colorbar_config.pop('colorbar', True)
+            ax_objects['colorbar'] = self.add_colorbar(**colorbar_config)
 
         # legend
         legend = self.filter_config(ax_config, 'legend')
         keys = ['label', 'size', 'loc', 'ha', 'va']
-        params = self.filter_config(ax_config, keys, prefix='legend_')
-        if legend or params:
-            if mode == 'imshow':
-                color = self.filter_config(ax_config, keys=['color', 'cmap'], prefix='legend_')
-                params['color'] = list(color.values())[0]
+        legend_config = self.filter_config(ax_config, keys, prefix='legend_')
+        if legend or legend_config:
+            if isinstance(legend, (str, list)):
+                legend_config['label'] = legend
+            if mode in ('imshow', 'hist'):
+                color = None
+                if 'cmap' in ax_config:
+                    color = ax_config['cmap']
+                if 'color' in ax_config:
+                    color = ax_config['color']
+                if 'color' in legend_config:
+                    color = legend_config.pop('color')
+                legend_config['color'] = color
+                legend_config['alpha'] = ax_config.get('alpha')
             elif mode in ('curve', 'loss'):
-                params['handles'] = ax_objects['lines']
-            self.add_legend(ax, mode=mode, **params)
+                legend_config['handles'] = ax_objects['lines']
+            self.add_legend(ax, mode=mode, **legend_config)
 
         # grid
         grid = self.filter_config(ax_config, 'grid', index=idx)
@@ -664,6 +678,13 @@ class plot:
         major_config = self.filter_config(ax_config, grid_keys, prefix='major_grid_', index=idx)
         if grid in ('major', 'both') and minor_config:
             self.add_grid(ax, grid_type='major', **major_config)
+
+        spine_colors = ax_config.get('spine_color')
+        if spine_colors is not None:
+            spines = ax.spines.values()
+            spine_colors = spine_colors if isinstance(spine_colors, list) else [spine_colors] * len(spines)
+            for spine, color in zip(spines, spine_colors):
+                spine.set_edgecolor(color)
 
         facecolor = ax_config.get('facecolor', None)
         if facecolor is not None:
@@ -687,11 +708,18 @@ class plot:
 
         # suptitle
         keys = ['suptitle', 't', 'y']
-        params = self.filter_config(self.config, keys, prefix='suptitle_')
-        params['t'] = params.pop('t', params.pop('suptitle', params.pop('label', None)))
-        params = {**text_config, **params}
-        if params:
-            fig_objects['suptitle'] = fig_objects['suptitle'] = self.fig.suptitle(**params)
+        suptitle_config = self.filter_config(self.config, keys, prefix='suptitle_')
+        t = None
+        if 'label' in suptitle_config:
+            t = suptitle_config.pop('label')
+        if 'suptitle' in suptitle_config:
+            t = suptitle_config.pop('suptitle')
+        if 't' in suptitle_config:
+            t = suptitle_config.pop('t')
+        suptitle_config['t'] = t
+        suptitle_config = {**text_config, **suptitle_config}
+        if suptitle_config:
+            fig_objects['suptitle'] = fig_objects['suptitle'] = self.fig.suptitle(**suptitle_config)
 
         self.fig.tight_layout()
 
@@ -736,6 +764,8 @@ class plot:
         'mask_color': (0, 0, 0, 0),
         # grid
         'grid': False,
+        'minor_grid_x_n': 2,
+        'minor_grid_y_n': 2,
     }
 
     @classmethod
@@ -762,7 +792,7 @@ class plot:
             # Set a color for nan/masked values display to colormap if provided
             mask_color = cls.filter_config(config, 'mask_color', index=layer_idx)
             cmap.set_bad(color=mask_color)
-            # Add created cmap to a dict of imshow params
+            # Add created cmap to imshow config
             imshow_config['cmap'] = cmap
 
             # Add `0` to a list of values that shouldn't be displayed if image is a binary mask
@@ -957,7 +987,7 @@ class plot:
     # Supplementary methods
 
     @staticmethod
-    def filter_config(params, keys=None, prefix='', index=None, save_to=None):
+    def filter_config(config, keys=None, prefix='', index=None, save_to=None):
         """ Make a subdictionary of parameters with required keys.
 
         Parameter are retrieved if:
@@ -966,7 +996,7 @@ class plot:
 
         Parameters
         ----------
-        params : dict
+        config : dict
             Arguments to filter.
         keys : str or sequence
             Key(s) to retrieve. If str, return key value.
@@ -985,21 +1015,21 @@ class plot:
         maybe_index = lambda value, index: value[index] if index is not None and isinstance(value, list) else value
 
         if isinstance(keys, str):
-            value = params.get(keys, None)
+            value = config.get(keys, None)
             return maybe_index(value, index)
 
         if keys is None:
-            keys = list(params.keys())
+            keys = list(config.keys())
         elif prefix:
-            keys += [key.split(prefix)[1] for key in params if key.startswith(prefix)]
+            keys += [key.split(prefix)[1] for key in config if key.startswith(prefix)]
 
         result = {} if save_to is None else save_to
 
         for key in keys:
-            if prefix + key in params:
-                value = params[prefix + key]
-            elif key in params:
-                value = params[key]
+            if prefix + key in config:
+                value = config[prefix + key]
+            elif key in config:
+                value = config[key]
             else:
                 continue
             result[key] = maybe_index(value, index)
@@ -1037,12 +1067,12 @@ class plot:
             colorbar = None
         else:
             colorbar = ax_image.axes.figure.colorbar(ax_image, cax=cax)
-            colorbar.ax.yaxis.set_tick_params(color=color)
+            colorbar.ax.yaxis.set_tick_params(color=color, labelcolor=color)
 
         return colorbar
 
     def add_legend(self, ax=None, mode='imshow', handles=None, label=None, color=None,
-                   size=10, ha=None, va=None, **kwargs):
+                   alpha=1, size=10, ha=None, va=None, **kwargs):
         """ TODO Add patches to legend. All invalid colors are filtered.
 
         Notes to self: Rewrite doc, explain line/patches parametrization.
@@ -1056,14 +1086,19 @@ class plot:
         old_labels = [t._text for t in texts] # pylint: disable=protected-access
 
         if mode in ('imshow', 'hist', 'wiggle'):
-            colors = [color for color in to_list(color) if is_color_like(color)]
-            new_handles = [Patch(color=color) for color in colors]
+            colors = to_list(color)
+            alphas = alpha if isinstance(alpha, list) else [alpha] * len(colors)
+            new_handles = []
+            for color, alpha in zip(colors, alphas):
+                if is_color_like(color):
+                    patch = Patch(color=color, alpha=alpha)
+                    new_handles.append(patch)
             new_labels = [] if label is None else to_list(label)
         elif mode in ('curve', 'loss'):
             new_handles = handles
             new_labels = [line.get_label() for line in handles]
 
-        if len(new_labels) > 0:
+        if len(new_handles) > 0:
             kwargs['handles'] = old_handles + new_handles
             kwargs['labels'] = old_labels + new_labels
 
