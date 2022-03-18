@@ -7,6 +7,7 @@ from numbers import Number
 
 import numpy as np
 
+from itertools import cycle
 from IPython.display import display
 from scipy.ndimage import convolve
 from matplotlib import pyplot as plt
@@ -481,8 +482,7 @@ class plot:
             self.axes_configs = np.full(len(self.axes), None)
             self.axes_objects = np.full(len(self.axes), None)
 
-        mode_defaults = getattr(self, f"{mode.upper()}_DEFAULTS")
-        self.config = {**self.ANNOTATION_DEFAULTS, **mode_defaults, **kwargs}
+        self.config = {**self.ANNOTATION_DEFAULTS, **kwargs}
 
         ax = kwargs.get('axes') or kwargs.get('axis') or kwargs.get('ax')
         if ax is None:
@@ -494,6 +494,8 @@ class plot:
         else:
             msg = f"When figure already created one can only specify ax indices to use, got {type(ax)} instead."
             raise ValueError(msg)
+
+        mode_defaults = getattr(self, f"{mode.upper()}_DEFAULTS")
 
         idx_fixes = np.cumsum([0] + empty_subplots)
 
@@ -509,6 +511,7 @@ class plot:
                 ax_data = data[rel_idx]
                 subplot_idx = None if combine == 'overlay' else rel_idx - idx_fixes[rel_idx]
                 ax_config = self.filter_config(self.config, index=subplot_idx)
+                ax_config = {**mode_defaults, **ax_config}
 
                 idx_fix = rel_idx - idx_fixes[rel_idx] if combine == 'separate' else 0
 
@@ -754,7 +757,7 @@ class plot:
 
     IMSHOW_DEFAULTS = {
         # image
-        'cmap': CycledList(['Greys_r', *MASK_COLORS], cycle_from=1),
+        'cmap': 'Greys_r',
         # ticks
         'labeltop': True,
         'labelright': True,
@@ -774,14 +777,23 @@ class plot:
         """ TODO """
         images = []
 
+        mask_colors_generator = cycle(cls.MASK_COLORS)
+
         for image_idx, image in enumerate(data):
             layer_idx = image_idx + idx_fix
 
             imshow_keys = ['vmin', 'vmax', 'interpolation', 'alpha', 'extent', 'order_axes', 'mask_values']
             imshow_config = cls.filter_config(config, imshow_keys, prefix='imshow_', index=layer_idx)
 
-            # Assemble colormap from given parameters
             cmap = cls.filter_config(config, 'cmap', index=layer_idx)
+            # Add `0` to a list of values that shouldn't be displayed if image is a binary mask
+            if tuple(np.unique(image)) in [(0, ), (0, 1)]:
+                imshow_config['mask_values'] = 0
+                imshow_config['vmin'] = 0
+                if not is_color_like(cmap):
+                    cmap = next(mask_colors_generator)
+
+            # Assemble colormap from given parameters
             # If a single color provided, prepend 'white' color, so that a resulting list defines binary colormap
             if is_color_like(cmap):
                 cmap = ['white', cmap]
@@ -795,11 +807,6 @@ class plot:
             cmap.set_bad(color=mask_color)
             # Add created cmap to imshow config
             imshow_config['cmap'] = cmap
-
-            # Add `0` to a list of values that shouldn't be displayed if image is a binary mask
-            if tuple(np.unique(image)) in [(0, ), (0, 1)]:
-                imshow_config['mask_values'] = 0
-                imshow_config['vmin'] = 0
 
             # Use a proxy for imshow calls that fixes data preprocessing parameters
             # and re-applies them to axes image before `set_data` calls
