@@ -1088,6 +1088,7 @@ class plot:
             colors = to_list(color)
             alphas = alpha if isinstance(alpha, list) else [alpha] * len(colors)
             new_handles = []
+            # pylint: disable=redefined-argument-from-local
             for color, alpha in zip(colors, alphas):
                 if is_color_like(color):
                     patch = Patch(color=color, alpha=alpha)
