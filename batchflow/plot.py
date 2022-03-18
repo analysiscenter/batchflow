@@ -433,9 +433,10 @@ class plot:
             axes = fig.axes
 
         if axes is None:
-            config = self.make_default_config(mode=mode, n_subplots=n_subplots, shapes=shapes, **kwargs)
+            default_config = self.make_default_config(mode=mode, n_subplots=n_subplots, shapes=shapes, **kwargs)
             subplots_keys = ['figsize', 'facecolor', 'dpi', 'ncols', 'nrows', 'tight_layout', 'gridspec_kw']
-            config = self.filter_config(kwargs, subplots_keys, prefix='figure_', save_to=config)
+            config = self.filter_config(kwargs, subplots_keys, prefix='figure_')
+            config = {**default_config, **config}
 
             with plt.ioff():
                 fig, axes = plt.subplots(**config)
@@ -987,7 +988,7 @@ class plot:
     # Supplementary methods
 
     @staticmethod
-    def filter_config(config, keys=None, prefix='', index=None, save_to=None):
+    def filter_config(config, keys=None, prefix='', index=None):
         """ Make a subdictionary of parameters with required keys.
 
         Parameter are retrieved if:
@@ -1008,8 +1009,6 @@ class plot:
             Index of argument value to retrieve.
             If none provided, get whole argument value.
             If value is non-indexable, get it without indexing.
-        save_to : dict
-            Config to populate with filtered items. If none provided, empty dict is used.
         """
         # get value by index if it is requested and value is a list
         maybe_index = lambda value, index: value[index] if index is not None and isinstance(value, list) else value
@@ -1023,7 +1022,7 @@ class plot:
         elif prefix:
             keys += [key.split(prefix)[1] for key in config if key.startswith(prefix)]
 
-        result = {} if save_to is None else save_to
+        result = {}
 
         for key in keys:
             if prefix + key in config:
