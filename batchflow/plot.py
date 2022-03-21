@@ -3,11 +3,11 @@ from colorsys import rgb_to_hls, hls_to_rgb
 from copy import copy
 from datetime import datetime
 from functools import reduce
+from itertools import cycle
 from numbers import Number
 
 import numpy as np
 
-from itertools import cycle
 from IPython.display import display
 from scipy.ndimage import convolve
 from matplotlib import pyplot as plt
