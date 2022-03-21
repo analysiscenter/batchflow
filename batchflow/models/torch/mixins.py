@@ -170,7 +170,11 @@ class VisualizationMixin:
             save_kwargs : dict or None
                 If dict, then additional parameters for figure saving.
         """
-        data = (self.loss_list, self.lr_list) if overlay_lr else (self.loss_list,)
+        if overlay_lr:
+            data = (self.loss_list, [l[0] for l in self.lr_list])
+        else:
+            data = (self.loss_list,)
+
         kwargs['title'] = 'Loss values and learning rate' if overlay_lr else 'Loss values'
         if 'final_window' in kwargs:
             kwargs['final_window'] = min(kwargs['final_window'], self.iteration)
