@@ -458,15 +458,11 @@ class plot:
 
         return fig, axes, config, adjust_figsize
 
-    def get_bbox(self, obj, kind):
+    def get_bbox(self, obj):
         """ Get object bounding box in inches. """
         renderer = self.fig.canvas.get_renderer()
         transformer = self.fig.dpi_scale_trans.inverted()
-        if kind == 'inner':
-            return obj.get_window_extent(renderer=renderer).transformed(transformer)
-        if kind == 'outer':
-            return obj.get_tightbbox(renderer).transformed(transformer)
-        raise ValueError() # TODO
+        return obj.get_window_extent(renderer=renderer).transformed(transformer)
 
     def adjust_figsize(self):
         """ Look through axes' annotation objects and add figsize corrections for their widths and heights. """
@@ -478,7 +474,7 @@ class plot:
         extra_height = 0
         if 'suptitle' in self.fig_objects:
             suptitle_obj = self.fig_objects['suptitle']
-            suptitle_height = self.get_bbox(suptitle_obj, 'inner').height
+            suptitle_height = self.get_bbox(suptitle_obj).height
             extra_height += suptitle_height
 
         ax_widths = []
@@ -487,43 +483,43 @@ class plot:
             width = 0
             height = 0
             if ax_objects is not None:
-                ax_bbox = self.get_bbox(ax, 'inner')
+                ax_bbox = self.get_bbox(ax)
 
                 if 'title' in ax_objects:
                     title_obj = ax_objects['title']
-                    title_height = self.get_bbox(title_obj, 'inner').height
+                    title_height = self.get_bbox(title_obj).height
                     height += title_height
 
                 xticks_objects = ax.get_xticklabels()
-                first_xtick_bbox = self.get_bbox(xticks_objects[0], 'inner') # first lower xticklabel bbox
-                lower_xticks_height = ax_bbox.y0 - first_xtick_bbox.y0
+                first_xtick_bbox = self.get_bbox(xticks_objects[0]) # first lower xticklabel bbox
+                lower_xticks_height = max(0, ax_bbox.y0 - first_xtick_bbox.y0)
                 height += lower_xticks_height
 
-                last_xtick_bbox = self.get_bbox(xticks_objects[-1], 'inner')
+                last_xtick_bbox = self.get_bbox(xticks_objects[-1])
                 # if last xticklabel bbox is heigher that the first, there are labels atop of the subplot
                 if first_xtick_bbox.y0 != last_xtick_bbox.y0:
-                    upper_xticks_height = last_xtick_bbox.y1 - ax_bbox.y1
+                    upper_xticks_height = max(0, last_xtick_bbox.y1 - ax_bbox.y1)
                     height += upper_xticks_height
 
                 if 'xlabel' in ax_objects:
                     xlabel_obj = ax_objects['xlabel']
-                    xlabel_height = self.get_bbox(xlabel_obj, 'inner').height
+                    xlabel_height = self.get_bbox(xlabel_obj).height
                     height += xlabel_height
 
                 yticks_objects = ax.get_yticklabels()
-                first_ytick_bbox = self.get_bbox(yticks_objects[0], 'inner') # first lower xticklabel bbox
-                lower_yticks_width = ax_bbox.x0 - first_ytick_bbox.x0
+                first_ytick_bbox = self.get_bbox(yticks_objects[0]) # first lower xticklabel bbox
+                lower_yticks_width = max(0, ax_bbox.x0 - first_ytick_bbox.x0)
                 width += lower_yticks_width
 
-                last_ytick_bbox = self.get_bbox(yticks_objects[-1], 'inner')
+                last_ytick_bbox = self.get_bbox(yticks_objects[-1])
                 # if last yticklabel bbox is righter that the first, there are labels to the right of the subplot
                 if first_ytick_bbox.x0 != last_ytick_bbox.x0:
-                    right_yticks_width = last_ytick_bbox.x1 - ax_bbox.x1
+                    right_yticks_width = max(0, last_ytick_bbox.x1 - ax_bbox.x1)
                     width += right_yticks_width
 
                 if 'ylabel' in ax_objects:
                     ylabel_obj = ax_objects['ylabel']
-                    ylabel_width = self.get_bbox(ylabel_obj, 'inner').width
+                    ylabel_width = self.get_bbox(ylabel_obj).width
                     width += ylabel_width
 
             ax_widths.append(width)
@@ -723,9 +719,9 @@ class plot:
                 pad = 0.4
                 labelright = self.filter_config(ax_config, 'labelright', prefix='tick_', index=idx)
                 if labelright:
-                    ax_x1 = self.get_bbox(ax, 'inner').x1
+                    ax_x1 = self.get_bbox(ax).x1
                     yticklabels = ax.get_yticklabels()
-                    max_ytick_label_x1 = max(self.get_bbox(label, 'inner').x1
+                    max_ytick_label_x1 = max(self.get_bbox(label).x1
                                              for label in yticklabels[len(yticklabels)//2:])
                     pad += (max_ytick_label_x1 - ax_x1) # account for width of yticklabels to the right of the subplot
                 colorbar_config['pad'] = pad
