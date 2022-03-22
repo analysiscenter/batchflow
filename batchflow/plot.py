@@ -8,7 +8,6 @@ from numbers import Number
 
 import numpy as np
 
-from IPython.display import display
 from scipy.ndimage import convolve
 from matplotlib import pyplot as plt
 from matplotlib.colors import ColorConverter, ListedColormap, is_color_like
@@ -808,7 +807,11 @@ class plot:
 
     def show(self):
         """ TODO """
-        display(self.fig)
+        try:
+            from IPython.display import display #pylint: disable=import-outside-toplevel
+            display(self.fig)
+        except ImportError:
+            self.fig.show()
 
     def save(self, kwargs):
         """ Save plot. """
