@@ -424,6 +424,7 @@ class plot:
             fig_height = fig_width * ratio
 
         config['figsize'] = (fig_width, fig_height)
+
         return config
 
     def make_figure(self, mode, n_subplots, shapes, axes=None, axis=None, ax=None, figure=None, fig=None, **kwargs):
@@ -433,10 +434,15 @@ class plot:
         if axes is None and fig is not None:
             axes = fig.axes
 
+        # enable figsize adjustment by default for `imshow` mode
+        adjust_figsize = mode == 'imshow'
+
         if axes is None:
             default_config = self.make_default_config(mode=mode, n_subplots=n_subplots, shapes=shapes, **kwargs)
             subplots_keys = ['figsize', 'facecolor', 'dpi', 'ncols', 'nrows', 'tight_layout', 'gridspec_kw']
             config = self.filter_config(kwargs, subplots_keys, prefix='figure_')
+            if 'figsize' in config:
+                adjust_figsize = False # disable figsize adjustment if explicit figsize provided
             config = {**default_config, **config}
 
             with plt.ioff():
@@ -450,7 +456,7 @@ class plot:
             if len(axes) < n_subplots:
                 raise ValueError(f"Not enough axes provided — got ({len(axes)}) for {n_subplots} subplots.")
 
-        return fig, axes, config
+        return fig, axes, config, adjust_figsize
 
     def get_bbox(self, obj, kind):
         """ Get object bounding box in inches. """
@@ -462,7 +468,77 @@ class plot:
             return obj.get_tightbbox(renderer).transformed(transformer)
         raise ValueError() # TODO
 
-    def plot(self, data=None, combine='overlay', mode='imshow', save=False, show=False, **kwargs):
+    def adjust_figsize(self):
+        """ Look through axes' annotation objects and add figsize corrections for their widths and heights. """
+        ncols = self.fig_config['ncols']
+        nrows = self.fig_config['nrows']
+        fig_width, fig_height = self.fig_config['figsize']
+
+        extra_width = 0
+        extra_height = 0
+        if 'suptitle' in self.fig_objects:
+            suptitle_obj = self.fig_objects['suptitle']
+            suptitle_height = self.get_bbox(suptitle_obj, 'inner').height
+            extra_height += suptitle_height
+
+        ax_widths = []
+        ax_heights = []
+        for ax, ax_objects in zip(self.axes, self.axes_objects):
+            width = 0
+            height = 0
+            if ax_objects is not None:
+                ax_bbox = self.get_bbox(ax, 'inner')
+
+                if 'title' in ax_objects:
+                    title_obj = ax_objects['title']
+                    title_height = self.get_bbox(title_obj, 'inner').height
+                    height += title_height
+
+                xticks_objects = ax.get_xticklabels()
+                first_xtick_bbox = self.get_bbox(xticks_objects[0], 'inner') # first lower xticklabel bbox
+                lower_xticks_height = ax_bbox.y0 - first_xtick_bbox.y0
+                height += lower_xticks_height
+
+                last_xtick_bbox = self.get_bbox(xticks_objects[-1], 'inner')
+                # if last xticklabel bbox is heigher that the first, there are labels atop of the subplot
+                if first_xtick_bbox.y0 != last_xtick_bbox.y0:
+                    upper_xticks_height = last_xtick_bbox.y1 - ax_bbox.y1
+                    height += upper_xticks_height
+
+                if 'xlabel' in ax_objects:
+                    xlabel_obj = ax_objects['xlabel']
+                    xlabel_height = self.get_bbox(xlabel_obj, 'inner').height
+                    height += xlabel_height
+
+                yticks_objects = ax.get_yticklabels()
+                first_ytick_bbox = self.get_bbox(yticks_objects[0], 'inner') # first lower xticklabel bbox
+                lower_yticks_width = ax_bbox.x0 - first_ytick_bbox.x0
+                width += lower_yticks_width
+
+                last_ytick_bbox = self.get_bbox(yticks_objects[-1], 'inner')
+                # if last yticklabel bbox is righter that the first, there are labels to the right of the subplot
+                if first_ytick_bbox.x0 != last_ytick_bbox.x0:
+                    right_yticks_width = last_ytick_bbox.x1 - ax_bbox.x1
+                    width += right_yticks_width
+
+                if 'ylabel' in ax_objects:
+                    ylabel_obj = ax_objects['ylabel']
+                    ylabel_width = self.get_bbox(ylabel_obj, 'inner').width
+                    width += ylabel_width
+
+            ax_widths.append(width)
+            ax_heights.append(height)
+
+        ax_widths = np.array(ax_widths).reshape(nrows, ncols)
+        extra_width += ax_widths.max(axis=1).sum()
+
+        ax_heights = np.array(ax_heights).reshape(nrows, ncols)
+        extra_height += ax_heights.max(axis=0).sum()
+
+        new_figsize = (fig_width + extra_width, fig_height + extra_height)
+        self.fig.set_size_inches(new_figsize)
+
+    def plot(self, data=None, combine='overlay', mode='imshow', save=False, show=False, adjust_figsize=False, **kwargs):
         """ TODO
 
         Parses axes from kwargs if provided, else creates them.
@@ -477,8 +553,8 @@ class plot:
                 shapes = [subplot_data[0].shape if subplot_data is not None else None for subplot_data in data]
             else:
                 shapes = None
-            self.fig, self.axes, self.fig_config = self.make_figure(mode=mode, n_subplots=n_subplots,
-                                                                    shapes=shapes, **kwargs)
+            self.fig, self.axes, self.fig_config, adjust_figsize = self.make_figure(mode=mode, n_subplots=n_subplots,
+                                                                                    shapes=shapes, **kwargs)
             self.axes_configs = np.full(len(self.axes), None)
             self.axes_objects = np.full(len(self.axes), None)
 
@@ -516,8 +592,6 @@ class plot:
                 idx_fix = rel_idx - idx_fixes[rel_idx] if combine == 'separate' else 0
 
                 ax_objects, ax_config = plot_method(data=ax_data, ax=subplot_ax, config=ax_config, idx_fix=idx_fix)
-                # redraw figure so that latest plots are applied to obtain correct axes sizes
-                self.fig.canvas.draw_idle()
                 ax_objects, ax_config = self.ax_annotate(ax=subplot_ax, ax_config=ax_config, ax_objects=ax_objects,
                                                          idx=rel_idx, mode=mode)
 
@@ -525,6 +599,9 @@ class plot:
                 self.axes_configs[abs_idx] = ax_config
 
         self.fig_objects = self.fig_annotate()
+
+        if adjust_figsize:
+            self.adjust_figsize()
 
         if show:
             self.show()
@@ -552,7 +629,7 @@ class plot:
         # title
         'title_size': 25,
         # axis labels
-        'xlabel': '', 'ylabel': '',
+        # 'xlabel': '', 'ylabel': '',
         'xlabel_size': '12', 'ylabel_size': '12',
         # colorbar
         'colorbar': False,
@@ -580,26 +657,20 @@ class plot:
         title_config = {**text_config, **title_config}
         if title_config:
             ax_objects['title'] = ax.set_title(**title_config)
-        else:
-            ax_objects['title'] = None
 
         # xlabel
         keys = ['xlabel']
         xlabel_config = self.filter_config(ax_config, keys, prefix='xlabel_', index=idx)
         xlabel_config = {**text_config, **xlabel_config}
-        if xlabel_config:
+        if xlabel_config and 'xlabel' in xlabel_config:
             ax_objects['xlabel'] = ax.set_xlabel(**xlabel_config)
-        else:
-            ax_objects['xlabel'] = None
 
         # ylabel
         keys = ['ylabel']
         ylabel_config = self.filter_config(ax_config, keys, prefix='ylabel_', index=idx)
         ylabel_config = {**text_config, **ylabel_config}
-        if ylabel_config:
+        if ylabel_config and 'ylabel' in ylabel_config:
             ax_objects['ylabel'] = ax.set_ylabel(**ylabel_config)
-        else:
-            ax_objects['ylabel'] = None
 
         # xticks
         xticks_config = self.filter_config(ax_config, [], prefix='xticks_', index=idx)
@@ -648,6 +719,16 @@ class plot:
             colorbar_config['ax_image'] = ax_objects['images'][0]
             # if colorbar is disabled for subplot, add param to plot fake axis instead to keep proportions
             colorbar_config['fake'] = not colorbar_config.pop('colorbar', True)
+            if 'pad' not in colorbar_config:
+                pad = 0.4
+                labelright = self.filter_config(ax_config, 'labelright', prefix='tick_', index=idx)
+                if labelright:
+                    ax_x1 = self.get_bbox(ax, 'inner').x1
+                    yticklabels = ax.get_yticklabels()
+                    max_ytick_label_x1 = max(self.get_bbox(label, 'inner').x1
+                                             for label in yticklabels[len(yticklabels)//2:])
+                    pad += (max_ytick_label_x1 - ax_x1) # account for width of yticklabels to the right of the subplot
+                colorbar_config['pad'] = pad
             ax_objects['colorbar'] = self.add_colorbar(**colorbar_config)
 
         # legend
@@ -1061,11 +1142,6 @@ class plot:
     def add_colorbar(self, ax_image, width=.2, pad=None, color='black', fake=False):
         """ Append colorbar to the image on the right. """
         divider = axes_grid1.make_axes_locatable(ax_image.axes)
-        if pad is None:
-            inner_bbox = self.get_bbox(ax_image.axes, 'inner')
-            outer_bbox = self.get_bbox(ax_image.axes, 'outer')
-            pad = (outer_bbox.width - inner_bbox.width) / 2 + .1
-
         cax = divider.append_axes("right", size=width, pad=pad)
 
         if fake:
@@ -1105,7 +1181,7 @@ class plot:
             new_handles = handles
             new_labels = [line.get_label() for line in handles]
 
-        if len(new_handles) > 0:
+        if len(new_handles) > 0 and len(new_labels) > 0:
             kwargs['handles'] = old_handles + new_handles
             kwargs['labels'] = old_labels + new_labels
 
