@@ -113,10 +113,10 @@ class ClearMLExperimentStorage(ExperimentStorage):
         from clearml import Task
 
         super().__init__(experiment, loglevel, storage)
-        self.task = Task.create(
+        self.task = Task.init(
             project_name=self.name,
             task_name=self.experiment.id,
-            add_task_init_call=True,
+            # add_task_init_call=True,
         )
         self.task.connect_configuration(self.experiment.config.config)
 
@@ -136,7 +136,6 @@ class ClearMLExperimentStorage(ExperimentStorage):
 
     def close(self):
         self.task.close()
-        pass
 
     def copy_results_to_research_storage(self):
         pass
@@ -158,6 +157,7 @@ class ClearMLExperimentStorage(ExperimentStorage):
             for iteration, value in values.items():
                 self.logger.report_scalar('', variable, value, iteration)
             del self.results[var]
+
 class LocalExperimentStorage(ExperimentStorage):
     def __init__(self, experiment, loglevel=None,  storage='local'):
         super().__init__(experiment, loglevel, storage)
@@ -422,6 +422,8 @@ class LocalResearchStorage(ResearchStorage):
         self.results.load()
         self.profiler.load()
 
+ClearMLResearchStorage = MemoryResearchStorage
+
 class ClearMLResearchStorage(ResearchStorage):
     def __init__(self, research, loglevel, mode='w', storage='clearml'):
         from clearml import Task
@@ -430,7 +432,7 @@ class ClearMLResearchStorage(ResearchStorage):
         self.task = Task.create(
             project_name=self.research.name,
             task_name='research',
-            # add_task_init_call=True,
+            add_task_init_call=True,
         )
 
         self.create_logger()
@@ -447,6 +449,7 @@ class ClearMLResearchStorage(ResearchStorage):
         self.logger = ClearMLLogger(self.task.get_logger())
 
     def close(self):
+        # self.task.mark_completed()
         self.task.close()
 
     def close_logger(self):
