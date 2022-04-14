@@ -12,6 +12,7 @@ from scipy.ndimage import convolve
 from matplotlib import pyplot as plt
 from matplotlib.colors import ColorConverter, ListedColormap, is_color_like
 from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator, AutoMinorLocator
 from mpl_toolkits import axes_grid1
 
@@ -584,11 +585,11 @@ class plot:
                 ax_config = self.filter_config(self.config, index=subplot_idx)
                 ax_config = {**mode_defaults, **ax_config}
 
-                idx_fix = rel_idx - idx_fixes[rel_idx] if combine == 'separate' else 0
+                idx_fix = rel_idx - idx_fixes[rel_idx] if combine == 'separate' else None
 
                 ax_objects, ax_config = plot_method(data=ax_data, ax=subplot_ax, config=ax_config, idx_fix=idx_fix)
                 ax_objects, ax_config = self.ax_annotate(ax=subplot_ax, ax_config=ax_config, ax_objects=ax_objects,
-                                                         idx=rel_idx, mode=mode)
+                                                         idx=idx_fix, mode=mode)
 
                 self.axes_objects[abs_idx] = ax_objects
                 self.axes_configs[abs_idx] = ax_config
@@ -602,7 +603,7 @@ class plot:
             self.show()
 
         if save or 'savepath' in kwargs:
-            self.save(kwargs)
+            self.save(**kwargs)
 
         return self
 
@@ -727,24 +728,17 @@ class plot:
             ax_objects['colorbar'] = self.add_colorbar(**colorbar_config)
 
         # legend
-        legend = self.filter_config(ax_config, 'legend')
-        keys = ['label', 'size', 'loc', 'ha', 'va']
+        keys = ['labels', 'handles', 'size', 'loc', 'ha', 'va', 'handletextpad']
         legend_config = self.filter_config(ax_config, keys, prefix='legend_')
-        if legend or legend_config:
-            if isinstance(legend, (str, list)):
-                legend_config['label'] = legend
-            if mode in ('imshow', 'hist'):
-                color = None
-                if 'cmap' in ax_config:
-                    color = ax_config['cmap']
-                if 'color' in ax_config:
-                    color = ax_config['color']
-                if 'color' in legend_config:
-                    color = legend_config.pop('color')
-                legend_config['color'] = color
-                legend_config['alpha'] = ax_config.get('alpha')
-            elif mode in ('curve', 'loss'):
-                legend_config['handles'] = ax_objects['lines']
+        if legend_config.get('labels') or legend_config.get('handles'):
+            if 'cmap' in ax_config:
+                colors = self.filter_config(ax_config, 'cmap', index=idx)
+            if 'color' in ax_config:
+                colors = self.filter_config(ax_config, 'color', index=idx)
+            if 'color' in legend_config:
+                colors = legend_config.pop('color')
+            legend_config['colors'] = colors
+            legend_config['alphas'] = ax_config.get('alpha')
             self.add_legend(ax, mode=mode, **legend_config)
 
         # grid
@@ -813,7 +807,7 @@ class plot:
         except ImportError:
             self.fig.show()
 
-    def save(self, kwargs):
+    def save(self, **kwargs):
         """ Save plot. """
         default_config = {
             'savepath': datetime.now().strftime('%Y-%m-%d_%H:%M:%S.png'),
@@ -853,14 +847,15 @@ class plot:
     }
 
     @classmethod
-    def ax_imshow(cls, data, ax, config, idx_fix=0):
+    def ax_imshow(cls, data, ax, config, idx_fix=None):
         """ TODO """
         images = []
 
         mask_colors_generator = cycle(cls.MASK_COLORS)
 
-        for image_idx, image in enumerate(data):
-            layer_idx = image_idx + idx_fix
+        for layer_idx, image in enumerate(data):
+            if idx_fix is not None:
+                layer_idx += idx_fix
 
             imshow_keys = ['vmin', 'vmax', 'interpolation', 'alpha', 'extent', 'order_axes', 'mask_values']
             imshow_config = cls.filter_config(config, imshow_keys, prefix='imshow_', index=layer_idx)
@@ -912,12 +907,13 @@ class plot:
     }
 
     @classmethod
-    def ax_hist(cls, data, ax, config, idx_fix=0):
+    def ax_hist(cls, data, ax, config, idx_fix=None):
         """ TODO """
         bars = []
 
-        for array_idx, array in enumerate(data):
-            layer_idx = array_idx + idx_fix
+        for layer_idx, array in enumerate(data):
+            if idx_fix is not None:
+                layer_idx += idx_fix
 
             hist_keys = ['bins', 'color', 'alpha', 'label']
             hist_config = cls.filter_config(config, hist_keys, prefix='hist_', index=layer_idx)
@@ -955,11 +951,11 @@ class plot:
     }
 
     @classmethod
-    def ax_curve(cls, data, ax, config, idx_fix=0):
+    def ax_curve(cls, data, ax, config, idx_fix=None):
         """ TODO """
         lines = []
 
-        for array_idx, arrays in enumerate(data):
+        for layer_idx, arrays in enumerate(data):
             if isinstance(arrays, np.ndarray):
                 if arrays.ndim == 1:
                     x = range(len(arrays))
@@ -975,7 +971,8 @@ class plot:
             else:
                 raise ValueError('Valid data object is either np.array or tuple of np.arrays')
 
-            layer_idx = array_idx + idx_fix
+            if idx_fix is not None:
+                layer_idx += idx_fix
 
             curve_keys = ['color', 'linestyle', 'alpha', 'label']
             curve_config = cls.filter_config(config, curve_keys, prefix='curve_', index=layer_idx)
@@ -1011,12 +1008,12 @@ class plot:
     }
 
     @classmethod
-    def ax_loss(cls, data, ax, config, idx_fix=0):
+    def ax_loss(cls, data, ax, config, idx_fix=None):
         """ TODO """
         lines = []
 
         lr_ax = None
-        for array_idx, arrays in enumerate(data):
+        for layer_idx, arrays in enumerate(data):
             if isinstance(arrays, np.ndarray):
                 if arrays.ndim == 1:
                     loss = arrays
@@ -1032,9 +1029,10 @@ class plot:
             else:
                 raise ValueError('Valid data object is either np.array or tuple of np.arrays')
 
-            layer_idx = array_idx + idx_fix
+            if idx_fix is not None:
+                layer_idx += idx_fix
 
-            label = cls.filter_config(config, 'label') or f'loss №{array_idx}'
+            label = cls.filter_config(config, 'label') or f'loss {layer_idx + 1}'
             loss_label = label + f' ⟶ {loss[-1]:2.3f}'
             final_window = cls.filter_config(config, 'final_window')
             if final_window is not None:
@@ -1061,7 +1059,7 @@ class plot:
             if lr is not None:
                 if lr_ax is None:
                     lr_ax = ax.twinx()
-                lr_label = f'learning rate №{array_idx} ⟶ {lr[-1]:.0e}'
+                lr_label = f'learning rate №{layer_idx + 1} ⟶ {lr[-1]:.0e}'
                 lr_config = cls.filter_config(config, curve_keys, prefix='lr_', index=layer_idx)
                 lr_line = lr_ax.plot(lr, label=lr_label, **lr_config)
                 lr_ax.set_ylabel('Learning rate', fontsize=12)
@@ -1152,12 +1150,35 @@ class plot:
 
         return colorbar
 
-    def add_legend(self, ax=None, mode='imshow', handles=None, label=None, color=None,
-                   alpha=1, size=10, ha=None, va=None, **kwargs):
-        """ TODO Add patches to legend. All invalid colors are filtered.
+    def add_legend(self, ax=None, mode='imshow', handles=None, labels=None, colors='none',
+                   alphas=1, size=10, ha=None, va=None, handletextpad=None, **kwargs):
+        """ Add patches to axes legend.
 
-        Notes to self: Rewrite doc, explain line/patches parametrization.
+        Parameters
+        ----------
+        ax : int or instance of `matploblib.axes.Axes`
+            Axes to put labels into. If and int, used for indexing `self.axes`.
+        mode : 'imshow', 'hist', 'curve', 'loss', 'wiggle'
+            Mode to match legend hadles patches to.
+            If from ('imshow', 'hist', 'wiggle'), use rectangular legend patches.
+            If from ('curve', 'loss'), use line legend patches.
+        handles : None or sequence of `matplotlib.artist.Artist`
+            A list of Artists (lines, patches) to be added to the legend.
+            The length of handles and labels (if both provided) should be the same.
+        labels : str or list of str
+            A list of labels to show next to the artists.
+        colors : valid matplotlib color or a list of them
+            Color to use for patches creation if those are not provided explicitly.
+        alphas : number or list of numbers from 0 to 1
+            Legend handles opacity.
+        size : int
+            Legend size.
+        kwargs : misc
+            For `matplotlib.legend`.
         """
+        if handles is None and labels is None:
+            raise ValueError("Both `handle` and `label` cannot be None.")
+
         if isinstance(ax, int):
             ax = self.axes[ax]
 
@@ -1166,30 +1187,54 @@ class plot:
         texts = getattr(legend, 'get_texts', lambda: [])()
         old_labels = [t._text for t in texts] # pylint: disable=protected-access
 
-        if mode in ('imshow', 'hist', 'wiggle'):
-            colors = to_list(color)
-            alphas = alpha if isinstance(alpha, list) else [alpha] * len(colors)
+        new_labels = [] if labels is None else to_list(labels)
+        if handles is None:
+            colors = colors if isinstance(colors, list) else [colors] * len(new_labels)
+            alphas = alphas if isinstance(alphas, list) else [alphas] * len(new_labels)
+
             new_handles = []
-            # pylint: disable=redefined-argument-from-local
             for color, alpha in zip(colors, alphas):
                 if is_color_like(color):
-                    patch = Patch(color=color, alpha=alpha)
-                    new_handles.append(patch)
-            new_labels = [] if label is None else to_list(label)
-        elif mode in ('curve', 'loss'):
-            new_handles = handles
-            new_labels = [line.get_label() for line in handles]
+                    if mode in ('imshow', 'hist', 'wiggle'):
+                        handle = Patch(color=color, alpha=alpha)
+                    elif mode in ('curve', 'loss'):
+                        handle = Line2D(xdata=[0], ydata=[0], color=color, alpha=alpha)
+                    new_handles.append(handle)
+        else:
+            new_handles = to_list(handles)
+            new_labels = [handle.get_label() for handle in new_handles] if len(new_labels) == 0 else new_labels
 
         if len(new_handles) > 0 and len(new_labels) > 0:
             kwargs['handles'] = old_handles + new_handles
             kwargs['labels'] = old_labels + new_labels
 
-            legend = ax.legend(prop={'size': size}, **kwargs)
+            legend = ax.legend(prop={'size': size}, handletextpad=handletextpad, **kwargs)
 
         if ha is not None:
             _ = [text.set_ha(ha) for text in legend.get_texts()]
         if va is not None:
             _ = [text.set_ha(va) for text in legend.get_texts()]
+
+    def add_legend_center(self, ax, labels, colors='none', size=30, **kwargs):
+        """ Add text labels to axes center and hide patches if color not provided.
+
+        A convenient method for adding text in box (usually on empty ax).
+
+        Parameters
+        ----------
+        ax : int or instance of `matploblib.axes.Axes`
+            Axes to put labels into. If and int, used for indexing `self.axes`.
+        labels : str or list of str
+            Labels to put into axes.
+        colors : valid matplotlib color or a list of them
+            If color is 'none', `handletextpad` is automatically set to `-2` effectively eliminating empty left gap.
+        size : int
+            Legend size.
+        kwargs : misc
+            For `matplotlib.legend`.
+        """
+        handletextpad = -2 if colors == 'none' else None
+        self.add_legend(ax=ax, colors=colors, labels=labels, loc=10, size=size, handletextpad=handletextpad, **kwargs)
 
     @staticmethod
     def add_grid(ax, grid_type, x_n=None, y_n=None, zorder=0, **kwargs):
