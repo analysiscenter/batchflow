@@ -3,7 +3,6 @@ from colorsys import rgb_to_hls, hls_to_rgb
 from copy import copy
 from datetime import datetime
 from functools import reduce
-from itertools import cycle
 from numbers import Number
 
 import numpy as np
@@ -124,7 +123,12 @@ class preprocess_and_imshow:
 
 
 class ColorMappingHandler(HandlerBase):
-    """ Handler mapping for `plt.legend` that transforms colormap name to patches collection of its colors. """
+    """ Handler transforming empty patches into colored patches corresponding to collection colormap.
+
+    Notes
+    -----
+    Used as `handler_map` argument for `plt.legend` to make colormap patches.
+    """
     def __init__(self, n_segments=8, **kwargs):
         super().__init__(**kwargs)
         self.n_segments = n_segments
@@ -133,7 +137,7 @@ class ColorMappingHandler(HandlerBase):
         """ Create a rectangle consisting of sequential patches with colors of colormap. """
         _ = legend, fontsize
         segment_width = width / self.n_segments
-        cmap = plt.get_cmap(orig_handle)
+        cmap = orig_handle.cmap
 
         segments = []
         for segment_index in range(self.n_segments):
@@ -141,7 +145,9 @@ class ColorMappingHandler(HandlerBase):
             facecolor = cmap(segment_index / self.n_segments)
             segment = Rectangle(xy, segment_width, height, facecolor=facecolor, transform=trans)
             segments.append(segment)
-        patch = PatchCollection(segments, match_original=True, edgecolor=None, cmap=orig_handle)
+
+        label = orig_handle.get_label()
+        patch = PatchCollection(segments, match_original=True, edgecolor=None, cmap=cmap.name, label=label)
 
         return [patch]
 
@@ -356,7 +362,7 @@ class plot:
         n_subplots = 0
 
         if data is None:
-            data_list = [None]
+            data_list = []
             n_subplots = 1
         elif isinstance(data, tuple):
             data_list = [[cls.process_tuple(data=data, mode=mode)]]
@@ -467,7 +473,7 @@ class plot:
                     widths.append(subplot_width)
 
                 mean_height, mean_width = np.mean(heights), np.mean(widths)
-                if mean_height == 0 or mean_width == 0:
+                if np.isnan(mean_height) or np.isnan(mean_width):
                     ratio = 1
                 else:
                     ratio = (mean_height * 1.05 * nrows) / (mean_width * 1.05 * ncols)
@@ -599,12 +605,12 @@ class plot:
         self.fig.set_size_inches(new_figsize)
 
     def plot(self, data=None, combine='overlay', mode='imshow', save=False, show=False, adjust_figsize=False, **kwargs):
-        """ TODO
+        """ Plot data on axes.
 
         Parses axes from kwargs if provided, else creates them.
         Filters parameters and calls chosen plot method for every axis-data pair.
 
-        Notes to self: Explain `abs_idx` and `rel_idx`.
+        TODO: Explain `abs_idx` and `rel_idx`.
         """
         data, combine, n_subplots, empty_subplots = self.parse_data(data=data, combine=combine, mode=mode)
 
@@ -615,8 +621,8 @@ class plot:
                 shapes = None
             self.fig, self.axes, self.fig_config, adjust_figsize = self.make_figure(mode=mode, n_subplots=n_subplots,
                                                                                     shapes=shapes, **kwargs)
-            self.axes_configs = np.full(len(self.axes), None)
-            self.axes_objects = np.full(len(self.axes), None)
+            self.axes_configs = [None] * len(self.axes)
+            self.axes_objects = [None] * len(self.axes)
 
         self.config = {**self.ANNOTATION_DEFAULTS, **kwargs}
 
@@ -800,10 +806,10 @@ class plot:
             if 'color' in ax_config:
                 colors = self.filter_config(ax_config, 'color', index=index)
             if 'color' in legend_config:
-                colors = legend_config.pop('color')
+                colors = legend_config.pop('colors')
             legend_config['colors'] = colors
             legend_config['alphas'] = ax_config.get('alpha')
-            self.add_legend(ax, mode=mode, **legend_config)
+            ax_objects['legend'] = self.add_legend(ax, mode=mode, **legend_config)
 
         # grid
         grid = self.filter_config(ax_config, 'grid', index=index)
@@ -895,7 +901,7 @@ class plot:
 
     IMSHOW_DEFAULTS = {
         # image
-        'cmap': 'Greys_r',
+        'cmap': CycledList(['Greys_r'] + MASK_COLORS, cycle_from=1),
         # ticks
         'labeltop': True,
         'labelright': True,
@@ -912,10 +918,8 @@ class plot:
 
     @classmethod
     def ax_imshow(cls, data, ax, config, idx_fix=None):
-        """ TODO """
+        """ Display given list of arrays as images on axis. """
         images = []
-
-        mask_colors_generator = cycle(cls.MASK_COLORS)
 
         for layer_idx, image in enumerate(data):
             if idx_fix is not None:
@@ -924,20 +928,18 @@ class plot:
             imshow_keys = ['vmin', 'vmax', 'interpolation', 'alpha', 'extent', 'order_axes', 'mask_values']
             imshow_config = cls.filter_config(config, imshow_keys, prefix='imshow_', index=layer_idx)
 
-            cmap = cls.filter_config(config, 'cmap', index=layer_idx)
             # Add `0` to a list of values that shouldn't be displayed if image is a binary mask
             if tuple(np.unique(image)) in [(0, ), (0, 1)]:
                 imshow_config['mask_values'] = 0
                 imshow_config['vmin'] = 0
-                if not is_color_like(cmap):
-                    cmap = next(mask_colors_generator)
 
             # Assemble colormap from given parameters
-            # If a single color provided, prepend 'white' color, so that a resulting list defines binary colormap
+            cmap = cls.filter_config(config, 'cmap', index=layer_idx)
+            # If a single color provided, prepend 'white' color, so that a resulting tuple defines binary colormap
             if is_color_like(cmap):
-                cmap = ['white', cmap]
-            # If a list of colors provided in `cmap` argument convert it into a colormap
-            if isinstance(cmap, list):
+                cmap = ('white', cmap)
+            # If a tuple of colors provided in `cmap` argument convert it into a colormap
+            if isinstance(cmap, tuple):
                 cmap = cls.make_cmap(colors=cmap)
             else:
                 cmap = copy(plt.get_cmap(cmap))
@@ -972,7 +974,7 @@ class plot:
 
     @classmethod
     def ax_hist(cls, data, ax, config, idx_fix=None):
-        """ TODO """
+        """ Display given list of arrays as histograms on axis. """
         bars = []
 
         for layer_idx, array in enumerate(data):
@@ -1016,7 +1018,7 @@ class plot:
 
     @classmethod
     def ax_curve(cls, data, ax, config, idx_fix=None):
-        """ TODO """
+        """ Display given list of arrays as curves on axis. """
         lines = []
 
         for layer_idx, arrays in enumerate(data):
@@ -1038,7 +1040,7 @@ class plot:
             if idx_fix is not None:
                 layer_idx += idx_fix
 
-            curve_keys = ['color', 'linestyle', 'alpha', 'label']
+            curve_keys = ['color', 'linestyle', 'alpha']
             curve_config = cls.filter_config(config, curve_keys, prefix='curve_', index=layer_idx)
             line = ax.plot(x, y, **curve_config)
             lines.extend(line)
@@ -1073,7 +1075,7 @@ class plot:
 
     @classmethod
     def ax_loss(cls, data, ax, config, idx_fix=None):
-        """ TODO """
+        """ Display given list of arrays as loss curves. """
         lines = []
 
         lr_ax = None
@@ -1096,7 +1098,7 @@ class plot:
             if idx_fix is not None:
                 layer_idx += idx_fix
 
-            label = cls.filter_config(config, 'label') or f'loss {layer_idx + 1}'
+            label = cls.filter_config(config, 'label') or f'loss #{layer_idx + 1}'
             loss_label = label + f' ⟶ {loss[-1]:2.3f}'
             final_window = cls.filter_config(config, 'final_window')
             if final_window is not None:
@@ -1131,6 +1133,8 @@ class plot:
 
             if lr is not None and config.get('log_lr'):
                 lr_ax.set_yscale('log')
+
+        config['handles'] = config.get('handles', lines)
 
         return {'lines': lines}, config
 
@@ -1214,8 +1218,7 @@ class plot:
 
         return colorbar
 
-    def add_legend(self, ax=None, mode='imshow', handles=None, labels=None, colors='none',
-                   alphas=1, size=10, ha=None, va=None, handletextpad=None, **kwargs):
+    def add_legend(self, ax=None, mode='imshow', handles=None, labels=None, colors='none', alphas=1, size=10, **kwargs):
         """ Add patches to axes legend.
 
         Parameters
@@ -1240,8 +1243,8 @@ class plot:
         kwargs : misc
             For `matplotlib.legend`.
         """
-        if handles is None and labels is None:
-            raise ValueError("Both `handle` and `label` cannot be None.")
+        if (handles is None and labels is None) or (handles is not None and labels is not None):
+            raise ValueError("One and only one of `handles`, `labels` must be specified.")
 
         if isinstance(ax, int):
             ax = self.axes[ax]
@@ -1249,69 +1252,63 @@ class plot:
         # get legend that already exists
         legend = ax.get_legend()
         old_handles = getattr(legend, 'legendHandles', [])
-        old_handles = [handle.cmap.name if isinstance(handle, PatchCollection) else handle for handle in old_handles]
-        texts = getattr(legend, 'texts', [])
-        old_labels = [t._text for t in texts] # pylint: disable=protected-access
         handler_map = getattr(legend, '_custom_handler_map', {})
 
-        # form new handles and labels
-        new_labels = [] if labels is None else to_list(labels)
+        # make new handles
         if handles is None:
-            colors = colors if isinstance(colors, list) else [colors] * len(new_labels)
-            alphas = alphas if isinstance(alphas, list) else [alphas] * len(new_labels)
+            labels = to_list(labels)
+            colors = colors if isinstance(colors, list) else [colors] * len(labels)
+            alphas = alphas if isinstance(alphas, list) else [alphas] * len(labels)
 
             new_handles = []
-            for color, alpha in zip(colors, alphas):
+            for color, alpha, label in zip(colors, alphas, labels):
+                if label is None:
+                    continue
                 if mode in ('imshow', 'hist', 'wiggle'):
                     if is_color_like(color):
-                        handle = Patch(color=color, alpha=alpha)
+                        handle = Patch(color=color, alpha=alpha, label=label)
                     else:
-                        handle = color
-                        handler_map[str] = ColorMappingHandler()
+                        handle = PatchCollection(patches=[], cmap=color, label=label)
+                        handler_map[PatchCollection] = ColorMappingHandler()
                 elif mode in ('curve', 'loss'):
-                    handle = Line2D(xdata=[0], ydata=[0], color=color, alpha=alpha)
+                    handle = Line2D(xdata=[0], ydata=[0], color=color, alpha=alpha, label=label)
                 new_handles.append(handle)
         else:
             new_handles = to_list(handles)
-            new_labels = [handle.get_label() for handle in new_handles] if len(new_labels) == 0 else new_labels
 
         # extend existing handles and labels with new ones
-        if len(new_handles) > 0 and len(new_labels) > 0:
-            kwargs['handles'] = old_handles + new_handles
-            kwargs['labels'] = old_labels + new_labels
+        kwargs['handles'] = old_handles + new_handles
+        legend = ax.legend(prop={'size': size}, handler_map=handler_map, **kwargs)
 
-            legend = ax.legend(prop={'size': size}, handletextpad=handletextpad, handler_map=handler_map, **kwargs)
+        return legend
 
-        # adjust texts alignment
-        if ha is not None:
-            _ = [text.set_ha(ha) for text in legend.get_texts()]
-        if va is not None:
-            _ = [text.set_ha(va) for text in legend.get_texts()]
-
-    def add_legend_center(self, ax, labels, colors='none', size=30, **kwargs):
-        """ Add text labels to axes center and hide patches if color not provided.
+    def add_text(self, ax, text, size=10, x=0.5, y=0.5, ha='center', va='center', bbox='default', **kwargs):
+        """ Add text to axis.
 
         A convenient method for adding text in box (usually on empty ax).
 
         Parameters
         ----------
         ax : int or instance of `matploblib.axes.Axes`
-            Axes to put labels into. If and int, used for indexing `self.axes`.
-        labels : str or list of str
-            Labels to put into axes.
-        colors : valid matplotlib color or a list of them
-            If color is 'none', `handletextpad` is automatically set to `-2` effectively eliminating empty left gap.
+            Axes to put labels into. If an int, used for indexing `self.axes`.
+        text : str
+            Text to display.
         size : int
-            Legend size.
+            Text size.
         kwargs : misc
             For `matplotlib.legend`.
         """
-        handletextpad = -2 if colors == 'none' else None
-        self.add_legend(ax=ax, colors=colors, labels=labels, loc=10, size=size, handletextpad=handletextpad, **kwargs)
+        if isinstance(ax, int):
+            ax = self.axes[ax]
+
+        if bbox == 'default':
+            bbox = {'boxstyle': 'square', 'fc': 'none'}
+
+        return ax.text(x=x, y=y, s=text, size=size, ha=ha, va=va, bbox=bbox, **kwargs)
 
     @staticmethod
     def add_grid(ax, grid_type, x_n=None, y_n=None, zorder=0, **kwargs):
-        """ TODO """
+        """ Set axis grid parameters. """
         if grid_type == 'minor':
             locator = AutoMinorLocator
         elif grid_type == 'major':
