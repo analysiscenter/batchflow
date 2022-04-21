@@ -181,19 +181,17 @@ class plot:
         If list if flat, 'overlay/separate' logic is handled via `combine` parameter.
         If list is nested, outer level defines subplots order while inner one defines layers order.
         Shape of data items must match chosen plotting mode (see below).
-    mode : 'imshow', 'wiggle', 'hist', 'loss'
+    mode : 'imshow', 'hist', 'curve', 'loss'
         If 'imshow' plot given arrays as images.
-        If 'wiggle' plot 1d subarrays of given array as signals.
-        Subarrays are extracted from given data with fixed step along vertical axis.
         If 'hist' plot histogram of flattened array.
+        If 'curve' plot given arrays as curve lines.
         If 'loss' plot given arrays as loss curves.
     combine : 'overlay', 'separate' or 'mixed'
         Whether overlay images on a single axis, show them on separate ones or use mixed approach.
-        Note, that 'wiggle' plot mode is incompatible with `combine='separate'`.
     kwargs :
-        - For one of `imshow`, 'wiggle`, `hist` or `loss` methods (depending on chosen mode).
+        - For one of `ax_imshow`, `ax_hist`, `ax_curve`, `ax_loss` methods (depending on chosen mode).
             Parameters and data nestedness levels must match.
-            Every param with 'imshow_', 'wiggle_', 'hist_' or 'loss_' prefix is redirected to corresponding method.
+            Every param with 'imshow_', 'hist_', 'curve_', 'loss_' prefix is redirected to corresponding method.
             See detailed parameters listings below.
         - For `annotate_axis`.
             Every param with 'title_', 'suptitle_', 'xlabel_', 'ylabel_', 'xticks_', 'yticks_', 'xlim_', 'ylim_',
@@ -312,7 +310,7 @@ class plot:
     The list of parameters expected by specific plot method is rather short.
     But there is a way to provide parameter to a plot method, even if it's not hard-coded.
     One must use specific prefix for that.
-    Address docs of `imshow`, `wiggle`, `hist`, `loss` and `annotate_axis` for details.
+    Address docs of `ax_imshow``, `ax_hist`, `ax_curve`, `ax_loss` and `annotate_axis` for details.
 
     This also allows one to pass arguments of the same name for different plotting steps.
     E.g. `plt.set_title` and `plt.set_xlabel` both require `size` argument.
@@ -418,12 +416,12 @@ class plot:
 
         return data_list, combine, n_subplots, empty_subplots
 
-    def make_default_config(self, mode, n_subplots, shapes, ncols=None, ratio=None, scale=1, max_fig_width=25,
+    def make_default_config(self, mode, n_subplots, data, ncols=None, ratio=None, scale=1, max_fig_width=25,
                             nrows=None, xlim=(None, None), ylim=(None, None), **kwargs):
         """ Infer default figure params from shapes of provided data. """
         config = {'tight_layout': True, 'facecolor': 'snow'}
 
-        if mode in ('imshow', 'hist', 'wiggle'):
+        if mode in ('imshow', 'hist'):
             default_ncols = 4
         elif mode in ('curve', 'loss'):
             default_ncols = 1
@@ -440,7 +438,7 @@ class plot:
 
         config['ncols'], config['nrows'] = ncols, nrows
 
-        if mode in ('imshow', 'hist', 'wiggle'):
+        if mode in ('imshow', 'hist'):
             fig_width = 8 * ncols * scale
         elif mode in ('curve', 'loss'):
             fig_width = 16 * ncols * scale
@@ -455,6 +453,8 @@ class plot:
 
                 widths = []
                 heights = []
+
+                shapes = [subplot_data[0].shape if subplot_data is not None else None for subplot_data in data]
                 for idx, shape in enumerate(shapes):
                     if shape is None:
                         continue
@@ -481,9 +481,6 @@ class plot:
             elif mode == 'hist':
                 ratio = 2 / 3 / ncols * nrows
 
-            elif mode == 'wiggle':
-                ratio = 1 / ncols * nrows
-
             elif mode in ('curve', 'loss'):
                 ratio = 1 / 3 / ncols * nrows
 
@@ -497,36 +494,31 @@ class plot:
 
         return config
 
-    def make_figure(self, mode, n_subplots, shapes, axes=None, axis=None, ax=None, figure=None, fig=None, **kwargs):
+    def make_figure(self, mode, n_subplots, data, axes=None, figure=None, **kwargs):
         """ Create figure and axes if needed. """
-        axes = axes or axis or ax
-        fig = figure or fig
-        if axes is None and fig is not None:
-            axes = fig.axes
-
-        # enable figsize adjustment by default for `imshow` mode
-        adjust_figsize = mode == 'imshow'
+        if axes is None and figure is not None:
+            axes = figure.axes
 
         if axes is None:
-            default_config = self.make_default_config(mode=mode, n_subplots=n_subplots, shapes=shapes, **kwargs)
+            default_config = self.make_default_config(mode=mode, n_subplots=n_subplots, data=data, **kwargs)
             subplots_keys = ['figsize', 'facecolor', 'dpi', 'ncols', 'nrows', 'tight_layout', 'gridspec_kw']
             config = self.filter_config(kwargs, subplots_keys, prefix='figure_')
-            if 'figsize' in config:
-                adjust_figsize = False # disable figsize adjustment if explicit figsize provided
             config = {**default_config, **config}
 
             with plt.ioff():
-                fig, axes = plt.subplots(**config)
+                figure, axes = plt.subplots(**config)
             axes = to_list(axes)
         else:
             axes = to_list(axes)
-            fig = axes[0].figure
-            config = {}
+            figure = axes[0].figure
+            ncols, nrows = axes[0].get_subplotspec().get_gridspec().get_geometry()
+            figsize = figure.get_size_inches()
+            config = {'ncols': ncols, 'nrows': nrows, 'figsize': figsize}
 
             if len(axes) < n_subplots:
                 raise ValueError(f"Not enough axes provided — got ({len(axes)}) for {n_subplots} subplots.")
 
-        return fig, axes, config, adjust_figsize
+        return figure, axes, config
 
     def get_bbox(self, obj):
         """ Get object bounding box in inches. """
@@ -604,7 +596,8 @@ class plot:
         new_figsize = (fig_width + extra_width, fig_height + extra_height)
         self.fig.set_size_inches(new_figsize)
 
-    def plot(self, data=None, combine='overlay', mode='imshow', save=False, show=False, adjust_figsize=False, **kwargs):
+    def plot(self, data=None, combine='overlay', mode='imshow', save=False, show=False,
+             adjust_figsize='imshow', axes=None, axis=None, ax=None, **kwargs):
         """ Plot data on axes.
 
         Parses axes from kwargs if provided, else creates them.
@@ -614,28 +607,20 @@ class plot:
         """
         data, combine, n_subplots, empty_subplots = self.parse_data(data=data, combine=combine, mode=mode)
 
+        axes = axes or axis or ax
         if self.fig is None:
-            if mode == 'imshow':
-                shapes = [subplot_data[0].shape if subplot_data is not None else None for subplot_data in data]
-            else:
-                shapes = None
-            self.fig, self.axes, self.fig_config, adjust_figsize = self.make_figure(mode=mode, n_subplots=n_subplots,
-                                                                                    shapes=shapes, **kwargs)
-            self.axes_configs = [None] * len(self.axes)
-            self.axes_objects = [None] * len(self.axes)
+            fig, axes, fig_config = self.make_figure(mode=mode, n_subplots=n_subplots, data=data, axes=axes, **kwargs)
+            self.fig, self.axes, self.fig_config = fig, axes, fig_config
+            self.axes_configs = [None] * len(axes)
+            self.axes_objects = [None] * len(axes)
+            axes_indices = range(len(axes))
+        else:
+            axes_indices = to_list(axes)
+            if any(not isinstance(idx, int) for idx in axes_indices):
+                msg = f"Figure already created — only ax indices to use can be specified, got {axes_indices} instead."
+                raise ValueError(msg)
 
         self.config = {**self.ANNOTATION_DEFAULTS, **kwargs}
-
-        ax = kwargs.get('axes') or kwargs.get('axis') or kwargs.get('ax')
-        if ax is None:
-            axes_indices = range(len(self.axes))
-        elif isinstance(ax, int):
-            axes_indices = [ax]
-        elif isinstance(ax, list) and all(isinstance(item, int) for item in ax):
-            axes_indices = ax
-        else:
-            msg = f"When figure already created one can only specify ax indices to use, got {type(ax)} instead."
-            raise ValueError(msg)
 
         mode_defaults = getattr(self, f"{mode.upper()}_DEFAULTS")
 
@@ -666,7 +651,7 @@ class plot:
 
         self.fig_objects = self.fig_annotate()
 
-        if adjust_figsize:
+        if adjust_figsize == mode or adjust_figsize is True:
             self.adjust_figsize()
 
         if show:
@@ -1225,9 +1210,9 @@ class plot:
         ----------
         ax : int or instance of `matploblib.axes.Axes`
             Axes to put labels into. If and int, used for indexing `self.axes`.
-        mode : 'imshow', 'hist', 'curve', 'loss', 'wiggle'
+        mode : 'imshow', 'hist', 'curve', 'loss'
             Mode to match legend hadles patches to.
-            If from ('imshow', 'hist', 'wiggle'), use rectangular legend patches.
+            If from ('imshow', 'hist'), use rectangular legend patches.
             If from ('curve', 'loss'), use line legend patches.
         handles : None or sequence of `matplotlib.artist.Artist`
             A list of Artists (lines, patches) to be added to the legend.
@@ -1264,7 +1249,7 @@ class plot:
             for color, alpha, label in zip(colors, alphas, labels):
                 if label is None:
                     continue
-                if mode in ('imshow', 'hist', 'wiggle'):
+                if mode in ('imshow', 'hist'):
                     if is_color_like(color):
                         handle = Patch(color=color, alpha=alpha, label=label)
                     else:
