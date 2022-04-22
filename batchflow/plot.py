@@ -177,7 +177,6 @@ class plot:
         - Put provided arrays into double nested list.
           Nestedness levels define subplot and layer data order correspondingly.
         - Infer images combination mode.
-        - Calculate indices corrections for empty subplots.
     2. Parse figure axes if provided, else create them with either parsed parameters or inferred ones.
     3. Obtain default config for chosen mode and merge them with provided config.
     4. For every axis-data pair:
@@ -366,7 +365,6 @@ class plot:
         """
         contains_numbers = lambda x: isinstance(x[0], Number)
 
-        empty_subplots = []
         n_subplots = 0
 
         if data is None:
@@ -387,14 +385,12 @@ class plot:
 
             data_list = []
             for item in data:
-                empty = 0
 
                 if item is None:
                     if combine == 'overlay':
                         msg = "`None` is a placeholder future subplots. It makes not sense when `combine='overlay'`."
                         raise ValueError(msg)
                     data_item = None
-                    empty = 1
                 elif isinstance(item, tuple):
                     data_item = [cls.process_tuple(data=item, mode=mode)]
                 elif isinstance(item, np.ndarray):
@@ -418,13 +414,11 @@ class plot:
                     msg = f"Valid combine modes are 'overlay', 'separate', 'mixed', got {combine} instead."
                     raise ValueError(msg)
 
-                empty_subplots.append(empty)
-
             if combine == 'overlay':
                 data_list = [data_list]
                 n_subplots = 1
 
-        return data_list, combine, n_subplots, empty_subplots
+        return data_list, combine, n_subplots
 
     def make_default_config(self, mode, n_subplots, data, ncols=None, ratio=None, scale=1, max_fig_width=25,
                             nrows=None, xlim=(None, None), ylim=(None, None), **kwargs):
@@ -611,7 +605,7 @@ class plot:
 
         TODO: Explain `abs_idx` and `rel_idx`.
         """
-        data, combine, n_subplots, empty_subplots = self.parse_data(data=data, combine=combine, mode=mode)
+        data, combine, n_subplots = self.parse_data(data=data, combine=combine, mode=mode)
 
         axes = axes or axis or ax
         if self.fig is None:
@@ -630,8 +624,6 @@ class plot:
 
         mode_defaults = getattr(self, f"{mode.upper()}_DEFAULTS")
 
-        idx_fixes = np.cumsum([0] + empty_subplots)
-
         for rel_idx, abs_idx in enumerate(axes_indices):
             subplot_ax = self.axes[abs_idx]
 
@@ -642,15 +634,12 @@ class plot:
                 plot_method = getattr(self, f"ax_{mode}")
 
                 ax_data = data[rel_idx]
-                subplot_idx = None if combine == 'overlay' else rel_idx - idx_fixes[rel_idx]
+                subplot_idx = None if combine == 'overlay' else rel_idx
                 ax_config = self.filter_config(self.config, index=subplot_idx)
                 ax_config = {**mode_defaults, **ax_config}
 
-                idx_fix = rel_idx - idx_fixes[rel_idx] if combine == 'separate' else None
-
-                ax_objects, ax_config = plot_method(data=ax_data, ax=subplot_ax, config=ax_config, idx_fix=idx_fix)
-                ax_objects, ax_config = self.ax_annotate(ax=subplot_ax, ax_config=ax_config, ax_objects=ax_objects,
-                                                         index=idx_fix, mode=mode)
+                ax_objects = plot_method(data=ax_data, ax=subplot_ax, config=ax_config)
+                ax_objects = self.ax_annotate(ax=subplot_ax, ax_config=ax_config, ax_objects=ax_objects, mode=mode)
 
                 self.axes_objects[abs_idx] = ax_objects
                 self.axes_configs[abs_idx] = ax_config
@@ -698,7 +687,7 @@ class plot:
         'major_grid_color': '#CCCCCC',
     }
 
-    def ax_annotate(self, ax, ax_config, ax_objects, index, mode):
+    def ax_annotate(self, ax, ax_config, ax_objects, mode):
         """ Apply requested annotation functions to given axis with chosen parameters. """
         # pylint: disable=too-many-branches
         text_keys = ['size', 'family', 'color']
@@ -719,22 +708,22 @@ class plot:
 
         # xlabel
         keys = ['xlabel']
-        xlabel_config = self.filter_config(ax_config, keys, prefix='xlabel_', index=index)
+        xlabel_config = self.filter_config(ax_config, keys, prefix='xlabel_')
         xlabel_config = {**text_config, **xlabel_config}
         if xlabel_config and 'xlabel' in xlabel_config:
             ax_objects['xlabel'] = ax.set_xlabel(**xlabel_config)
 
         # ylabel
         keys = ['ylabel']
-        ylabel_config = self.filter_config(ax_config, keys, prefix='ylabel_', index=index)
+        ylabel_config = self.filter_config(ax_config, keys, prefix='ylabel_')
         ylabel_config = {**text_config, **ylabel_config}
         if ylabel_config and 'ylabel' in ylabel_config:
             ax_objects['ylabel'] = ax.set_ylabel(**ylabel_config)
 
         # xticks
-        xticks_config = self.filter_config(ax_config, [], prefix='xticks_', index=index)
-        ticks = self.filter_config(ax_config, 'ticks', index=index)
-        xticks = self.filter_config(ax_config, 'xticks', index=index)
+        xticks_config = self.filter_config(ax_config, [], prefix='xticks_')
+        ticks = self.filter_config(ax_config, 'ticks')
+        xticks = self.filter_config(ax_config, 'xticks')
         xticks = ticks if ticks is not None else xticks
         if xticks is not None:
             xticks_config['ticks'] = xticks
@@ -742,9 +731,9 @@ class plot:
             ax.set_xticks(**xticks_config)
 
         # yticks
-        yticks_config = self.filter_config(ax_config, [], prefix='yticks_', index=index)
-        ticks = self.filter_config(ax_config, 'ticks', index=index)
-        yticks = self.filter_config(ax_config, 'yticks', index=index)
+        yticks_config = self.filter_config(ax_config, [], prefix='yticks_')
+        ticks = self.filter_config(ax_config, 'ticks')
+        yticks = self.filter_config(ax_config, 'yticks')
         yticks = ticks if ticks is not None else yticks
         if yticks is not None:
             yticks_config['ticks'] = yticks
@@ -753,19 +742,19 @@ class plot:
 
         # ticks
         keys = ['labeltop', 'labelright', 'labelcolor', 'direction']
-        tick_config = self.filter_config(ax_config, keys, prefix='tick_', index=index)
+        tick_config = self.filter_config(ax_config, keys, prefix='tick_')
         if tick_config:
             ax.tick_params(**tick_config)
 
         # xlim
-        xlim_config = self.filter_config(ax_config, ['xlim'], prefix='xlim_', index=index)
+        xlim_config = self.filter_config(ax_config, ['xlim'], prefix='xlim_')
         if 'xlim' in xlim_config:
             xlim_config['left'] = xlim_config.get('left', xlim_config.pop('xlim'))
         if xlim_config:
             ax.set_xlim(**xlim_config)
 
         # ylim
-        ylim_config = self.filter_config(ax_config, ['ylim'], prefix='ylim_', index=index)
+        ylim_config = self.filter_config(ax_config, ['ylim'], prefix='ylim_')
         if 'ylim' in ylim_config:
             ylim_config['bottom'] = ylim_config.get('bottom', ylim_config.pop('ylim'))
         if ylim_config:
@@ -774,13 +763,13 @@ class plot:
         # colorbar
         if any(to_list(self.config['colorbar'])):
             keys = ['colorbar', 'width', 'pad', 'fake', 'ax_objects']
-            colorbar_config = self.filter_config(ax_config, keys, prefix='colorbar_', index=index)
+            colorbar_config = self.filter_config(ax_config, keys, prefix='colorbar_')
             colorbar_config['ax_image'] = ax_objects['images'][0]
             # if colorbar is disabled for subplot, add param to plot fake axis instead to keep proportions
             colorbar_config['fake'] = not colorbar_config.pop('colorbar', True)
             if 'pad' not in colorbar_config:
                 pad = 0.4
-                labelright = self.filter_config(ax_config, 'labelright', prefix='tick_', index=index)
+                labelright = self.filter_config(ax_config, 'labelright', prefix='tick_')
                 if labelright:
                     ax_x1 = self.get_bbox(ax).x1
                     yticklabels = ax.get_yticklabels()
@@ -791,28 +780,30 @@ class plot:
             ax_objects['colorbar'] = self.add_colorbar(**colorbar_config)
 
         # legend
+        if mode == 'loss':
+            ax_config['handles'] = ax_objects['lines']
         keys = ['labels', 'handles', 'size', 'loc', 'ha', 'va', 'handletextpad']
         legend_config = self.filter_config(ax_config, keys, prefix='legend_')
         if legend_config.get('labels') or legend_config.get('handles'):
             if 'cmap' in ax_config:
-                colors = self.filter_config(ax_config, 'cmap', index=index)
+                colors = self.filter_config(ax_config, 'cmap')
             if 'color' in ax_config:
-                colors = self.filter_config(ax_config, 'color', index=index)
-            if 'color' in legend_config:
+                colors = self.filter_config(ax_config, 'color')
+            if 'colors' in legend_config:
                 colors = legend_config.pop('colors')
             legend_config['colors'] = colors
             legend_config['alphas'] = ax_config.get('alpha')
             ax_objects['legend'] = self.add_legend(ax, mode=mode, **legend_config)
 
         # grid
-        grid = self.filter_config(ax_config, 'grid', index=index)
+        grid = self.filter_config(ax_config, 'grid')
         grid_keys = ['color', 'linestyle', 'freq']
 
-        minor_config = self.filter_config(ax_config, grid_keys, prefix='minor_grid_', index=index)
+        minor_config = self.filter_config(ax_config, grid_keys, prefix='minor_grid_')
         if grid in ('minor', 'both') and minor_config:
             self.add_grid(ax, grid_type='minor', **minor_config)
 
-        major_config = self.filter_config(ax_config, grid_keys, prefix='major_grid_', index=index)
+        major_config = self.filter_config(ax_config, grid_keys, prefix='major_grid_')
         if grid in ('major', 'both') and minor_config:
             self.add_grid(ax, grid_type='major', **major_config)
 
@@ -834,7 +825,7 @@ class plot:
         elif not ax.axison:
             ax.set_axis_on()
 
-        return ax_objects, ax_config
+        return ax_objects
 
     def fig_annotate(self):
         """ Put suptitle with given parameters over figure and apply `tight_layout`. """
@@ -908,14 +899,11 @@ class plot:
     }
 
     @classmethod
-    def ax_imshow(cls, data, ax, config, idx_fix=None):
+    def ax_imshow(cls, data, ax, config):
         """ Display given list of arrays as images on axis. """
         images = []
 
         for layer_idx, array in enumerate(data):
-            if idx_fix is not None:
-                layer_idx += idx_fix
-
             imshow_keys = ['vmin', 'vmax', 'interpolation', 'alpha', 'extent', 'order_axes', 'mask_values']
             imshow_config = cls.filter_config(config, imshow_keys, prefix='imshow_', index=layer_idx)
 
@@ -945,7 +933,7 @@ class plot:
             image = preprocess_and_imshow(ax=ax, array=array, **imshow_config)
             images.append(image)
 
-        return {'images': images}, config
+        return {'images': images}
 
 
     HIST_DEFAULTS = {
@@ -964,14 +952,11 @@ class plot:
     }
 
     @classmethod
-    def ax_hist(cls, data, ax, config, idx_fix=None):
+    def ax_hist(cls, data, ax, config):
         """ Display given list of arrays as histograms on axis. """
         bars = []
 
         for layer_idx, array in enumerate(data):
-            if idx_fix is not None:
-                layer_idx += idx_fix
-
             hist_keys = ['bins', 'color', 'alpha', 'label']
             hist_config = cls.filter_config(config, hist_keys, prefix='hist_', index=layer_idx)
 
@@ -988,7 +973,7 @@ class plot:
             _, _, bar = ax.hist(new_array, **hist_config)
             bars.append(bar)
 
-        return {'bars': bars}, config
+        return {'bars': bars}
 
 
     CURVE_COLORS = ['cornflowerblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
@@ -1008,7 +993,7 @@ class plot:
     }
 
     @classmethod
-    def ax_curve(cls, data, ax, config, idx_fix=None):
+    def ax_curve(cls, data, ax, config):
         """ Display given list of arrays as curves on axis. """
         lines = []
 
@@ -1028,9 +1013,6 @@ class plot:
             else:
                 raise ValueError('Valid data object is either np.array or tuple of np.arrays')
 
-            if idx_fix is not None:
-                layer_idx += idx_fix
-
             curve_keys = ['color', 'linestyle', 'alpha']
             curve_config = cls.filter_config(config, curve_keys, prefix='curve_', index=layer_idx)
             line = ax.plot(x, y, **curve_config)
@@ -1040,7 +1022,7 @@ class plot:
             if config.get('log'):
                 ax.set_yscale('log')
 
-        return {'lines': lines}, config
+        return {'lines': lines}
 
 
     LOSS_DEFAULTS = {
@@ -1065,7 +1047,7 @@ class plot:
     }
 
     @classmethod
-    def ax_loss(cls, data, ax, config, idx_fix=None):
+    def ax_loss(cls, data, ax, config):
         """ Display given list of arrays as loss curves. """
         lines = []
 
@@ -1085,9 +1067,6 @@ class plot:
                     loss, lr = arrays
             else:
                 raise ValueError('Valid data object is either np.array or tuple of np.arrays')
-
-            if idx_fix is not None:
-                layer_idx += idx_fix
 
             label = cls.filter_config(config, 'label') or f'loss #{layer_idx + 1}'
             loss_label = label + f' ⟶ {loss[-1]:2.3f}'
@@ -1125,9 +1104,7 @@ class plot:
             if lr is not None and config.get('log_lr'):
                 lr_ax.set_yscale('log')
 
-        config['handles'] = config.get('handles', lines)
-
-        return {'lines': lines}, config
+        return {'lines': lines}
 
     # Supplementary methods
 
