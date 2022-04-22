@@ -16,6 +16,7 @@ from matplotlib.lines import Line2D
 from matplotlib.legend_handler import HandlerBase
 from matplotlib.ticker import MaxNLocator, AutoMinorLocator
 from mpl_toolkits import axes_grid1
+from numba import njit
 
 from .utils import to_list
 
@@ -112,7 +113,8 @@ class preprocess_and_imshow:
         self.im.set_data(new_array)
 
     def __getattr__(self, key):
-        if self.im is None:
+        # Avoid recursive `__setstate__`, `__getstate__` on serialization
+        if self.im is None or key.endswith('state__'):
             return getattr(self, key)
         return getattr(self.im, key)
 
@@ -150,6 +152,14 @@ class ColorMappingHandler(HandlerBase):
         patch = PatchCollection(segments, match_original=True, edgecolor=None, cmap=cmap.name, label=label)
 
         return [patch]
+
+@njit
+def is_binary(array):
+    """ Fast check that array consists of 0 and 1 only. """
+    for item in array:
+        if item not in (0., 1.):
+            return False
+    return True
 
 
 class plot:
@@ -505,15 +515,12 @@ class plot:
             config = self.filter_config(kwargs, subplots_keys, prefix='figure_')
             config = {**default_config, **config}
 
-            with plt.ioff():
-                figure, axes = plt.subplots(**config)
+            figure, axes = plt.subplots(**config)
             axes = to_list(axes)
         else:
             axes = to_list(axes)
             figure = axes[0].figure
-            ncols, nrows = axes[0].get_subplotspec().get_gridspec().get_geometry()
-            figsize = figure.get_size_inches()
-            config = {'ncols': ncols, 'nrows': nrows, 'figsize': figsize}
+            config = {}
 
             if len(axes) < n_subplots:
                 raise ValueError(f"Not enough axes provided — got ({len(axes)}) for {n_subplots} subplots.")
@@ -528,9 +535,8 @@ class plot:
 
     def adjust_figsize(self):
         """ Look through axes' annotation objects and add figsize corrections for their widths and heights. """
-        ncols = self.fig_config['ncols']
-        nrows = self.fig_config['nrows']
-        fig_width, fig_height = self.fig_config['figsize']
+        ncols, nrows = self.axes[0].get_subplotspec().get_gridspec().get_geometry()
+        fig_width, fig_height = self.fig.get_size_inches()
 
         extra_width = 0
         extra_height = 0
@@ -596,7 +602,7 @@ class plot:
         new_figsize = (fig_width + extra_width, fig_height + extra_height)
         self.fig.set_size_inches(new_figsize)
 
-    def plot(self, data=None, combine='overlay', mode='imshow', save=False, show=False,
+    def plot(self, data=None, combine='overlay', mode='imshow', save=False, show=True,
              adjust_figsize='imshow', axes=None, axis=None, ax=None, **kwargs):
         """ Plot data on axes.
 
@@ -656,6 +662,8 @@ class plot:
 
         if show:
             self.show()
+        else:
+            self.close()
 
         if save or 'savepath' in kwargs:
             self.save(**kwargs)
@@ -665,11 +673,11 @@ class plot:
     def __call__(self, mode, **kwargs):
         self.plot(mode=mode, **kwargs)
 
-    def _ipython_display_(self):
-        self.show()
-
     def __repr__(self):
-        return repr(self.fig).replace('Figure', 'Batchflow Figure')
+        return ''
+
+    def __str__(self):
+        return f"<Batchflow Plotter with {len(self.axes)} axes>"
 
     ANNOTATION_DEFAULTS = {
         'facecolor': 'snow',
@@ -855,12 +863,7 @@ class plot:
         return fig_objects
 
     def show(self):
-        """ Display figure with either `IPython.display` or (if not available) with `plt.show`. """
-        try:
-            from IPython.display import display #pylint: disable=import-outside-toplevel
-            display(self.fig)
-        except ImportError:
-            plt.show()
+        self.fig = plt.figure(self.fig)
 
     def save(self, **kwargs):
         """ Save plot. """
@@ -878,6 +881,9 @@ class plot:
 
         self.fig.savefig(fname=savepath, **save_config)
 
+    def close(self):
+        """ Close figure. """
+        plt.close(self.fig)
 
     # Rendering methods
     MASK_COLORS = ['firebrick', 'mediumseagreen', 'thistle', 'darkorange', 'navy', 'gold',
@@ -906,7 +912,7 @@ class plot:
         """ Display given list of arrays as images on axis. """
         images = []
 
-        for layer_idx, image in enumerate(data):
+        for layer_idx, array in enumerate(data):
             if idx_fix is not None:
                 layer_idx += idx_fix
 
@@ -914,7 +920,7 @@ class plot:
             imshow_config = cls.filter_config(config, imshow_keys, prefix='imshow_', index=layer_idx)
 
             # Add `0` to a list of values that shouldn't be displayed if image is a binary mask
-            if tuple(np.unique(image)) in [(0, ), (0, 1)]:
+            if is_binary(array.flatten()):
                 imshow_config['mask_values'] = 0
                 imshow_config['vmin'] = 0
 
@@ -936,7 +942,7 @@ class plot:
 
             # Use a proxy for imshow calls that fixes data preprocessing parameters
             # and re-applies them to axes image before `set_data` calls
-            image = preprocess_and_imshow(ax=ax, array=image, **imshow_config)
+            image = preprocess_and_imshow(ax=ax, array=array, **imshow_config)
             images.append(image)
 
         return {'images': images}, config
@@ -1126,7 +1132,34 @@ class plot:
     # Supplementary methods
 
     @staticmethod
-    def filter_config(config, keys=None, prefix='', index=None):
+    def maybe_index(key, value, index):
+        """ Get i-th element of parameter if index is provided and parameter value is a list else return it unchanged.
+
+        Parameters
+        ----------
+        key : str
+            Parameter name.
+        value : misc
+            Parameter value.
+        index : None or int
+            If not None, a number to use for parameter indexing.
+
+        Raises
+        ------
+        ValueError
+            If parameter is a list but the index is greater than its length.
+        """
+        if index is not None and isinstance(value, list):
+            try:
+                return value[index]
+            except IndexError as e:
+                msg = f"Tried to obtain element #{index} from `{key}={value}`. Either provide parameter value "\
+                      f"not in list (to use the same `{key}` several times) or add more elements to it."
+                raise ValueError(msg) from e
+        return value
+
+    @classmethod
+    def filter_config(cls, config, keys=None, prefix='', index=None):
         """ Make a subdictionary of parameters with required keys.
 
         Parameter are retrieved if:
@@ -1148,12 +1181,9 @@ class plot:
             If none provided, get whole argument value.
             If value is non-indexable, get it without indexing.
         """
-        # get value by index if it is requested and value is a list
-        maybe_index = lambda value, index: value[index] if index is not None and isinstance(value, list) else value
-
         if isinstance(keys, str):
             value = config.get(keys, None)
-            return maybe_index(value, index)
+            return cls.maybe_index(keys, value, index)
 
         if keys is None:
             keys = list(config.keys())
@@ -1169,7 +1199,7 @@ class plot:
                 value = config[key]
             else:
                 continue
-            result[key] = maybe_index(value, index)
+            result[key] = cls.maybe_index(key, value, index)
 
         return result
 
@@ -1280,6 +1310,14 @@ class plot:
             Text to display.
         size : int
             Text size.
+        x, y : float
+            The position to place the text in data coordinates.
+        ha : 'center', 'right', 'left'
+            Text horizontal alignment.
+        va : 'top', 'bottom', 'center', 'baseline', 'center_baseline'
+            Text vertical alignment.
+        bbox : 'default' or dict with properties for `matplotlib.patches.FancyBboxPatch`
+            Properties of box containing the text.
         kwargs : misc
             For `matplotlib.legend`.
         """
@@ -1308,7 +1346,6 @@ class plot:
             set_locator(locator(y_n))
 
         ax.grid(which=grid_type, zorder=zorder, **kwargs)
-
 
 
 def plot_image(data, **kwargs):
