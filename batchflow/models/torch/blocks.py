@@ -405,21 +405,24 @@ class ResNeStBlock(ConvBlock):
 
 class ConvNeXtBlock(nn.Module):
     """ ConvNeXt block: simple conv-only adaptation of Transformer's improvements over the years.
+    Zhuang Liu et al. "`A ConvNet for the 2020s <https://arxiv.org/abs/2201.03545>`_"
+
     General idea is to use:
-        - larger kernels
+        - larger kernels (7x7 as default, can be as large as 11x11)
         - depthwise -> pointwise convolutions in inverted order
-        - GELU instead of RELU, fewer activations over the network
-        - LayerNorm instead of BatchNorm, fewer normalizations over the network
+        - GELU instead of ReLU, fewer activations over the block/network
+        - LayerNorm instead of BatchNorm, fewer normalizations over the block/network
         - bias in the convolutions
         - StochasticDepth and layer scale
 
-    Outside of this block, it is proposed to use `layer_norm -> 2x2 convolution` for downsampling, instead of pooling.
+    Also, unlike the usual `*NetBlocks`, this block does not change the number of filters in the processed tensor.
+    In the paper authors propose to change the dimensionality of tensor in the `layer_norm -> 2x2 convolution` step,
+    controlling both spatial and channel dimension at the same time instead of regular pooling.
+
     Also, a number of improvements to training procedure should be used in tandem:
         - RandAugment, Mixup, Cutmix
         - Label Smoothing
         - AdamW, EMA
-
-    Zhuang Liu et al. "`A ConvNet for the 2020s <https://arxiv.org/abs/2201.03545>`_"
     """
     def __init__(self, inputs=None, kernel_size=7, strides=1, drop_path=0.0, layer_scale=1e-6):
         super().__init__()
