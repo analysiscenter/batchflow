@@ -28,23 +28,21 @@ class BaseConv(nn.Module):
             'bias': bias,
         }
 
-        if custom_padding:
-            padding = calc_padding(inputs, padding=padding, transposed=self.TRANSPOSED, **args)
+        calculated_padding = calc_padding(inputs, padding=padding, transposed=self.TRANSPOSED, **args)
+        nested_padding = isinstance(calculated_padding, tuple) and isinstance(calculated_padding[0], tuple)
 
-            if isinstance(padding, tuple) and isinstance(padding[0], tuple):
-                args['padding'] = 0
-                self.padding = sum(padding, ())
-            else:
-                args['padding'] = padding
-                self.padding = 0
+        self.padding = None
+        if calculated_padding == 0:
+            args['padding'] = 0
+        elif custom_padding and nested_padding:
+            args['padding'] = 0
+            self.padding = sum(calculated_padding, ())
+        elif padding == 'same' and nested_padding:
+            args['padding'] = tuple(max(0, item[0]) for item in calculated_padding)
         else:
-            if padding == 'same':
-                args['padding'] = kernel_size // 2
-            else:
-                args['padding'] = padding
-            self.padding = None
+            args['padding'] = padding
 
-        self.layer = self.LAYERS[get_num_dims(inputs)](**args, )
+        self.layer = self.LAYERS[get_num_dims(inputs)](**args)
 
     def forward(self, x):
         if self.padding is not None:
