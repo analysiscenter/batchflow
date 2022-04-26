@@ -98,18 +98,20 @@ class preprocess_and_imshow:
         mask = reduce(np.logical_or, masks, np.isnan(array))
         new_array = np.ma.array(array, mask=mask)
 
-        order_axes = self.order_axes[:array.ndim]
-        new_array = np.transpose(new_array, order_axes)
+        if self.order_axes is not None:
+            order_axes = self.order_axes[:array.ndim]
+            new_array = np.transpose(new_array, order_axes)
+
         return new_array
 
     def set_data(self, array):
         """ Apply data transformations with saved parameters and call `set_data` on `AxesImage` instance. """
-        vmin_new = np.nanmin(array) if self.vmin is None else self.vmin
-        vmax_new = np.nanmax(array) if self.vmax is None else self.vmax
-        clim = [vmin_new, vmax_new]
-        self.im.set_clim(clim)
-
         new_array = self._preprocess(array)
+
+        vmin_new = np.nanmin(new_array) if self.vmin is None else self.vmin
+        vmax_new = np.nanmax(new_array) if self.vmax is None else self.vmax
+        self.im.set_clim([vmin_new, vmax_new])
+
         self.im.set_data(new_array)
 
     def __getattr__(self, key):
@@ -165,8 +167,6 @@ def is_binary(array):
 class plot:
     """ Multiple images plotter.
 
-    Overall idea
-    ------------
     General idea is to display graphs for provided data while passing other keyword arguments to corresponding
     `matplotlib` functions (e.g. `figsize` goes to figure initialization, `title` goes to `plt.set_title`, etc.).
 
