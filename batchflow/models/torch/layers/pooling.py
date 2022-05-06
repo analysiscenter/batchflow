@@ -1,10 +1,11 @@
 """ Pooling layers. """
 #pylint: disable=not-callable, invalid-name
 import torch
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 
-from ..utils import get_shape, get_num_dims, calc_padding
+from .utils import calc_padding
+from ..utils import get_shape, get_num_dims
 
 
 MAX_ALIASES = ['max', 'p', 'P']
@@ -49,11 +50,11 @@ class BasePoolWithPadding(BasePool):
     AND makes proper padding
     """
 
-    def __init__(self, inputs=None, pool_size=2, pool_strides=2, padding='same'):
+    def __init__(self, inputs=None, pool_size=2, pool_stride=2, padding='same'):
         self.padding = None
 
         if padding is not None:
-            padding = calc_padding(inputs=inputs, padding=padding, kernel_size=pool_size, stride=pool_strides)
+            padding = calc_padding(inputs=inputs, padding=padding, kernel_size=pool_size, stride=pool_stride)
 
             if isinstance(padding, tuple) and isinstance(padding[0], tuple):
                 self.padding = sum(padding, ())
@@ -62,7 +63,7 @@ class BasePoolWithPadding(BasePool):
             else:
                 raise ValueError('Incorrect padding!')
 
-        super().__init__(inputs, kernel_size=pool_size, stride=pool_strides)
+        super().__init__(inputs, kernel_size=pool_size, stride=pool_stride)
 
     def forward(self, x):
         if self.padding:
@@ -93,10 +94,10 @@ class Pool(nn.Module):
     OP_SELECTOR = {**{op:  MaxPool for op in MAX_ALIASES},
                    **{op:  AvgPool for op in AVG_ALIASES}}
 
-    def __init__(self, inputs=None, op='max', pool_size=2, pool_strides=2, padding='same'):
+    def __init__(self, inputs=None, op='max', pool_size=2, pool_stride=2, padding='same'):
         super().__init__()
         self.pool = self.OP_SELECTOR[op](inputs=inputs,
-                                         pool_size=pool_size, pool_strides=pool_strides, padding=padding)
+                                         pool_size=pool_size, pool_stride=pool_stride, padding=padding)
 
     def forward(self, x):
         x = self.pool(x)

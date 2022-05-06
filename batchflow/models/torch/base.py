@@ -19,10 +19,10 @@ try:
 except ImportError:
     CUPY_AVAILABLE = False
 
-from .initialization import best_practice_resnet_init
+from .network import Network
 from .mixins import OptimalBatchSizeMixin, LayerHook, ExtractionMixin, VisualizationMixin
+from .initialization import best_practice_resnet_init
 from .utils import unpack_fn_from_config, get_shape
-from .layers import ConvBlock
 from .losses import CrossEntropyLoss, BinaryLovaszLoss, LovaszLoss, SSIM, MSSIM
 from .losses import binary as binary_losses, multiclass as multiclass_losses
 from ..base import BaseModel
@@ -166,7 +166,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         Examples:
 
-        - ``{'initial_block': dict(layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
+        - ``{'initial_block': dict(layout='nac nac', channels=64, kernel_size=[7, 3], stride=[1, 2])}``
         - ``{'initial_block': MyCustomModule(some_param=1, another_param=2)}``
 
     body : dict or nn.Module
@@ -342,14 +342,14 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     segmentation_config = {
         # Model layout
         'initial_block': {'layout': 'cna cna cnap',                    # string layout: c=conv, n=BN, a=act, p=pool
-                          filters: [INT, INT, INT],                    # individual filters for each convolution
+                          'channels': [INT, INT, INT],                  # individual channels for each convolution
                           'kernel_size': 3},                           # common kernel_size for all convolutions
 
         'body': {'base_block': ResBlock,                               # in ConvBlock, we can use any nn.Module as base
-                 'filters': INT, 'kernel_size': INT,
+                 'channels': INT, 'kernel_size': INT,
                  'downsample': False, 'attention': 'scse'},            # additional parameters of ResBlock module
 
-        'head': {'layout' : 'cna', 'filters': 1},                      # postprocessing
+        'head': {'layout' : 'cna', 'channels': 1},                      # postprocessing
         'output': 'sigmoid',                                           # can get `sigmoid` output in the `predict`
 
         # Train configuration
@@ -463,7 +463,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     def default_config(cls):
         """ Define model defaults.
 
-        Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc)
+        Put here all constants (like the number of channels, kernel sizes, block layouts, stride, etc)
         specific to the model, but independent of anything else (like image shapes, number of classes, etc).
 
         Don't forget to use the default config from parent class.
@@ -515,10 +515,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         # we need to use `or` insetad of `get`
         config['head/classes'] = config.get('head/classes') or self.classes
 
-        if config.get('head/units') is None:
-            config['head/units'] = config.get('head/classes')
-        if config.get('head/filters') is None:
-            config['head/filters'] = config.get('head/classes')
+        if config.get('head/features') is None:
+            config['head/features'] = config.get('head/classes')
+        if config.get('head/channels') is None:
+            config['head/channels'] = config.get('head/classes')
 
 
     # Parse config keys into instance attributes
@@ -746,144 +746,28 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         self.make_infrastructure()
 
-
     def build_model(self, inputs=None):
         """ Create the instance of PyTorch model by chaining multiple blocks sequentially.
         After it, create training infrastructure (loss, optimizer, decay).
 
-        The order is defined by `order` key in the config, which is [`initial_block`, `body`, `head`] by default.
-        Each item in `order` should describe the block name, the config name and method to create. It can be a:
-            - string, then we use it as name, config key and method name
-            - tuple of three elements, which are name, config key and method name or callable
-            - dictionary with three items, which are `block_name`, `config_name` and `method`.
-
-            The `block_name` is used as the identifier in resulting model, i.e. `model.body`, `model.head`.
-            The `config_name` is used to retrieve block creation parameters from config.
-            The `method` is either a callable or name of the method to get from the current instance.
-            Either method or callable should return an instance of nn.Module and accept block parameters.
+        !!.
         """
         inputs = inputs or self.make_placeholder_data()
         inputs = inputs[0] if len(inputs) == 1 else inputs
         inputs = self.transfer_to_device(inputs)
 
-        blocks = OrderedDict()
-        for item in self.config.get('order'):
-            # Get the `block_name`, which is used as the name in the Sequential,
-            #         `config_name`, which is used to retrieve parameters from config,
-            #     and `method`, which is either a callable or name of the method to get from the current instance
-            if isinstance(item, str):
-                block_name = config_name = method = item
-            elif isinstance(item, tuple) and len(item) == 3:
-                block_name, config_name, method = item
-            elif isinstance(item, dict):
-                block_name = item['block_name']
-                config_name = item.get('config_name', block_name)
-                method = item.get('method', config_name)
-
-            # Make block, from the `inputs`, transfer it to device
-            # Important: apply to the `inputs` before passing them to the next block, so the shapes/etc are updated
-            block = self.make_block(config_name, method, inputs)
-
-            if block is not None:
-                block.to(self.device)
-                inputs = block(inputs)
-                blocks[block_name] = block
-
-        # Use the OrderedDict in Sequential to give readable names to stages
-        self.model = nn.Sequential(blocks)
+        self.model = Network(inputs=inputs, config=self.config, device=self.device)
         self.initialize_weights()
         self.model_to_device()
 
         self.make_infrastructure()
-
-    def make_block(self, name, method, inputs):
-        """ Create the block with `method` by retrieving its parameters from config by `name`. """
-        config = self.config
-        block = config[name]
-
-        if isinstance(block, nn.Module):
-            # Already initialized module
-            pass
-
-        elif isinstance(block, dict):
-            block_params = {**config['common'], **block}
-
-            if 'module' in block_params:
-                # A custom module
-                module = block_params['module']
-
-                if isinstance(module, nn.Module):
-                    # Already initialized module
-                    block = module
-                else:
-                    # Initialize module with parameters from config. Add `inputs`, if needed
-                    kwargs = {**block, **block_params.get('module_kwargs', {})}
-                    if 'inputs' in inspect.getfullargspec(module.__init__)[0]:
-                        kwargs['inputs'] = inputs
-                    block = module(**kwargs)
-            else:
-                # A string to get the module from the instance or callable that returns nn.Module
-                method = getattr(self, method) if isinstance(method, str) else method
-                block = method(inputs=inputs, **block_params)
-        else:
-            raise ValueError(f'`{name}` must be configured either as nn.Module or dictionary, got {block_params}')
-        return block
-
-
-    # Pre-defined building blocks
-    @classmethod
-    def get_block_defaults(cls, name, kwargs):
-        """ Make block parameters from class default config and kwargs. """
-        class_config = cls.default_config()
-        return class_config['common'] + Config(class_config.get(name)) + (kwargs or {})
-
-    @classmethod
-    def block(cls, inputs, name, **kwargs):
-        """ Model building block. """
-        kwargs = cls.get_block_defaults(name, kwargs)
-        if kwargs.get('layout') or kwargs.get('base_block'):
-            return ConvBlock(inputs=inputs, **kwargs)
-        return None
-
-    @classmethod
-    def initial_block(cls, inputs, **kwargs):
-        """ Transform inputs. Usually used for initial preprocessing, e.g. reshaping, downsampling etc.
-        For parameters see :class:`~.torch.layers.ConvBlock`.
-
-        Returns
-        -------
-        torch.nn.Module or None
-        """
-        return cls.block(inputs, name='initial_block', **kwargs)
-
-    @classmethod
-    def body(cls, inputs, **kwargs):
-        """ Base layers which produce a network embedding.
-        For parameters see :class:`~.torch.layers.ConvBlock`.
-
-        Returns
-        -------
-        torch.nn.Module or None
-        """
-        return cls.block(inputs, name='body', **kwargs)
-
-    @classmethod
-    def head(cls, inputs, **kwargs):
-        """ Produce predictions. Usually used to make network output compatible with the `targets` tensor.
-        For parameters see :class:`~.torch.layers.ConvBlock`.
-
-        Returns
-        -------
-        torch.nn.Module or None
-        """
-        return cls.block(inputs, name='head', **kwargs)
 
 
     # Model weights initialization
     def initialize_weights(self):
         """ Initialize model weights with a pre-defined or supplied callable. """
         if self.model and (self.init_weights is not None):
-            # Parse model weights initilaization
+            # Parse model weights initialization
             if isinstance(self.init_weights, str):
                 # We have only one variant of predefined init function, so we check that init is str for a typo case
                 # The common used non-default weights initialization:
@@ -1503,7 +1387,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         return requested_outputs
 
 
-    # Preserve model for later usage
+    # Store model
     def save(self, path, *args, **kwargs):
         """ Save torch model.
 
