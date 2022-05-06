@@ -1,9 +1,11 @@
 """ Convolutional layers. """
 #pylint: disable=not-callable
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 
-from ..utils import get_num_channels, get_num_dims, safe_eval, calc_padding
+from .utils import calc_padding
+from ..utils import get_num_channels, get_num_dims, safe_eval
+
 
 
 class BaseConv(nn.Module):
@@ -11,20 +13,20 @@ class BaseConv(nn.Module):
     LAYERS = {}
     TRANSPOSED = False
 
-    def __init__(self, filters, kernel_size=3, strides=1, padding='same', custom_padding=False,
-                 dilation_rate=1, groups=1, bias=False, inputs=None):
+    def __init__(self, inputs=None, channels=None, kernel_size=3, stride=1, dilation=1, groups=1,
+                 padding='same', custom_padding=False, bias=False):
         super().__init__()
 
-        if isinstance(filters, str):
-            filters = safe_eval(filters, get_num_channels(inputs))
+        if isinstance(channels, str):
+            channels = safe_eval(channels, get_num_channels(inputs))
 
         args = {
             'in_channels': get_num_channels(inputs),
-            'out_channels': filters,
+            'out_channels': channels,
             'groups': groups,
             'kernel_size': kernel_size,
-            'dilation': dilation_rate,
-            'stride': strides,
+            'dilation': dilation,
+            'stride': stride,
             'bias': bias,
         }
 
@@ -34,11 +36,11 @@ class BaseConv(nn.Module):
         self.padding = None
         if calculated_padding == 0:
             args['padding'] = 0
-        elif custom_padding and nested_padding:
+        elif (custom_padding or self.TRANSPOSED) and nested_padding:
             args['padding'] = 0
             self.padding = sum(calculated_padding, ())
         elif padding == 'same' and nested_padding:
-            args['padding'] = tuple(max(0, item[0]) for item in calculated_padding)
+            args['padding'] = tuple(max(0, max(item)) for item in calculated_padding)
         else:
             args['padding'] = padding
 
@@ -52,6 +54,11 @@ class BaseConv(nn.Module):
     def extra_repr(self):
         return f'custom_padding={self.padding is not None}'
 
+    def __repr__(self):
+        msg = super().__repr__()
+        if getattr(self, 'collapsible', True):
+            msg = msg.replace('(\n    (layer): ', ':').replace('\n    ', '\n  ').replace('\n  )\n)', '\n)')
+        return msg
 
 class Conv(BaseConv):
     """ Multi-dimensional convolutional layer. """
@@ -78,17 +85,17 @@ class BaseDepthwiseConv(nn.Module):
     """ An universal module for plain and transposed depthwise convolutions. """
     LAYER = None
 
-    def __init__(self, kernel_size=3, strides=1, padding='same',
-                 dilation_rate=1, bias=False, depth_multiplier=1, inputs=None):
+    def __init__(self, kernel_size=3, stride=1, padding='same',
+                 dilation=1, bias=False, depth_multiplier=1, inputs=None):
         super().__init__()
 
         args = {
-            'filters': get_num_channels(inputs) * depth_multiplier,
+            'channels': get_num_channels(inputs) * depth_multiplier,
             'kernel_size': kernel_size,
             'groups': get_num_channels(inputs),
-            'strides': strides,
+            'stride': stride,
             'padding': padding,
-            'dilation_rate': dilation_rate,
+            'dilation': dilation,
             'bias': bias,
         }
 
@@ -113,13 +120,15 @@ class BaseSeparableConv(nn.Module):
     """ An universal module for plain and transposed separable convolutions. """
     LAYER = None
 
-    def __init__(self, filters, kernel_size=3, strides=1, padding='same',
-                 dilation_rate=1, bias=False, depth_multiplier=1, inputs=None):
+    def __init__(self, channels, kernel_size=3, stride=1, padding='same',
+                 dilation=1, bias=False, depth_multiplier=1, inputs=None):
         super().__init__()
 
         self.layer = nn.Sequential(
-            self.LAYER(kernel_size, strides, padding, dilation_rate, bias, depth_multiplier, inputs),
-            Conv(filters, kernel_size=1, strides=1, padding=padding, dilation_rate=1, bias=bias, inputs=inputs)
+            self.LAYER(inputs=inputs, kernel_size=kernel_size, stride=stride,
+                       padding=padding, dilation=dilation, bias=bias, depth_multiplier=depth_multiplier),
+            Conv(inputs=inputs, channels=channels, kernel_size=1, stride=1,
+                 padding=padding, dilation=1, bias=bias, )
             )
 
     def forward(self, x):

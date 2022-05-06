@@ -3,24 +3,24 @@
 """
 import warnings
 
-from .encoder_decoder import EncoderDecoder
+from .base import TorchModel
 from .blocks import ResBlock, DenseBlock
 
 
 
-class UNet(EncoderDecoder):
+class UNet(TorchModel):
     """ UNet-like model.
 
     Parameters
     ----------
     auto_build : dict, optional
-        Parameters for auto-building `filters` in accordance with the idea described in the original paper.
-        Note that any of `filters`, if passed, will be replaced by auto-built ones.
+        Parameters for auto-building `channels` in accordance with the idea described in the original paper.
+        Note that any of `channels`, if passed, will be replaced by auto-built ones.
 
         num_stages : int
             number of encoder/decoder stages — defines network depth and the number of its skip connections
-        filters : int, optional
-            number of filters in first encoder block — each of the following ones will be doubled until embedding
+        channels : int, optional
+            number of channels in first encoder block — each of the following ones will be doubled until embedding
 
     body : dict
         encoder : dict
@@ -29,16 +29,16 @@ class UNet(EncoderDecoder):
             blocks : dict
                 Parameters for pre-processing blocks:
 
-                filters : None, int, list of ints or list of lists of ints
-                    The number of filters in the output tensor.
-                    If int, same number of filters applies to all layers on all stages
-                    If list of ints, specifies number of filters in each layer of different stages
-                    If list of list of ints, specifies number of filters in different layers on different stages
-                    If not given or None, filters parameters in encoder/blocks, decoder/blocks and decoder/upsample
-                    default to values which make number of filters double
+                channels : None, int, list of ints or list of lists of ints
+                    The number of channels in the output tensor.
+                    If int, same number of channels applies to all layers on all stages
+                    If list of ints, specifies number of channels in each layer of different stages
+                    If list of list of ints, specifies number of channels in different layers on different stages
+                    If not given or None, channels parameters in encoder/blocks, decoder/blocks and decoder/upsample
+                    default to values which make number of channels double
                     on each stage of encoding and halve on each stage of decoding,
-                    provided that `decoder/skip` is `True`. Specify `filters=None` explicitly
-                    if you want to use custom `num_steps` and infer `filters`
+                    provided that `decoder/skip` is `True`. Specify `channels=None` explicitly
+                    if you want to use custom `num_steps` and infer `channels`
 
         decoder : dict
             num_stages : int
@@ -52,14 +52,14 @@ class UNet(EncoderDecoder):
             blocks : dict
                 Parameters for post-processing blocks:
 
-                filters : None, int, list of ints or list of lists of ints
-                    same as encoder/blocks/filters
+                channels : None, int, list of ints or list of lists of ints
+                    same as encoder/blocks/channels
 
             upsample : dict
                 Parameters for upsampling (see :func:`~.layers.upsample`).
 
-                filters : int, list of ints or list of lists of ints
-                    same as encoder/blocks/filters
+                channels : int, list of ints or list of lists of ints
+                    same as encoder/blocks/channels
 
     Notes
     -----
@@ -70,14 +70,44 @@ class UNet(EncoderDecoder):
         """ Define model's defaults. """
         config = super().default_config()
 
-        config['body/encoder/num_stages'] = 4
-        config['body/encoder/order'] = ['block', 'skip', 'downsampling']
-        config['body/encoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[64, 128, 256, 512])
+        config.update({
+            'order': ['initial_block', 'encoder', 'embedding', 'decoder', 'head'],
 
-        config['body/embedding'] += dict(layout='cna cna', kernel_size=3, filters=1024)
+            'encoder': {
+                'type': 'encoder',
+                'num_stages': 4,
+                'order': ['block', 'skip', 'downsampling'],
+                'blocks': {
+                    'layout': 'cna cna',
+                    'kernel_size': 3,
+                    'channels': [64, 128, 256, 512]
+                }
+            },
 
-        config['body/decoder/order'] = ['upsampling', 'combine', 'block']
-        config['body/decoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[512, 256, 128, 64])
+            'embedding': {
+                'layout': 'cna cna',
+                'kernel_size': 3,
+                'channels': 1024,
+                'input_list' : True,
+                'input_idx': -1,
+                'output_list': True
+            },
+
+            'decoder': {
+                'type': 'decoder',
+                'order': ['upsampling', 'combine', 'block'],
+                'blocks': {
+                    'layout': 'cna cna',
+                    'kernel_size': 3,
+                    'channels': [512, 256, 128, 64]
+                }
+            },
+
+            'head': {
+                'layout': 'c',
+                'channels': 1
+            }
+        })
 
         config['loss'] = 'ce'
         return config
@@ -89,20 +119,20 @@ class UNet(EncoderDecoder):
 
         if config.get('auto_build'):
             num_stages = config.get('auto_build/num_stages', 4)
-            filters = config.get('auto_build/filters', 64)
-            encoder_filters = [filters * 2**i for i in range(num_stages)]
+            channels = config.get('auto_build/channels', 64)
+            encoder_channels = [channels * 2**i for i in range(num_stages)]
 
-            config['body/encoder/num_stages'] = num_stages
-            config['body/encoder/blocks/filters'] = encoder_filters
-            config['body/embedding/filters'] = encoder_filters[-1] * 2
-            config['body/decoder/num_stages'] = num_stages
-            config['body/decoder/blocks/filters'] = encoder_filters[::-1]
-            config['body/decoder/upsample/filters'] = encoder_filters[::-1]
+            config['encoder/num_stages'] = num_stages
+            config['encoder/blocks/channels'] = encoder_channels
+            config['embedding/channels'] = encoder_channels[-1] * 2
+            config['decoder/num_stages'] = num_stages
+            config['decoder/blocks/channels'] = encoder_channels[::-1]
+            config['decoder/upsample/channels'] = encoder_channels[::-1]
 
-        if not config.get('body/decoder/upsample/filters'):
-            warnings.warn("'decoder/upsample/filters' are not set and " +
-                          "can be inconsistent with 'decoder/blocks/filters'! Please revise your model's config. " +
-                          "In future, upsample filters can be made to match decoder block's filters by default.")
+        if not config.get('decoder/upsample/channels'):
+            warnings.warn("'decoder/upsample/channels' are not set and " +
+                          "can be inconsistent with 'decoder/blocks/channels'! Please revise your model's config. " +
+                          "In future, upsample channels can be made to match decoder block's channels by default.")
 
 
 class ResUNet(UNet):
@@ -110,8 +140,8 @@ class ResUNet(UNet):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks'] += dict(base=ResBlock, layout='cna', n_reps=2)
-        config['body/decoder/blocks'] += dict(base=ResBlock, layout='cna', n_reps=2)
+        config['encoder/blocks'] += dict(base_block=ResBlock, layout='cna', n_reps=1)
+        config['decoder/blocks'] += dict(base_block=ResBlock, layout='cna', n_reps=1)
         return config
 
 
@@ -120,6 +150,6 @@ class DenseUNet(UNet):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks'] += dict(base=DenseBlock, layout='nacd', skip=True)
-        config['body/decoder/blocks'] += dict(base=DenseBlock, layout='nacd', skip=False)
+        config['encoder/blocks'] += dict(base_block=DenseBlock, layout='nacd', skip=True)
+        config['decoder/blocks'] += dict(base_block=DenseBlock, layout='nacd', skip=False)
         return config

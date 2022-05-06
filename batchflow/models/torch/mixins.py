@@ -14,6 +14,7 @@ from ...notifier import Notifier
 
 # Also imports `tensorboard`, if necessary
 
+
 def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts=True, underscore_numbers=False):
     """ Backwards compatible version of pformat. """
     # pylint: disable=unexpected-keyword-arg
@@ -24,6 +25,7 @@ def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts
         result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact,
                           sort_dicts=sort_dicts)
     return result
+
 
 
 class VisualizationMixin:
@@ -68,7 +70,7 @@ class VisualizationMixin:
 
             message += template_header.format('Model info')
             if self.model:
-                num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+                num_params = self.num_parameters
                 message += f'Total number of parameters in the model: {num_params:,}'
 
             message += f'\nTotal number of passed training iterations: {self.iteration}\n'
@@ -82,15 +84,17 @@ class VisualizationMixin:
                 message += pformat(self.last_predict_info, sort_dicts=False) + '\n'
         return message[1:-1]
 
-    def short_repr(self):
+    def repr(self, verbosity=1, collapsible=True, show_num_parameters=False):
         """ Show simplified model layout. """
-        print(self._short_repr())
+        self.model.repr(verbosity=verbosity, collapsible=collapsible, show_num_parameters=show_num_parameters)
 
-    def _short_repr(self):
-        self.model.apply(lambda module: setattr(module, 'short_repr', True))
-        msg = repr(self.model)
-        self.model.apply(lambda module: setattr(module, 'short_repr', False))
-        return msg
+    def prepare_repr(self, verbosity=1, collapsible=True, show_num_parameters=False):
+        return self.model.prepare_repr(verbosity=verbosity, collapsible=collapsible,
+                                       show_num_parameters=show_num_parameters)
+
+    @property
+    def num_parameters(self):
+        return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
     # Graphs to describe model
     def save_graph(self, log_dir=None, **kwargs):

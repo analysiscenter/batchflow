@@ -1,11 +1,9 @@
 """ Functional modules for various deep network architectures."""
 import numpy as np
-import torch.nn as nn
+from torch import nn
 
-from .resize import Combine
-from .conv_block import ConvBlock
-from .conv import Conv
-from .core import BatchNorm
+from .core import Block
+from ..layers import Conv, BatchNorm, Combine
 from ..utils import get_shape, get_num_dims, get_num_channels
 
 
@@ -19,8 +17,8 @@ class PyramidPooling(nn.Module):
         Example of input tensor to this layer.
     layout : str
         Sequence of operations in convolution layer.
-    filters : int
-        Number of filters in pyramid branches.
+    channels : int
+        Number of channels in pyramid branches.
     kernel_size : int
         Kernel size.
     pool_op : str
@@ -29,12 +27,12 @@ class PyramidPooling(nn.Module):
         Number of feature regions in each dimension.
         `0` is used to include `inputs` into the output tensor.
     """
-    def __init__(self, inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean',
+    def __init__(self, inputs, layout='cna', channels=None, kernel_size=1, pool_op='mean',
                  pyramid=(0, 1, 2, 3, 6), **kwargs):
         super().__init__()
 
         spatial_shape = np.array(get_shape(inputs)[2:])
-        filters = filters if filters else 'same // {}'.format(len(pyramid))
+        channels = channels if channels else 'same // {}'.format(len(pyramid))
 
         modules = nn.ModuleList()
         for level in pyramid:
@@ -43,11 +41,11 @@ class PyramidPooling(nn.Module):
             else:
                 x = inputs
                 pool_size = tuple(np.ceil(spatial_shape / level).astype(np.int32))
-                pool_strides = tuple(np.floor((spatial_shape - 1) / level + 1).astype(np.int32))
+                pool_stride = tuple(np.floor((spatial_shape - 1) / level + 1).astype(np.int32))
 
-                module = ConvBlock(inputs=x, layout='p' + layout + 'b', filters=filters, kernel_size=kernel_size,
-                                   pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides,
-                                   factor=None, shape=tuple(spatial_shape), **kwargs)
+                module = Block(inputs=x, layout='p' + layout + 'b', channels=channels, kernel_size=kernel_size,
+                               pool_op=pool_op, pool_size=pool_size, pool_stride=pool_stride,
+                               factor=None, shape=tuple(spatial_shape), **kwargs)
             modules.append(module)
 
         self.blocks = modules
@@ -68,8 +66,8 @@ class ASPP(nn.Module):
     ----------
     layout : str
         Layout for convolution layers.
-    filters : int
-        Number of filters in the output tensor.
+    channels : int
+        Number of channels in the output tensor.
     kernel_size : int
         Kernel size for dilated branches.
     rates : tuple of int
@@ -84,27 +82,27 @@ class ASPP(nn.Module):
     --------
     PyramidPooling
     """
-    def __init__(self, inputs=None, layout='cna', filters='same', kernel_size=3,
+    def __init__(self, inputs=None, layout='cna', channels='same', kernel_size=3,
                  rates=(6, 12, 18), pyramid=None, **kwargs):
         super().__init__()
 
         modules = nn.ModuleList()
-        global_pooling = ConvBlock(inputs=inputs, layout='V>cnab', filters=filters,
-                                   kernel_size=1, dim=get_num_dims(inputs),
-                                   factor=None, shape=get_shape(inputs)[2:], **kwargs)
+        global_pooling = Block(inputs=inputs, layout='V>cnab', channels=channels,
+                               kernel_size=1, dim=get_num_dims(inputs),
+                               factor=None, shape=get_shape(inputs)[2:], **kwargs)
         modules.append(global_pooling)
 
-        bottleneck = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=1, **kwargs)
+        bottleneck = Block(inputs=inputs, layout=layout, channels=channels, kernel_size=1, **kwargs)
         modules.append(bottleneck)
 
         for level in rates:
-            layer = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=kernel_size,
-                              padding=level, dilation_rate=level, **kwargs)
+            layer = Block(inputs=inputs, layout=layout, channels=channels, kernel_size=kernel_size,
+                          padding=level, dilation=level, **kwargs)
             modules.append(layer)
 
         if pyramid is not None:
             pyramid = pyramid if isinstance(pyramid, (tuple, list)) else [pyramid]
-            pyramid_layer = PyramidPooling(inputs=inputs, filters=filters, pyramid=pyramid, **kwargs)
+            pyramid_layer = PyramidPooling(inputs=inputs, channels=channels, pyramid=pyramid, **kwargs)
             modules.append(pyramid_layer)
 
         self.blocks = modules
@@ -126,8 +124,8 @@ class KSAC(nn.Module):
     ----------
     layout : str
         Layout for final postprocessing layer.
-    filters : int
-        Number of filters in the output tensor.
+    channels : int
+        Number of channels in the output tensor.
     kernel_size : int
         Kernel size for dilated branches.
     rates : tuple of int
@@ -144,23 +142,23 @@ class KSAC(nn.Module):
         3: nn.functional.conv3d,
     }
 
-    def __init__(self, inputs=None, layout='cnad', filters=None, kernel_size=3,
+    def __init__(self, inputs=None, layout='cnad', channels=None, kernel_size=3,
                  rates=(6, 12, 18), pyramid=None, **kwargs):
         super().__init__()
         self.n = get_num_dims(inputs)
         self.conv = self.LAYERS[self.n]
         self.rates = rates
 
-        out_filters = filters or get_num_channels(inputs)
-        feature_filters = max(1, out_filters // len(rates))
+        out_channels = channels or get_num_channels(inputs)
+        feature_channels = max(1, out_channels // len(rates))
         tensors = []
 
         # Bottleneck: 1x1 convolution
-        self.bottleneck = ConvBlock(inputs=inputs, layout='cna', filters=feature_filters, kernel_size=1, **kwargs)
+        self.bottleneck = Block(inputs=inputs, layout='cna', channels=feature_channels, kernel_size=1, **kwargs)
         tensors.append(self.bottleneck(inputs))
 
         # Convolutions with different dilations and shared weights
-        self.layer = Conv(inputs=inputs, filters=feature_filters, kernel_size=kernel_size).to(inputs.device)
+        self.layer = Conv(inputs=inputs, channels=feature_channels, kernel_size=kernel_size).to(inputs.device)
         tensor = self.layer(inputs)
         tensors.append(tensor)
 
@@ -174,13 +172,13 @@ class KSAC(nn.Module):
         # Optional pyramid branch
         if pyramid is not None:
             pyramid = pyramid if isinstance(pyramid, (tuple, list)) else [pyramid]
-            self.pyramid = PyramidPooling(inputs=inputs, filters=feature_filters, pyramid=pyramid, **kwargs)
+            self.pyramid = PyramidPooling(inputs=inputs, channels=feature_channels, pyramid=pyramid, **kwargs)
             tensors.append(self.pyramid(inputs))
         else:
             self.pyramid = None
 
         # Global pooling
-        self.global_pooling = ConvBlock(inputs=inputs, layout='V>cnab', filters=feature_filters, kernel_size=1,
+        self.global_pooling = Block(inputs=inputs, layout='V>cnab', channels=feature_channels, kernel_size=1,
                                         dim=self.n, shape=inputs.size()[2:], align_corners=True)
         tensors.append(self.global_pooling(inputs))
 
@@ -189,7 +187,7 @@ class KSAC(nn.Module):
         combined = self.combine(tensors)
 
         # Final postprocessing
-        self.post = ConvBlock(inputs=combined, layout=layout, filters=out_filters, kernel_size=kernel_size, **kwargs)
+        self.post = Block(inputs=combined, layout=layout, channels=out_channels, kernel_size=kernel_size, **kwargs)
 
     def forward(self, x):
         # Bottleneck and base convolution layer

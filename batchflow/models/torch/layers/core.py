@@ -8,7 +8,7 @@ from ..utils import get_shape, get_num_channels, get_num_dims, safe_eval
 
 
 class Flatten(nn.Module):
-    """ Flatten input, optionaly keeping provided dimensions.
+    """ Flatten input, optionally keeping provided dimensions.
     Batch dimension is always preserved """
     def __init__(self, keep_dims=0):
         super().__init__()
@@ -37,7 +37,7 @@ class Dense(nn.Module):
 
     Parameters
     ----------
-    units : int or srt
+    features : int or srt
         Out_features in linear layer. see :meth:`~..utils.safe_eval` for details on str values.
 
     bias : bool, optional
@@ -49,22 +49,57 @@ class Dense(nn.Module):
     keep_dims : int, optional
         Dimensions to keep while flattening input, see :class:`~.Flatten`, by default 0.
     """
-    def __init__(self, units, bias=True, inputs=None, flatten=True, keep_dims=0):
+    def __init__(self, features, bias=True, inputs=None, flatten=True, keep_dims=0):
         super().__init__()
 
         self.flatten = Flatten(keep_dims) if flatten else nn.Identity()
 
         inputs = self.flatten(inputs)
-        in_units = inputs.size(-1)
+        in_features = inputs.size(-1)
 
-        if isinstance(units, str):
-            units = safe_eval(units, in_units)
+        if isinstance(features, str):
+            features = safe_eval(features, in_features)
 
-        self.linear = nn.Linear(in_units, units, bias)
+        self.linear = nn.Linear(in_features, features, bias)
 
     def forward(self, x):
         x = self.flatten(x)
         return self.linear(x)
+
+
+class DenseAlongAxis(nn.Module):
+    """ !!. """
+    def __init__(self, inputs=None, features=None, axis=1, bias=True):
+        super().__init__()
+        in_shape = get_shape(inputs)
+
+        # Move `axis` to the `1` position
+        permuted_axis_order = list(range(inputs.ndim))
+        permuted_axis_order[1], permuted_axis_order[axis] = axis, 1
+        self.permuted_axis_order = permuted_axis_order
+        inputs = inputs.permute(*permuted_axis_order)                                       # (B, C, H, W)
+
+        # Flatten rest of the axes; swap order of the last two axes
+        inputs = inputs.flatten(2).transpose(1, 2)                                          # (B, H*W, C)
+        in_features = inputs.size(-1)
+
+        # Apply linear: only along the last axis
+        if isinstance(features, str):
+            features = safe_eval(features, in_features)
+        self.layer = nn.Linear(in_features=in_features, out_features=features, bias=bias)   # (B, H*W, C2)
+
+        after_linear_shape = list(in_shape)
+        after_linear_shape[0], after_linear_shape[axis] = -1, features
+        self.after_linear_shape = after_linear_shape
+
+    def forward(self, x):
+        x = x.permute(*self.permuted_axis_order)         # (B, C, H, W), move `axis` to the 1 position
+        x = x.flatten(2).transpose(1, 2)                 # (B, H*W, C)
+        x = self.layer(x)                                # (B, H*W, C2)
+
+        x = x.permute(0, 2, 1)                           # (B, C2, H*W)
+        x = x.reshape(*self.after_linear_shape)          # (B, C2, H, W)
+        return x
 
 
 
@@ -120,7 +155,7 @@ class Dropout(nn.Module):
     Parameters
     ----------
     dropout_rate : float
-        The fraction of the input units to drop.
+        The fraction of the input features to drop.
 
     multisample: bool, number, sequence
         If evaluates to True, then either multiple dropout applied to the whole batch and then averaged, or
@@ -156,22 +191,21 @@ class Dropout(nn.Module):
                     sizes = self.multisample
                 elif all(isinstance(item, float) for item in self.multisample):
                     if sum(self.multisample) != 1.:
-                        raise ValueError('Sequence of floats must sum up to one for multisample dropout,\
-                                          got instead {}'.format(self.multisample))
+                        raise ValueError(f'Sequence of floats must sum up to one, got {self.multisample} instead!')
 
                     batch_size = x.shape[0]
                     sizes = [round(batch_size*item) for item in self.multisample[:-1]]
                     residual = batch_size - sum(sizes)
                     sizes += [residual]
                 else:
-                    raise ValueError('Elements of multisample must be either all ints or floats,\
-                                      got instead {}'.format(self.multisample))
+                    raise ValueError(f'Elements of multisample must be either all ints or floats,\
+                                       got "{self.multisample}" instead!')
 
                 splitted = torch.split(x, sizes)
                 dropped = [self.layer(branch) for branch in splitted]
                 output = torch.cat(dropped, dim=0)
             else:
-                raise ValueError('Unknown type of multisample: {}'.format(self.multisample))
+                raise ValueError(f'Unknown type of multisample: {self.multisample}')
         else:
             output = self.layer(x)
         return output
@@ -184,26 +218,3 @@ class AlphaDropout(Dropout):
         2: nn.AlphaDropout,
         3: nn.AlphaDropout,
     }
-
-
-class DropPath(nn.Module):
-    """ Drop paths per sample, also known as Stochastic Depth. Usually applied in blocks with residuals. """
-    def __init__(self, drop_prob=0.0, scale=True):
-        super().__init__()
-        self.drop_prob = drop_prob
-        self.scale = scale
-
-    def forward(self, x):
-        if self.drop_prob == 0.0 or not self.training:
-            return x
-
-        keep_prob = 1 - self.drop_prob
-        shape = (x.shape[0], ) + (1,) * (x.ndim - 1)
-        mask = x.new_empty(shape).bernoulli_(keep_prob)
-
-        if keep_prob > 0.0 and self.scale:
-            mask.div_(keep_prob)
-        return x * mask
-
-    def extra_repr(self):
-        return f'drop_prob={self.drop_prob}'
