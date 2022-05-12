@@ -79,8 +79,9 @@ class ResNet(TorchModel):
 
         config['body'] = {
             'type': 'encoder',
+            'output_type': 'tensor',
             'num_stages': 4,
-            'order': ['skip', 'block'],
+            'order': ['block'],
             'blocks': {
                 'base_block': ResBlock,
                 'layout': 'cnacn',

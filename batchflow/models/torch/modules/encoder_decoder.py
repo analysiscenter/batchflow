@@ -21,12 +21,12 @@ class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
         'downsample': {'layout': 'p', 'pool_size': 2, 'pool_stride': 2}
     }
 
-    def __init__(self, inputs=None, output_hidden_states=True, input_index=-1, **kwargs):
+    def __init__(self, inputs=None, output_type='list', input_index=-1, **kwargs):
         super().__init__()
         kwargs = Config(self.DEFAULTS) + kwargs
         self.kwargs = kwargs
-        self.output_hidden_states = output_hidden_states
         self.input_index = input_index
+        self.output_type = output_type
 
         self.shapes = {}
         self.initialize(inputs, **kwargs)
@@ -62,7 +62,7 @@ class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
                     block = nn.Identity()
                     block_name = f'skip-{i}'
                 else:
-                    raise ValueError(f'Unknown letter "{letter}" in order, use one of "b", "d", "p", "s"')
+                    raise ValueError(f'Unknown letter "{letter}" in order, use one of "b", "d", "p", "s"!')
 
                 output_shapes = get_shape(inputs)
 
@@ -87,7 +87,7 @@ class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
         outputs.append(tensor)
 
         # Prepare output type: sequence or individual tensor
-        if self.output_hidden_states:
+        if self.output_type == 'list':
             if inputs_is_list:
                 output = inputs + outputs
             else:
@@ -99,6 +99,7 @@ class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
 
 class DecoderModule(ModuleDictReprMixin, nn.ModuleDict):
     """ Decoder: increasing spatial dimensions. """
+    # TODO: add meaningful functionality for `output_type=='list'`
     VERBOSITY_THRESHOLD = 2
 
     DEFAULTS = {
@@ -110,10 +111,12 @@ class DecoderModule(ModuleDictReprMixin, nn.ModuleDict):
         'combine': {'op': 'concat', 'leading_index': 1}
     }
 
-    def __init__(self, inputs=None, **kwargs):
+    def __init__(self, inputs=None, indices=None, **kwargs):
         super().__init__()
         kwargs = Config(self.DEFAULTS) + kwargs
         self.kwargs = kwargs
+
+        self.indices = indices if indices is not None else list(range(-3, -len(inputs)-1, -1))
 
         self.shapes = {}
         self.initialize(inputs, **kwargs)
@@ -127,7 +130,7 @@ class DecoderModule(ModuleDictReprMixin, nn.ModuleDict):
         # Parse parameters
         num_stages = kwargs.pop('num_stages') or len(inputs) - 2
         order = ''.join([item[0] for item in kwargs.pop('order')])
-        self.skip = kwargs.pop('skip')
+        skip = kwargs.pop('skip')
 
         block_params = kwargs.pop('blocks')
         upsample_params = kwargs.pop('upsample')
@@ -150,17 +153,22 @@ class DecoderModule(ModuleDictReprMixin, nn.ModuleDict):
                     block_name = f'upsample-{i}'
 
                 elif letter in {'c'}:
-                    if self.skip:
-                        if i < len(inputs) - 2:
+                    if skip:
+                        skip_index = self.indices[i]
+                        if (skip_index is not None and
+                            ((0 <= skip_index < len(inputs)) or (-len(inputs) <= skip_index < 0))):
                             args = {**kwargs, **combine_params, **unpack_args(combine_params, i, num_stages)}
-                            input_shapes = get_shape([tensor, inputs[-i - 3]])
-                            block = Combine(inputs=[tensor, inputs[-i - 3]], **args)
-                            tensor = block([tensor, inputs[-i - 3]])
+                            combine_inputs = [tensor, inputs[skip_index]]
+                            input_shapes = get_shape(combine_inputs)
+                            block = Combine(inputs=combine_inputs, **args)
+                            tensor = block(combine_inputs)
                             block_name = f'combine-{i}'
+                        else:
+                            continue
                     else:
-                        continue
+                        raise ValueError('Using "c" letter with `skip=False`!')
                 else:
-                    raise ValueError('Unknown letter "{letter}" in order, use one of ("b", "u", "c")')
+                    raise ValueError('Unknown letter "{letter}" in order, use one of ("b", "u", "c")!')
                 output_shapes = get_shape(tensor)
 
                 self[block_name] = block
@@ -177,14 +185,17 @@ class DecoderModule(ModuleDictReprMixin, nn.ModuleDict):
 
             if letter in ['b', 'u']:
                 tensor = block(tensor)
-            elif letter in ['c'] and self.skip and (i < len(inputs) - 2):
-                tensor = block([tensor, inputs[-i - 3]])
+            elif letter in ['c']:
+                stage_index = int(block_name.split('-')[-1])
+                skip_index = self.indices[stage_index]
+                tensor = block([tensor, inputs[skip_index]])
                 i += 1
         return tensor
 
 
 class MLPDecoderModule(ModuleDictReprMixin, nn.ModuleDict):
     """ Decoder: increasing spatial dimensions. """
+    # TODO: add meaningful functionality for `output_type=='list'`
     VERBOSITY_THRESHOLD = 2
 
     DEFAULTS = {
@@ -207,8 +218,12 @@ class MLPDecoderModule(ModuleDictReprMixin, nn.ModuleDict):
         # Parse inputs
         inputs = inputs if isinstance(inputs, list) else [inputs]
 
-        # Parse parameters
+        # Parse desired shape
         size = kwargs.pop('size') or inputs[0].shape[2:]
+        if size is None:
+            shapes = get_shape(inputs)
+            size = (max([shape[-2] for shape in shapes]),
+                    max([shape[-1] for shape in shapes]))
         self.size = size
 
         upsample_params = kwargs.pop('upsample')

@@ -15,14 +15,14 @@ class HuggingFaceLoader(nn.Module):
     VERBOSITY_THRESHOLD = 4
 
     def __init__(self, inputs=None, path=None, task='ImageClassification', pretrained=False, attribute_name='auto',
-                 output_hidden_states=True, input_index=-1, **kwargs):
+                 output_type='list', input_index=-1, **kwargs):
         if transformers is None:
-            raise ImportError('Install HuggingFace library! `pip install transformers`')
+            raise ImportError('Install the HuggingFace library! `pip install transformers`')
         super().__init__()
 
         self.path = path
+        self.output_type = output_type
         self.input_index = input_index
-        self.output_hidden_states = output_hidden_states
         inputs = inputs[self.input_index] if isinstance(inputs, list) else inputs
 
         # Make model: either download with fixed structure and weights, or re-initialize
@@ -31,7 +31,7 @@ class HuggingFaceLoader(nn.Module):
         if pretrained:
             model = model_class.from_pretrained(path)
         else:
-            config = transformers.AutoConfig.from_pretrained(path)
+            config = self.load_config(path)
             for key, value in kwargs.items():
                 setattr(config, key, value)
 
@@ -60,6 +60,10 @@ class HuggingFaceLoader(nn.Module):
 
         self.model = model.to(inputs.device)
 
+    @staticmethod
+    def load_config(path):
+        return transformers.AutoConfig.from_pretrained(path)
+
     def forward(self, inputs):
         # Parse inputs type: list or individual tensor
         inputs_is_list = isinstance(inputs, list)
@@ -70,7 +74,7 @@ class HuggingFaceLoader(nn.Module):
         outputs = list(outputs)
 
         # Prepare output type: sequence or individual tensor
-        if self.output_hidden_states:
+        if self.output_type == 'list':
             if inputs_is_list:
                 output = inputs + outputs
             else:

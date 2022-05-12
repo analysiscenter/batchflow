@@ -1,9 +1,9 @@
 """ Resizing Torch layers. """
 import torch
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 
-from ..utils import get_shape, get_num_dims, get_num_channels
+from ..utils import get_shape
 
 
 
@@ -108,10 +108,10 @@ class Interpolate(nn.Module):
     def extra_repr(self):
         """ Report interpolation mode and factor for a repr. """
         if self.scale_factor is not None:
-            info = 'scale_factor=' + str(self.scale_factor)
+            info = f'scale_factor={self.scale_factor}'
         else:
-            info = 'size=' + str(self.shape)
-        info += ', mode=' + self.mode
+            info = f'size={self.shape}'
+        info += f', mode={self.mode}, align_corners={self.align_corners}'
         return info
 
 
@@ -121,5 +121,3 @@ class PixelShuffle(nn.PixelShuffle):
 class SubPixelConv(PixelShuffle):
     """ An alias for PixelShuffle. """
     pass
-
-

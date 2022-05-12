@@ -86,15 +86,16 @@ class Combine(nn.Module):
             res += f', {key}={value}'
 
         if getattr(self, 'verbosity', 10) > 2:
-            res += f',\ninput_shapes={self.input_shapes}'
+            res += f',\n  input_shapes={self.input_shapes}'
 
             if self.force_resize:
                 res += f',\nresized_shapes={self.resized_shapes}'
 
-            res += f',\noutput_shapes={self.output_shapes}'
+            res += f',\n output_shapes={self.output_shapes}'
 
-            res += f',\ninput_ids={self.input_ids}'
-            res += f',\nafter_ids={self.after_ids}'
+            if getattr(self, 'extra', False):
+                res += f',\ninput_ids={self.input_ids}'
+                res += f',\nafter_ids={self.after_ids}'
         return res
 
 
