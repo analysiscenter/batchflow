@@ -1,10 +1,8 @@
 """ Eager version of TorchModel. """
 import os
 import re
-import inspect
 from threading import Lock
 from functools import partial
-from collections import OrderedDict
 
 import dill
 import numpy as np

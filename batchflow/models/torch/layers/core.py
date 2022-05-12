@@ -71,7 +71,7 @@ class DenseAlongAxis(nn.Module):
     """ !!. """
     def __init__(self, inputs=None, features=None, axis=1, bias=True):
         super().__init__()
-        in_shape = get_shape(inputs)
+        self.axis = axis
 
         # Move `axis` to the `1` position
         permuted_axis_order = list(range(inputs.ndim))
@@ -88,17 +88,18 @@ class DenseAlongAxis(nn.Module):
             features = safe_eval(features, in_features)
         self.layer = nn.Linear(in_features=in_features, out_features=features, bias=bias)   # (B, H*W, C2)
 
-        after_linear_shape = list(in_shape)
-        after_linear_shape[0], after_linear_shape[axis] = -1, features
-        self.after_linear_shape = after_linear_shape
 
     def forward(self, x):
+        # Compute shape of the outputs
+        final_shape = list(get_shape(x))
+        final_shape[0], final_shape[self.axis] = -1, self.layer.out_features
+
         x = x.permute(*self.permuted_axis_order)         # (B, C, H, W), move `axis` to the 1 position
         x = x.flatten(2).transpose(1, 2)                 # (B, H*W, C)
         x = self.layer(x)                                # (B, H*W, C2)
 
         x = x.permute(0, 2, 1)                           # (B, C2, H*W)
-        x = x.reshape(*self.after_linear_shape)          # (B, C2, H, W)
+        x = x.reshape(*final_shape)                      # (B, C2, H, W)
         return x
 
 

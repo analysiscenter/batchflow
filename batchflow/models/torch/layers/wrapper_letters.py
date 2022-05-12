@@ -21,9 +21,6 @@ class Branch(nn.Module):
         self.after_id = id(output)
         return output
 
-    def extra_repr(self):
-        return f'input_id={self.input_id},\nafter_id={self.after_id}'
-
 
 
 class AttentionWrapper(nn.Module):
@@ -144,4 +141,3 @@ class AttentionWrapper(nn.Module):
         sac: ['sac', 'SAC']
     }
     ATTENTIONS = {alias: getattr(method, '__func__') for method, aliases in ATTENTIONS.items() for alias in aliases}
-

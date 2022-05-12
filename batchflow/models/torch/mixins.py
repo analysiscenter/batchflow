@@ -31,18 +31,17 @@ def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts
 class VisualizationMixin:
     """ Collection of visualization (both textual and graphical) tools for a :class:`~.torch.TorchModel`. """
     # Textual visualization of the model
-    def information(self, config=False, devices=True, model=False, misc=True):
+    def information(self, config=False, devices=True, model=False, misc=True, bold=True):
         """ Show information about model configuration, used devices, train steps and more. """
-        print(self._information(config=config, devices=devices, model=model, misc=misc))
+        print(self._information(config=config, devices=devices, model=model, misc=misc, bold=bold))
 
-    def info(self):
-        """ Return the info message with default parameters. """
-        return self._information()
-
-    def _information(self, config=False, devices=True, model=False, misc=True):
+    def _information(self, config=False, devices=True, model=False, misc=True, bold=False):
         """ Create information string. """
         message = ''
-        template_header = '\n\033[1m\033[4m{}:\033[0m\n'
+        bold_code = '\033[1m\033[4m' if bold else ''
+        endl_code = '\033[0m\n' if bold else ''
+
+        template_header = bold_code + '\n{}:' + endl_code
 
         if config:
             message += template_header.format('Config')
@@ -84,13 +83,16 @@ class VisualizationMixin:
                 message += pformat(self.last_predict_info, sort_dicts=False) + '\n'
         return message[1:-1]
 
-    def repr(self, verbosity=1, collapsible=True, show_num_parameters=False):
-        """ Show simplified model layout. """
-        self.model.repr(verbosity=verbosity, collapsible=collapsible, show_num_parameters=show_num_parameters)
 
-    def prepare_repr(self, verbosity=1, collapsible=True, show_num_parameters=False):
+    def repr(self, verbosity=1, collapsible=True, show_num_parameters=False, extra=False,):
+        """ Show simplified model layout. """
+        self.model.repr(verbosity=verbosity, collapsible=collapsible,
+                        show_num_parameters=show_num_parameters, extra=extra)
+
+    def prepare_repr(self, verbosity=1, collapsible=True, show_num_parameters=False, extra=False):
         return self.model.prepare_repr(verbosity=verbosity, collapsible=collapsible,
-                                       show_num_parameters=show_num_parameters)
+                                       show_num_parameters=show_num_parameters, extra=extra)
+
 
     @property
     def num_parameters(self):
