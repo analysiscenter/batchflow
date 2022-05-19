@@ -6,77 +6,132 @@ from torch import nn
 from .core import Dense, DenseAlongAxis, BatchNorm, LayerNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
-from .pooling import Pool, GlobalPool
-from .resize import IncreaseDim, Reshape, Interpolate, SubPixelConv
+from .pooling import AvgPool, MaxPool, GlobalAvgPool, GlobalMaxPool
+from .resize import IncreaseDim, Reshape, Interpolate, PixelShuffle
 from .activation import Activation
 from .combine import Combine
 from .wrapper_letters import Branch, AttentionWrapper
 
 from ..repr_mixin import ModuleDictReprMixin
-from ..utils import get_shape
+from ..utils import make_initialization_inputs, get_device, get_shape
 from ...utils import unpack_args
 
 
 
 
 class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
-    """ !!. """
+    """ Chain multiple layers together in a sequential manner.
+
+    The main idea of this class is to create a layer for each letter in `layout` string,
+    while using other supplied parameters for their initialization. For example::
+    >>> MultiLayer(inputs=inputs, layout='cna', channels=17, activation='GELU')
+    Creates a sequence of convolutional, batch normalization and activation layers.
+    `channels` are used to initialize the first one.
+
+    Layout can contain whitespaces to improve readability.
+
+    If there are multiple occurences of the same letter in layout, parameters can be sequences, for example::
+    >>> MultiLayer(inputs=inputs, layout='cnac', channels=[17, 26], activation='GELU')
+    If the parameter is not a sequence, the same value is used across all layers.
+
+    Some letters are merged into groups. Inside each group, the parameters are shared.
+    This way, regular, transposed and separable convolutions share one parameter `channels` as a sequence::
+    >>> MultiLayer(inputs=inputs, layout='cnaC', channels=[17, 26], activation='GELU')
+
+    In order to pass some parameters only to a certain layer inside a group, one can use the name of this letter
+    as keyword argument. This can also be used to avoid cluttering and confusion::
+    >>> MultiLayer(inputs=inputs, layout='cnaC', channels=17, activation='GELU',
+                   separable_conv={'channels': 26}, batch_norm={'eps': 1e-03, 'momentum': 0.1})
+
+    Some of the letters allow for non-sequential tensor flow (sic!):
+        - `R` and `B` letters start the residual connection by storing a tensor.
+        It can be parametrized to include another multilayer inside of it.
+        To do so, use `branch` keyword parameter to pass parameters of inner multilayer.
+        By default, the residual branch does not include any operations and equivalent to identity op.
+
+        - `+`, `|`, `*`, `!` letters end the residual connection.
+        They take the last stored tensor and combine it with the current main flow.
+        The operation for combination is defined by the exact letter: sum, concat, mul or droppath.
+        `branch_end` keyword can be used to pass parameters to the combination function.
+
+    In order to initialize all of the layers, we need an example of tensor to be used as inputs for this module.
+    It can be either a torch.Tensor or a tuple with its shape. In case of tuple, one can also specify `device` to use.
+
+
+    Under the hood, we introspect layer constructors to find which parameters should be passed where.
+
+    """
     LETTERS_LAYERS = {
+        # Core
         'a': 'activation_layer',
-        'B': 'branch',
-        'R': 'branch', # stands for `R`esidual
-        '+': 'branch_end',
-        '|': 'branch_end',
-        '*': 'branch_end',
-        '!': 'branch_end',
-        '>': 'increase_dim',
-        'r': 'reshape',
         'f': 'dense',
         'F': 'dense_along_axis',
+        'n': 'batch_norm',
+        'l': 'layer_norm',
+        'd': 'dropout',
+        'D': 'alpha_dropout',
+
+        # Conv
         'c': 'conv',
         't': 'transposed_conv',
         'C': 'separable_conv',
         'T': 'separable_conv_transpose',
         'w': 'depthwise_conv',
         'W': 'depthwise_conv_transpose',
-        'p': 'pooling',
-        'v': 'pooling',
-        'P': 'global_pooling',
-        'V': 'global_pooling',
-        'n': 'batch_norm',
-        'l': 'layer_norm',
-        'd': 'dropout',
-        'D': 'alpha_dropout',
-        'S': 'self_attention',
+
+        # Pool
+        'v': 'avg_pool',
+        'p': 'max_pool',
+        'V': 'global_avg_pool',
+        'P': 'global_max_pool',
+
+        # Resize
         'b': 'resize_bilinear',
-        'N': 'resize_nn',
-        'X': 'subpixel_conv'
+        'X': 'pixel_shuffle',
+        '>': 'increase_dim',
+        'r': 'reshape',
+
+        # Branches
+        'B': 'branch',
+        'R': 'branch',
+        '+': 'branch_end',
+        '|': 'branch_end',
+        '*': 'branch_end',
+        '!': 'branch_end',
+
+        # Wrapper
+        'S': 'self_attention',
     }
 
     LAYERS_MODULES = {
         'activation_layer': Activation,
-        'branch': Branch,
-        'branch_end': Combine,
-        'increase_dim': IncreaseDim,
-        'reshape': Reshape,
         'dense': Dense,
         'dense_along_axis': DenseAlongAxis,
+        'batch_norm': BatchNorm,
+        'layer_norm': LayerNorm,
+        'dropout': Dropout,
+        'alpha_dropout': AlphaDropout,
+
         'conv': Conv,
         'transposed_conv': ConvTranspose,
         'separable_conv': SeparableConv,
         'separable_conv_transpose': SeparableConvTranspose,
         'depthwise_conv': DepthwiseConv,
         'depthwise_conv_transpose': DepthwiseConvTranspose,
-        'pooling': Pool,
-        'global_pooling': GlobalPool,
-        'batch_norm': BatchNorm,
-        'layer_norm': LayerNorm,
-        'dropout': Dropout,
-        'alpha_dropout': AlphaDropout,
-        'self_attention': AttentionWrapper,
+
+        'avg_pool': AvgPool,
+        'max_pool': MaxPool,
+        'global_avg_pool': GlobalAvgPool,
+        'global_max_pool': GlobalMaxPool,
+
         'resize_bilinear': Interpolate,
-        'resize_nn': Interpolate,
-        'subpixel_conv': SubPixelConv,
+        'pixel_shuffle': PixelShuffle,
+        'increase_dim': IncreaseDim,
+        'reshape': Reshape,
+
+        'branch': Branch,
+        'branch_end': Combine,
+        'self_attention': AttentionWrapper,
     }
 
     DEFAULT_LETTERS = LETTERS_LAYERS.keys()
@@ -91,7 +146,6 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         'V': 'P',
         'D': 'd',
         'n': 'd',
-        'N': 'b',
         'F': 'f',
     })
 
@@ -101,38 +155,15 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
 
     VERBOSITY_THRESHOLD = 4
 
-    def __init__(self, inputs=None, layout='', **kwargs):
+    def __init__(self, inputs=None, layout='', device=None, **kwargs):
         super().__init__()
+        inputs = make_initialization_inputs(inputs, device=device)
+        self.device = get_device(inputs)
 
         self.layout = layout
-        self.device = inputs.device
-        # self.channels, self.kernel_size, self.stride = channels, kernel_size, stride
-        # self.dilation, self.depth_multiplier = dilation, depth_multiplier
-        # self.activation = activation
-        # self.pool_size, self.pool_stride = pool_size, pool_stride
-        # self.dropout_rate = dropout_rate
-        # self.padding, self.data_format = padding, data_format
         self.kwargs = kwargs
 
-        self._make_modules(inputs)
-
-        # ModuleDict uses not only the keys, manually put in it, but also every `nn.Module` attribute
-        # To combat that, we manually remove keys, corresponding to passed parameters that can be nn.Modules
-        if 'activation' in self._modules:
-            self._modules.pop('activation')
-
-
-    def forward(self, x):
-        branches = []
-
-        for letter, layer in zip(self.layout, self.values()):
-            if letter in self.BRANCH_LETTERS:
-                branches += [layer(x)]
-            elif letter in self.COMBINE_LETTERS:
-                x = layer([branches.pop(), x])
-            else:
-                x = layer(x)
-        return x
+        self.initialize(inputs)
 
 
     def fill_layer_params(self, layer_name, layer_class, inputs, counters):
@@ -141,8 +172,7 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         layer_params.remove('self')
 
         args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
-                for param in layer_params
-                if (hasattr(self, param) or (param in self.kwargs))}
+                for param in layer_params if param in self.kwargs}
         if 'inputs' in layer_params:
             args['inputs'] = inputs
 
@@ -152,7 +182,7 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         args = {**args, **layer_args}
         return args
 
-    def _make_modules(self, inputs):
+    def initialize(self, inputs):
         """ Create necessary modules from instance parameters. """
         self.shapes = {}
         self.layout = self.layout or ''
@@ -175,24 +205,23 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
             layer_class = self.LAYERS_MODULES[layer_name]
             layout_dict[letter_group][0] += 1
 
-            if letter in self.BRANCH_LETTERS:
-                # Skip-connection letters: parallel execution branch
-                # Make layer arguments
-                args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
+            # Make args by inspecting layer constructor signature and matching it with `self.kwargs`
+            args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
 
+            # Skip-connection letters: parallel execution branch
+            if letter in self.BRANCH_LETTERS:
                 # Create layer and store the output
                 layer = layer_class(**args).to(self.device)
                 skip = layer(inputs)
                 branches.append(skip)
 
                 # Create layer description
-                layer_name = f'Layer {i},    skip "{letter}"'
                 output_shapes = get_shape(skip)
+                layer_name = f'Layer {i},    skip "{letter}"'
 
+            # Combine multiple inputs with addition, concatenation, etc
             elif letter in self.COMBINE_LETTERS:
-                # Combine multiple inputs with addition, concatenation, etc
-                # Make layer arguments: pop additional inputs from storage
-                args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
+                # Update inputs with the latest stored tensor
                 combine_inputs = [branches.pop(), inputs]
                 args = {'op': letter, **args, 'inputs': combine_inputs}
 
@@ -205,65 +234,58 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
                 output_shapes = get_shape(inputs)
                 layer_name = f'Layer {i}, combine "{letter}"'
 
+            # Regular layer
             else:
-                # Regular layer
-                # Check if we need to skip current layer. #TODO: remove this behavior?
-                layer_args = self.kwargs.get(layer_name, {})
-                skip_layer = layer_args is False \
-                             or isinstance(layer_args, dict) and layer_args.get('disable', False)
+                # Create layer
+                layer = layer_class(**args).to(self.device)
+                inputs = layer(inputs)
 
-                # Make layer argument
-                if skip_layer:
-                    pass
-                elif letter in self.DEFAULT_LETTERS:
-                    args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
-                elif letter not in self.LETTERS_LAYERS.keys():
-                    raise ValueError(f'Unknown letter symbol "{letter}"!')
-
-                # Additional params for some of the layers
-                if letter_group.lower() == 'p':
-                    args['op'] = letter
-                elif letter_group == 'b':
-                    args['mode'] = args.get('mode', letter.lower())
-
-                if not skip_layer:
-                    # Create layer
-                    layer = layer_class(**args).to(self.device)
-                    inputs = layer(inputs)
-
-                    # Create layer description
-                    output_shapes = get_shape(inputs)
-                    layer_name = f'Layer {i},  letter "{letter}"'
+                # Create layer description
+                output_shapes = get_shape(inputs)
+                layer_name = f'Layer {i},  letter "{letter}"'
 
             self[layer_name] = layer
             self.shapes[layer_name] = (input_shapes, output_shapes)
+
+    def forward(self, x):
+        branches = []
+
+        for letter, layer in zip(self.layout, self.values()):
+            if letter in self.BRANCH_LETTERS:
+                branches += [layer(x)]
+            elif letter in self.COMBINE_LETTERS:
+                x = layer([branches.pop(), x])
+            else:
+                x = layer(x)
+        return x
 
     def extra_repr(self):
         return f'layout={self.layout}'
 
 
+    @classmethod
+    def add_letter(cls, letter, module, name=None):
+        """ Add new letter to layout parsing procedure.
 
-def update_layers(letter, module, name=None):
-    """ Add custom letter to layout parsing procedure.
+        Parameters
+        ----------
+        letter : str
+            Letter to add.
+        module : :class:`torch.nn.Module`
+            Tensor-processing layer. Must have layer-like signature (both init and forward methods overloaded).
+        name : str
+            Name of parameter dictionary. Defaults to `letter`.
 
-    Parameters
-    ----------
-    letter : str
-        Letter to add.
-    module : :class:`torch.nn.Module`
-        Tensor-processing layer. Must have layer-like signature (both init and forward methods overloaded).
-    name : str
-        Name of parameter dictionary. Defaults to `letter`.
+        Examples
+        --------
+        Add custom `Q` letter::
 
-    Examples
-    --------
-    Add custom `Q` letter::
-
-        block.add_letter('Q', my_module, 'custom_module_params')
-        block = BaseConvBlock('cnap Q', channels=32, custom_module_params={'key': 'value'})
-        x = block(x)
-    """
-    name = name or letter
-    MultiLayer.LETTERS_LAYERS.update({letter: name})
-    MultiLayer.LAYERS_MODULES.update({name: module})
-    MultiLayer.LETTERS_GROUPS.update({letter: letter})
+            MultiLayer.add_letter('Q', my_module, 'custom_module_params')
+            block = MultiLayer(inputs=x, layout='cnap Q', channels=32,
+                               custom_module_params={'key': 'value'})
+            x = block(x)
+        """
+        name = name or letter
+        cls.LETTERS_LAYERS[letter] = name
+        cls.LAYERS_MODULES[name] = module
+        cls.LETTERS_GROUPS[letter] = letter

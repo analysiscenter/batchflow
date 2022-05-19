@@ -89,7 +89,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             Separation of the NN into multiple blocks is just for convenience, so we can split
             the preprocessing, main body of the model, and postprocessing into individual parts.
             In the simplest case, each element is a string that points to other key in the config,
-            which is used to create a :class:`~.torch.layers.ConvBlock`.
+            which is used to create a :class:`~.torch.layers.Block`.
             Check the detailed description for more complex cases.
             - `initial_block`, `body`, `head` are parameters for this respective parts of the neural network.
             Defaults are empty layouts, meaning no operations.
@@ -124,7 +124,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             - `decay`. Default is to not use learning rate decay.
 
 
-    We recommend looking at :class:`~.torch.layers.ConvBlock` to learn about parameters for model building blocks,
+    We recommend looking at :class:`~.torch.layers.Block` to learn about parameters for model building blocks,
     and at :class:`~.EncoderDecoder` which allows more sophisticated logic of block chaining.
 
 
@@ -160,7 +160,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         In cases of tuple and dict, `method` can also be callable.
 
     initial_block : dict
-        User-defined module or parameters for the input block, usually :class:`~.torch.layers.ConvBlock` parameters.
+        User-defined module or parameters for the input block, usually :class:`~.torch.layers.Block` parameters.
 
         Examples:
 
@@ -169,14 +169,14 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     body : dict or nn.Module
         User-defined module or parameters for the base network layers,
-        usually :class:`~.torch.layers.ConvBlock` parameters.
+        usually :class:`~.torch.layers.Block` parameters.
 
     head : dict or nn.Module
         User-defined module or parameters for the prediction layers,
-        usually :class:`~.torch.layers.ConvBlock` parameters.
+        usually :class:`~.torch.layers.Block` parameters.
 
     common : dict
-        Default parameters for all blocks (see :class:`~.torch.layers.ConvBlock`).
+        Default parameters for all blocks (see :class:`~.torch.layers.Block`).
 
     output : str, list or dict
         Auxiliary operations to apply to the network predictions.
@@ -339,22 +339,29 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     --------
     segmentation_config = {
         # Model layout
-        'initial_block': {'layout': 'cna cna cnap',                    # string layout: c=conv, n=BN, a=act, p=pool
-                          'channels': [INT, INT, INT],                  # individual channels for each convolution
-                          'kernel_size': 3},                           # common kernel_size for all convolutions
+        'initial_block': {                                         # preprocessing
+            'layout': 'cna cna cnap',                              # string layout: c=conv, n=BN, a=act, p=pool
+            'channels': [INT, INT, INT],                           # individual channels for each convolution
+            'kernel_size': 3                                       # common kernel_size for all convolutions
+        },
 
-        'body': {'base_block': ResBlock,                               # in ConvBlock, we can use any nn.Module as base
-                 'channels': INT, 'kernel_size': INT,
-                 'downsample': False, 'attention': 'scse'},            # additional parameters of ResBlock module
+        'body': {
+            'base_block': ResBlock,                                # can use any nn.Module as base block
+            'channels': INT, 'kernel_size': INT,
+            'downsample': False, 'attention': 'scse'               # additional parameters of ResBlock module
+        },
 
-        'head': {'layout' : 'cna', 'channels': 1},                      # postprocessing
-        'output': 'sigmoid',                                           # can get `sigmoid` output in the `predict`
+        'head': {                                                  # postprocessing
+            'layout' : 'cna',
+            'channels': 1
+        },
+        'output': 'sigmoid',                                       # can get `sigmoid` output in the `predict`
 
         # Train configuration
-        'loss': 'bdice',                                               # binary dice coefficient as loss function
-        'optimizer': {'name': 'Adam', 'lr': 0.01,},
-        'decay': {'name': 'exp', 'gamma': 0.9, 'frequency': 100},
-        'microbatch_size': 16,                                         # size of microbatches at training
+        'loss': 'bdice',                                           # binary dice coefficient as loss function
+        'optimizer': {'name': 'Adam', 'lr': 0.01,},                # optimizer configuration
+        'decay': {'name': 'exp', 'gamma': 0.9, 'frequency': 100},  # lr decay scheduler
+        'microbatch_size': 16,                                     # size of microbatches at training
     }
     """
     PRESERVE = [
@@ -477,6 +484,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             # Model building
             'order': ['initial_block', 'body', 'head'],
+            'trainable': None,
             'initial_block': {},
             'body': {},
             'head': {},
@@ -745,34 +753,38 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.make_infrastructure()
 
     def build_model(self, inputs=None):
-        """ Create the instance of PyTorch model by chaining multiple blocks sequentially.
+        """ Create an instance of PyTorch model or use one provided.
         After it, create training infrastructure (loss, optimizer, decay).
-
-        !!.
         """
         inputs = inputs or self.make_placeholder_data()
         inputs = inputs[0] if len(inputs) == 1 else inputs
         inputs = self.transfer_to_device(inputs)
 
-        self.model = Network(inputs=inputs, config=self.config, device=self.device)
-        self.initialize_weights()
-        self.model_to_device()
+        if 'model' not in self.config:
+            self.model = Network(inputs=inputs, config=self.config, device=self.device)
+        else:
+            self.model = self.config['model']
 
+        self.initialize_weights()
+
+        self.model_to_device()
         self.make_infrastructure()
 
 
     # Model weights initialization
     def initialize_weights(self):
         """ Initialize model weights with a pre-defined or supplied callable. """
-        if self.model and (self.init_weights is not None):
+        init_weights = self.init_weights
+        if self.model and (init_weights is not None):
             # Parse model weights initialization
-            if isinstance(self.init_weights, str):
-                # We have only one variant of predefined init function, so we check that init is str for a typo case
-                # The common used non-default weights initialization:
-                self.init_weights = best_practice_resnet_init
+            init_weights = init_weights if isinstance(init_weights, list) else [init_weights]
 
-            # Actual weights initialization
-            self.model.apply(self.init_weights)
+            for init_weights_function in init_weights:
+                if init_weights_function in {'resnet', 'classic'}:
+                    init_weights_function = best_practice_resnet_init
+
+                # Actual weights initialization
+                self.model.apply(init_weights_function)
 
 
     # Transfer to/from device(s)
@@ -1236,7 +1248,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         # Log inner info
         predictions_ = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
-        self.last_train_info['predictions_shapes'] = [get_shape(item) for item in predictions_]
+        self.last_predict_info['predictions_shapes'] = [get_shape(item) for item in predictions_]
         self.last_predict_info['available_outputs'] = list(output_container.keys())
 
         # Retrieve requested outputs

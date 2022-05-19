@@ -1,4 +1,4 @@
-""" !!. """
+""" Blocks: large parts that implement idea/named entity from popular articles. """
 from torch import nn
 
 from ..repr_mixin import ModuleDictReprMixin
@@ -9,18 +9,34 @@ from .... import Config
 
 
 class Block(ModuleDictReprMixin, nn.ModuleDict):
-    """ Convenient wrapper for chaining/splitting multiple base blocks.
+    """ Convenient wrapper for chaining multiple base large blocks.
+    Serves as a link between smaller, like individual layers and their sequences
+     and larger, like named blocks and stages, model parts.
+
+    Depending on the supplied arguments, does the following:
+        - no positional `args`, no explicit `base_block`: the same as :class:`~.torch.layers.MultiLayer`.
+        - no positional `args`,    explicit `base_block`: uses `base_block` to construct nn.Module from the rest kwargs
+        This way `Block` acts as a selector of different constructors.
+
+        -    positional `args: each element of `args` is either a ready-to-use nn.Module, or
+        a dictionary with parameters to create one. If no explicit `base_block` is provided, dictionaries are processed
+        by :class:`~.torch.layers.MultiLayer`; otherwise, `base_block` is used as constructor.
+        This type of initialization is mostly used in directly inherited blocks,
+        see :class:`~.torch.blocks.ResBlock`, :class:`~.torch.blocks.DenseBlock` for examples.
+
+        - `n_repeats` keyword-only argument can be used to repeat the same logical structure multiple times.
+        This way, we can create entire `Stages` of some popular named networks with one additional parameter.
 
     Parameters
     ----------
     args : sequence
         Layers to be chained.
         If element of a sequence is a module, then it is used as is.
-        If element of a sequence is a dictionary, then it is used as arguments of a layer creation.
-        Function that is used as layer is either `base_block` or `base`/`base_block` keys inside the dictionary.
+        If element of a sequence is a dictionary, then it is used as arguments of a block creation.
+        Function that is used as block constructor is either `base_block` or `base_block` key inside the dictionary.
 
-    base, base_block : nn.Module
-        Tensor processing function.
+    base_block : type
+        Constructor for blocks. By default, uses :class:`~.torch.layers.MultiLayer` to chain multiple simple layers.
 
     n_repeats : int
         Number of times to repeat the whole block.
@@ -34,10 +50,6 @@ class Block(ModuleDictReprMixin, nn.ModuleDict):
     of features to maintain the same tensor size::
 
         layer = Block({layout='cnap', channels='same*2'}, inputs=inputs, n_repeats=5)
-
-    Repeat the whole construction two times::
-
-        repeated = splitted * 2
     """
     VERBOSITY_THRESHOLD = 3
 
@@ -53,42 +65,37 @@ class Block(ModuleDictReprMixin, nn.ModuleDict):
 
 
     def initialize(self, inputs, base_block, n_repeats, *args, **kwargs):
-        """ !!. """
+        """ Construct blocks. If needed, repeat them multiple times. """
         for r in range(n_repeats):
             if args:
                 for i, item in enumerate(args):
                     # Make block
                     if isinstance(item, dict):
-                        block = item.pop('base_block', None) or base_block
+                        block_constructor = item.pop('base_block', None) or base_block
                         block_args = {'inputs': inputs, **dict(Config(kwargs) + Config(item))}
-                        layer = block(**block_args)
+                        block = block_constructor(**block_args)
                     elif isinstance(item, nn.Module):
-                        layer = item
+                        block = item
                     else:
-                        raise ValueError(f'Positional arguments of Block must be either dicts or nn.Modules, \
-                                           got {type(item)} instead!')
+                        raise ValueError(f'Positional arguments of Block must be either dicts or nn.Modules, '
+                                         f'got {type(item)} instead!')
 
-                    # Apply block and store shapes
-                    input_shapes = get_shape(inputs)
-                    inputs = layer(inputs)
-                    output_shapes = get_shape(inputs)
-                    layer_name = f'r{r}-i{i}'
-
-                    self[layer_name] = layer
-                    self.shapes[layer_name] = (input_shapes, output_shapes)
+                    inputs = self.initialize_block(inputs, block, f'r{r}-i{i}')
 
             else:
                 # Make block
-                layer = base_block(inputs=inputs, **kwargs)
+                block = base_block(inputs=inputs, **kwargs)
+                inputs = self.initialize_block(inputs, block, f'r{r}')
 
-                # Apply block and store shapes
-                input_shapes = get_shape(inputs)
-                inputs = layer(inputs)
-                output_shapes = get_shape(inputs)
-                layer_name = f'r{r}'
+    def initialize_block(self, inputs, block, block_name):
+        """ Construct one block. """
+        input_shapes = get_shape(inputs)
+        inputs = block(inputs)
+        output_shapes = get_shape(inputs)
 
-                self[layer_name] = layer
-                self.shapes[layer_name] = (input_shapes, output_shapes)
+        self[block_name] = block
+        self.shapes[block_name] = (input_shapes, output_shapes)
+        return inputs
 
 
     def forward(self, x):
@@ -97,18 +104,43 @@ class Block(ModuleDictReprMixin, nn.ModuleDict):
         return x
 
 
+    @classmethod
+    def make(cls, *args, **kwargs):
+        """ Make a block without additional level of nestedness. """
+        if not args and 'n_repeats' not in kwargs:
+            return kwargs.pop('base_block', MultiLayer)(**kwargs)
+        return cls(*args, **kwargs)
+
+
+class DefaultBlock(Block):
+    """ Block with default layout: convolution, normalization, activation. """
+    DEFAULTS = {
+        'layout': 'cna',
+        'channels': 'same',
+        'kernel_size': 3,
+    }
+    def __init__(self, inputs=None, **kwargs):
+        kwargs = {**self.DEFAULTS, **kwargs}
+        super().__init__(inputs=inputs, **kwargs)
+
 
 class Upsample(Block):
-    """ !!. """
+    """ Block with additional defaults for upsampling layers.
+
+    Parameters
+    ----------
+    factor : int
+        The upsampling factor to apply.
+    """
     def __init__(self, inputs=None, layout='b', factor=2, shape=None, **kwargs):
-        if 't' in layout or 'T' in layout:
+        if set('tT').intersection(layout):
             kwargs = {
-                'kernel_size': factor,
+                'kernel_size': 2*factor - 1,
                 'stride': factor,
                 'channels': 'same',
                 **kwargs
             }
-        if 'b' in layout:
+        if set('b').intersection(layout):
             kwargs = {
                 'scale_factor': factor,
                 **kwargs
@@ -117,15 +149,21 @@ class Upsample(Block):
 
 
 class Downsample(Block):
-    """ !!. """
+    """ Block with additional defaults for downsampling layers.
+
+    Parameters
+    ----------
+    factor : int
+        The downsampling factor to apply.
+    """
     def __init__(self, inputs=None, layout='p', factor=2, **kwargs):
-        if 'p' in layout or 'v' in layout:
+        if set('pv').intersection(layout):
             kwargs = {
                 'pool_size': factor,
                 'pool_stride': factor,
                 **kwargs
             }
-        elif 'c' in layout or 'C' in layout or 'w' in layout or 'W' in layout:
+        elif set('cCvV').intersection(layout):
             kwargs = {
                 'kernel_size': factor,
                 'stride': factor,

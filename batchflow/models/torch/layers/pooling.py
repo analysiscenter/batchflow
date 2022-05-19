@@ -5,7 +5,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from .utils import calc_padding
-from ..utils import get_shape, get_num_dims
+from ..utils import get_num_dims
 
 
 MAX_ALIASES = ['max', 'p', 'P']
@@ -14,44 +14,13 @@ SUM_ALIASES = ['sum', 'plus', '+']
 
 
 class BasePool(nn.Module):
-    """ Base class that can select appropriate torch.nn layer depending on input's number of dimensions. """
+    """ Base class for that can select appropriate torch.nn layer, depending on input's number of dimensions,
+    and apply proper padding.
+    """
     LAYERS = {}
 
-    def __init__(self, inputs=None, **kwargs):
-        super().__init__()
-        layer = self.LAYERS[get_num_dims(inputs)]
-        self.layer = layer(**kwargs)
-
-    def forward(self, x):
-        return self.layer(x)
-
-
-class AdaptiveMaxPool(BasePool):
-    """ Multi-dimensional adaptive max pooling layer. """
-    LAYERS = {
-        1: nn.AdaptiveMaxPool1d,
-        2: nn.AdaptiveMaxPool2d,
-        3: nn.AdaptiveMaxPool3d,
-    }
-
-
-class AdaptiveAvgPool(BasePool):
-    """ Multi-dimensional adaptive average pooling layer. """
-    LAYERS = {
-        1: nn.AdaptiveAvgPool1d,
-        2: nn.AdaptiveAvgPool2d,
-        3: nn.AdaptiveAvgPool3d,
-    }
-
-
-class BasePoolWithPadding(BasePool):
-    """
-    Base class that selects torch.nn layer depending on input's number of dimensions
-    AND makes proper padding
-    """
-
     def __init__(self, inputs=None, pool_size=2, pool_stride=2, padding='same'):
-        self.padding = None
+        super().__init__()
 
         if padding is not None:
             padding = calc_padding(inputs=inputs, padding=padding, kernel_size=pool_size, stride=pool_stride)
@@ -63,15 +32,23 @@ class BasePoolWithPadding(BasePool):
             else:
                 raise ValueError('Incorrect padding!')
 
-        super().__init__(inputs, kernel_size=pool_size, stride=pool_stride)
+        layer = self.LAYERS[get_num_dims(inputs)]
+        self.layer = layer(kernel_size=pool_size, stride=pool_stride)
 
     def forward(self, x):
         if self.padding:
             x = F.pad(x, self.padding[::-1])
-        return super().forward(x)
+        return self.layer(x)
 
+class AvgPool(BasePool):
+    """ Multi-dimensional average pooling layer. """
+    LAYERS = {
+        1: nn.AvgPool1d,
+        2: nn.AvgPool2d,
+        3: nn.AvgPool3d,
+    }
 
-class MaxPool(BasePoolWithPadding):
+class MaxPool(BasePool):
     """ Multi-dimensional max pooling layer. """
     LAYERS = {
         1: nn.MaxPool1d,
@@ -80,65 +57,38 @@ class MaxPool(BasePoolWithPadding):
     }
 
 
-class AvgPool(BasePoolWithPadding):
-    """ Multi-dimensional average pooling layer. """
+
+
+class BaseGlobalPool(nn.Module):
+
+    def __init__(self, inputs=None):
+        super().__init__()
+        ndims = get_num_dims(inputs)
+        output_shape = [1] * ndims
+
+        layer = self.LAYERS[ndims]
+        self.layer = layer(output_size=output_shape)
+
+    def forward(self, x):
+        return self.layer(x).view(x.shape[0], -1)
+
+class GlobalAvgPool(BaseGlobalPool):
+    """ Multi-dimensional adaptive average pooling layer. """
     LAYERS = {
-        1: nn.AvgPool1d,
-        2: nn.AvgPool2d,
-        3: nn.AvgPool3d,
+        1: nn.AdaptiveAvgPool1d,
+        2: nn.AdaptiveAvgPool2d,
+        3: nn.AdaptiveAvgPool3d,
+    }
+
+class GlobalMaxPool(BaseGlobalPool):
+    """ Multi-dimensional adaptive max pooling layer. """
+    LAYERS = {
+        1: nn.AdaptiveMaxPool1d,
+        2: nn.AdaptiveMaxPool2d,
+        3: nn.AdaptiveMaxPool3d,
     }
 
 
-class Pool(nn.Module):
-    """ Multi-dimensional pooling layer that selects aggregation strategy (avg or max) """
-    OP_SELECTOR = {**{op:  MaxPool for op in MAX_ALIASES},
-                   **{op:  AvgPool for op in AVG_ALIASES}}
-
-    def __init__(self, inputs=None, op='max', pool_size=2, pool_stride=2, padding='same'):
-        super().__init__()
-        self.pool = self.OP_SELECTOR[op](inputs=inputs,
-                                         pool_size=pool_size, pool_stride=pool_stride, padding=padding)
-
-    def forward(self, x):
-        x = self.pool(x)
-        return x
-
-
-class AdaptivePool(nn.Module):
-    """ Multi-dimensional adaptive pooling layer, that selects aggregation strategy (avg or max) """
-    OP_SELECTOR = {**{op:  AdaptiveMaxPool for op in MAX_ALIASES},
-                   **{op:  AdaptiveAvgPool for op in AVG_ALIASES}}
-
-    def __init__(self, inputs=None, op='max', output_size=None):
-        super().__init__()
-        self.pool = self.OP_SELECTOR[op](output_size=output_size, inputs=inputs)
-
-    def forward(self, x):
-        return self.pool(x)
-
-
-class GlobalPool(AdaptivePool):
-    """ Multi-dimensional global pooling layer. """
-    def __init__(self, inputs=None, op='max'):
-        shape = get_shape(inputs)
-        pool_shape = [1] * len(shape[2:])
-        super().__init__(inputs=inputs, op=op, output_size=pool_shape)
-
-    def forward(self, x):
-        x = super().forward(x)
-        return x.view(x.size(0), -1)
-
-
-class GlobalMaxPool(GlobalPool):
-    """ Multi-dimensional global max pooling layer. """
-    def __init__(self, inputs=None):
-        super().__init__(inputs=inputs, op='max')
-
-
-class GlobalAvgPool(GlobalPool):
-    """ Multi-dimensional global avg pooling layer. """
-    def __init__(self, inputs=None):
-        super().__init__(inputs=inputs, op='avg')
 
 
 class ChannelPool(nn.Module):

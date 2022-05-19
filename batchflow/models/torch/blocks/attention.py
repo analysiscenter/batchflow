@@ -6,7 +6,7 @@ import torch
 from torch import nn
 
 from .core import Block
-from ..layers import Activation, Conv, GlobalPool, ChannelPool, RadixSoftmax, Combine
+from ..layers import Activation, Conv, ChannelPool, RadixSoftmax, Combine
 from ..utils import get_shape, get_num_dims, get_num_channels, safe_eval
 
 
@@ -207,7 +207,7 @@ class CBAM(nn.Module):
         Pooling operations for channel_attention module.
         Default is `('avg', 'max')`.
     """
-    def __init__(self, inputs=None, ratio=16, pool_ops=('avg', 'max'), **kwargs):
+    def __init__(self, inputs=None, ratio=16, pool_ops=('V', 'P'), **kwargs):
         super().__init__()
         self.channel_attention(inputs, ratio, pool_ops, **kwargs)
         self.spatial_attention(inputs, **kwargs)
@@ -226,7 +226,7 @@ class CBAM(nn.Module):
         num_channels = get_num_channels(inputs)
 
         for pool_op in pool_ops:
-            pool = GlobalPool(inputs=inputs, op=pool_op)
+            pool = Block(inputs=inputs, layout=pool_op)
             self.pool_layers.append(pool)
 
         tensor = self.pool_layers[0](inputs)

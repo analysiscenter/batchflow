@@ -1,11 +1,11 @@
-""" !!. """
+""" Utils for individual layers. """
 import numpy as np
 
 from ..utils import get_shape, get_num_dims
 
 
 def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, stride=1, **kwargs):
-    """ Get padding values for various convolutions. """
+    """ Get padding values for various convolutions/poolings. """
     _ = kwargs
 
     dims = get_num_dims(inputs)

@@ -187,7 +187,6 @@ class MBConvBlock(Block):
             block_params['kernel_size'].append(1)
             block_params['stride'].append(1)
 
-
             if use_res_connect:
                 block_params['layout'] += '+'
 
@@ -373,13 +372,15 @@ class ConvNeXtBlock(Block):
         - Label Smoothing
         - AdamW, EMA
     """
-    def __init__(self, inputs=None, kernel_size=7, stride=1, drop_path=0.0, layer_scale=1e-6, **kwargs):
-        channels = get_num_channels(inputs)
+    def __init__(self, inputs=None, layout='Rwlcac!', channels='same', expand_ratio=4, kernel_size=7, stride=1,
+                 drop_path=0.0, layer_scale=1e-6, **kwargs):
+        channels = safe_eval(channels, get_num_channels(inputs))
 
-        super().__init__(inputs=inputs, layout='Rwlcac!', activation='GELU',
-                         channels=[channels, channels * 4, channels],
+        super().__init__(inputs=inputs, layout=layout, activation='GELU',
+                         channels=[channels, channels * expand_ratio, channels],
                          stride=[stride, 1, 1],
                          bias=True,
                          kernel_size=[kernel_size, 1, 1],
                          layer_norm={'data_format':'channels_first'},
-                         branch_end={'op': 'drop_path', 'drop_path': drop_path, 'layer_scale': layer_scale})
+                         branch_end={'drop_path': drop_path, 'layer_scale': layer_scale},
+                         **kwargs)

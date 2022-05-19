@@ -31,17 +31,17 @@ def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts
 class VisualizationMixin:
     """ Collection of visualization (both textual and graphical) tools for a :class:`~.torch.TorchModel`. """
     # Textual visualization of the model
-    def information(self, config=False, devices=True, model=False, misc=True, bold=True):
+    def information(self, config=False, devices=True, misc=True, bold=True):
         """ Show information about model configuration, used devices, train steps and more. """
-        print(self._information(config=config, devices=devices, model=model, misc=misc, bold=bold))
+        print(self._information(config=config, devices=devices, misc=misc, bold=bold))
 
-    def _information(self, config=False, devices=True, model=False, misc=True, bold=False):
+    def _information(self, config=False, devices=True, misc=True, bold=False):
         """ Create information string. """
         message = ''
         bold_code = '\033[1m\033[4m' if bold else ''
         endl_code = '\033[0m\n' if bold else ''
 
-        template_header = bold_code + '\n{}:' + endl_code
+        template_header = '\n' + bold_code + '{}:' + endl_code
 
         if config:
             message += template_header.format('Config')
@@ -53,24 +53,25 @@ class VisualizationMixin:
             if self.devices:
                 message += '\n'.join([f'Device {i} is {d}' for i, d in enumerate(self.devices)]) + '\n'
 
-        if model:
-            message += template_header.format('Model')
-            message += str(self.model) + '\n'
-
         if misc:
             message += template_header.format('Shapes')
 
             if self.inputs_shapes:
-                message += '\n'.join([f'Input {i} has shape {s}' for i, s in enumerate(self.inputs_shapes)]) + '\n'
+                message += '\n'.join([f'Input  {i}: {s}' for i, s in enumerate(self.inputs_shapes)]) + '\n'
             if self.targets_shapes:
-                message += '\n'.join([f'Target {i} has shape {s}' for i, s in enumerate(self.targets_shapes)]) + '\n'
+                message += '\n'.join([f'Target {i}: {s}' for i, s in enumerate(self.targets_shapes)]) + '\n'
             if self.classes:
                 message += f'Number of classes: {self.classes}\n'
 
             message += template_header.format('Model info')
             if self.model:
-                num_params = self.num_parameters
-                message += f'Total number of parameters in the model: {num_params:,}'
+                message += f'Order  of model parts: {self.model.config["order"]}\n'
+                message += f'Number of all model parameters in the model: {self.num_parameters:,}\n'
+
+                if self.model.config["order"] != self.model.config["trainable"]:
+                    message += f'Trainable model parts: {self.model.config["trainable"]}\n'
+                    message += f'Number of trainable parameters in the model: {self.num_trainable_parameters:,}\n'
+
 
             message += f'\nTotal number of passed training iterations: {self.iteration}\n'
 
@@ -95,8 +96,16 @@ class VisualizationMixin:
 
 
     @property
-    def num_parameters(self):
+    def num_frozen_parameters(self):
+        return sum(p.numel() for p in self.model.parameters() if not p.requires_grad)
+
+    @property
+    def num_trainable_parameters(self):
         return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+
+    @property
+    def num_parameters(self):
+        return sum(p.numel() for p in self.model.parameters())
 
     # Graphs to describe model
     def save_graph(self, log_dir=None, **kwargs):
