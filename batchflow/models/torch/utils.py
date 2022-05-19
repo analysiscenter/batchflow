@@ -1,6 +1,7 @@
 """ Utility functions. """
 import numpy as np
 import torch
+from torch import nn
 
 
 
@@ -63,18 +64,18 @@ def safe_eval(expression, value, names=None):
 
 
 def make_initialization_inputs(inputs, device=None):
-    """ !!. """
+    """ Take either tensor, shape tuple or list of them, and always return tensor or list of them. """
     if isinstance(inputs, torch.Tensor):
         pass
     elif isinstance(inputs, tuple):
-        inputs = torch.ones(*inputs, device=device)
+        inputs = torch.rand(*inputs, device=device)
     elif isinstance(inputs, (tuple, list)):
         inputs = [make_initialization_inputs(item, device=device) for item in inputs]
     return inputs
 
 
 def get_shape(inputs, default_shape=None):
-    """ !!. """
+    """ Compute shape of a tensor or shapes of list of tensors. """
     if inputs is None:
         shape = default_shape
     elif isinstance(inputs, np.ndarray):
@@ -87,22 +88,38 @@ def get_shape(inputs, default_shape=None):
         raise TypeError(f'Inputs can be array, tensor, or sequence, got {type(inputs)} instead!')
     return shape
 
-def get_num_channels(inputs, axis=1):
-    """ !!. """
-    return get_shape(inputs)[axis]
+def get_num_channels(inputs):
+    """ Get number of channels in one tensor. """
+    return inputs.shape[1]
 
 def get_num_dims(inputs):
-    """ !!. """
-    shape = get_shape(inputs)
-    dim = len(shape)
+    """ Get number of dimensions in one tensor, minus the batch and channel dimension. """
+    dim = len(inputs.shape)
     return max(1, dim - 2)
 
 def get_device(inputs):
-    """ !!. """
+    """ Get used device of a tensor or list of tensors. """
     if isinstance(inputs, torch.Tensor):
         device = inputs.device
     elif isinstance(inputs, (tuple, list)):
         device = inputs[0].device
     else:
-        raise TypeError(f'Inputs can be a tensor, shape, or sequence of them, got {type(inputs)} instead!')
+        raise TypeError(f'Inputs can be a tensor or list of tensors, got {type(inputs)} instead!')
     return device
+
+def make_shallow_dict(module):
+    """ Create a dictionary from a module, where:
+        - keys are valid attribute names for each children
+        - values are submodules themselves, directly contained in torch.nn, e.g. nn.Conv2d, nn.Linear
+    """
+    #pylint: disable=protected-access
+    if module.__class__ is getattr(nn, module.__class__.__name__, None):
+        return {None : module}
+
+    result = {}
+    for key, value in module._modules.items():
+        subdict = make_shallow_dict(value)
+        for subkey, subvalue in subdict.items():
+            store_key = f'{key}/{subkey}' if subkey is not None else key
+            result[store_key] = subvalue
+    return result

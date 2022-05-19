@@ -68,7 +68,7 @@ class Dense(nn.Module):
 
 
 class DenseAlongAxis(nn.Module):
-    """ !!. """
+    """ Dense layer along specified axis. Completely equivalent to a 1x1 convolution along the same axis. """
     def __init__(self, inputs=None, features=None, axis=1, bias=True):
         super().__init__()
         self.axis = axis
@@ -87,7 +87,6 @@ class DenseAlongAxis(nn.Module):
         if isinstance(features, str):
             features = safe_eval(features, in_features)
         self.layer = nn.Linear(in_features=in_features, out_features=features, bias=bias)   # (B, H*W, C2)
-
 
     def forward(self, x):
         # Compute shape of the outputs
@@ -140,9 +139,12 @@ class LayerNorm(nn.Module):
         if self.data_format == "channels_last":
             return F.layer_norm(x, (self.channels,), self.weight, self.bias, self.eps)
 
+        # Use multiplication instead of `pow` as `torch2trt` throws warnings about it
         mean = x.mean(1, keepdim=True)
-        s = (x - mean).pow(2).mean(1, keepdim=True)
-        x = (x - mean) / torch.sqrt(s + self.eps)
+        normalized = x - mean
+        std = (normalized * normalized).mean(1, keepdim=True)
+        std = torch.sqrt(std + self.eps)
+        x = normalized / std
         x = self.weight[:, None, None] * x + self.bias[:, None, None]
         return x
 
@@ -199,8 +201,8 @@ class Dropout(nn.Module):
                     residual = batch_size - sum(sizes)
                     sizes += [residual]
                 else:
-                    raise ValueError(f'Elements of multisample must be either all ints or floats,\
-                                       got "{self.multisample}" instead!')
+                    raise ValueError(f'Elements of multisample must be either all ints or floats, '
+                                     f'got "{self.multisample}" instead!')
 
                 splitted = torch.split(x, sizes)
                 dropped = [self.layer(branch) for branch in splitted]

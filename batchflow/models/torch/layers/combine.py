@@ -1,4 +1,4 @@
-""" !!. """
+""" Layer to combine multiple inputs into one tensor. """
 import torch
 from torch import nn
 
@@ -10,6 +10,8 @@ from ..utils import get_shape, get_num_channels, get_num_dims
 
 class Combine(nn.Module):
     """ Combine list of tensor into one.
+    For each operation, we call its initialization ('*_initialization' methods) at module init,
+    then use its forward ('*_forward' methods) for applying the operation.
 
     Parameters
     ----------
@@ -22,7 +24,8 @@ class Combine(nn.Module):
         If 'sum', '+', then inputs are summed.
         If 'mul', '*', then inputs are multiplied.
         If 'mean', then inputs are averaged.
-        !!.
+        If 'drop_path', then inputs are summed with probability:
+        for each batch item, there is a chance to not add anything.
     """
     #pylint: disable=attribute-defined-outside-init
     OPS = {
@@ -105,8 +108,8 @@ class Combine(nn.Module):
         dim_ = get_num_dims(inputs[0])
         spatial_shape_ = shape_[-dim_:]
 
-        resized = []
-        for item in inputs:
+        resized = [inputs[0]]
+        for item in inputs[1:]:
             shape = get_shape(item)
             dim = get_num_dims(item)
             spatial_shape = shape[-dim:]
@@ -137,7 +140,7 @@ class Combine(nn.Module):
 
 
     def drop_path_initialization(self, inputs, drop_prob=0.0, scale=True, layer_scale=1e-6, **kwargs):
-        """ !!. """
+        """ Initializa drop path: save supplied args and create trainable parameter. """
         _ = kwargs
         self.drop_prob = drop_prob
         self.scale = scale
@@ -151,7 +154,7 @@ class Combine(nn.Module):
             self.gamma = None
 
     def drop_path_forward(self, inputs):
-        """ !!. """
+        """ Drop some of the batch items in the second tensor, multiply it by trainable parameter, add. """
         inputs, x = inputs
 
         # DropPath: drop information about some of the samples
@@ -162,7 +165,7 @@ class Combine(nn.Module):
             shape = (x.shape[0], ) + (1,) * (x.ndim - 1)
             mask = x.new_empty(shape).bernoulli_(keep_prob)
 
-            if keep_prob > 0.0 and self.scale:
+            if self.scale:
                 mask.div_(keep_prob)
             x = x * mask
 

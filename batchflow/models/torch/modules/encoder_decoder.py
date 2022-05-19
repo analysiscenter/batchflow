@@ -1,9 +1,9 @@
-""" !!. """
+""" Encoder and decoders: process tensors in multiple stages with reducing or increasing spatial dimensionality. """
 from torch import nn
 
 
 from ..repr_mixin import ModuleDictReprMixin
-from ..blocks import Block, Upsample, Downsample, Combine
+from ..blocks import Block, DefaultBlock, Upsample, Downsample, Combine
 from ..utils import get_shape
 from ...utils import unpack_args
 from ....config import Config
@@ -11,13 +11,39 @@ from ....config import Config
 
 
 class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
-    """ Encoder: create compressed representation of an input by reducing its spatial dimensions. """
+    """ EncoderModule: create compressed representation of an input by reducing its spatial dimensions.
+
+    Consists of multiple stages, parametrized by the `num_stages` key.
+    Each stage consists of multiple blocks. Order of blocks is parametrized by `order` key.
+    The contents (`base_block`, `layout`, etc) parametrized in corresponding `blocks` and `downsample` keys.
+
+    This module can work with either individual tensor / list of them as the input.
+    Usually it expects one tensor. If the input is list, then it is simply sliced with `input_index`.
+    Depending on `output_type`:
+        - if `output_type` is `tensor`, then only the last activation is returned.
+        - if `output_type` is   `list`, then all hidden activations (from each stage) are returned in a list.
+
+    Parameters
+    ----------
+    num_stages : int
+        Number of stages.
+    order : str, sequence of str
+        Determines order of applying layers.
+        If str, then each letter stands for operation:
+        'b' for 'block', 'd'/'p' for 'downsampling', 's' for 'skip'.
+        If sequence, than the first letter of each item stands for operation:
+        For example, `'sbd'` allows to use throw skip connection -> block -> downsampling.
+    downsample : dict, optional
+        Parameters for downsampling, see :class:`~.blocks.Downsample`.
+    blocks : dict, optional
+        Parameters for processing blocks, see :class:`~.blocks.Block`.
+    """
     VERBOSITY_THRESHOLD = 2
 
     DEFAULTS = {
         'num_stages': None,
         'order': ['skip', 'block', 'downsampling'],
-        'blocks': {'layout': 'cna', 'channels': 'same', 'kernel_size': 3},
+        'blocks': {'base_block': DefaultBlock},
         'downsample': {'layout': 'p', 'pool_size': 2, 'pool_stride': 2}
     }
 
@@ -32,7 +58,7 @@ class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
         self.initialize(inputs, **kwargs)
 
     def initialize(self, inputs, **kwargs):
-        """ !!. """
+        """ Chain stages and their contents. """
         inputs = inputs[self.input_index] if isinstance(inputs, list) else inputs
 
         # Parse parameters
@@ -98,7 +124,37 @@ class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
 
 
 class DecoderModule(ModuleDictReprMixin, nn.ModuleDict):
-    """ Decoder: increasing spatial dimensions. """
+    """ Decoder: increasing spatial dimensions.
+
+    General idea is to sequentially increase spatial dimensionality, while concatenating provided skip-connections
+    to facilitate information flow.
+
+    Consists of multiple stages, parametrized by the `num_stages` key.
+    If not provided, uses length of the inputs as default.
+    Each stage consists of multiple blocks. Order of blocks is parametrized by `order` key.
+    The contents (`base_block`, `layout`, etc) parametrized in corresponding `blocks`, `upsample` and `combine` keys.
+
+    This module can work with either individual tensor / list of them as the input.
+    Usually it expects a list of hidden activations. If the input is list, then it is sliced with `input_index`.
+    Outputs one tensor.
+
+    Parameters
+    ----------
+    num_stages : int
+        Number of stages.
+    order : str, sequence of str
+        Determines order of applying layers.
+        If str, then each letter stands for operation:
+        'b' for 'block', 'u' for 'upsampling', 'c' for 'combine'
+        If sequence, than the first letter of each item stands for operation.
+        For example, `'ucb'` allows to use upsampling -> combine -> block.
+    upsample : dict, optional
+        Parameters for upsampling, see :class:`~.blocks.Upsample`.
+    blocks : dict, optional
+        Parameters for processing blocks, see :class:`~.blocks.Block`.
+    combine : dict, optional
+        Parameters for processing blocks, see :class:`~.layers.Combine`.
+    """
     # TODO: add meaningful functionality for `output_type=='list'`
     VERBOSITY_THRESHOLD = 2
 
@@ -106,7 +162,7 @@ class DecoderModule(ModuleDictReprMixin, nn.ModuleDict):
         'num_stages': None,
         'order': ['upsampling', 'block', 'combine'],
         'skip': True,
-        'blocks': {'layout': 'cna', 'channels': 'same', 'kernel_size': 3},
+        'blocks': {'base_block': DefaultBlock},
         'upsample': {'layout': 'b', 'factor': 2},
         'combine': {'op': 'concat', 'leading_index': 1}
     }
@@ -122,7 +178,7 @@ class DecoderModule(ModuleDictReprMixin, nn.ModuleDict):
         self.initialize(inputs, **kwargs)
 
     def initialize(self, inputs, **kwargs):
-        """ !!. """
+        """ Chain stages and their contents. """
         # Parse inputs
         inputs = inputs if isinstance(inputs, list) else [inputs]
         tensor = inputs[-1]
@@ -178,7 +234,6 @@ class DecoderModule(ModuleDictReprMixin, nn.ModuleDict):
     def forward(self, inputs):
         inputs = inputs if isinstance(inputs, list) else [inputs]
         tensor = inputs[-1]
-        i = 0
 
         for block_name, block in self.items():
             letter = block_name[0]
@@ -189,20 +244,38 @@ class DecoderModule(ModuleDictReprMixin, nn.ModuleDict):
                 stage_index = int(block_name.split('-')[-1])
                 skip_index = self.indices[stage_index]
                 tensor = block([tensor, inputs[skip_index]])
-                i += 1
         return tensor
 
 
 class MLPDecoderModule(ModuleDictReprMixin, nn.ModuleDict):
-    """ Decoder: increasing spatial dimensions. """
+    """ Decoder: increasing spatial dimensions.
+
+    General idea is to separately increase spatial dimensionality of all of the provided inputs, then combine them
+    into one resulting tensor.
+
+    This module can work with either individual tensor / list of them as the input.
+    Usually it expects a list of hidden activations. If the input is list, then it is sliced with `input_index`.
+    Outputs one tensor.
+
+    Parameters
+    ----------
+    size : tuple of ints, optional
+        Desired spatial size of resulting tensor. If not provided, uses the biggest of the inputs.
+    upsample : dict, optional
+        Parameters for upsampling, see :class:`~.blocks.Upsample`.
+    block : dict, optional
+        Parameters for processing block, see :class:`~.blocks.Block`.
+    combine : dict, optional
+        Parameters for processing blocks, see :class:`~.layers.Combine`.
+    """
     # TODO: add meaningful functionality for `output_type=='list'`
     VERBOSITY_THRESHOLD = 2
 
     DEFAULTS = {
         'size': None,
-        'upsample': {'layout': 'Fb', 'features': 'same'},
+        'upsample': {'layout': 'cb', 'channels': 'same'},
         'combine': {'op': 'concat', 'force_resize': False},
-        'block': {'layout': 'cnad', 'channels': 'same', 'kernel_size': 1, 'dropout_rate': 0.0}
+        'block': {'base_block': DefaultBlock}
     }
 
     def __init__(self, inputs=None, **kwargs):
@@ -214,7 +287,7 @@ class MLPDecoderModule(ModuleDictReprMixin, nn.ModuleDict):
         self.initialize(inputs, **kwargs)
 
     def initialize(self, inputs, **kwargs):
-        """ !!. """
+        """ Upsample every tensor to the same shape, combine, postprocess. """
         # Parse inputs
         inputs = inputs if isinstance(inputs, list) else [inputs]
 

@@ -20,4 +20,4 @@ from .unet import UNet, ResUNet, DenseUNet
 # from .efficientnet import EfficientNetB0, EfficientNetB1, EfficientNetB2, EfficientNetB3, EfficientNetB4, \
 #                           EfficientNetB5, EfficientNetB6, EfficientNetB7
 from .utils import (unpack_fn_from_config, safe_eval, make_initialization_inputs,
-                    get_shape, get_num_channels, get_num_dims, get_device)
+                    get_shape, get_num_channels, get_num_dims, get_device, make_shallow_dict)

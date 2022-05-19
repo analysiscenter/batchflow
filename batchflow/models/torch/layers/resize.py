@@ -117,7 +117,3 @@ class Interpolate(nn.Module):
 
 class PixelShuffle(nn.PixelShuffle):
     """ Resize input tensor with depth to space operation. """
-
-class SubPixelConv(PixelShuffle):
-    """ An alias for PixelShuffle. """
-    pass

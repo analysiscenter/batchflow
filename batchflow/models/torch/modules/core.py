@@ -1,4 +1,4 @@
-""" !!. """
+""" Defaults module. """
 import inspect
 from torch import nn
 
@@ -7,7 +7,19 @@ from ..repr_mixin import LayerReprMixin
 
 
 class DefaultModule(LayerReprMixin, nn.Module):
-    """ !!. """
+    """ Module for default model parts.
+    Relies on :class:`~.torch.layers.MultiLayer` for actual operations.
+
+    Implements additional logic of working with inputs and outputs:
+        - if `input_type` is `tensor` and `output_type` is `tensor`,
+        then this module expects one tensor and outputs one tensor.
+        - if `input_type` is   `list` and `output_type` is `tensor`,
+        then this module slices the list with `input_index` and outputs one tensor.
+        - if `input_type` is `tensor` and `output_type` is `list`,
+        then this module expects one tensor and wraps the output in list.
+        - if `input_type` is `list` and `output_type` is `list`,
+        then this module slices the list wth `input_index` and appends the output to the same list, which is returned.
+    """
     VERBOSITY_THRESHOLD = 3
 
     def __init__(self, inputs=None, input_type='tensor', output_type='tensor', input_index=-1, **kwargs):
@@ -46,7 +58,12 @@ class DefaultModule(LayerReprMixin, nn.Module):
 
 
 class WrapperModule(DefaultModule):
-    """ !!. """
+    """ Module for wrapping external nn.Modules.
+
+    Allows to use `module` key for initialization:
+        - if the value is a nn.Module, then it is used directly
+        - otherwise, `module` is expected to be a module constructor, which is initialized with the rest of the kwargs.
+    """
     VERBOSITY_THRESHOLD = 4
 
     def initialize(self, inputs, **kwargs):

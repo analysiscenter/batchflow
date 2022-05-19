@@ -1,10 +1,13 @@
-""" !!. """
+""" Classes to wrap large (named) blocks as letters to use in layout. """
 from torch import nn
 
 
 
 class Branch(nn.Module):
-    """ Add side branch to a :class:`~.layers.Block`. """
+    """ Add side branch to a :class:`~..MultiLayer`.
+    Used as letters `R`/`B` in layouts.
+    Can be ended (and combined with the main flow) with `+`, `*`, `|` operations.
+    """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
         self.input_id, self.after_id = None, None
@@ -22,9 +25,9 @@ class Branch(nn.Module):
         return output
 
 
-
 class AttentionWrapper(nn.Module):
     """ Attention based on tensor itself.
+    Used as `S` letter in layouts.
 
     Parameters
     ----------
