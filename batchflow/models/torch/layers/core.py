@@ -56,10 +56,9 @@ class Dense(nn.Module):
         super().__init__()
 
         self.flatten = Flatten(keep_dims) if flatten else nn.Identity()
-
         inputs = self.flatten(inputs)
-        in_features = inputs.size(-1)
 
+        in_features = inputs.size(-1)
         if isinstance(features, str):
             features = safe_eval(features, in_features)
 

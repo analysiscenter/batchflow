@@ -74,29 +74,37 @@ class ResNet(TorchModel):
         """ Define model's defaults: general architecture. """
         config = super().default_config()
 
-        config['initial_block'] += dict(layout='cnap', channels=64, kernel_size=7, stride=2,
-                                        pool_size=3, pool_stride=2)
+        config.update({
+            'initial_block': {
+                'layout': 'cnap',
+                'channels': 64,
+                'kernel_size': 7,
+                'stride': 2,
+                'pool_size': 3,
+                'pool_stride': 2
+            },
+            'body': {
+                'type': 'encoder',
+                'output_type': 'tensor',
+                'num_stages': 4,
+                'order': ['block'],
+                'blocks': {
+                    'base_block': ResBlock,
+                    'layout': 'cnacn',
+                    'channels': [64, 128, 256, 512],
+                    'n_reps': [1, 1, 1, 1],
+                    'downsample': [False, True, True, True],
+                    'bottleneck': False,
+                    'attention': False,
+                }
+            },
+            'head': {
+                'layout': 'Vdf',
+                'dropout_rate' : 0.4,
+            },
 
-        config['body'] = {
-            'type': 'encoder',
-            'output_type': 'tensor',
-            'num_stages': 4,
-            'order': ['block'],
-            'blocks': {
-                'base_block': ResBlock,
-                'layout': 'cnacn',
-                'channels': [64, 128, 256, 512],
-                'n_reps': [1, 1, 1, 1],
-                'downsample': [False, True, True, True],
-                'bottleneck': False,
-                'attention': False,
-            }
-        }
-
-
-        config['head'] += dict(layout='Vdf', dropout_rate=.4)
-
-        config['loss'] = 'ce'
+            'loss': 'ce',
+        })
         return config
 
 

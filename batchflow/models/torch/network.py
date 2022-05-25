@@ -64,6 +64,7 @@ class Network(ModuleDictReprMixin, nn.ModuleDict):
         self.shapes = {}
         self.config = {}
         self.initialize(inputs, config)
+        self._last_used_modules = None
 
 
     # Initialization of the network: making modules and forward pass
@@ -118,7 +119,15 @@ class Network(ModuleDictReprMixin, nn.ModuleDict):
         return module
 
     def forward(self, inputs):
-        for module in self.values():
+        used_modules = []
+
+        for name, module in self.items():
+            inputs_id = id(inputs)
             inputs = module(inputs)
+
+            if id(inputs) != inputs_id:
+                used_modules.append(name)
+
+        self._last_used_modules = used_modules
         return inputs
 

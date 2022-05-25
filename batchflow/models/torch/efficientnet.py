@@ -97,13 +97,15 @@ class EfficientNetB0(TorchModel):
                 'activation': swish,
                 'width_factor': 1.0,
                 'depth_factor': 1.0,
-            }
+            },
+            'loss': 'ce',
         })
         return config
 
-    def build_config(self):
+    def update_config(self):
         """ Define model's architecture configuration. """
-        config = super().build_config()
+        super().update_config()
+        config = self.config
 
         w_factor = config.get('common/width_factor')
         d_factor = config.get('common/depth_factor')
@@ -127,8 +129,7 @@ class EfficientNetB0(TorchModel):
 
 
 class EfficientNetB1(EfficientNetB0):
-    """ EfficientNetB1 """
-
+    """ EfficientNetB1. """
     resolution = 240
 
     @classmethod
@@ -145,8 +146,7 @@ class EfficientNetB1(EfficientNetB0):
 
 
 class EfficientNetB2(EfficientNetB0):
-    """ EfficientNetB2 """
-
+    """ EfficientNetB2. """
     resolution = 260
 
     @classmethod
@@ -163,8 +163,7 @@ class EfficientNetB2(EfficientNetB0):
 
 
 class EfficientNetB3(EfficientNetB0):
-    """ EfficientNetB3 """
-
+    """ EfficientNetB3. """
     resolution = 300
 
     @classmethod
@@ -181,8 +180,7 @@ class EfficientNetB3(EfficientNetB0):
 
 
 class EfficientNetB4(EfficientNetB0):
-    """ EfficientNetB4 """
-
+    """ EfficientNetB4. """
     resolution = 380
 
     @classmethod
@@ -199,8 +197,7 @@ class EfficientNetB4(EfficientNetB0):
 
 
 class EfficientNetB5(EfficientNetB0):
-    """ EfficientNetB5 """
-
+    """ EfficientNetB5. """
     resolution = 456
 
     @classmethod
@@ -217,8 +214,7 @@ class EfficientNetB5(EfficientNetB0):
 
 
 class EfficientNetB6(EfficientNetB0):
-    """ EfficientNetB6 """
-
+    """ EfficientNetB6. """
     resolution = 528
 
     @classmethod
@@ -235,8 +231,7 @@ class EfficientNetB6(EfficientNetB0):
 
 
 class EfficientNetB7(EfficientNetB0):
-    """ EfficientNetB7 """
-
+    """ EfficientNetB7. """
     resolution = 600
 
     @classmethod

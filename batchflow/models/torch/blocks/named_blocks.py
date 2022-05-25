@@ -10,6 +10,24 @@ CONV_LETTERS = ['c', 'C', 'w', 'W', 't', 'T']
 
 
 
+class VGGBlock(Block):
+    """ Convenient VGG block.
+    Parameters
+    ----------
+    depth3 : int
+        Number of 3x3 convolutions.
+    depth1 : int
+        Number of 1x1 convolutions.
+    """
+    def __init__(self, inputs=None, layout='cna', filters=None, depth3=1, depth1=0, **kwargs):
+        if isinstance(filters, str):
+            filters = safe_eval(filters, get_num_channels(inputs))
+
+        layout = layout * (depth3 + depth1)
+        kernels = [3]*depth3 + [1]*depth1
+        super().__init__(inputs=inputs, layout=layout, filters=filters, kernel_size=kernels, **kwargs)
+
+
 class ResBlock(Block):
     """ ResNet Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is a
     configurable residual layer, potentially including downsampling, bottleneck, squeeze-and-excitation and groups.
