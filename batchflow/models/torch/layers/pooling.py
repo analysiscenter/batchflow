@@ -8,14 +8,9 @@ from .utils import calc_padding
 from ..utils import get_num_dims
 
 
-MAX_ALIASES = ['max', 'p', 'P']
-AVG_ALIASES = ['avg', 'mean', 'v', 'V']
-SUM_ALIASES = ['sum', 'plus', '+']
-
-
 class BasePool(nn.Module):
-    """ Base class for that can select appropriate torch.nn layer, depending on input's number of dimensions,
-    and apply proper padding.
+    """ Base class for pooling.
+    Selects appropriate layer, depending on input's number of dimensions, and applies proper padding.
     """
     LAYERS = {}
 
@@ -58,9 +53,10 @@ class MaxPool(BasePool):
 
 
 
-
 class BaseGlobalPool(nn.Module):
-
+    """ Base class for global pooling.
+    Selects appropriate layer, depending on input's number of dimensions.
+    """
     def __init__(self, inputs=None):
         super().__init__()
         ndims = get_num_dims(inputs)
@@ -90,6 +86,9 @@ class GlobalMaxPool(BaseGlobalPool):
 
 
 
+MAX_ALIASES = ['max', 'p', 'P']
+AVG_ALIASES = ['avg', 'mean', 'v', 'V']
+SUM_ALIASES = ['sum', 'plus', '+']
 
 class ChannelPool(nn.Module):
     """ Channel pooling layer. """

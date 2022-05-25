@@ -26,9 +26,12 @@ class Flatten(nn.Module):
         if len(self.keep_dims) == x.ndim:
             return x
 
+        if self.keep_dims == [0]:
+            return x.flatten(1)
+
         for dim1, dim2 in enumerate(self.keep_dims):
             x = x.transpose(dim1, dim2)
-        new_shape = [x.size(i) for i in range(len(self.keep_dims))]
+        new_shape = x.shape[:len(self.keep_dims)]
         return x.reshape(*new_shape, -1)
 
 
@@ -41,15 +44,15 @@ class Dense(nn.Module):
         Out_features in linear layer. see :meth:`~..utils.safe_eval` for details on str values.
 
     bias : bool, optional
-        Whether to learn  an additive bias by default True.
+        Whether to learn an additive bias. Default is True.
 
     flatten : bool, optional
-        Whether to flatten input prior to feeding it to linear layer, by default True.
+        Whether to flatten inputs prior to feeding it to linear layer, by default True.
 
     keep_dims : int, optional
         Dimensions to keep while flattening input, see :class:`~.Flatten`, by default 0.
     """
-    def __init__(self, features, bias=True, inputs=None, flatten=True, keep_dims=0):
+    def __init__(self, features, inputs=None, bias=True, flatten=True, keep_dims=0):
         super().__init__()
 
         self.flatten = Flatten(keep_dims) if flatten else nn.Identity()

@@ -2,7 +2,7 @@
 from torch import nn
 
 from .repr_mixin import ModuleDictReprMixin
-from .modules import (DefaultModule, WrapperModule,
+from .modules import (DefaultModule,
                       EncoderModule, DecoderModule, MLPDecoderModule,
                       HuggingFaceLoader, TIMMLoader)
 from .utils import get_shape, get_device, make_initialization_inputs, make_shallow_dict
@@ -13,18 +13,43 @@ class Network(ModuleDictReprMixin, nn.ModuleDict):
     """ Class to chain multiple modules together.
     The main functionality is to select required module, based on type, and chain multiple of them together.
 
-    !!.
+    Works by analyzing supplied `config`:
+        - `order` key defines the order and number of modules to chain.
+        Each element is a string with a module name, for example, `'head'`.
+
+        - each element in `order` is used as a key to get value from `config`.
+        A value should be a dictionary with `type` key, that defines the type of module to use:
+            - `default`, used also if no `type` is provided.
+            Relies on `:class:~.layers.MultiLayer` for making actual operations.
+            - `encoder`, `decoder`, `mlp-decoder`.
+            Process tensor sequentially with increase/decrease in spatial dimensionality.
+            - `timm`, `hugging-face`.
+            Import a module from library and use it as tensor processing operation.
+        Each module accepts optional `input_type` and `output_type` keys, which can modify
+        the behavior to input or output to work with individual tensor or list.
+
+        - optional `trainable` key can be used to freeze some of the network parts.
+        If not provided, uses the same names as in `order` and enables all of them to train.
+
+    Parameters
+    ----------
+    inputs : torch.Tensor, tuple of ints or list of them
+        Example of the input tensor(s) to the network.
+        Instead of instance of torch.Tensor, one can use its tuple shape (with batch dim included).
+    device : str or torch.cuda.Device
+        Device to use for tensor definition. Used only if some of the `inputs` are shapes.
+    config : dict
+        Configuration of network to initialize.
     """
     VERBOSITY_THRESHOLD = 1
 
     MODULE_TO_TYPE = {
-        DefaultModule: ['default'],
-        WrapperModule: ['wrapper'],
+        DefaultModule: ['default', 'wrapper'],
         EncoderModule: ['encoder'],
         DecoderModule: ['decoder'],
         MLPDecoderModule: ['mlp-decoder', 'mlpdecoder'],
-        HuggingFaceLoader: ['hugging-face', 'huggingface', 'hf'],
         TIMMLoader: ['timm'],
+        HuggingFaceLoader: ['hugging-face', 'huggingface', 'hf'],
     }
     TYPE_TO_MODULE = {alias: module for module, aliases in MODULE_TO_TYPE.items() for alias in aliases}
 
@@ -41,6 +66,7 @@ class Network(ModuleDictReprMixin, nn.ModuleDict):
         self.initialize(inputs, config)
 
 
+    # Initialization of the network: making modules and forward pass
     def initialize(self, inputs, config):
         """ Make multiple modules. Mark some of them as frozen (not trainable). """
         order = self.config['order'] = config['order']
@@ -77,7 +103,7 @@ class Network(ModuleDictReprMixin, nn.ModuleDict):
     def make_module(self, inputs, module_params):
         """ Parse the type of one module and make it. """
         if module_params:
-            module_type = module_params.pop('type', 'default')
+            module_type = module_params.pop('type', 'default').lower()
 
             if module_type in self.TYPE_TO_MODULE:
                 module = self.TYPE_TO_MODULE[module_type](inputs=inputs, **module_params)
@@ -95,3 +121,4 @@ class Network(ModuleDictReprMixin, nn.ModuleDict):
         for module in self.values():
             inputs = module(inputs)
         return inputs
+
