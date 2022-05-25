@@ -108,9 +108,9 @@ class UNet(TorchModel):
         config['loss'] = 'ce'
         return config
 
-    def build_config(self):
+    def update_config(self):
         """ Update architecture configuration, if needed. """
-        super().build_config()
+        super().update_config()
         config = self.full_config
 
         if config.get('auto_build'):
@@ -126,9 +126,9 @@ class UNet(TorchModel):
             config['decoder/upsample/channels'] = encoder_channels[::-1]
 
         if not config.get('decoder/upsample/channels'):
-            warnings.warn("'decoder/upsample/channels' are not set and " +
-                          "can be inconsistent with 'decoder/blocks/channels'! Please revise your model's config. " +
-                          "In future, upsample channels can be made to match decoder block's channels by default.")
+            warnings.warn("'decoder/upsample/channels' are not set and " + \
+                          "can be inconsistent with 'decoder/blocks/channels'! Please revise your model's config. " + \
+                          "In the future, upsample channels can be made to match decoder block's channels by default.")
 
 
 class ResUNet(UNet):

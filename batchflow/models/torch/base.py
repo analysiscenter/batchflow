@@ -517,7 +517,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         config['head/targets_shapes'] = self.targets_shapes
         # As `update_config` can be called multiple times, and `head/classes` key can have value `None`,
-        # we need to use `or` insetad of `get`
+        # we need to use `or` instead of `get`
         config['head/classes'] = config.get('head/classes') or self.classes
 
         if config.get('head/features') is None:
@@ -778,7 +778,6 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.model_to_device()
         self.make_infrastructure()
 
-
     def initialize_weights(self):
         """ Initialize model weights with a pre-defined or supplied callable. """
         init_weights = self.config.get('init_weights', None)
@@ -792,6 +791,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
                 # Actual weights initialization
                 self.model.apply(init_weights_function)
+
 
     # Transfer to/from device(s)
     def transfer_to_device(self, data):

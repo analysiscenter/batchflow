@@ -53,6 +53,8 @@ class DefaultModule(LayerReprMixin, nn.Module):
 
             if isinstance(module_constructor, nn.Module):
                 module = module_constructor
+            elif callable(module_constructor) and not isinstance(module_constructor, type):
+                module = module_constructor
             else:
                 kwargs = {**kwargs, **kwargs.get('module_kwargs', {})}
                 if 'inputs' in inspect.getfullargspec(module_constructor.__init__)[0]:
@@ -72,6 +74,8 @@ class DefaultModule(LayerReprMixin, nn.Module):
         # Apply layer
         if self.training or (self.disable_at_inference is False):
             output = self.block(tensor)
+        else:
+            output = tensor
 
         # Prepare output type: sequence or individual tensor
         if self.output_type == 'list':
