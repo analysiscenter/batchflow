@@ -99,3 +99,8 @@ class R(E):
     def get(self, **kwargs):
         research = self._get(**kwargs)
         return research.results
+
+class S(E):
+    """ Research storage. """
+    def _transform(self, experiments):
+        return [exp.storage for exp in experiments]
