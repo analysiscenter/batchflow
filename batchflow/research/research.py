@@ -385,10 +385,10 @@ class Research:
         if debug and (parallel or executor_target not in ['f', 'for']):
             raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")
 
-        if not dump_results and (redirect_stdout == 1 or redirect_stdout == 3):
+        if not dump_results and redirect_stdout in (1, 3):
             raise ValueError("`redirect_stdout` can be 0 or 2 only when `dump_results` is False")
 
-        if not dump_results and (redirect_stderr == 1 or redirect_stderr == 3):
+        if not dump_results and redirect_stderr in (1, 3):
             raise ValueError("`redirect_stderr` can be 0 or 2 only when `dump_results` is False")
 
         self.debug = debug

@@ -238,7 +238,8 @@ class ExecutableUnit:
             self.transform_method()
 
         if self.must_execute(iteration, n_iters, last):
-            self.experiment.logger.debug(f"Execute '{self.name}' [{iteration}/{n_iters - 1}]")
+            total = (n_iters - 1) if n_iters is not None else None
+            self.experiment.logger.debug(f"Execute '{self.name}' [{iteration}/{total}]")
 
             self.iteration = iteration
             args = eval_expr(self.args, experiment=self.experiment)
@@ -876,6 +877,7 @@ class Executor:
         self.common_stderr = None
 
     def set_params(self, kwargs):
+        """ Set params of executor. Is used to get attributes from research or from kwargs. """
         defaults = {
             'loglevel': 'debug',
             'name': 'executor',
@@ -907,7 +909,7 @@ class Executor:
 
     def run(self):
         """ Run experiments. """
-        self.storage.create_redirection_files()
+        self.storage._create_redirection_files()
 
         with self.storage.stdout_file, self.storage.stderr_file:
             self.pid = os.getpid() if self.research and self.research.parallel else None
@@ -934,19 +936,21 @@ class Executor:
                 if self.research:
                     self.research.monitor.stop_experiment(experiment)
                 experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
-                experiment.storage.copy_results_to_research_storage()
+                # experiment.storage.copy_results_to_research_storage()
 
         self.close()
 
     def close(self):
+        """ Close storages. """
         for experiment in self.experiments:
             experiment.storage.close()
         self.storage.close_files()
         if self.research is None:
             self.storage.close()
 
-    def __del__(self):
-        self.close()
+    # def __del__(self):
+    #     print("Close again.", self.experiments[0].storage._closed)
+    #     self.close()
 
     @parallel(init='_parallel_init_call')
     def parallel_call(self, experiment, iteration, unit_name):
@@ -973,6 +977,7 @@ class Executor:
 
     @property
     def profiler(self):
+        """ Executor profiler. """
         if self.experiments[0].profile:
             return ExecutorProfiler(self.experiments)
         return None
