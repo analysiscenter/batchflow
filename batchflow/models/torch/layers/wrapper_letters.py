@@ -10,7 +10,7 @@ class Branch(nn.Module):
     """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
-        self.input_id, self.after_id = None, None
+        self.input_id, self.output_id = None, None
 
         if kwargs.get('layout'):
             from ..blocks import Block
@@ -21,7 +21,7 @@ class Branch(nn.Module):
     def forward(self, x):
         self.input_id = id(x)
         output = self.layer(x)
-        self.after_id = id(output)
+        self.output_id = id(output)
         return output
 
 

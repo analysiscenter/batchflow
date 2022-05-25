@@ -22,44 +22,38 @@ class UNet(TorchModel):
         channels : int, optional
             number of channels in first encoder block — each of the following ones will be doubled until embedding
 
-    body : dict
-        encoder : dict
-            num_stages : int
-                number of downsampling blocks (default=4)
-            blocks : dict
-                Parameters for pre-processing blocks:
+    encoder : dict
+        num_stages : int
+            number of downsampling blocks (default=4)
+        blocks : dict
+            Parameters for pre-processing blocks:
 
-                channels : None, int, list of ints or list of lists of ints
-                    The number of channels in the output tensor.
-                    If int, same number of channels applies to all layers on all stages
-                    If list of ints, specifies number of channels in each layer of different stages
-                    If list of list of ints, specifies number of channels in different layers on different stages
-                    If not given or None, channels parameters in encoder/blocks, decoder/blocks and decoder/upsample
-                    default to values which make number of channels double
-                    on each stage of encoding and halve on each stage of decoding,
-                    provided that `decoder/skip` is `True`. Specify `channels=None` explicitly
-                    if you want to use custom `num_steps` and infer `channels`
+            channels : None, int, list of ints or list of lists of ints
+                The number of channels in the output tensor.
+                If int, same number of channels applies to all layers on all stages
+                If list of ints, specifies number of channels in each layer of different stages
+                If list of list of ints, specifies number of channels in different layers on different stages
+                If not given or None, channels parameters in encoder/blocks, decoder/blocks and decoder/upsample
+                default to values which make number of channels double
+                on each stage of encoding and halve on each stage of decoding,
+                provided that `decoder/skip` is `True`. Specify `channels=None` explicitly
+                if you want to use custom `num_steps` and infer `channels`
 
-        decoder : dict
-            num_stages : int
-                number of upsampling blocks. Defaults to the number of downsamplings.
+    decoder : dict
+        num_stages : int
+            number of upsampling blocks. Defaults to the number of downsamplings.
 
-            factor : None, int or list of ints
-                If int, the total upsampling factor for all stages combined.
-                If list, upsampling factors for each stage
-                If not given or None, defaults to [2]*num_stages
+        blocks : dict
+            Parameters for post-processing blocks:
 
-            blocks : dict
-                Parameters for post-processing blocks:
+            channels : None, int, list of ints or list of lists of ints
+                same as encoder/blocks/channels
 
-                channels : None, int, list of ints or list of lists of ints
-                    same as encoder/blocks/channels
+        upsample : dict
+            Parameters for upsampling (see :func:`~.layers.upsample`).
 
-            upsample : dict
-                Parameters for upsampling (see :func:`~.layers.upsample`).
-
-                channels : int, list of ints or list of lists of ints
-                    same as encoder/blocks/channels
+            channels : int, list of ints or list of lists of ints
+                same as encoder/blocks/channels
 
     Notes
     -----
@@ -71,6 +65,8 @@ class UNet(TorchModel):
         config = super().default_config()
 
         config.update({
+            'auto_build': False,
+
             'order': ['initial_block', 'encoder', 'embedding', 'decoder', 'head'],
 
             'encoder': {
@@ -85,12 +81,12 @@ class UNet(TorchModel):
             },
 
             'embedding': {
+                'input_type': 'list',
+                'input_idx': -1,
+                'output_type': 'list',
                 'layout': 'cna cna',
                 'kernel_size': 3,
                 'channels': 1024,
-                'input_list' : True,
-                'input_idx': -1,
-                'output_list': True
             },
 
             'decoder': {

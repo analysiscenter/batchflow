@@ -66,7 +66,7 @@ class Block(ModuleDictReprMixin, nn.ModuleDict):
 
     def initialize(self, inputs, base_block, n_repeats, *args, **kwargs):
         """ Construct blocks. If needed, repeat them multiple times. """
-        for r in range(n_repeats):
+        for repeat in range(n_repeats):
             if args:
                 for i, item in enumerate(args):
                     # Make block
@@ -80,12 +80,12 @@ class Block(ModuleDictReprMixin, nn.ModuleDict):
                         raise ValueError(f'Positional arguments of Block must be either dicts or nn.Modules, '
                                          f'got {type(item)} instead!')
 
-                    inputs = self.initialize_block(inputs, block, f'r{r}-i{i}')
+                    inputs = self.initialize_block(inputs, block, f'repeat{repeat}-args{i}')
 
             else:
                 # Make block
                 block = base_block(inputs=inputs, **kwargs)
-                inputs = self.initialize_block(inputs, block, f'r{r}')
+                inputs = self.initialize_block(inputs, block, f'repeat{repeat}')
 
     def initialize_block(self, inputs, block, block_name):
         """ Construct one block. """

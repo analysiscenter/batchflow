@@ -18,11 +18,11 @@ except ImportError:
     CUPY_AVAILABLE = False
 
 from .network import Network
-from .mixins import OptimalBatchSizeMixin, LayerHook, ExtractionMixin, VisualizationMixin
+from .base_mixins import OptimalBatchSizeMixin, LayerHook, ExtractionMixin, VisualizationMixin
 from .initialization import best_practice_resnet_init
-from .utils import unpack_fn_from_config, get_shape
 from .losses import CrossEntropyLoss, BinaryLovaszLoss, LovaszLoss, SSIM, MSSIM
 from .losses import binary as binary_losses, multiclass as multiclass_losses
+from .utils import unpack_fn_from_config, get_shape
 from ..base import BaseModel
 from ...config import Config
 
@@ -79,12 +79,16 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     All of the parameters for both logics are defined in the config, supplied at initialization.
     The detailed description can be seen at `parameters` section; here, we describe the overall structure of keys:
-        - global `cuda` parameters:
+        - global cuda and memory parameters:
             - `device` sets the desired accelerator to use. Default is to use the single best available (GPU over CPU).
             - `benchmark` defines the `cuda` behavior: trade some GPU memory to get minor (~15%) acceleration.
             Default is True.
+            - `channels_last` sets the model weights and tensors layout to `channels_last`,
+            which may result in minor acceleration. Default is False.
 
         - PyTorch model configuration.
+            - `model`. If provided, then value should be a ready-to-use nn.Module.
+        Otherwise, relies on :class:`.network.Network` for building the model:
             - `order` defines the sequence of blocks to build the model from. Default is initial_block -> body -> head.
             Separation of the NN into multiple blocks is just for convenience, so we can split
             the preprocessing, main body of the model, and postprocessing into individual parts.
@@ -94,10 +98,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             - `initial_block`, `body`, `head` are parameters for this respective parts of the neural network.
             Defaults are empty layouts, meaning no operations.
             - `common` parameters are passed to each of the neural network parts. Default is empty.
+            - `init_weights` allows to initialize weights.
+
             - `output` defines additional operations, applied to the output after loss computation.
             By default, we have `predictions`, `predictions_{i}` and `predictions_{i}_{j}` aliases.
             Note that these do not interfere with loss computation and are here only for convenience.
-            - `init_weights` allows to initialize weights.
 
         - shapes info. If fully provided, used to initialize the model. If no shapes are given in the config,
         the model is created at the time of the first `train` call by looking at the actual batch data and shapes.
@@ -139,7 +144,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         If str, a device name (e.g. ``'cpu'`` or ``'gpu:0'``). Regular expressions are also allowed (e.g. ``'gpu:*'``).
         If torch.device, then device to be used.
         If sequence, then each entry must be in one of previous formats, and batch data is paralleled across them.
-        Default behaviour is to use one (and only one) device of the best available type (priority to GPU over CPU).
+        Default behavior is to use one (and only one) device of the best available type (priority to GPU over CPU).
 
     benchmark : bool
         Whether to optimize network's forward pass during the first batch.
@@ -149,34 +154,27 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Model building configuration
+    model : nn.Module, optional
+        If provided, then this module is used as the model to train without any modifications.
+        If provided, other model-related keys (`order`, `initial_block`, etc) are not used.
+
     order : sequence
         Defines sequence of network blocks in the architecture. Default is initial_block -> body -> head.
-        Each element of the sequence must be either a string, a tuple or a dict.
-        If string, then it is used as name of method to use, as config key to use, as name in model repr.
-        For example, ``'initial_block'`` stands for using ``self.initial_block`` with config[`initial_block`]
-        as parameters, and model representation would show this part of network as `initial_block`.
-        If tuple, then it must have three elements: (block_name, config_name, method).
-        If dict, then it must contain three keys: `block_name`, `config_name`, `method`.
-        In cases of tuple and dict, `method` can also be callable.
+        Each element of the sequence must be either a string, which is used to retrieve module parameters from config.
+        Module parameters should include `type` and other keyword arguments for its initialization.
+        Refer to the documentation of :class:`.network.Network` for more details.
 
     initial_block : dict
-        User-defined module or parameters for the input block, usually :class:`~.torch.layers.Block` parameters.
-
-        Examples:
-
-        - ``{'initial_block': dict(layout='nac nac', channels=64, kernel_size=[7, 3], stride=[1, 2])}``
-        - ``{'initial_block': MyCustomModule(some_param=1, another_param=2)}``
-
+        User-defined module or parameters for the preprocess layers, usually :class:`~.torch.layers.Block` parameters.
     body : dict or nn.Module
-        User-defined module or parameters for the base network layers,
-        usually :class:`~.torch.layers.Block` parameters.
-
+        User-defined module or parameters for the base network layers, usually :class:`~.torch.layers.Block` parameters.
     head : dict or nn.Module
-        User-defined module or parameters for the prediction layers,
-        usually :class:`~.torch.layers.Block` parameters.
-
+        User-defined module or parameters for the postprocess layers, usually :class:`~.torch.layers.Block` parameters.
     common : dict
-        Default parameters for all blocks (see :class:`~.torch.layers.Block`).
+        Default parameters, passed for all modules.
+
+    trainable : sequence, optional
+        Names of model parts to train. Should be a subset of names in `order` and can be used to freeze parameters.
 
     output : str, list or dict
         Auxiliary operations to apply to the network predictions.
@@ -190,7 +188,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         See :meth:`.TorchModel.output` for more details.
 
     init_weights : callable, 'best_practice_resnet', or None
-        Model weights initilaization.
+        Model weights initialization.
         If None, then default initialization is used.
         If 'best_practice_resnet', then common used non-default initialization is used.
         If callable, then callable applied to each layer.
@@ -394,8 +392,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.device = None
         self.devices = []
 
-        # Train procedure and ifrastructure
-        self.init_weights = None
+        # Train procedure and infrastructure
         self.loss = None
         self.optimizer = None
         self.decay = None
@@ -461,6 +458,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         # TODO: do we really need this?
         self.model = None
         self.last_train_info = {}
+        self.last_predict_info = {}
 
 
     # Create config of model creation: combine the external and default ones
@@ -478,6 +476,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             'amp': True,
             'device': None,
             'benchmark': True,
+            'channels_last': False,
             'microbatch_size': False,
             'sync_frequency': 1,
             'profile': False,
@@ -532,7 +531,6 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         """ Parse instance attributes from config. """
         config = self.config
 
-        self.init_weights = config.get('init_weights', None)
         self.microbatch_size = config.get('microbatch', config.get('microbatch_size', False))
         self.sync_frequency = config.get('sync_frequency', 1)
         self.amp = config.get('amp', True)
@@ -587,6 +585,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                             if device not in self.devices[:i]]
             self.device = self.devices[0]
 
+        if self.device.type == 'cpu':
+            #TODO: maybe, we should add warning
+            self.amp = False
         torch.backends.cudnn.benchmark = config.get('benchmark', 'cuda' in self.device.type)
 
     def _parse_placeholder_shapes(self):
@@ -621,12 +622,15 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             return [list(sequence)]
         return [list(item) for item in sequence]
 
-    def make_placeholder_data(self, batch_size=None):
+    def make_placeholder_data(self, batch_size=None, to_device=True):
         """ Create a sequence of tensor, based on the parsed `inputs_shapes`. """
         batch_size = batch_size or self.placeholder_batch_size
 
         data = [np.random.random((batch_size, *shape[1:])).astype(np.float32)
                 for shape in self.inputs_shapes]
+
+        data = data[0] if len(data) == 1 else data
+        data = self.transfer_to_device(data) if to_device else data
         return data
 
 
@@ -756,9 +760,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         """ Create an instance of PyTorch model or use one provided.
         After it, create training infrastructure (loss, optimizer, decay).
         """
-        inputs = inputs or self.make_placeholder_data()
-        inputs = inputs[0] if len(inputs) == 1 else inputs
-        inputs = self.transfer_to_device(inputs)
+        if inputs is not None:
+            inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
+            inputs = self.transfer_to_device(inputs)
+        else:
+            inputs = self.make_placeholder_data(to_device=True)
 
         if 'model' not in self.config:
             self.model = Network(inputs=inputs, config=self.config, device=self.device)
@@ -766,16 +772,17 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self.model = self.config['model']
 
         self.initialize_weights()
+        if self.config['channels_last']:
+            self.model = self.model.to(memory_format=torch.channels_last)
 
         self.model_to_device()
         self.make_infrastructure()
 
 
-    # Model weights initialization
     def initialize_weights(self):
         """ Initialize model weights with a pre-defined or supplied callable. """
-        init_weights = self.init_weights
-        if self.model and (init_weights is not None):
+        init_weights = self.config.get('init_weights', None)
+        if self.model is not None and init_weights is not None:
             # Parse model weights initialization
             init_weights = init_weights if isinstance(init_weights, list) else [init_weights]
 
@@ -785,7 +792,6 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
                 # Actual weights initialization
                 self.model.apply(init_weights_function)
-
 
     # Transfer to/from device(s)
     def transfer_to_device(self, data):
@@ -799,7 +805,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         if isinstance(data, np.ndarray):
             if data.dtype != np.float32:
                 data = data.astype(np.float32)
-            data = torch.from_numpy(data).to(self.device)
+            data = torch.from_numpy(data)
+
+            if self.config['channels_last'] and data.ndim == 4:
+                data = data.to(memory_format=torch.channels_last)
+            data = data.to(self.device)
             return data
 
         if isinstance(data, torch.Tensor):
@@ -1001,8 +1011,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     def _train(self, inputs, targets, outputs, sync_frequency, sam_rho, sam_individual_norm):
         # Parse inputs
-        inputs = inputs[0] if len(inputs) == 1 else inputs
-        targets = targets[0] if len(targets) == 1 else targets
+        inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
+        targets = targets[0] if len(targets) == 1 and isinstance(targets, list) else targets
         inputs = self.transfer_to_device(inputs)
         targets = self.transfer_to_device(targets)
 
@@ -1224,8 +1234,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     def _predict(self, inputs, targets, outputs):
         # Parse inputs
-        inputs = inputs[0] if len(inputs) == 1 else inputs
-        targets = targets[0] if len(targets) == 1 else targets
+        inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
+        targets = targets[0] if len(targets) == 1 and isinstance(targets, list) else targets
 
         # Convert layer ids into LayerHooks
         outputs = self.prepare_outputs(outputs)

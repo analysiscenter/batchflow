@@ -1,7 +1,7 @@
 """ Various Torch models and blocks.
 
 .. note::
-    This module requries PyTorch package.
+    This module requires PyTorch package.
 """
 from .base import TorchModel
 from .network import Network
