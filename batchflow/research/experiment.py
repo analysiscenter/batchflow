@@ -17,7 +17,7 @@ from .domain import ConfigAlias
 from .named_expr import E, O, EC
 from .utils import generate_id, must_execute, to_list, parse_name, MultiOut
 from .profiler import ExecutorProfiler
-from .storage import ExperimentStorage, ResearchStorage
+from .storage import BaseExperimentStorage, BaseResearchStorage
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -698,7 +698,7 @@ class Experiment:
         else:
             storage = self.dump_results
 
-        self.storage = ExperimentStorage(self, loglevel=self.loglevel, storage=storage)
+        self.storage = BaseExperimentStorage(self, loglevel=self.loglevel, storage=storage)
         self.logger = self.storage.logger
         self.profiler = self.storage.profiler
 
@@ -868,7 +868,7 @@ class Executor:
             self.storage = self.research.storage
         else:
             storage = 'local' if self.dump_results else 'memory'
-            self.storage = ResearchStorage(self, storage=storage)
+            self.storage = BaseResearchStorage(self, storage=storage)
 
         self.create_experiments()
 
@@ -909,7 +909,7 @@ class Executor:
 
     def run(self):
         """ Run experiments. """
-        self.storage._create_redirection_files()
+        self.storage.create_redirection_streams()
 
         with self.storage.stdout_file, self.storage.stderr_file:
             self.pid = os.getpid() if self.research and self.research.parallel else None

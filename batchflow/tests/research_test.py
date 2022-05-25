@@ -523,7 +523,7 @@ class TestResearch:
 
         assert simple_research.profiler.profile_info.shape[1] == shape
 
-    @pytest.mark.parametrize('loglevel, length_res, length_exp', list(zip(['info', 'debug'], [62, 104], [7, 16])))
+    @pytest.mark.parametrize('loglevel, length_res, length_exp', list(zip(['info', 'debug'], [62, 104], [7, 14])))
     def test_logging(self, loglevel, length_res, length_exp, tmp_path, simple_research):
         path = os.path.join(tmp_path, 'research')
         simple_research.run(name=path, n_iters=3, dump_results=True, loglevel=loglevel)

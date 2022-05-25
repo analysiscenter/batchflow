@@ -19,7 +19,7 @@ from .domain import Domain
 from .distributor import Distributor, DynamicQueue
 from .experiment import Experiment, Executor
 from .utils import to_list
-from .storage import ResearchStorage
+from .storage import BaseResearchStorage
 
 from ..utils_random import make_seed_sequence
 
@@ -412,7 +412,7 @@ class Research:
         else:
             storage = self.dump_results
 
-        self.storage = ResearchStorage(self, self.loglevel, storage=storage)
+        self.storage = BaseResearchStorage(self, self.loglevel, storage=storage)
 
         if self.dump_results:
             self.experiment = self.experiment.dump() # add final dump of experiment results
@@ -514,7 +514,7 @@ class Research:
             research = dill.load(f)
 
         if research.dump_results:
-            research.storage = ResearchStorage(research, research.loglevel, mode='r', storage='local')
+            research.storage = BaseResearchStorage(research, research.loglevel, mode='r', storage='local')
             research.storage.load()
             research._is_loaded = True # pylint: disable=protected-access
         return research

@@ -188,7 +188,7 @@ class Worker:
                 else:
                     executor.run()
                 self.tasks.task_done()
-        except exception as e: #pylint: disable=broad-exception
+        except exception as e: #pylint: disable=broad-except
             ex_traceback = e.__traceback__
             msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
             self.research.logger.error(f"Fail worker {self.index}[pid:{self.pid}]: Exception\n{msg}")
