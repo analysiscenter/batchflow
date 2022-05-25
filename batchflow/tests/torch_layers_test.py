@@ -6,9 +6,7 @@ import pytest
 import torch
 import numpy as np
 
-from batchflow.models.torch.layers.pooling import GlobalMaxPool, GlobalAvgPool, \
-    AdaptiveMaxPool, AdaptiveAvgPool, MaxPool, AvgPool, Pool
-
+from batchflow.models.torch.layers.pooling import GlobalMaxPool, GlobalAvgPool, MaxPool, AvgPool
 from batchflow.models.torch.layers.core import Flatten
 
 # POOLING_TEST_DATA format: (input array,
@@ -25,66 +23,39 @@ POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, *shape]),
                       for shape in [(-1,), (-1, 2), (-1, 2, 2)]]
 
 POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1]),
-                       np.array([3, 7, 11, 15]).reshape([2, 1, 2]),
-                       AdaptiveMaxPool, {'output_size': [2]})]
-POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1, 2]),
-                       np.array([6, 7, 14, 15]).reshape([2, 1, 1, 2]),
-                       AdaptiveMaxPool, {'output_size': [1, 2]})]
-POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1, 2, 2]),
-                       np.array([5, 7, 13, 15]).reshape([2, 1, 1, 2, 1]),
-                       AdaptiveMaxPool, {'output_size': [1, 2, 1]})]
-
-POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1]),
-                       np.array([1.5, 5.5, 9.5, 13.5]).reshape([2, 1, 2]),
-                       AdaptiveAvgPool,
-                       {'output_size': [2]})]
-POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1, 2]),
-                       np.array([3, 4, 11, 12]).reshape([2, 1, 1, 2]),
-                       AdaptiveAvgPool, {'output_size': [1, 2]})]
-POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1, 2, 2]),
-                       np.array([2.5, 4.5, 10.5, 12.5]).reshape([2, 1, 1, 2, 1]),
-                       AdaptiveAvgPool, {'output_size': [1, 2, 1]})]
-
-POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1]),
                        np.array([1, 4, 7, 9, 12, 15]).reshape([2, 1, -1]),
-                       MaxPool, dict(pool_size=3, pool_strides=3, padding='same'))]
+                       MaxPool, dict(pool_size=3, pool_stride=3, padding='same'))]
 POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1]),
                        np.array([2, 5, 10, 13]).reshape([2, 1, -1]),
-                       MaxPool, dict(pool_size=3, pool_strides=3, padding='valid'))]
+                       MaxPool, dict(pool_size=3, pool_stride=3, padding='valid'))]
 POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1]),
                        np.array([1, 5, 7, 9, 13, 15]).reshape([2, 1, -1]),
-                       MaxPool, dict(pool_size=4, pool_strides=4, padding=2))]
+                       MaxPool, dict(pool_size=4, pool_stride=4, padding=2))]
 POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1, 2]),
                        np.array([3, 7, 11, 15]).reshape([2, 1, -1, 1]),
-                       MaxPool, dict(pool_size=2, pool_strides=2, padding=p))
+                       MaxPool, dict(pool_size=2, pool_stride=2, padding=p))
                       for p in ('same', 'valid', )]
 POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1, 2]),
                        np.array([0, 1, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15]).reshape([2, 1, -1, 2]),
-                       MaxPool, dict(pool_size=2, pool_strides=2, padding=1))]
+                       MaxPool, dict(pool_size=2, pool_stride=2, padding=1))]
 
 POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1]),
                        np.array([1/3, 3, 6, 17/3, 11, 14]).reshape([2, 1, -1]),
-                       AvgPool, dict(pool_size=3, pool_strides=3, padding='same'))]
+                       AvgPool, dict(pool_size=3, pool_stride=3, padding='same'))]
 POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1]),
                        np.array([1, 4, 9, 12]).reshape([2, 1, -1]),
-                       AvgPool, dict(pool_size=3, pool_strides=3, padding='valid'))]
+                       AvgPool, dict(pool_size=3, pool_stride=3, padding='valid'))]
 POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1]),
                        np.array([0.25, 3.5, 3.25, 4.25, 11.5, 7.25]).reshape([2, 1, -1]),
-                       AvgPool, dict(pool_size=4, pool_strides=4, padding=2))]
+                       AvgPool, dict(pool_size=4, pool_stride=4, padding=2))]
 POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1, 2]),
                        np.array([1.5, 5.5, 9.5, 13.5]).reshape([2, 1, -1, 1]),
-                       AvgPool, dict(pool_size=2, pool_strides=2, padding=p))
+                       AvgPool, dict(pool_size=2, pool_stride=2, padding=p))
                       for p in ('same', 'valid', )]
 POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1, 2]),
                        np.array([0, 0.25, 1.5, 2, 1.5, 1.75, 2, 2.25, 5.5, 6, 3.5, 3.75]).reshape([2, 1, -1, 2]),
-                       AvgPool, dict(pool_size=2, pool_strides=2, padding=1))]
+                       AvgPool, dict(pool_size=2, pool_stride=2, padding=1))]
 
-POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1]),
-                       np.array([1, 4, 7, 9, 12, 15]).reshape([2, 1, -1]),
-                       Pool, dict(op='max', pool_size=3, pool_strides=3, padding='same'))]
-POOLING_TEST_DATA += [(np.arange(16).reshape([2, 1, -1]),
-                       np.array([1/3, 3, 6, 17/3, 11, 14]).reshape([2, 1, -1]),
-                       Pool, dict(op='avg', pool_size=3, pool_strides=3, padding='same'))]
 
 
 @pytest.mark.parametrize('inp, res, op, kwargs', POOLING_TEST_DATA)

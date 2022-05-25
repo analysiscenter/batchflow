@@ -41,6 +41,7 @@ class DefaultModule(LayerReprMixin, nn.Module):
         self.initialize(inputs, **kwargs)
 
     def initialize(self, inputs, **kwargs):
+        """ Make underlying block or reuse existing one. """
         # Parse inputs type: list or individual tensor
         inputs_is_list = isinstance(inputs, list)
         if inputs_is_list and self.input_type != 'list':

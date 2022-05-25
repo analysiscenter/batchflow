@@ -130,4 +130,3 @@ class Network(ModuleDictReprMixin, nn.ModuleDict):
 
         self._last_used_modules = used_modules
         return inputs
-
