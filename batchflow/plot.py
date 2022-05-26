@@ -1,12 +1,14 @@
 """ Plot functions. """
+from ast import literal_eval
 from colorsys import rgb_to_hls, hls_to_rgb
 from copy import copy
 from datetime import datetime
-from functools import reduce
 from numbers import Number
+import operator
 
 import numpy as np
 
+import cv2
 from scipy.ndimage import convolve
 from matplotlib import pyplot as plt
 from matplotlib.collections import PatchCollection
@@ -20,6 +22,25 @@ from numba import njit
 
 from .utils import to_list
 
+STR_TO_OPERATION = {
+    '<': operator.lt,
+    '<=': operator.le,
+    '==': operator.eq,
+    '!=': operator.ne,
+    '>=': operator.ge,
+    '>': operator.gt
+}
+
+def evaluate_str_comparison(arg0, string):
+    """ Find comparison operator in string and apply it against given argument
+    and those parsed from the string to the right of the found operator.
+    """
+    for key in STR_TO_OPERATION:
+        if key in string:
+            operation = STR_TO_OPERATION[key]
+            arg1 = literal_eval(string.split(key)[-1])
+            return operation(arg0, arg1)
+    raise ValueError("Given string {string} does not contain any of supported operators: {STR_TO_OPERATION}")
 
 
 class CycledList(list):
@@ -206,15 +227,35 @@ class Layer:
     def preprocess(self, data):
         """ Look through layer config for requested data transformations and apply them ."""
         if self.mode == 'image':
-            mask_values = self.config.get('mask_values', [])
-            masks = [data == m if isinstance(m, Number) else m(data) for m in to_list(mask_values)]
-            mask = reduce(np.logical_or, masks, np.isnan(data))
-            data = np.ma.array(data, mask=mask)
-
             order_axes = self.config.get('order_axes', None)
             if order_axes is not None:
                 order_axes = order_axes[:data.ndim]
                 data = np.transpose(data, order_axes)
+
+            dilate = self.config.get('dilate', False)
+            if dilate:
+                if dilate is True:
+                    dilation_config = {'kernel': np.ones((3, 1), dtype=np.uint8)}
+                elif isinstance(dilate, int):
+                    dilation_config = {'iterations': dilate}
+                elif isinstance(dilate, tuple):
+                    dilation_config = {'kernel': np.ones(dilate, dtype=np.uint8)}
+
+                data = cv2.dilate(data, **dilation_config)
+
+            masking_conditions = self.config.get('mask', None)
+            if masking_conditions is not None:
+                mask = np.isnan(data)
+                masking_conditions = to_list(masking_conditions)
+                for condition in masking_conditions:
+                    if isinstance(condition, Number):
+                        condition_mask = data == condition
+                    elif isinstance(condition, str):
+                        condition_mask = evaluate_str_comparison(data, condition)
+                    elif callable(condition):
+                        condition_mask = condition(data)
+                    mask = np.logical_or(mask, condition_mask)
+                data = np.ma.array(data, mask=mask)
 
         if self.mode == 'histogram':
             flatten = self.config.get('flatten', False)
