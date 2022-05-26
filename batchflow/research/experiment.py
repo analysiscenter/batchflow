@@ -367,7 +367,6 @@ class Experiment:
         self.instances = None
         self.logger = None
         self.iteration = None
-        self.exception = None
         self.random_seed = None
         self.random = None
         self.profiler = None
@@ -755,7 +754,6 @@ class Experiment:
                     if isinstance(e, StopIteration):
                         self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
                     else:
-                        self.exception = e
                         ex_traceback = e.__traceback__
                         msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
                         self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")

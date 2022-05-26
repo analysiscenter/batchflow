@@ -465,7 +465,7 @@ class TestResearch:
 
         results = research.results.df.dtypes.values
 
-        # columns : id,  layout, units, iteration, loss, accuracy
+        # columns : id, layout, units, iteration, loss, accuracy
         assert all(results == [np.dtype(i) for i in ['O', 'O', 'O', 'int64', 'float32', 'float64']])
 
         process = psutil.Process(os.getpid())
