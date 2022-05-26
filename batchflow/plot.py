@@ -93,6 +93,11 @@ def is_binary(array):
             return False
     return True
 
+
+def contains_numbers(iterable):
+    """ Check if first iterable item is a number. """
+    return isinstance(iterable[0], Number)
+
 def maybe_index(key, value, index):
     """ Get i-th element of parameter if index is provided and parameter value is a list else return it unchanged.
 
@@ -195,10 +200,10 @@ class Layer:
                 self.config['vmin'] = 0
                 self.config['vmax'] = 1
 
-        preprocessed_data = self.preprocess_data(data)
+        preprocessed_data = self.preprocess(data)
         self.object = getattr(self, mode)(preprocessed_data)
 
-    def preprocess_data(self, data):
+    def preprocess(self, data):
         """ Look through layer config for requested data transformations and apply them ."""
         if self.mode == 'image':
             mask_values = self.config.get('mask_values', [])
@@ -216,20 +221,79 @@ class Layer:
             if flatten:
                 data = data.flatten()
 
+        if self.mode == 'curve':
+            if isinstance(data, np.ndarray) or (isinstance(data, list) and contains_numbers(data)):
+                if hasattr(self, 'object'):
+                    xdata = self.object.get_xdata()
+                else:
+                    xdata = range(len(data))
+                data = [xdata, data]
+
+        if self.mode == 'loss':
+            if isinstance(data, tuple):
+                loss, lr = data
+            else:
+                loss, lr = data, None
+
+            window = self.config.get('window')
+            if window is None:
+                smoothed = None
+            else:
+                smoothed = convolve(loss, np.ones(window), mode='nearest') / window
+
+            data = [loss, smoothed, lr]
+
         return data
 
-    def set_data(self, data):
-        """ Preprocess given data and pass it to `set_data`. Works in `image` mode only. """
-        if self.mode != 'image':
-            raise NotImplementedError("Updating layer data is supported in 'image' mode only")
+    @property
+    def ax(self):
+        return self.subplot.ax
 
-        new_data = self.preprocess(data)
+    @property
+    def twin_ax(self):
+        return self.subplot._twin_ax # pylint: disable=protected-access
 
-        new_vmin = self.config.get('vmin', np.nanmin(new_data))
-        new_vmax = self.config.get('vmax', np.nanmax(new_data))
-        self.object.set_clim([new_vmin, new_vmax])
+    def update_lims(self):
+        """ Recalculate plot limits. """
+        self.ax.relim()
+        self.ax.autoscale_view()
 
-        self.object.set_data(new_data)
+        if self.twin_ax is not None:
+            self.twin_ax.relim()
+            self.twin_ax.autoscale_view()
+
+    def update(self, data):
+        """ Preprocess given data and pass it to `set_data`. Does not work in `histogram` mode. """
+        if self.mode == 'image':
+            data = self.preprocess(data)
+            self.object.set_data(data)
+
+            vmin = self.config.get('vmin', np.nanmin(data))
+            vmax = self.config.get('vmax', np.nanmax(data))
+            self.object.set_clim([vmin, vmax])
+
+        if self.mode == 'histogram':
+            raise NotImplementedError("Updating layer data is not in supported in 'histogram' mode. ")
+
+        if self.mode == 'curve':
+            x_data, y_data = self.preprocess(data)
+            self.object.set_data(x_data, y_data)
+            self.update_lims()
+
+        if self.mode == 'loss':
+            loss, smoothed, lr = self.preprocess(data)
+
+            self.object[0].set_ydata(loss)
+            if smoothed is None:
+                if lr is not None:
+                    self.object[1].set_ydata(lr)
+            else:
+                self.object[1].set_ydata(smoothed)
+                if lr is not None:
+                    self.object[2].set_ydata(lr)
+
+            self.update_lims()
+
 
     def image(self, data):
         """ Display data as an image. """
@@ -250,7 +314,7 @@ class Layer:
         mask_color = self.config.get('mask_color', None)
         cmap.set_bad(color=mask_color)
 
-        image = self.subplot.ax.imshow(data, cmap=cmap, **image_config)
+        image = self.ax.imshow(data, cmap=cmap, **image_config)
 
         return image
 
@@ -259,7 +323,7 @@ class Layer:
         histogram_keys = ['bins', 'color', 'alpha', 'label']
         histogram_config = filter_config(self.config, histogram_keys, prefix='histogram_')
 
-        _, _, bar = self.subplot.ax.hist(data, **histogram_config)
+        _, _, bar = self.ax.hist(data, **histogram_config)
 
         return bar
 
@@ -270,13 +334,13 @@ class Layer:
         curve_keys = ['color', 'linestyle', 'alpha']
         curve_config = filter_config(self.config, curve_keys, prefix='curve_')
 
-        lines = self.subplot.ax.plot(x, y, **curve_config)
+        line = self.ax.plot(x, y, **curve_config)[0]
 
-        return lines
+        return line
 
     def loss(self, data):
         """ Display data as a polygonal chain, optionally display running mean and learning rate with nice defaults. """
-        loss, lr = data
+        loss, smoothed, lr = data
 
         label = self.config.get('label', f'loss #{self.index + 1}')
         loss_label = label + f' ⟶ {loss[-1]:2.3f}'
@@ -285,29 +349,27 @@ class Layer:
             final = np.mean(loss[-final_window:]) #pylint: disable=invalid-unary-operand-type
             loss_label += f"\nmean over last {final_window} iterations={final:2.3f}"
 
-        lines = []
+        curves = []
 
         curve_keys = ['color', 'linestyle', 'linewidth', 'alpha']
         loss_config = filter_config(self.config, curve_keys, prefix='curve_')
-        loss_line = self.subplot.ax.plot(loss, label=loss_label, **loss_config)
-        lines.extend(loss_line)
+        loss_curve = self.ax.plot(loss, label=loss_label, **loss_config)
+        curves.extend(loss_curve)
 
-        window = self.config.get('window', None)
-        if window is not None:
-            averaged = convolve(loss, np.ones(window), mode='nearest') / window
-            mean_color = scale_lightness(loss_config['color'], scale=.5)
-            averaged_loss_label = label + ' running mean'
-            average_line = self.subplot.ax.plot(averaged, label=averaged_loss_label, color=mean_color, linestyle='--')
-            lines.extend(average_line)
+        if smoothed is not None:
+            smoothed_color = scale_lightness(loss_config['color'], scale=.5)
+            smoothed_loss_label = label + ' running mean'
+            smooth_curve = self.ax.plot(smoothed, label=smoothed_loss_label, color=smoothed_color, linestyle='--')
+            curves.extend(smooth_curve)
 
         if lr is not None:
             lr_label = f'learning rate №{self.index + 1} ⟶ {lr[-1]:.0e}'
             lr_config = filter_config(self.config, curve_keys, prefix='lr_')
-            lr_line = self.subplot.twin_ax.plot(lr, label=lr_label, **lr_config)
-            self.subplot.twin_ax.set_ylabel('Learning rate', fontsize=12)
-            lines.extend(lr_line)
+            lr_curve = self.subplot.twin_ax.plot(lr, label=lr_label, **lr_config)
+            self.twin_ax.set_ylabel('Learning rate', fontsize=12)
+            curves.extend(lr_curve)
 
-        return lines
+        return curves
 
 
 class Subplot:
@@ -321,6 +383,11 @@ class Subplot:
         self.layers = []
         self.config = {}
         self.annotations = {}
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self.layers[key]
+        raise ValueError(f"Only integer keys are supported for layers indexing, got {type(key)}.")
 
     @property
     def twin_ax(self):
@@ -794,6 +861,11 @@ class Plot:
 
         self.plot(data=data, combine=combine, mode=mode, **kwargs)
 
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self.subplots[key]
+        raise ValueError(f"Only integer keys are supported for subplots indexing, got {type(key)}.")
+
     @staticmethod
     def parse_tuple(data, mode):
         """ Validate that tuple data item is provided with correct plot mode and convert its objects to arrays. """
@@ -836,8 +908,6 @@ class Plot:
         - `[[array_0, array_1]] when `combine='overlay'`
         - `[[array_0], [array_1]] when `combine='separate'`
         """
-        contains_numbers = lambda x: isinstance(x[0], Number)
-
         n_subplots = 0
 
         data_list = []
