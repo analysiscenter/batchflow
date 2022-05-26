@@ -476,7 +476,7 @@ class TestResearch:
     def test_update_variable(self):
         def my_call(x, storage):
             if x > 2:
-                storage.update_variable('var2', x ** 2)
+                storage.update_variable('var1', x ** 2)
             else:
                 storage.update_variable('var2', x ** 2)
         research = (Research(domain=Option('x', [1, 2, 3, 4]))
