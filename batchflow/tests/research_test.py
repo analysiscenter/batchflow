@@ -13,7 +13,7 @@ from batchflow import Dataset, Pipeline, B, V, C
 from batchflow import NumpySampler as NS
 from batchflow.models.torch import ResNet
 from batchflow.opensets import CIFAR10
-from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults, Alias
+from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, S, ResearchResults, Alias
 
 class Model:
     def __init__(self):
@@ -472,6 +472,24 @@ class TestResearch:
         for p in process.children():
             print(p, research.monitor.processes.get(p.pid, 'unknown'))
         assert len(process.children()) <= 1
+
+    def test_update_variable(self):
+        def my_call(x, storage):
+            if x > 2:
+                storage.update_variable('var2', x ** 2)
+            else:
+                storage.update_variable('var2', x ** 2)
+        research = (Research(domain=Option('x', [1, 2, 3, 4]))
+            .add_callable('func', my_call, x=EC('x'), storage=S())
+        )
+
+        research.run(workers=2, branches=2, dump_results=False, bar=False)
+
+        var1 = research.results.df['var1'].values
+        var2 = research.results.df['var2'].values
+        a = np.array([np.nan, np.nan, 9., 16.])
+        b = np.array([1., 4., np.nan, np.nan])
+        assert ((var1 == a) | (np.isnan(var1) & np.isnan(a))).all() and ((var2 == b) | (np.isnan(var2) & np.isnan(b))).all()
 
     @pytest.mark.parametrize('create_id_prefix', [False, True, 4])
     @pytest.mark.parametrize('domain', [
