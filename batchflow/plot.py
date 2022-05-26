@@ -251,19 +251,15 @@ class Layer:
 
     @property
     def twin_ax(self):
-        return self.subplot._twin_ax # pylint: disable=protected-access
+        return self.subplot.twin_ax
 
     def update_lims(self):
         """ Recalculate plot limits. """
         self.ax.relim()
         self.ax.autoscale_view()
 
-        if self.twin_ax is not None:
-            self.twin_ax.relim()
-            self.twin_ax.autoscale_view()
-
     def update(self, data):
-        """ Preprocess given data and pass it to `set_data`. Does not work in `histogram` mode. """
+        """ Preprocess given data and pass it to `set_data`. Does not work in 'histogram' and 'loss' mode. """
         if self.mode == 'image':
             data = self.preprocess(data)
             self.object.set_data(data)
@@ -281,18 +277,7 @@ class Layer:
             self.update_lims()
 
         if self.mode == 'loss':
-            loss, smoothed, lr = self.preprocess(data)
-
-            self.object[0].set_ydata(loss)
-            if smoothed is None:
-                if lr is not None:
-                    self.object[1].set_ydata(lr)
-            else:
-                self.object[1].set_ydata(smoothed)
-                if lr is not None:
-                    self.object[2].set_ydata(lr)
-
-            self.update_lims()
+            raise NotImplementedError("Updating layer data is not in supported in 'loss' mode. ")
 
 
     def image(self, data):
