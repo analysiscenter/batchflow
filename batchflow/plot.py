@@ -180,7 +180,7 @@ def scale_lightness(color, scale):
 
 class Layer:
     """ Implements subplot layer, storing plotted object and redirecting call to corresponding matplotlib methods.
-        Also handles data transformations in `imshow` mode, re-applying it to given data on `set_data` call.
+        Also handles data transformations in `image` mode, re-applying it to given data on `set_data` call.
     """
     def __init__(self, subplot, mode, index, config, data):
         self.subplot = subplot
@@ -188,7 +188,7 @@ class Layer:
         self.index = index
         self.config = config
 
-        if mode in ('imshow', 'hist') and 'mask_values' not in self.config:
+        if mode in ('image', 'histogram') and 'mask_values' not in self.config:
             # Add `0` to a list of values that shouldn't be displayed if image is a binary mask
             if is_binary(data.flatten()):
                 self.config['mask_values'] = 0
@@ -200,7 +200,7 @@ class Layer:
 
     def preprocess_data(self, data):
         """ Look through layer config for requested data transformations and apply them ."""
-        if self.mode == 'imshow':
+        if self.mode == 'image':
             mask_values = self.config.get('mask_values', [])
             masks = [data == m if isinstance(m, Number) else m(data) for m in to_list(mask_values)]
             mask = reduce(np.logical_or, masks, np.isnan(data))
@@ -211,7 +211,7 @@ class Layer:
                 order_axes = order_axes[:data.ndim]
                 data = np.transpose(data, order_axes)
 
-        if self.mode == 'hist':
+        if self.mode == 'histogram':
             flatten = self.config.get('flatten', False)
             if flatten:
                 data = data.flatten()
@@ -219,9 +219,9 @@ class Layer:
         return data
 
     def set_data(self, data):
-        """ Preprocess given data and pass it to `set_data`. Works in `imshow` mode only. """
-        if self.mode != 'imshow':
-            raise NotImplementedError("Updating layer data is supported in 'imshow' mode only")
+        """ Preprocess given data and pass it to `set_data`. Works in `image` mode only. """
+        if self.mode != 'image':
+            raise NotImplementedError("Updating layer data is supported in 'image' mode only")
 
         new_data = self.preprocess(data)
 
@@ -231,10 +231,10 @@ class Layer:
 
         self.object.set_data(new_data)
 
-    def imshow(self, data):
+    def image(self, data):
         """ Display data as an image. """
-        imshow_keys = ['vmin', 'vmax', 'interpolation', 'alpha', 'extent']
-        imshow_config = filter_config(self.config, imshow_keys, prefix='imshow_')
+        image_keys = ['vmin', 'vmax', 'interpolation', 'alpha', 'extent']
+        image_config = filter_config(self.config, image_keys, prefix='image_')
 
         # Assemble colormap from given parameters
         cmap = self.config.get('cmap', None)
@@ -250,16 +250,16 @@ class Layer:
         mask_color = self.config.get('mask_color', None)
         cmap.set_bad(color=mask_color)
 
-        image = self.subplot.ax.imshow(data, cmap=cmap, **imshow_config)
+        image = self.subplot.ax.imshow(data, cmap=cmap, **image_config)
 
         return image
 
-    def hist(self, data):
-        """ Display data as 1-D histogram. """
-        hist_keys = ['bins', 'color', 'alpha', 'label']
-        hist_config = filter_config(self.config, hist_keys, prefix='hist_')
+    def histogram(self, data):
+        """ Display data as 1-D histogramogram. """
+        histogram_keys = ['bins', 'color', 'alpha', 'label']
+        histogram_config = filter_config(self.config, histogram_keys, prefix='histogram_')
 
-        _, _, bar = self.subplot.ax.hist(data, **hist_config)
+        _, _, bar = self.subplot.ax.hist(data, **histogram_config)
 
         return bar
 
@@ -517,16 +517,16 @@ class Subplot:
 
         return colorbar
 
-    def add_legend(self, mode='imshow', handles=None, labels=None, colors='none', alphas=1, size=10, **kwargs):
+    def add_legend(self, mode='image', handles=None, labels=None, colors='none', alphas=1, size=10, **kwargs):
         """ Add patches to ax legend.
 
         Parameters
         ----------
         ax : int or instance of `matploblib.axes.Axes`
             Axes to put labels into. If and int, used for indexing `self.axes`.
-        mode : 'imshow', 'hist', 'curve', 'loss'
+        mode : 'image', 'histogram', 'curve', 'loss'
             Mode to match legend hadles patches to.
-            If from ('imshow', 'hist'), use rectangular legend patches.
+            If from ('image', 'histogram'), use rectangular legend patches.
             If from ('curve', 'loss'), use line legend patches.
         handles : None or sequence of `matplotlib.artist.Artist`
             A list of Artists (lines, patches) to be added to the legend.
@@ -560,7 +560,7 @@ class Subplot:
             for color, alpha, label in zip(colors, alphas, labels):
                 if label is None:
                     continue
-                if mode in ('imshow', 'hist'):
+                if mode in ('image', 'histogram'):
                     if is_color_like(color):
                         handle = Patch(color=color, alpha=alpha, label=label)
                     else:
@@ -652,17 +652,17 @@ class Plot:
         If list if flat, 'overlay/separate' logic is handled via `combine` parameter.
         If list is nested, outer level defines subplots order while inner one defines layers order.
         Shape of data items must match chosen plotting mode (see below).
-    mode : 'imshow', 'hist', 'curve', 'loss'
-        If 'imshow' plot given arrays as images.
-        If 'hist' plot histogram of flattened array.
+    mode : 'image', 'histogram', 'curve', 'loss'
+        If 'image' plot given arrays as images.
+        If 'histogram' plot histogramogram of flattened array.
         If 'curve' plot given arrays as curve lines.
         If 'loss' plot given arrays as loss curves.
     combine : 'overlay', 'separate' or 'mixed'
         Whether overlay images on a single axis, show them on separate ones or use mixed approach.
     kwargs :
-        - For one of `ax_imshow`, `ax_hist`, `ax_curve`, `ax_loss` methods (depending on chosen mode).
+        - For one of `ax_image`, `ax_histogram`, `ax_curve`, `ax_loss` methods (depending on chosen mode).
             Parameters and data nestedness levels must match.
-            Every param with 'imshow_', 'hist_', 'curve_', 'loss_' prefix is redirected to corresponding method.
+            Every param with 'image_', 'histogram_', 'curve_', 'loss_' prefix is redirected to corresponding method.
             See detailed parameters listings below.
         - For `annotate_axis`.
             Every param with 'title_', 'suptitle_', 'xlabel_', 'ylabel_', 'xticks_', 'yticks_', 'xlim_', 'ylim_',
@@ -676,7 +676,7 @@ class Plot:
     facecolor : valid matplotlib color
         Figure background color.
 
-    Parameters for 'imshow' mode
+    Parameters for 'image' mode
     ----------------------------
     cmap : valid matplotlib colormap or color
         Defines colormap to display single-channel images with.
@@ -689,23 +689,23 @@ class Plot:
         Values that should be masked on image display.
     mask_color : valid matplotlib color
         Color to display masked values with.
-    imshow_{parameter} : misc
+    image_{parameter} : misc
         Any parameter valid for `plt.imshow`.
 
-    Parameters for 'hist' mode
+    Parameters for 'histogram' mode
     ----------------------------
     color : valid matplotlib color
-        Defines color to display histogram with.
+        Defines color to display histogramogram with.
     alpha : number in (0, 1) range
         Hisotgram opacity (0 means fully transparent, i.e. invisible, and 1 - totally opaque).
         Useful when `combine='overlay'`.
     bins : int
-        Number of bins for histogram.
+        Number of bins for histogramogram.
     mask_values : number or tuple of numbers
         Values that should be masked on image display.
     mask_color : valid matplotlib color
         Color to display masked values with.
-    hist_{parameter} : misc
+    histogram_{parameter} : misc
         Any parameter valid for `plt.hist`.
 
     Parameters for 'loss' mode
@@ -781,14 +781,14 @@ class Plot:
     The list of parameters expected by specific plot method is rather short.
     But there is a way to provide parameter to a plot method, even if it's not hard-coded.
     One must use specific prefix for that.
-    Address docs of `ax_imshow``, `ax_hist`, `ax_curve`, `ax_loss` and `annotate_axis` for details.
+    Address docs of `ax_image``, `ax_histogram`, `ax_curve`, `ax_loss` and `annotate_axis` for details.
 
     This also allows one to pass arguments of the same name for different plotting steps.
     E.g. `plt.set_title` and `plt.set_xlabel` both require `size` argument.
     Providing `{'size': 30}` in kwargs will affect both title and x-axis labels.
     To change parameter for title only, one can provide {'title_fontsize': 30}` instead.
     """
-    def __init__(self, data=None, combine='overlay', mode='imshow', **kwargs):
+    def __init__(self, data=None, combine='overlay', mode='image', **kwargs):
         self.figure = None
         self.subplots = None
 
@@ -806,7 +806,7 @@ class Plot:
     def parse_array(data, mode):
         """ Validate that data dimensionality is correct for given plot mode. """
         if data.ndim == 1:
-            if mode == 'imshow':
+            if mode == 'image':
                 return data.reshape(-1, 1)
             if mode == 'curve':
                 return (range(len(data)), data)
@@ -819,7 +819,7 @@ class Plot:
                 raise ValueError(msg)
 
         if data.ndim > 3:
-            if mode != 'hist':
+            if mode != 'histogram':
                 msg = f"In `mode={mode}` array must be 1-, 2- or 3-dimensional, got array with ndim={data.ndim}."
                 raise ValueError(msg)
 
@@ -908,7 +908,7 @@ class Plot:
         """ Infer default figure params from shapes of provided data. """
         config = {'tight_layout': True, 'facecolor': 'snow'}
 
-        if mode in ('imshow', 'hist'):
+        if mode in ('image', 'histogram'):
             default_ncols = 4
         elif mode in ('curve', 'loss'):
             default_ncols = 1
@@ -925,14 +925,14 @@ class Plot:
 
         config['ncols'], config['nrows'] = ncols, nrows
 
-        if mode in ('imshow', 'hist'):
+        if mode in ('image', 'histogram'):
             fig_width = 8 * ncols * scale
         elif mode in ('curve', 'loss'):
             fig_width = 16 * ncols * scale
 
         # Make figsize
         if ratio is None:
-            if mode == 'imshow':
+            if mode == 'image':
                 if not isinstance(xlim, list):
                     xlim = [xlim] * n_subplots
                 if not isinstance(ylim, list):
@@ -947,7 +947,7 @@ class Plot:
                         continue
 
                     order_axes = filter_config(kwargs, 'order_axes', index=idx)
-                    order_axes = order_axes or self.IMSHOW_DEFAULTS['order_axes']
+                    order_axes = order_axes or self.IMAGE_DEFAULTS['order_axes']
 
                     min_height = ylim[idx][0] or 0
                     max_height = ylim[idx][1] or shape[order_axes[0]]
@@ -965,7 +965,7 @@ class Plot:
                 else:
                     ratio = (mean_height * 1.05 * nrows) / (mean_width * 1.05 * ncols)
 
-            elif mode == 'hist':
+            elif mode == 'histogram':
                 ratio = 2 / 3 / ncols * nrows
 
             elif mode in ('curve', 'loss'):
@@ -1086,7 +1086,7 @@ class Plot:
                     'red', 'turquoise', 'darkorchid', 'darkkhaki', 'royalblue', 'yellow',
                     'chocolate', 'forestgreen', 'lightpink', 'darkslategray', 'deepskyblue', 'wheat']
 
-    IMSHOW_DEFAULTS = {
+    IMAGE_DEFAULTS = {
         # image
         'cmap': CycledList(['Greys_r'] + MASK_COLORS, cycle_from=1),
         # ticks
@@ -1103,10 +1103,10 @@ class Plot:
         'minor_grid_y_n': 2,
     }
 
-    HIST_DEFAULTS = {
+    HISTOGRAM_DEFAULTS = {
         # preprocessing
         'flatten': True,
-        # hist
+        # histogram
         'bins': 50,
         'color': CycledList(MASK_COLORS),
         'alpha': 0.8,
@@ -1120,7 +1120,7 @@ class Plot:
         'grid': 'major',
     }
 
-    CURVE_COLORS = ['cornflowerblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
+    CURVE_COLORS = ['cornflowerblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistogramle', 'firebrick',
                     'forestgreen', 'navy', 'gold', 'red', 'turquoise', 'darkorchid',
                     'darkkhaki', 'royalblue', 'yellow', 'chocolate', 'darkslategray', 'wheat']
 
@@ -1176,8 +1176,8 @@ class Plot:
         'major_grid_color': '#CCCCCC',
     }
 
-    def plot(self, data=None, combine='overlay', mode='imshow', save=False, show=True,
-             adjust_figsize='imshow', axes=None, axis=None, ax=None, subplots=None, **kwargs):
+    def plot(self, data=None, combine='overlay', mode='image', save=False, show=True,
+             adjust_figsize='image', axes=None, axis=None, ax=None, subplots=None, **kwargs):
         """ Plot data on subplots.
 
         Parses axes from kwargs if provided, else creates them.
@@ -1292,11 +1292,11 @@ class Plot:
 
 def plot_image(data, **kwargs):
     """ Shorthand for image plotting. """
-    return Plot(data, mode='imshow', **kwargs)
+    return Plot(data, mode='image', **kwargs)
 
-def plot_hist(data, **kwargs):
-    """ Shorthand for histogram plotting. """
-    return Plot(data, mode='hist', **kwargs)
+def plot_histogram(data, **kwargs):
+    """ Shorthand for histogramogram plotting. """
+    return Plot(data, mode='histogram', **kwargs)
 
 def plot_curve(data, **kwargs):
     """ Shorthand for curve plotting. """
