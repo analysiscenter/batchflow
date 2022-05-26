@@ -100,7 +100,7 @@ class R(E):
         research = self._get(**kwargs)
         return research.results
 
-class S(E):
+class S(E): # pylint: disable=invalid-name
     """ Research storage. """
     def _transform(self, experiments):
         return [exp.storage for exp in experiments]
