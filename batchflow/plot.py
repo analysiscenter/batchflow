@@ -55,76 +55,6 @@ class CycledList(list):
             idx = pos + (idx - pos) % (len(self) - pos)
         return super().__getitem__(idx)
 
-# pylint: disable=invalid-name
-class preprocess_and_imshow:
-    """ Proxy class that handles data transformations preceding `imshow` and `set_data` calls.
-
-    Initally, is must be instantiated with parameters valid for `plt.imshow` plus a few of its own (see below).
-    On that stage two things happen:
-    - Provided data is preprocessed in accordance with given parameters and those parameters are saved.
-    - Method `plt.imshow` is called on transformed data and resulted `AxesImage` instance is also saved.
-
-    After initialization, class instance re-applies same data preprocessing when `set_data` is called on it.
-
-    Parameters
-    ----------
-    ax : `matplotlib.axes.Axes`
-        Axis to call `imshow` upon.
-    array : `np.ndarray`
-        Array to display initially.
-    mask_values : iterable of numbers
-        Values in data array to mask (diplayed with colormap's bad color).
-    order_axes : tuple of numbers
-        Parameter for data transpose.
-    vmin, vmax : numbers
-        For visualized data normalization.
-    args, kwargs : misc
-        For `plt.imshow`.
-
-    Notes
-    -----
-    Used to apply consistent data transformation across `set_data` calls during interactive events.
-    """
-    def __init__(self, ax, array, *args, mask_values=(), order_axes=None, vmin=None, vmax=None, **kwargs):
-        self.mask_values = to_list(mask_values) if mask_values is not None else []
-        self.order_axes = order_axes
-        self.vmin, self.vmax = vmin, vmax
-
-        new_array = self._preprocess(array)
-        self.im = ax.imshow(new_array, *args, vmin=vmin, vmax=vmax, **kwargs)
-
-    def _preprocess(self, array):
-        masks = [array == m if isinstance(m, Number) else m(array) for m in self.mask_values]
-        mask = reduce(np.logical_or, masks, np.isnan(array))
-        new_array = np.ma.array(array, mask=mask)
-
-        if self.order_axes is not None:
-            order_axes = self.order_axes[:array.ndim]
-            new_array = np.transpose(new_array, order_axes)
-
-        return new_array
-
-    def set_data(self, array):
-        """ Apply data transformations with saved parameters and call `set_data` on `AxesImage` instance. """
-        new_array = self._preprocess(array)
-
-        vmin_new = np.nanmin(new_array) if self.vmin is None else self.vmin
-        vmax_new = np.nanmax(new_array) if self.vmax is None else self.vmax
-        self.im.set_clim([vmin_new, vmax_new])
-
-        self.im.set_data(new_array)
-
-    def __getattr__(self, key):
-        # Avoid recursive `__setstate__`, `__getstate__` on serialization
-        if self.im is None or key.endswith('state__'):
-            return getattr(self, key)
-        return getattr(self.im, key)
-
-    def __repr__(self):
-        if self.im is None:
-            return super().__repr__()
-        return self.im.__repr__()
-
 
 class ColorMappingHandler(HandlerBase):
     """ Handler transforming empty patches into colored patches corresponding to collection colormap.
@@ -134,8 +64,8 @@ class ColorMappingHandler(HandlerBase):
     Used as `handler_map` argument for `plt.legend` to make colormap patches.
     """
     def __init__(self, n_segments=8, **kwargs):
-        super().__init__(**kwargs)
         self.n_segments = n_segments
+        super().__init__(**kwargs)
 
     def create_artists(self, legend, orig_handle, xdescent, ydescent, width, height, fontsize, trans):
         """ Create a rectangle consisting of sequential patches with colors of colormap. """
@@ -145,9 +75,9 @@ class ColorMappingHandler(HandlerBase):
 
         segments = []
         for segment_index in range(self.n_segments):
-            xy = [xdescent + segment_index * segment_width, ydescent]
+            anchor = [xdescent + segment_index * segment_width, ydescent]
             facecolor = cmap(segment_index / self.n_segments)
-            segment = Rectangle(xy, segment_width, height, facecolor=facecolor, transform=trans)
+            segment = Rectangle(anchor, segment_width, height, facecolor=facecolor, transform=trans)
             segments.append(segment)
 
         label = orig_handle.get_label()
@@ -163,8 +93,540 @@ def is_binary(array):
             return False
     return True
 
+def maybe_index(key, value, index):
+    """ Get i-th element of parameter if index is provided and parameter value is a list else return it unchanged.
 
-class plot:
+    Parameters
+    ----------
+    key : str
+        Parameter name.
+    value : misc
+        Parameter value.
+    index : None or int
+        If not None, a number to use for parameter indexing.
+
+    Raises
+    ------
+    ValueError
+        If parameter is a list but the index is greater than its length.
+    """
+    if index is not None and isinstance(value, list):
+        try:
+            return value[index]
+        except IndexError as e:
+            msg = f"Tried to obtain element #{index} from `{key}={value}`. Either provide parameter value "\
+                    f"as a single item (to use the same `{key}` several times) or add more elements to it."
+            raise ValueError(msg) from e
+    return value
+
+def filter_config(config, keys=None, prefix='', index=None):
+    """ Make a subdictionary of parameters with required keys.
+
+    Parameter are retrieved if:
+    a. It is explicitly requested (via `keys` arg).
+    b. Its name starts with given prefix (defined by `prefix` arg).
+
+    Parameters
+    ----------
+    config : dict
+        Arguments to filter.
+    keys : str or sequence
+        Key(s) to retrieve. If str, return key value.
+        If list — return dict of pairs (key, value) for every existing key.
+    prefix : str, optional
+        Arguments with keys starting with given prefix will also be retrieved.
+        Defaults to `''`, i.e. no prefix used.
+    index : int
+        Index of argument value to retrieve.
+        If none provided, get whole argument value.
+        If value is non-indexable, get it without indexing.
+    """
+    if isinstance(keys, str):
+        value = config.get(keys, None)
+        return maybe_index(keys, value, index)
+
+    if keys is None:
+        keys = list(config.keys())
+    elif prefix:
+        keys += [key.split(prefix)[1] for key in config if key.startswith(prefix)]
+
+    result = {}
+
+    for key in keys:
+        if prefix + key in config:
+            value = config[prefix + key]
+        elif key in config:
+            value = config[key]
+        else:
+            continue
+        result[key] = maybe_index(key, value, index)
+
+    return result
+
+def make_cmap(colors):
+    """ Make colormap from provided color/colors list. """
+    colors = [ColorConverter().to_rgb(color) if isinstance(color, str) else color for color in to_list(colors)]
+    cmap = ListedColormap(colors)
+    return cmap
+
+def scale_lightness(color, scale):
+    """ Make new color with modified lightness from existing. """
+    if isinstance(color, str):
+        color = ColorConverter.to_rgb(color)
+    hue, light, saturation = rgb_to_hls(*color)
+    new_color = hls_to_rgb(h=hue, l=min(1, light * scale), s=saturation)
+    return new_color
+
+
+class Layer:
+    """ Implements subplot layer, storing plotted object and redirecting call to corresponding matplotlib methods.
+        Also handles data transformations in `imshow` mode, re-applying it to given data on `set_data` call.
+    """
+    def __init__(self, subplot, mode, index, config, data):
+        self.subplot = subplot
+        self.mode = mode
+        self.index = index
+        self.config = config
+
+        if mode in ('imshow', 'hist') and 'mask_values' not in self.config:
+            # Add `0` to a list of values that shouldn't be displayed if image is a binary mask
+            if is_binary(data.flatten()):
+                self.config['mask_values'] = 0
+                self.config['vmin'] = 0
+                self.config['vmax'] = 1
+
+        preprocessed_data = self.preprocess_data(data)
+        self.object = getattr(self, mode)(preprocessed_data)
+
+    def preprocess_data(self, data):
+        """ Look through layer config for requested data transformations and apply them ."""
+        if self.mode == 'imshow':
+            mask_values = self.config.get('mask_values', [])
+            masks = [data == m if isinstance(m, Number) else m(data) for m in to_list(mask_values)]
+            mask = reduce(np.logical_or, masks, np.isnan(data))
+            data = np.ma.array(data, mask=mask)
+
+            order_axes = self.config.get('order_axes', None)
+            if order_axes is not None:
+                order_axes = order_axes[:data.ndim]
+                data = np.transpose(data, order_axes)
+
+        if self.mode == 'hist':
+            flatten = self.config.get('flatten', False)
+            if flatten:
+                data = data.flatten()
+
+        return data
+
+    def set_data(self, data):
+        """ Preprocess given data and pass it to `set_data`. Works in `imshow` mode only. """
+        if self.mode != 'imshow':
+            raise NotImplementedError("Updating layer data is supported in 'imshow' mode only")
+
+        new_data = self.preprocess(data)
+
+        new_vmin = self.config.get('vmin', np.nanmin(new_data))
+        new_vmax = self.config.get('vmax', np.nanmax(new_data))
+        self.object.set_clim([new_vmin, new_vmax])
+
+        self.object.set_data(new_data)
+
+    def imshow(self, data):
+        """ Display data as an image. """
+        imshow_keys = ['vmin', 'vmax', 'interpolation', 'alpha', 'extent']
+        imshow_config = filter_config(self.config, imshow_keys, prefix='imshow_')
+
+        # Assemble colormap from given parameters
+        cmap = self.config.get('cmap', None)
+        # If a single color provided, prepend 'white' color, so that a resulting tuple defines binary colormap
+        if is_color_like(cmap):
+            cmap = ('white', cmap)
+        # If a tuple of colors provided in `cmap` argument convert it into a colormap
+        if isinstance(cmap, tuple):
+            cmap = make_cmap(colors=cmap)
+        else:
+            cmap = copy(plt.get_cmap(cmap))
+        # Set a color for nan/masked values display to colormap if provided
+        mask_color = self.config.get('mask_color', None)
+        cmap.set_bad(color=mask_color)
+
+        image = self.subplot.ax.imshow(data, cmap=cmap, **imshow_config)
+
+        return image
+
+    def hist(self, data):
+        """ Display data as 1-D histogram. """
+        hist_keys = ['bins', 'color', 'alpha', 'label']
+        hist_config = filter_config(self.config, hist_keys, prefix='hist_')
+
+        _, _, bar = self.subplot.ax.hist(data, **hist_config)
+
+        return bar
+
+    def curve(self, data):
+        """ Display data as a polygonal chain. """
+        x, y = data
+
+        curve_keys = ['color', 'linestyle', 'alpha']
+        curve_config = filter_config(self.config, curve_keys, prefix='curve_')
+
+        lines = self.subplot.ax.plot(x, y, **curve_config)
+
+        return lines
+
+    def loss(self, data):
+        """ Display data as a polygonal chain, optionally display running mean and learning rate with nice defaults. """
+        loss, lr = data
+
+        label = self.config.get('label', f'loss #{self.index + 1}')
+        loss_label = label + f' ⟶ {loss[-1]:2.3f}'
+        final_window = self.config.get('final_window', None)
+        if final_window is not None:
+            final = np.mean(loss[-final_window:]) #pylint: disable=invalid-unary-operand-type
+            loss_label += f"\nmean over last {final_window} iterations={final:2.3f}"
+
+        lines = []
+
+        curve_keys = ['color', 'linestyle', 'linewidth', 'alpha']
+        loss_config = filter_config(self.config, curve_keys, prefix='curve_')
+        loss_line = self.subplot.ax.plot(loss, label=loss_label, **loss_config)
+        lines.extend(loss_line)
+
+        window = self.config.get('window', None)
+        if window is not None:
+            averaged = convolve(loss, np.ones(window), mode='nearest') / window
+            mean_color = scale_lightness(loss_config['color'], scale=.5)
+            averaged_loss_label = label + ' running mean'
+            average_line = self.subplot.ax.plot(averaged, label=averaged_loss_label, color=mean_color, linestyle='--')
+            lines.extend(average_line)
+
+        if lr is not None:
+            lr_label = f'learning rate №{self.index + 1} ⟶ {lr[-1]:.0e}'
+            lr_config = filter_config(self.config, curve_keys, prefix='lr_')
+            lr_line = self.subplot.twin_ax.plot(lr, label=lr_label, **lr_config)
+            self.subplot.twin_ax.set_ylabel('Learning rate', fontsize=12)
+            lines.extend(lr_line)
+
+        return lines
+
+
+class Subplot:
+    """ Implements plotter subplot, managing new layers creation and axis annotation.
+        Basically acts as a proxy over `matplotlib.axes`.
+    """
+    def __init__(self, plotter, ax):
+        self.plotter = plotter
+        self.ax = ax
+        self._twin_ax = None
+        self.layers = []
+        self.config = {}
+        self.annotations = {}
+
+    @property
+    def twin_ax(self):
+        """ Twin axis of original subplot axis that shares the x-axis with it. Created on demand. """
+        if self._twin_ax is None:
+            self._twin_ax = self.ax.twinx()
+        return self._twin_ax
+
+    @property
+    def empty(self):
+        """ Indicator that subplot has no layers. """
+        return len(self.layers) == 0
+
+    def disable(self):
+        """ Hide subplot. """
+        self.ax.set_axis_off()
+
+    def plot(self, mode, data, config):
+        """ Update subplot config with given params, create subplot layers, annotate subplot. """
+        self.config.update(config)
+
+        for layer_index, layer_data in enumerate(data):
+            layer_config = filter_config(config, index=layer_index)
+            layer = Layer(self, mode, layer_index, layer_config, layer_data)
+            self.layers.append(layer)
+
+        annotations = self.annotate(mode)
+        self.annotations.update(annotations)
+
+    def annotate(self, mode):
+        """ Apply requested annotation functions to given axis with chosen parameters. """
+        # pylint: disable=too-many-branches
+        annotations = {}
+
+        text_keys = ['size', 'family', 'color']
+        text_config = filter_config(self.config, text_keys, prefix='text_')
+
+        # title
+        keys = ['title', 'y']
+        title_config = filter_config(self.config, keys, prefix='title_')
+        label = None
+        if 'label' in title_config:
+            label = title_config.pop('label')
+        if 'title' in title_config:
+            label = title_config.pop('title')
+        title_config['label'] = label
+        title_config = {**text_config, **title_config}
+        if title_config:
+            annotations['title'] = self.ax.set_title(**title_config)
+
+        # xlabel
+        keys = ['xlabel']
+        xlabel_config = filter_config(self.config, keys, prefix='xlabel_')
+        xlabel_config = {**text_config, **xlabel_config}
+        if xlabel_config and 'xlabel' in xlabel_config:
+            annotations['xlabel'] = self.ax.set_xlabel(**xlabel_config)
+
+        # ylabel
+        keys = ['ylabel']
+        ylabel_config = filter_config(self.config, keys, prefix='ylabel_')
+        ylabel_config = {**text_config, **ylabel_config}
+        if ylabel_config and 'ylabel' in ylabel_config:
+            annotations['ylabel'] = self.ax.set_ylabel(**ylabel_config)
+
+        # xticks
+        xticks_config = filter_config(self.config, [], prefix='xticks_')
+        ticks = filter_config(self.config, 'ticks')
+        xticks = filter_config(self.config, 'xticks')
+        xticks = ticks if ticks is not None else xticks
+        if xticks is not None:
+            xticks_config['ticks'] = xticks
+        if xticks_config:
+            self.ax.set_xticks(**xticks_config)
+
+        # yticks
+        yticks_config = filter_config(self.config, [], prefix='yticks_')
+        ticks = filter_config(self.config, 'ticks')
+        yticks = filter_config(self.config, 'yticks')
+        yticks = ticks if ticks is not None else yticks
+        if yticks is not None:
+            yticks_config['ticks'] = yticks
+        if yticks_config:
+            self.ax.set_yticks(**yticks_config)
+
+        # ticks
+        keys = ['labeltop', 'labelright', 'labelcolor', 'direction']
+        tick_config = filter_config(self.config, keys, prefix='tick_')
+        if tick_config:
+            self.ax.tick_params(**tick_config)
+
+        # xlim
+        xlim_config = filter_config(self.config, ['xlim'], prefix='xlim_')
+        if 'xlim' in xlim_config:
+            xlim_config['left'] = xlim_config.get('left', xlim_config.pop('xlim'))
+        if xlim_config:
+            self.ax.set_xlim(**xlim_config)
+
+        # ylim
+        ylim_config = filter_config(self.config, ['ylim'], prefix='ylim_')
+        if 'ylim' in ylim_config:
+            ylim_config['bottom'] = ylim_config.get('bottom', ylim_config.pop('ylim'))
+        if ylim_config:
+            self.ax.set_ylim(**ylim_config)
+
+        # colorbar
+        keys = ['colorbar', 'width', 'pad', 'fake', 'annotations']
+        colorbar_config = filter_config(self.config, keys, prefix='colorbar_')
+        if colorbar_config:
+            colorbar_config['image'] = self.layers[0].object
+
+            if 'pad' not in colorbar_config:
+                pad = 0.4
+                labelright = filter_config(self.config, 'labelright', prefix='tick_')
+                if labelright:
+                    ax_x1 = self.plotter.get_bbox(self.ax).x1
+                    yticklabels = self.ax.get_yticklabels()
+                    max_ytick_label_x1 = max(self.plotter.get_bbox(label).x1
+                                             for label in yticklabels[len(yticklabels)//2:])
+                    pad += (max_ytick_label_x1 - ax_x1) # account for width of yticklabels to the right of the subplot
+                colorbar_config['pad'] = pad
+
+            annotations['colorbar'] = self.add_colorbar(**colorbar_config)
+
+        # legend
+        if mode == 'loss':
+            self.config['handles'] = [layer.object for layer in self.layers]
+
+        keys = ['labels', 'handles', 'size', 'loc', 'ha', 'va', 'handletextpad']
+        legend_config = filter_config(self.config, keys, prefix='legend_')
+        if legend_config.get('labels') or legend_config.get('handles'):
+            if 'cmap' in self.config:
+                colors = filter_config(self.config, 'cmap')
+            if 'color' in self.config:
+                colors = filter_config(self.config, 'color')
+            if 'colors' in legend_config:
+                colors = legend_config.pop('colors')
+            legend_config['colors'] = colors
+            legend_config['alphas'] = self.config.get('alpha')
+            annotations['legend'] = self.add_legend(mode=mode, **legend_config)
+
+        # grid
+        grid = filter_config(self.config, 'grid')
+        grid_keys = ['color', 'linestyle', 'freq']
+
+        minor_config = filter_config(self.config, grid_keys, prefix='minor_grid_')
+        if grid in ('minor', 'both') and minor_config:
+            self.add_grid(self.ax, grid_type='minor', **minor_config)
+
+        major_config = filter_config(self.config, grid_keys, prefix='major_grid_')
+        if grid in ('major', 'both') and minor_config:
+            self.add_grid(self.ax, grid_type='major', **major_config)
+
+        spine_colors = self.config.get('spine_color')
+        if spine_colors is not None:
+            spines = self.ax.spines.values()
+            spine_colors = spine_colors if isinstance(spine_colors, list) else [spine_colors] * len(spines)
+            for spine, color in zip(spines, spine_colors):
+                spine.set_edgecolor(color)
+
+        facecolor = self.config.get('facecolor', None)
+        if facecolor is not None:
+            self.ax.set_facecolor(facecolor)
+
+        self.ax.set_axisbelow(self.config.get('set_axisbelow', False))
+
+        if self.config.get('disable_axes'):
+            self.ax.set_axis_off()
+        elif not self.ax.axison:
+            self.ax.set_axis_on()
+
+        # Change scale of axis, if needed
+        if self.config.get('log') or self.config.get('log_loss'):
+            self.ax.set_yscale('log')
+
+        if self.config.get('log_twin') or self.config.get('log_lr'):
+            self.twin_ax.set_yscale('log')
+
+        return annotations
+
+    def add_colorbar(self, image, width=.2, pad=None, color='black', colorbar=False):
+        """ Append colorbar to the image on the right. """
+        if colorbar is False:
+            return None
+
+        divider = axes_grid1.make_axes_locatable(image.axes)
+        cax = divider.append_axes("right", size=width, pad=pad)
+
+        if colorbar is None:
+            cax.set_axis_off()
+            return None
+
+        colorbar = image.axes.figure.colorbar(image, cax=cax)
+        colorbar.ax.yaxis.set_tick_params(color=color, labelcolor=color)
+
+        return colorbar
+
+    def add_legend(self, mode='imshow', handles=None, labels=None, colors='none', alphas=1, size=10, **kwargs):
+        """ Add patches to ax legend.
+
+        Parameters
+        ----------
+        ax : int or instance of `matploblib.axes.Axes`
+            Axes to put labels into. If and int, used for indexing `self.axes`.
+        mode : 'imshow', 'hist', 'curve', 'loss'
+            Mode to match legend hadles patches to.
+            If from ('imshow', 'hist'), use rectangular legend patches.
+            If from ('curve', 'loss'), use line legend patches.
+        handles : None or sequence of `matplotlib.artist.Artist`
+            A list of Artists (lines, patches) to be added to the legend.
+            The length of handles and labels (if both provided) should be the same.
+        labels : str or list of str
+            A list of labels to show next to the artists.
+        colors : valid matplotlib color or a list of them
+            Color to use for patches creation if those are not provided explicitly.
+        alphas : number or list of numbers from 0 to 1
+            Legend handles opacity.
+        size : int
+            Legend size.
+        kwargs : misc
+            For `matplotlib.legend`.
+        """
+        if (handles is None and labels is None) or (handles is not None and labels is not None):
+            raise ValueError("One and only one of `handles`, `labels` must be specified.")
+
+        # get legend that already exists
+        legend = self.ax.get_legend()
+        old_handles = getattr(legend, 'legendHandles', [])
+        handler_map = getattr(legend, '_custom_handler_map', {})
+
+        # make new handles
+        if handles is None:
+            labels = to_list(labels)
+            colors = colors if isinstance(colors, list) else [colors] * len(labels)
+            alphas = alphas if isinstance(alphas, list) else [alphas] * len(labels)
+
+            new_handles = []
+            for color, alpha, label in zip(colors, alphas, labels):
+                if label is None:
+                    continue
+                if mode in ('imshow', 'hist'):
+                    if is_color_like(color):
+                        handle = Patch(color=color, alpha=alpha, label=label)
+                    else:
+                        handle = PatchCollection(patches=[], cmap=color, label=label)
+                        handler_map[PatchCollection] = ColorMappingHandler()
+                elif mode in ('curve', 'loss'):
+                    handle = Line2D(xdata=[0], ydata=[0], color=color, alpha=alpha, label=label)
+                new_handles.append(handle)
+        else:
+            new_handles = to_list(handles)
+
+        # extend existing handles and labels with new ones
+        kwargs['handles'] = old_handles + new_handles
+        legend = self.ax.legend(prop={'size': size}, handler_map=handler_map, **kwargs)
+
+        return legend
+
+    def add_text(self, text, size=10, x=0.5, y=0.5, ha='center', va='center', bbox='default', **kwargs):
+        """ Add text to axis.
+
+        A convenient method for adding text in box (usually on empty ax).
+
+        Parameters
+        ----------
+        ax : int or instance of `matploblib.axes.Axes`
+            Axes to put labels into. If an int, used for indexing `self.axes`.
+        text : str
+            Text to display.
+        size : int
+            Text size.
+        x, y : float
+            The position to place the text in data coordinates.
+        ha : 'center', 'right', 'left'
+            Text horizontal alignment.
+        va : 'top', 'bottom', 'center', 'baseline', 'center_baseline'
+            Text vertical alignment.
+        bbox : 'default' or dict with properties for `matplotlib.patches.FancyBboxPatch`
+            Properties of box containing the text.
+        kwargs : misc
+            For `matplotlib.legend`.
+        """
+        if bbox == 'default':
+            bbox = {'boxstyle': 'square', 'fc': 'none'}
+
+        return self.ax.text(x=x, y=y, s=text, size=size, ha=ha, va=va, bbox=bbox, **kwargs)
+
+    @staticmethod
+    def add_grid(ax, grid_type, x_n=None, y_n=None, zorder=0, **kwargs):
+        """ Set axis grid parameters. """
+        if grid_type == 'minor':
+            locator = AutoMinorLocator
+        elif grid_type == 'major':
+            locator = MaxNLocator
+
+        if x_n is not None:
+            set_locator = getattr(ax.xaxis, f'set_{grid_type}_locator')
+            set_locator(locator(x_n))
+
+        if y_n is not None:
+            set_locator = getattr(ax.yaxis, f'set_{grid_type}_locator')
+            set_locator(locator(y_n))
+
+        ax.grid(which=grid_type, zorder=zorder, **kwargs)
+
+
+class Plot:
     """ Multiple images plotter.
 
     General idea is to display graphs for provided data while passing other keyword arguments to corresponding
@@ -327,17 +789,13 @@ class plot:
     To change parameter for title only, one can provide {'title_fontsize': 30}` instead.
     """
     def __init__(self, data=None, combine='overlay', mode='imshow', **kwargs):
-        """ Plot manager. """
-        self.fig = None
-        self.axes = []
-        self.fig_config = {}
-        self.axes_configs = []
-        self.axes_objects = []
+        self.figure = None
+        self.subplots = None
 
         self.plot(data=data, combine=combine, mode=mode, **kwargs)
 
     @staticmethod
-    def process_tuple(data, mode):
+    def parse_tuple(data, mode):
         """ Validate that tuple data item is provided with correct plot mode and convert its objects to arrays. """
         if mode not in ('curve', 'loss'):
             msg = "Tuple is a valid data item only in modes ('curve', 'loss')."
@@ -345,11 +803,26 @@ class plot:
         return tuple(np.array(item) for item in data)
 
     @staticmethod
-    def process_array(data, mode):
+    def parse_array(data, mode):
         """ Validate that data dimensionality is correct for given plot mode. """
-        if data.ndim > 1 and mode in ('curve', 'loss'):
-            msg = f"In `mode={mode}` array must be 1-dimensional, got array with ndim={data.ndim} instead."
-            raise ValueError(msg)
+        if data.ndim == 1:
+            if mode == 'imshow':
+                return data.reshape(-1, 1)
+            if mode == 'curve':
+                return (range(len(data)), data)
+            if mode == 'loss':
+                return (data, None)
+
+        if data.ndim == 3:
+            if mode in ('curve', 'loss'):
+                msg = f"In `mode={mode}` array must be 1- or 2-dimensional, got array with ndim={data.ndim}."
+                raise ValueError(msg)
+
+        if data.ndim > 3:
+            if mode != 'hist':
+                msg = f"In `mode={mode}` array must be 1-, 2- or 3-dimensional, got array with ndim={data.ndim}."
+                raise ValueError(msg)
+
         return data
 
     @classmethod
@@ -367,14 +840,15 @@ class plot:
 
         n_subplots = 0
 
+        data_list = []
         if data is None:
             data_list = []
             n_subplots = 1
         elif isinstance(data, tuple):
-            data_list = [[cls.process_tuple(data=data, mode=mode)]]
+            data_list = [[cls.parse_tuple(data=data, mode=mode)]]
             n_subplots = 1
         elif isinstance(data, np.ndarray):
-            data_list = [[cls.process_array(data=data, mode=mode)]]
+            data_list = [[cls.parse_array(data=data, mode=mode)]]
             n_subplots = 1
         elif isinstance(data, list) and contains_numbers(data):
             data_list = [[np.array(data)]]
@@ -392,17 +866,26 @@ class plot:
                         raise ValueError(msg)
                     data_item = None
                 elif isinstance(item, tuple):
-                    data_item = [cls.process_tuple(data=item, mode=mode)]
+                    data_item = [cls.parse_tuple(data=item, mode=mode)]
                 elif isinstance(item, np.ndarray):
-                    data_item = [cls.process_array(data=item, mode=mode)]
+                    data_item = [cls.parse_array(data=item, mode=mode)]
                 elif isinstance(item, list) and contains_numbers(item):
                     data_item = [np.array(item)]
                 elif isinstance(item, list):
                     if combine == 'separate':
                         raise ValueError("Data list items cant be lists themselves when `combine='separate'`")
-                    data_item = [np.array(subitem) if contains_numbers(subitem) else subitem for subitem in item]
+                    data_item = []
+                    for subitem in item:
+                        if isinstance(subitem, tuple):
+                            data_item += [cls.parse_tuple(data=subitem, mode=mode)]
+                        elif isinstance(subitem, np.ndarray):
+                            data_item += [cls.parse_array(data=subitem, mode=mode)]
+                        elif isinstance(subitem, list) and contains_numbers(subitem):
+                            data_item += [np.array(subitem)]
+                        elif isinstance(subitem, list):
+                            raise ValueError("!!.")
                 else:
-                    msg = f"Valid data items are None, tuple, array or list of those, got {type(item)} instead."
+                    msg = f"Valid data items are None, tuple, array or list of those, got {type(item)}."
                     raise ValueError(msg)
 
                 if combine in ('overlay',):
@@ -411,7 +894,7 @@ class plot:
                     data_list.append(data_item)
                     n_subplots += 1
                 else:
-                    msg = f"Valid combine modes are 'overlay', 'separate', 'mixed', got {combine} instead."
+                    msg = f"Valid combine modes are 'overlay', 'separate', 'mixed', got {combine}."
                     raise ValueError(msg)
 
             if combine == 'overlay':
@@ -463,7 +946,7 @@ class plot:
                     if shape is None:
                         continue
 
-                    order_axes = self.filter_config(kwargs, 'order_axes', index=idx)
+                    order_axes = filter_config(kwargs, 'order_axes', index=idx)
                     order_axes = order_axes or self.IMSHOW_DEFAULTS['order_axes']
 
                     min_height = ylim[idx][0] or 0
@@ -506,7 +989,7 @@ class plot:
         if axes is None:
             default_config = self.make_default_config(mode=mode, n_subplots=n_subplots, data=data, **kwargs)
             subplots_keys = ['figsize', 'facecolor', 'dpi', 'ncols', 'nrows', 'tight_layout', 'gridspec_kw']
-            config = self.filter_config(kwargs, subplots_keys, prefix='figure_')
+            config = filter_config(kwargs, subplots_keys, prefix='figure_')
             config = {**default_config, **config}
 
             figure, axes = plt.subplots(**config)
@@ -523,32 +1006,35 @@ class plot:
 
     def get_bbox(self, obj):
         """ Get object bounding box in inches. """
-        renderer = self.fig.canvas.get_renderer()
-        transformer = self.fig.dpi_scale_trans.inverted()
+        renderer = self.figure.canvas.get_renderer()
+        transformer = self.figure.dpi_scale_trans.inverted()
         return obj.get_window_extent(renderer=renderer).transformed(transformer)
 
     def adjust_figsize(self):
-        """ Look through axes' annotation objects and add figsize corrections for their widths and heights. """
-        ncols, nrows = self.axes[0].get_subplotspec().get_gridspec().get_geometry()
-        fig_width, fig_height = self.fig.get_size_inches()
+        """ Look through subplots annotation objects and add figsize corrections for their widths and heights. """
+        ncols, nrows = self.figure.axes[0].get_subplotspec().get_gridspec().get_geometry()
+        fig_width, fig_height = self.figure.get_size_inches()
 
         extra_width = 0
         extra_height = 0
-        if 'suptitle' in self.fig_objects:
-            suptitle_obj = self.fig_objects['suptitle']
+        if 'suptitle' in self.figure_objects:
+            suptitle_obj = self.figure_objects['suptitle']
             suptitle_height = self.get_bbox(suptitle_obj).height
             extra_height += suptitle_height
 
         ax_widths = []
         ax_heights = []
-        for ax, ax_objects in zip(self.axes, self.axes_objects):
+        for subplot in self.subplots:
+            ax = subplot.ax
+            annotations = subplot.annotations
+
             width = 0
             height = 0
-            if ax_objects is not None:
+            if annotations is not None:
                 ax_bbox = self.get_bbox(ax)
 
-                if 'title' in ax_objects:
-                    title_obj = ax_objects['title']
+                if 'title' in annotations:
+                    title_obj = annotations['title']
                     title_height = self.get_bbox(title_obj).height
                     height += title_height
 
@@ -563,8 +1049,8 @@ class plot:
                     upper_xticks_height = max(0, last_xtick_bbox.y1 - ax_bbox.y1)
                     height += upper_xticks_height
 
-                if 'xlabel' in ax_objects:
-                    xlabel_obj = ax_objects['xlabel']
+                if 'xlabel' in annotations:
+                    xlabel_obj = annotations['xlabel']
                     xlabel_height = self.get_bbox(xlabel_obj).height
                     height += xlabel_height
 
@@ -579,8 +1065,8 @@ class plot:
                     right_yticks_width = max(0, last_ytick_bbox.x1 - ax_bbox.x1)
                     width += right_yticks_width
 
-                if 'ylabel' in ax_objects:
-                    ylabel_obj = ax_objects['ylabel']
+                if 'ylabel' in annotations:
+                    ylabel_obj = annotations['ylabel']
                     ylabel_width = self.get_bbox(ylabel_obj).width
                     width += ylabel_width
 
@@ -594,57 +1080,143 @@ class plot:
         extra_height += ax_heights.max(axis=0).sum()
 
         new_figsize = (fig_width + extra_width, fig_height + extra_height)
-        self.fig.set_size_inches(new_figsize)
+        self.figure.set_size_inches(new_figsize)
+
+    MASK_COLORS = ['firebrick', 'mediumseagreen', 'thistle', 'darkorange', 'navy', 'gold',
+                    'red', 'turquoise', 'darkorchid', 'darkkhaki', 'royalblue', 'yellow',
+                    'chocolate', 'forestgreen', 'lightpink', 'darkslategray', 'deepskyblue', 'wheat']
+
+    IMSHOW_DEFAULTS = {
+        # image
+        'cmap': CycledList(['Greys_r'] + MASK_COLORS, cycle_from=1),
+        # ticks
+        'labeltop': True,
+        'labelright': True,
+        'direction': 'inout',
+        # axes order
+        'order_axes': (0, 1, 2),
+        # values masking
+        'mask_color': (0, 0, 0, 0),
+        # grid
+        'grid': False,
+        'minor_grid_x_n': 2,
+        'minor_grid_y_n': 2,
+    }
+
+    HIST_DEFAULTS = {
+        # preprocessing
+        'flatten': True,
+        # hist
+        'bins': 50,
+        'color': CycledList(MASK_COLORS),
+        'alpha': 0.8,
+        # axis labels
+        'xlabel': 'Values',
+        'ylabel': 'Counts',
+        # common
+        'set_axisbelow': True,
+        'colorbar': False,
+        # grid
+        'grid': 'major',
+    }
+
+    CURVE_COLORS = ['cornflowerblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
+                    'forestgreen', 'navy', 'gold', 'red', 'turquoise', 'darkorchid',
+                    'darkkhaki', 'royalblue', 'yellow', 'chocolate', 'darkslategray', 'wheat']
+
+    CURVE_DEFAULTS = {
+        # curve
+        'color': CycledList(CURVE_COLORS),
+        # axis labels
+        'xlabel': 'x',
+        'ylabel': 'y',
+        # common
+        'colorbar': False,
+        # grid
+        'grid': 'both',
+    }
+
+    LOSS_DEFAULTS = {
+        # main
+        'window': 20,
+        'final_window': 50,
+        # curve
+        'color': CycledList(CURVE_COLORS[::2]),
+        # learning rate
+        'lr_color': CycledList(CURVE_COLORS[1::2]),
+        # title
+        'title_label': 'Loss values and learning rate',
+        # axis labels
+        'xlabel': 'Iterations', 'ylabel': 'Loss',
+        # common
+        'colorbar': False,
+        # grid
+        'grid': 'both',
+        'minor_grid_y_n': 4,
+        # legend
+        'legend': True,
+    }
+
+    ANNOTATION_DEFAULTS = {
+        'facecolor': 'snow',
+        # text
+        'text_color': 'k',
+        # suptitle
+        'suptitle_size': 30,
+        # title
+        'title_size': 25,
+        # axis labels
+        # 'xlabel': '', 'ylabel': '',
+        'xlabel_size': '12', 'ylabel_size': '12',
+        # colorbar
+        'colorbar': False,
+        # grid
+        'minor_grid_color': '#CCCCCC',
+        'minor_grid_linestyle': '--',
+        'major_grid_color': '#CCCCCC',
+    }
 
     def plot(self, data=None, combine='overlay', mode='imshow', save=False, show=True,
-             adjust_figsize='imshow', axes=None, axis=None, ax=None, **kwargs):
-        """ Plot data on axes.
+             adjust_figsize='imshow', axes=None, axis=None, ax=None, subplots=None, **kwargs):
+        """ Plot data on subplots.
 
         Parses axes from kwargs if provided, else creates them.
         Filters parameters and calls chosen plot method for every axis-data pair.
-
-        TODO: Explain `abs_idx` and `rel_idx`.
         """
+        self.config = {**self.ANNOTATION_DEFAULTS, **kwargs}
+
         data, combine, n_subplots = self.parse_data(data=data, combine=combine, mode=mode)
 
         axes = axes or axis or ax
-        if self.fig is None:
+        if self.subplots is None:
             fig, axes, fig_config = self.make_figure(mode=mode, n_subplots=n_subplots, data=data, axes=axes, **kwargs)
-            self.fig, self.axes, self.fig_config = fig, axes, fig_config
-            self.axes_configs = [None] * len(axes)
-            self.axes_objects = [None] * len(axes)
-            axes_indices = range(len(axes))
+            self.figure, self.figure_config = fig, fig_config
+            self.subplots = [Subplot(self, ax) for ax in axes]
+            active_subplots = subplots or self.subplots
         else:
-            axes_indices = to_list(axes)
-            if any(not isinstance(idx, int) for idx in axes_indices):
-                msg = f"Figure already created — only ax indices to use can be specified, got {axes_indices} instead."
+            if axes is not None:
+                msg = "Subplots already created and new axes cannot be specified."
                 raise ValueError(msg)
-
-        self.config = {**self.ANNOTATION_DEFAULTS, **kwargs}
+            active_subplots = [self.subplots[idx] for idx in to_list(subplots)]
 
         mode_defaults = getattr(self, f"{mode.upper()}_DEFAULTS")
 
-        for rel_idx, abs_idx in enumerate(axes_indices):
-            subplot_ax = self.axes[abs_idx]
+        for idx, subplot in enumerate(active_subplots):
+            subplot_data = data[idx] if idx < len(data) else None
 
-            if rel_idx >= len(data) or data[rel_idx] is None:
-                if self.axes_objects[rel_idx] is None:
-                    subplot_ax.set_axis_off()
-            else:
-                plot_method = getattr(self, f"ax_{mode}")
+            if subplot_data is None:
+                if subplot.empty:
+                    subplot.disable()
+                continue
 
-                ax_data = data[rel_idx]
-                subplot_idx = None if combine == 'overlay' else rel_idx
-                ax_config = self.filter_config(self.config, index=subplot_idx)
-                ax_config = {**mode_defaults, **ax_config}
+            subplot_idx = None if combine == 'overlay' else idx
+            subplot_config = filter_config(self.config, index=subplot_idx)
+            subplot_config = {**mode_defaults, **subplot_config}
 
-                ax_objects = plot_method(data=ax_data, ax=subplot_ax, config=ax_config)
-                ax_objects = self.ax_annotate(ax=subplot_ax, ax_config=ax_config, ax_objects=ax_objects, mode=mode)
+            subplot.plot(mode, subplot_data, subplot_config)
 
-                self.axes_objects[abs_idx] = ax_objects
-                self.axes_configs[abs_idx] = ax_config
-
-        self.fig_objects = self.fig_annotate()
+        figure_objects = self.annotate()
+        self.figure_objects = figure_objects
 
         if adjust_figsize == mode or adjust_figsize is True:
             self.adjust_figsize()
@@ -668,175 +1240,16 @@ class plot:
     def __str__(self):
         return f"<Batchflow Plotter with {len(self.axes)} axes>"
 
-    ANNOTATION_DEFAULTS = {
-        'facecolor': 'snow',
-        # text
-        'text_color': 'k',
-        # suptitle
-        'suptitle_size': 30,
-        # title
-        'title_size': 25,
-        # axis labels
-        # 'xlabel': '', 'ylabel': '',
-        'xlabel_size': '12', 'ylabel_size': '12',
-        # colorbar
-        'colorbar': False,
-        # grid
-        'minor_grid_color': '#CCCCCC',
-        'minor_grid_linestyle': '--',
-        'major_grid_color': '#CCCCCC',
-    }
-
-    def ax_annotate(self, ax, ax_config, ax_objects, mode):
-        """ Apply requested annotation functions to given axis with chosen parameters. """
-        # pylint: disable=too-many-branches
-        text_keys = ['size', 'family', 'color']
-        text_config = self.filter_config(ax_config, text_keys, prefix='text_')
-
-        # title
-        keys = ['title', 'y']
-        title_config = self.filter_config(ax_config, keys, prefix='title_')
-        label = None
-        if 'label' in title_config:
-            label = title_config.pop('label')
-        if 'title' in title_config:
-            label = title_config.pop('title')
-        title_config['label'] = label
-        title_config = {**text_config, **title_config}
-        if title_config:
-            ax_objects['title'] = ax.set_title(**title_config)
-
-        # xlabel
-        keys = ['xlabel']
-        xlabel_config = self.filter_config(ax_config, keys, prefix='xlabel_')
-        xlabel_config = {**text_config, **xlabel_config}
-        if xlabel_config and 'xlabel' in xlabel_config:
-            ax_objects['xlabel'] = ax.set_xlabel(**xlabel_config)
-
-        # ylabel
-        keys = ['ylabel']
-        ylabel_config = self.filter_config(ax_config, keys, prefix='ylabel_')
-        ylabel_config = {**text_config, **ylabel_config}
-        if ylabel_config and 'ylabel' in ylabel_config:
-            ax_objects['ylabel'] = ax.set_ylabel(**ylabel_config)
-
-        # xticks
-        xticks_config = self.filter_config(ax_config, [], prefix='xticks_')
-        ticks = self.filter_config(ax_config, 'ticks')
-        xticks = self.filter_config(ax_config, 'xticks')
-        xticks = ticks if ticks is not None else xticks
-        if xticks is not None:
-            xticks_config['ticks'] = xticks
-        if xticks_config:
-            ax.set_xticks(**xticks_config)
-
-        # yticks
-        yticks_config = self.filter_config(ax_config, [], prefix='yticks_')
-        ticks = self.filter_config(ax_config, 'ticks')
-        yticks = self.filter_config(ax_config, 'yticks')
-        yticks = ticks if ticks is not None else yticks
-        if yticks is not None:
-            yticks_config['ticks'] = yticks
-        if yticks_config:
-            ax.set_yticks(**yticks_config)
-
-        # ticks
-        keys = ['labeltop', 'labelright', 'labelcolor', 'direction']
-        tick_config = self.filter_config(ax_config, keys, prefix='tick_')
-        if tick_config:
-            ax.tick_params(**tick_config)
-
-        # xlim
-        xlim_config = self.filter_config(ax_config, ['xlim'], prefix='xlim_')
-        if 'xlim' in xlim_config:
-            xlim_config['left'] = xlim_config.get('left', xlim_config.pop('xlim'))
-        if xlim_config:
-            ax.set_xlim(**xlim_config)
-
-        # ylim
-        ylim_config = self.filter_config(ax_config, ['ylim'], prefix='ylim_')
-        if 'ylim' in ylim_config:
-            ylim_config['bottom'] = ylim_config.get('bottom', ylim_config.pop('ylim'))
-        if ylim_config:
-            ax.set_ylim(**ylim_config)
-
-        # colorbar
-        if any(to_list(self.config['colorbar'])):
-            keys = ['colorbar', 'width', 'pad', 'fake', 'ax_objects']
-            colorbar_config = self.filter_config(ax_config, keys, prefix='colorbar_')
-            colorbar_config['ax_image'] = ax_objects['images'][0]
-            # if colorbar is disabled for subplot, add param to plot fake axis instead to keep proportions
-            colorbar_config['fake'] = not colorbar_config.pop('colorbar', True)
-            if 'pad' not in colorbar_config:
-                pad = 0.4
-                labelright = self.filter_config(ax_config, 'labelright', prefix='tick_')
-                if labelright:
-                    ax_x1 = self.get_bbox(ax).x1
-                    yticklabels = ax.get_yticklabels()
-                    max_ytick_label_x1 = max(self.get_bbox(label).x1
-                                             for label in yticklabels[len(yticklabels)//2:])
-                    pad += (max_ytick_label_x1 - ax_x1) # account for width of yticklabels to the right of the subplot
-                colorbar_config['pad'] = pad
-            ax_objects['colorbar'] = self.add_colorbar(**colorbar_config)
-
-        # legend
-        if mode == 'loss':
-            ax_config['handles'] = ax_objects['lines']
-        keys = ['labels', 'handles', 'size', 'loc', 'ha', 'va', 'handletextpad']
-        legend_config = self.filter_config(ax_config, keys, prefix='legend_')
-        if legend_config.get('labels') or legend_config.get('handles'):
-            if 'cmap' in ax_config:
-                colors = self.filter_config(ax_config, 'cmap')
-            if 'color' in ax_config:
-                colors = self.filter_config(ax_config, 'color')
-            if 'colors' in legend_config:
-                colors = legend_config.pop('colors')
-            legend_config['colors'] = colors
-            legend_config['alphas'] = ax_config.get('alpha')
-            ax_objects['legend'] = self.add_legend(ax, mode=mode, **legend_config)
-
-        # grid
-        grid = self.filter_config(ax_config, 'grid')
-        grid_keys = ['color', 'linestyle', 'freq']
-
-        minor_config = self.filter_config(ax_config, grid_keys, prefix='minor_grid_')
-        if grid in ('minor', 'both') and minor_config:
-            self.add_grid(ax, grid_type='minor', **minor_config)
-
-        major_config = self.filter_config(ax_config, grid_keys, prefix='major_grid_')
-        if grid in ('major', 'both') and minor_config:
-            self.add_grid(ax, grid_type='major', **major_config)
-
-        spine_colors = ax_config.get('spine_color')
-        if spine_colors is not None:
-            spines = ax.spines.values()
-            spine_colors = spine_colors if isinstance(spine_colors, list) else [spine_colors] * len(spines)
-            for spine, color in zip(spines, spine_colors):
-                spine.set_edgecolor(color)
-
-        facecolor = ax_config.get('facecolor', None)
-        if facecolor is not None:
-            ax.set_facecolor(facecolor)
-
-        ax.set_axisbelow(ax_config.get('set_axisbelow', False))
-
-        if ax_config.get('disable_axes'):
-            ax.set_axis_off()
-        elif not ax.axison:
-            ax.set_axis_on()
-
-        return ax_objects
-
-    def fig_annotate(self):
+    def annotate(self):
         """ Put suptitle with given parameters over figure and apply `tight_layout`. """
-        fig_objects = {}
+        annotations = {}
 
         text_keys = ['size', 'family', 'color']
-        text_config = self.filter_config(self.config, text_keys, prefix='text_')
+        text_config = filter_config(self.config, text_keys, prefix='text_')
 
         # suptitle
         keys = ['suptitle', 't', 'y']
-        suptitle_config = self.filter_config(self.config, keys, prefix='suptitle_')
+        suptitle_config = filter_config(self.config, keys, prefix='suptitle_')
         t = None
         if 'label' in suptitle_config:
             t = suptitle_config.pop('label')
@@ -847,14 +1260,14 @@ class plot:
         suptitle_config['t'] = t
         suptitle_config = {**text_config, **suptitle_config}
         if suptitle_config:
-            fig_objects['suptitle'] = fig_objects['suptitle'] = self.fig.suptitle(**suptitle_config)
+            annotations['suptitle'] = annotations['suptitle'] = self.figure.suptitle(**suptitle_config)
 
-        self.fig.tight_layout()
+        self.figure.tight_layout()
 
-        return fig_objects
+        return annotations
 
     def show(self):
-        self.fig = plt.figure(self.fig)
+        self.figure = plt.figure(self.figure)
 
     def save(self, **kwargs):
         """ Save plot. """
@@ -866,477 +1279,29 @@ class plot:
         }
 
         save_keys = ['savepath', 'bbox_inches', 'pad_inches', 'dpi']
-        save_config = self.filter_config(kwargs, save_keys, prefix='save_')
+        save_config = filter_config(kwargs, save_keys, prefix='save_')
         save_config = {**default_config, **save_config}
         savepath = save_config.pop('savepath')
 
-        self.fig.savefig(fname=savepath, **save_config)
+        self.figure.savefig(fname=savepath, **save_config)
 
     def close(self):
         """ Close figure. """
-        plt.close(self.fig)
-
-    # Rendering methods
-    MASK_COLORS = ['firebrick', 'mediumseagreen', 'thistle', 'darkorange', 'navy', 'gold',
-                   'red', 'turquoise', 'darkorchid', 'darkkhaki', 'royalblue', 'yellow',
-                   'chocolate', 'forestgreen', 'lightpink', 'darkslategray', 'deepskyblue', 'wheat']
-
-    IMSHOW_DEFAULTS = {
-        # image
-        'cmap': CycledList(['Greys_r'] + MASK_COLORS, cycle_from=1),
-        # ticks
-        'labeltop': True,
-        'labelright': True,
-        'direction': 'inout',
-        # axes order
-        'order_axes': (0, 1, 2),
-        # values masking
-        'mask_color': (0, 0, 0, 0),
-        # grid
-        'grid': False,
-        'minor_grid_x_n': 2,
-        'minor_grid_y_n': 2,
-    }
-
-    @classmethod
-    def ax_imshow(cls, data, ax, config):
-        """ Display given list of arrays as images on axis. """
-        images = []
-
-        for layer_idx, array in enumerate(data):
-            imshow_keys = ['vmin', 'vmax', 'interpolation', 'alpha', 'extent', 'order_axes', 'mask_values']
-            imshow_config = cls.filter_config(config, imshow_keys, prefix='imshow_', index=layer_idx)
-
-            # Add `0` to a list of values that shouldn't be displayed if image is a binary mask
-            if is_binary(array.flatten()):
-                imshow_config['mask_values'] = 0
-                imshow_config['vmin'] = 0
-
-            # Assemble colormap from given parameters
-            cmap = cls.filter_config(config, 'cmap', index=layer_idx)
-            # If a single color provided, prepend 'white' color, so that a resulting tuple defines binary colormap
-            if is_color_like(cmap):
-                cmap = ('white', cmap)
-            # If a tuple of colors provided in `cmap` argument convert it into a colormap
-            if isinstance(cmap, tuple):
-                cmap = cls.make_cmap(colors=cmap)
-            else:
-                cmap = copy(plt.get_cmap(cmap))
-            # Set a color for nan/masked values display to colormap if provided
-            mask_color = cls.filter_config(config, 'mask_color', index=layer_idx)
-            cmap.set_bad(color=mask_color)
-            # Add created cmap to imshow config
-            imshow_config['cmap'] = cmap
-
-            # Use a proxy for imshow calls that fixes data preprocessing parameters
-            # and re-applies them to axes image before `set_data` calls
-            image = preprocess_and_imshow(ax=ax, array=array, **imshow_config)
-            images.append(image)
-
-        return {'images': images}
-
-
-    HIST_DEFAULTS = {
-        # hist
-        'bins': 50,
-        'color': CycledList(MASK_COLORS),
-        'alpha': 0.8,
-        # axis labels
-        'xlabel': 'Values',
-        'ylabel': 'Counts',
-        # common
-        'set_axisbelow': True,
-        'colorbar': False,
-        # grid
-        'grid': 'major',
-    }
-
-    @classmethod
-    def ax_hist(cls, data, ax, config):
-        """ Display given list of arrays as histograms on axis. """
-        bars = []
-
-        for layer_idx, array in enumerate(data):
-            hist_keys = ['bins', 'color', 'alpha', 'label']
-            hist_config = cls.filter_config(config, hist_keys, prefix='hist_', index=layer_idx)
-
-            mask_values = cls.filter_config(config, 'mask_values', index=layer_idx)
-            if mask_values is None:
-                mask_values = []
-            else:
-                mask_values = to_list(mask_values)
-
-            masks = [array == m if isinstance(m, Number) else m(array) for m in mask_values]
-            mask = reduce(np.logical_or, masks, np.isnan(array))
-            new_array = np.ma.array(array, mask=mask).flatten()
-
-            _, _, bar = ax.hist(new_array, **hist_config)
-            bars.append(bar)
-
-        return {'bars': bars}
-
-
-    CURVE_COLORS = ['cornflowerblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
-                    'forestgreen', 'navy', 'gold', 'red', 'turquoise', 'darkorchid',
-                    'darkkhaki', 'royalblue', 'yellow', 'chocolate', 'darkslategray', 'wheat']
-
-    CURVE_DEFAULTS = {
-        # curve
-        'color': CycledList(CURVE_COLORS),
-        # axis labels
-        'xlabel': 'x',
-        'ylabel': 'y',
-        # common
-        'colorbar': False,
-        # grid
-        'grid': 'both',
-    }
-
-    @classmethod
-    def ax_curve(cls, data, ax, config):
-        """ Display given list of arrays as curves on axis. """
-        lines = []
-
-        for layer_idx, arrays in enumerate(data):
-            if isinstance(arrays, np.ndarray):
-                if arrays.ndim == 1:
-                    x = range(len(arrays))
-                    y = arrays
-                else:
-                    x, y = arrays
-            elif isinstance(arrays, tuple):
-                if len(arrays) == 1:
-                    x = range(len(arrays))
-                    y = arrays
-                else:
-                    x, y = arrays
-            else:
-                raise ValueError('Valid data object is either np.array or tuple of np.arrays')
-
-            curve_keys = ['color', 'linestyle', 'alpha']
-            curve_config = cls.filter_config(config, curve_keys, prefix='curve_', index=layer_idx)
-            line = ax.plot(x, y, **curve_config)
-            lines.extend(line)
-
-            # Change scale of axis, if needed
-            if config.get('log'):
-                ax.set_yscale('log')
-
-        return {'lines': lines}
-
-
-    LOSS_DEFAULTS = {
-        # main
-        'window': 20,
-        'final_window': 50,
-        # curve
-        'color': CycledList(CURVE_COLORS[::2]),
-        # learning rate
-        'lr_color': CycledList(CURVE_COLORS[1::2]),
-        # title
-        'title_label': 'Loss values and learning rate',
-        # axis labels
-        'xlabel': 'Iterations', 'ylabel': 'Loss',
-        # common
-        'colorbar': False,
-        # grid
-        'grid': 'both',
-        'minor_grid_y_n': 4,
-        # legend
-        'legend': True,
-    }
-
-    @classmethod
-    def ax_loss(cls, data, ax, config):
-        """ Display given list of arrays as loss curves. """
-        lines = []
-
-        lr_ax = None
-        for layer_idx, arrays in enumerate(data):
-            if isinstance(arrays, np.ndarray):
-                if arrays.ndim == 1:
-                    loss = arrays
-                    lr = None
-                else:
-                    loss, lr = arrays
-            elif isinstance(arrays, tuple):
-                if len(arrays) == 1:
-                    loss = arrays[0]
-                    lr = None
-                else:
-                    loss, lr = arrays
-            else:
-                raise ValueError('Valid data object is either np.array or tuple of np.arrays')
-
-            label = cls.filter_config(config, 'label') or f'loss #{layer_idx + 1}'
-            loss_label = label + f' ⟶ {loss[-1]:2.3f}'
-            final_window = cls.filter_config(config, 'final_window')
-            if final_window is not None:
-                final = np.mean(loss[-final_window:]) #pylint: disable=invalid-unary-operand-type
-                loss_label += f"\nmean over last {final_window} iterations={final:2.3f}"
-
-            curve_keys = ['color', 'linestyle', 'linewidth', 'alpha']
-            loss_config = cls.filter_config(config, curve_keys, prefix='curve_', index=layer_idx)
-            loss_line = ax.plot(loss, label=loss_label, **loss_config)
-            lines.extend(loss_line)
-
-            window = cls.filter_config(config, 'window', index=layer_idx)
-            if window:
-                averaged = convolve(loss, np.ones(window), mode='nearest') / window
-                mean_color = cls.scale_lightness(loss_config['color'], scale=.5)
-                averaged_loss_label = label + ' running mean'
-                average_line = ax.plot(averaged, label=averaged_loss_label, color=mean_color, linestyle='--')
-                lines.extend(average_line)
-
-            # Change scale of axis, if needed
-            if config.get('log_loss'):
-                ax.set_yscale('log')
-
-            if lr is not None:
-                if lr_ax is None:
-                    lr_ax = ax.twinx()
-                lr_label = f'learning rate №{layer_idx + 1} ⟶ {lr[-1]:.0e}'
-                lr_config = cls.filter_config(config, curve_keys, prefix='lr_', index=layer_idx)
-                lr_line = lr_ax.plot(lr, label=lr_label, **lr_config)
-                lr_ax.set_ylabel('Learning rate', fontsize=12)
-                lines.extend(lr_line)
-
-            if lr is not None and config.get('log_lr'):
-                lr_ax.set_yscale('log')
-
-        return {'lines': lines}
-
-    # Supplementary methods
-
-    @staticmethod
-    def maybe_index(key, value, index):
-        """ Get i-th element of parameter if index is provided and parameter value is a list else return it unchanged.
-
-        Parameters
-        ----------
-        key : str
-            Parameter name.
-        value : misc
-            Parameter value.
-        index : None or int
-            If not None, a number to use for parameter indexing.
-
-        Raises
-        ------
-        ValueError
-            If parameter is a list but the index is greater than its length.
-        """
-        if index is not None and isinstance(value, list):
-            try:
-                return value[index]
-            except IndexError as e:
-                msg = f"Tried to obtain element #{index} from `{key}={value}`. Either provide parameter value "\
-                      f"not in list (to use the same `{key}` several times) or add more elements to it."
-                raise ValueError(msg) from e
-        return value
-
-    @classmethod
-    def filter_config(cls, config, keys=None, prefix='', index=None):
-        """ Make a subdictionary of parameters with required keys.
-
-        Parameter are retrieved if:
-        a. It is explicitly requested (via `keys` arg).
-        b. Its name starts with given prefix (defined by `prefix` arg).
-
-        Parameters
-        ----------
-        config : dict
-            Arguments to filter.
-        keys : str or sequence
-            Key(s) to retrieve. If str, return key value.
-            If list — return dict of pairs (key, value) for every existing key.
-        prefix : str, optional
-            Arguments with keys starting with given prefix will also be retrieved.
-            Defaults to `''`, i.e. no prefix used.
-        index : int
-            Index of argument value to retrieve.
-            If none provided, get whole argument value.
-            If value is non-indexable, get it without indexing.
-        """
-        if isinstance(keys, str):
-            value = config.get(keys, None)
-            return cls.maybe_index(keys, value, index)
-
-        if keys is None:
-            keys = list(config.keys())
-        elif prefix:
-            keys += [key.split(prefix)[1] for key in config if key.startswith(prefix)]
-
-        result = {}
-
-        for key in keys:
-            if prefix + key in config:
-                value = config[prefix + key]
-            elif key in config:
-                value = config[key]
-            else:
-                continue
-            result[key] = cls.maybe_index(key, value, index)
-
-        return result
-
-    @staticmethod
-    def make_cmap(colors):
-        """ Make colormap from provided color/colors list. """
-        colors = [ColorConverter().to_rgb(color) if isinstance(color, str) else color for color in to_list(colors)]
-        cmap = ListedColormap(colors)
-        return cmap
-
-    @staticmethod
-    def scale_lightness(color, scale):
-        """ Make new color with modified lightness from existing. """
-        if isinstance(color, str):
-            color = ColorConverter.to_rgb(color)
-        hue, light, saturation = rgb_to_hls(*color)
-        new_color = hls_to_rgb(h=hue, l=min(1, light * scale), s=saturation)
-        return new_color
-
-    def add_colorbar(self, ax_image, width=.2, pad=None, color='black', fake=False):
-        """ Append colorbar to the image on the right. """
-        divider = axes_grid1.make_axes_locatable(ax_image.axes)
-        cax = divider.append_axes("right", size=width, pad=pad)
-
-        if fake:
-            cax.set_axis_off()
-            colorbar = None
-        else:
-            colorbar = ax_image.axes.figure.colorbar(ax_image, cax=cax)
-            colorbar.ax.yaxis.set_tick_params(color=color, labelcolor=color)
-
-        return colorbar
-
-    def add_legend(self, ax=None, mode='imshow', handles=None, labels=None, colors='none', alphas=1, size=10, **kwargs):
-        """ Add patches to axes legend.
-
-        Parameters
-        ----------
-        ax : int or instance of `matploblib.axes.Axes`
-            Axes to put labels into. If and int, used for indexing `self.axes`.
-        mode : 'imshow', 'hist', 'curve', 'loss'
-            Mode to match legend hadles patches to.
-            If from ('imshow', 'hist'), use rectangular legend patches.
-            If from ('curve', 'loss'), use line legend patches.
-        handles : None or sequence of `matplotlib.artist.Artist`
-            A list of Artists (lines, patches) to be added to the legend.
-            The length of handles and labels (if both provided) should be the same.
-        labels : str or list of str
-            A list of labels to show next to the artists.
-        colors : valid matplotlib color or a list of them
-            Color to use for patches creation if those are not provided explicitly.
-        alphas : number or list of numbers from 0 to 1
-            Legend handles opacity.
-        size : int
-            Legend size.
-        kwargs : misc
-            For `matplotlib.legend`.
-        """
-        if (handles is None and labels is None) or (handles is not None and labels is not None):
-            raise ValueError("One and only one of `handles`, `labels` must be specified.")
-
-        if isinstance(ax, int):
-            ax = self.axes[ax]
-
-        # get legend that already exists
-        legend = ax.get_legend()
-        old_handles = getattr(legend, 'legendHandles', [])
-        handler_map = getattr(legend, '_custom_handler_map', {})
-
-        # make new handles
-        if handles is None:
-            labels = to_list(labels)
-            colors = colors if isinstance(colors, list) else [colors] * len(labels)
-            alphas = alphas if isinstance(alphas, list) else [alphas] * len(labels)
-
-            new_handles = []
-            for color, alpha, label in zip(colors, alphas, labels):
-                if label is None:
-                    continue
-                if mode in ('imshow', 'hist'):
-                    if is_color_like(color):
-                        handle = Patch(color=color, alpha=alpha, label=label)
-                    else:
-                        handle = PatchCollection(patches=[], cmap=color, label=label)
-                        handler_map[PatchCollection] = ColorMappingHandler()
-                elif mode in ('curve', 'loss'):
-                    handle = Line2D(xdata=[0], ydata=[0], color=color, alpha=alpha, label=label)
-                new_handles.append(handle)
-        else:
-            new_handles = to_list(handles)
-
-        # extend existing handles and labels with new ones
-        kwargs['handles'] = old_handles + new_handles
-        legend = ax.legend(prop={'size': size}, handler_map=handler_map, **kwargs)
-
-        return legend
-
-    def add_text(self, ax, text, size=10, x=0.5, y=0.5, ha='center', va='center', bbox='default', **kwargs):
-        """ Add text to axis.
-
-        A convenient method for adding text in box (usually on empty ax).
-
-        Parameters
-        ----------
-        ax : int or instance of `matploblib.axes.Axes`
-            Axes to put labels into. If an int, used for indexing `self.axes`.
-        text : str
-            Text to display.
-        size : int
-            Text size.
-        x, y : float
-            The position to place the text in data coordinates.
-        ha : 'center', 'right', 'left'
-            Text horizontal alignment.
-        va : 'top', 'bottom', 'center', 'baseline', 'center_baseline'
-            Text vertical alignment.
-        bbox : 'default' or dict with properties for `matplotlib.patches.FancyBboxPatch`
-            Properties of box containing the text.
-        kwargs : misc
-            For `matplotlib.legend`.
-        """
-        if isinstance(ax, int):
-            ax = self.axes[ax]
-
-        if bbox == 'default':
-            bbox = {'boxstyle': 'square', 'fc': 'none'}
-
-        return ax.text(x=x, y=y, s=text, size=size, ha=ha, va=va, bbox=bbox, **kwargs)
-
-    @staticmethod
-    def add_grid(ax, grid_type, x_n=None, y_n=None, zorder=0, **kwargs):
-        """ Set axis grid parameters. """
-        if grid_type == 'minor':
-            locator = AutoMinorLocator
-        elif grid_type == 'major':
-            locator = MaxNLocator
-
-        if x_n is not None:
-            set_locator = getattr(ax.xaxis, f'set_{grid_type}_locator')
-            set_locator(locator(x_n))
-
-        if y_n is not None:
-            set_locator = getattr(ax.yaxis, f'set_{grid_type}_locator')
-            set_locator(locator(y_n))
-
-        ax.grid(which=grid_type, zorder=zorder, **kwargs)
+        plt.close(self.figure)
 
 
 def plot_image(data, **kwargs):
     """ Shorthand for image plotting. """
-    return plot(data, mode='imshow', **kwargs)
+    return Plot(data, mode='imshow', **kwargs)
 
 def plot_hist(data, **kwargs):
     """ Shorthand for histogram plotting. """
-    return plot(data, mode='hist', **kwargs)
+    return Plot(data, mode='hist', **kwargs)
 
 def plot_curve(data, **kwargs):
     """ Shorthand for curve plotting. """
-    return plot(data, mode='curve', **kwargs)
+    return Plot(data, mode='curve', **kwargs)
 
 def plot_loss(data, **kwargs):
     """ Shorthand for loss plotting. """
-    return plot(data, mode='loss', **kwargs)
+    return Plot(data, mode='loss', **kwargs)
