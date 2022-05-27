@@ -9,7 +9,7 @@ import torch
 
 from ...monitor import GPUMemoryMonitor
 from ...notifier import Notifier
-from ...plot import plot
+from ...plot import plot_loss
 
 # Also imports `tensorboard`, if necessary
 
@@ -142,12 +142,15 @@ class VisualizationMixin:
             'xlabel': 'Iterations',
             'ylabel': r'$\lambda$',
             'ylabel_rotation': 0,
-            'ylabel_size': 20,
+            'ylabel_size': 15,
             'legend': False,
             'grid': 'major',
             **kwargs
         }
-        return plot(data=self.lr_list, mode='curve', **params)
+
+        data = [(None, lr) for lr in np.array(self.lr_list).T]
+
+        return plot_loss(data=data, **params)
 
     def show_loss(self, overlay_lr=True, **kwargs):
         """ Plot loss and learning rate over the same figure.
@@ -188,13 +191,13 @@ class VisualizationMixin:
         if overlay_lr:
             data = (self.loss_list, [l[0] for l in self.lr_list])
         else:
-            data = (self.loss_list,)
+            data = (self.loss_list, None)
 
         kwargs['title'] = 'Loss values and learning rate' if overlay_lr else 'Loss values'
         if 'final_window' in kwargs:
             kwargs['final_window'] = min(kwargs['final_window'], self.iteration)
 
-        return plot(data=data, mode='loss', **kwargs)
+        return plot_loss(data=data, **kwargs)
 
 
     plot_loss = show_loss
