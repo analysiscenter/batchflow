@@ -40,7 +40,8 @@ def evaluate_str_comparison(arg0, string):
             operation = STR_TO_OPERATION[key]
             arg1 = literal_eval(string.split(key)[-1])
             return operation(arg0, arg1)
-    raise ValueError("Given string {string} does not contain any of supported operators: {STR_TO_OPERATION}")
+    msg = f"Given string '{string}' does not contain any of supported operators: {list(STR_TO_OPERATION.keys())}"
+    raise ValueError(msg)
 
 
 class CycledList(list):
@@ -214,53 +215,72 @@ class Layer:
         self.index = index
         self.config = config
 
-        if mode in ('image', 'histogram') and 'mask_values' not in self.config:
+        if mode in ('image', 'histogram') and 'mask' not in self.config:
             # Add `0` to a list of values that shouldn't be displayed if image is a binary mask
             if is_binary(data.flatten()):
-                self.config['mask_values'] = 0
+                self.config['mask'] = 0
                 self.config['vmin'] = 0
                 self.config['vmax'] = 1
 
         preprocessed_data = self.preprocess(data)
         self.object = getattr(self, mode)(preprocessed_data)
 
+    def transpose(self, data):
+        """ Change array axes order if needed. """
+        transpose = self.config.get('transpose', None)
+        if transpose is not None:
+            transpose = transpose[:data.ndim]
+            data = np.transpose(data, transpose)
+        return data
+
+    def flatten(self, data):
+        """ Make array 1d if needed. """
+        flatten = self.config.get('flatten', False)
+        if flatten:
+            data = data.flatten()
+        return data
+
+    def dilate(self, data):
+        """ Apply dilation to array. """
+        dilation_config = self.config.get('dilate', False)
+        if dilation_config:
+            if dilation_config is True:
+                dilation_config = {'kernel': np.ones((3, 1), dtype=np.uint8)}
+            elif isinstance(dilation_config, int):
+                dilation_config = {'iterations': dilation_config}
+            elif isinstance(dilation_config, tuple):
+                dilation_config = {'kernel': np.ones(dilation_config, dtype=np.uint8)}
+
+            data = cv2.dilate(data, **dilation_config)
+        return data
+
+    def mask(self, data):
+        """ Mask array values matching given conditions. """
+        masking_conditions = self.config.get('mask', None)
+        if masking_conditions is not None:
+            mask = np.isnan(data)
+            masking_conditions = to_list(masking_conditions)
+            for condition in masking_conditions:
+                if isinstance(condition, Number):
+                    condition_mask = data == condition
+                elif isinstance(condition, str):
+                    condition_mask = evaluate_str_comparison(data, condition)
+                elif callable(condition):
+                    condition_mask = condition(data)
+                mask = np.logical_or(mask, condition_mask)
+            data = np.ma.array(data, mask=mask)
+        return data
+
     def preprocess(self, data):
-        """ Look through layer config for requested data transformations and apply them ."""
+        """ Look through layer config for requested data transformations and apply them. """
         if self.mode == 'image':
-            order_axes = self.config.get('order_axes', None)
-            if order_axes is not None:
-                order_axes = order_axes[:data.ndim]
-                data = np.transpose(data, order_axes)
-
-            dilate = self.config.get('dilate', False)
-            if dilate:
-                if dilate is True:
-                    dilation_config = {'kernel': np.ones((3, 1), dtype=np.uint8)}
-                elif isinstance(dilate, int):
-                    dilation_config = {'iterations': dilate}
-                elif isinstance(dilate, tuple):
-                    dilation_config = {'kernel': np.ones(dilate, dtype=np.uint8)}
-
-                data = cv2.dilate(data, **dilation_config)
-
-            masking_conditions = self.config.get('mask', None)
-            if masking_conditions is not None:
-                mask = np.isnan(data)
-                masking_conditions = to_list(masking_conditions)
-                for condition in masking_conditions:
-                    if isinstance(condition, Number):
-                        condition_mask = data == condition
-                    elif isinstance(condition, str):
-                        condition_mask = evaluate_str_comparison(data, condition)
-                    elif callable(condition):
-                        condition_mask = condition(data)
-                    mask = np.logical_or(mask, condition_mask)
-                data = np.ma.array(data, mask=mask)
+            data = self.transpose(data)
+            data = self.dilate(data)
+            data = self.mask(data)
 
         if self.mode == 'histogram':
-            flatten = self.config.get('flatten', False)
-            if flatten:
-                data = data.flatten()
+            data = self.flatten(data)
+            data = self.mask(data)
 
         if self.mode == 'curve':
             if isinstance(data, np.ndarray) or (isinstance(data, list) and contains_numbers(data)):
@@ -776,9 +796,9 @@ class Plot:
     alpha : number in (0, 1) range
         Image opacity (0 means fully transparent, i.e. invisible, and 1 - totally opaque).
         Useful when `combine='overlay'`.
-    order_axes: tuple
+    transpose: tuple
         Order of axes for displayed images.
-    mask_values : number or tuple of numbers
+    mask : number or tuple of numbers
         Values that should be masked on image display.
     mask_color : valid matplotlib color
         Color to display masked values with.
@@ -794,7 +814,7 @@ class Plot:
         Useful when `combine='overlay'`.
     bins : int
         Number of bins for histogramogram.
-    mask_values : number or tuple of numbers
+    mask : number or tuple of numbers
         Values that should be masked on image display.
     mask_color : valid matplotlib color
         Color to display masked values with.
@@ -884,6 +904,7 @@ class Plot:
     def __init__(self, data=None, combine='overlay', mode='image', **kwargs):
         self.figure = None
         self.subplots = None
+        self.config = {}
 
         self.plot(data=data, combine=combine, mode=mode, **kwargs)
 
@@ -1042,15 +1063,15 @@ class Plot:
                     if shape is None:
                         continue
 
-                    order_axes = filter_config(kwargs, 'order_axes', index=idx)
-                    order_axes = order_axes or self.IMAGE_DEFAULTS['order_axes']
+                    transpose = filter_config(kwargs, 'transpose', index=idx)
+                    transpose = transpose or self.IMAGE_DEFAULTS['transpose']
 
                     min_height = ylim[idx][0] or 0
-                    max_height = ylim[idx][1] or shape[order_axes[0]]
+                    max_height = ylim[idx][1] or shape[transpose[0]]
                     subplot_height = abs(max_height - min_height)
                     heights.append(subplot_height)
 
-                    min_width = xlim[idx][0] or shape[order_axes[1]]
+                    min_width = xlim[idx][0] or shape[transpose[1]]
                     max_width = xlim[idx][1] or 0
                     subplot_width = abs(max_width - min_width)
                     widths.append(subplot_width)
@@ -1190,7 +1211,7 @@ class Plot:
         'labelright': True,
         'direction': 'inout',
         # axes order
-        'order_axes': (0, 1, 2),
+        'transpose': (0, 1, 2),
         # values masking
         'mask_color': (0, 0, 0, 0),
         # grid
