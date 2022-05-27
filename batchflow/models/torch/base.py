@@ -22,7 +22,7 @@ from .base_mixins import OptimalBatchSizeMixin, LayerHook, ExtractionMixin, Visu
 from .initialization import best_practice_resnet_init
 from .losses import CrossEntropyLoss, BinaryLovaszLoss, LovaszLoss, SSIM, MSSIM
 from .losses import binary as binary_losses, multiclass as multiclass_losses
-from .utils import unpack_fn_from_config, get_shape
+from .utils import get_shape
 from ..base import BaseModel
 from ...config import Config
 
@@ -637,22 +637,27 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     # Create training infrastructure: loss, optimizer, decay
     def make_infrastructure(self):
         """ Create loss, optimizer and decay, required for training the model. """
-        self.make_loss(**self._unpack('loss'))
-        self.make_optimizer(**self._unpack('optimizer'))
-        self.make_decay(**self._unpack('decay'), optimizer=self.optimizer)
+        self.make_loss()
+        self.make_optimizer()
+        self.make_decay()
         self.scaler = torch.cuda.amp.GradScaler()
 
-    def _unpack(self, name):
-        """ Get params from config. """
-        # TODO: move all code here to make it more explicit
-        unpacked = unpack_fn_from_config(name, self.config)
-        if isinstance(unpacked, list):
-            return {name: unpacked}
-        key, kwargs = unpacked
-        return {name: key, **kwargs}
+    def unpack(self, value):
+        """ Unpack argument to actual value and kwargs. """
+        if isinstance(value, dict):
+            kwargs = value.copy()
+            value = kwargs.pop('name', None)
+        else:
+            kwargs = {}
 
-    def make_loss(self, loss, **kwargs):
+        return value, kwargs
+
+    def make_loss(self):
         """ Set model loss. Changes the `loss` attribute. """
+        if not self.config.get('loss'):
+            raise ValueError('Set "loss" in model configuration!')
+        loss, kwargs = self.unpack(self.config['loss'])
+
         loss_fn = None
         # Parse `loss` to actual module
         if isinstance(loss, str):
@@ -674,36 +679,41 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             # Callable: just pass other arguments in
             loss_fn = partial(loss, **kwargs)
         else:
-            raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
+            raise ValueError(f'Unknown loss: {loss}')
 
-        loss_fn = loss_fn or loss(**kwargs)
+        loss_fn = loss_fn if loss_fn is not None else loss(**kwargs)
         if isinstance(loss_fn, nn.Module):
             loss_fn.to(device=self.device)
 
         self.loss = loss_fn
 
-    def make_optimizer(self, optimizer, **kwargs):
+    def make_optimizer(self):
         """ Set model optimizer. Changes the `optimizer` attribute. """
+        optimizer, kwargs = self.unpack(self.config['optimizer'])
+
         # Choose the optimizer
         if callable(optimizer) or isinstance(optimizer, type):
             pass
         elif isinstance(optimizer, str) and hasattr(torch.optim, optimizer):
             optimizer = getattr(torch.optim, optimizer)
         else:
-            raise ValueError("Unknown optimizer", optimizer)
+            raise ValueError(f'Unknown optimizer: {optimizer}')
 
         self.optimizer = optimizer(self.model.parameters(), **kwargs)
 
-    def make_decay(self, decay, optimizer=None, **kwargs):
+    def make_decay(self):
         """ Set model decay. Changes the `decay` and `decay_step` attribute. """
-        if isinstance(decay, (tuple, list)):
-            decays = decay
+        decay = self.config['decay']
+
+        if decay is None:
+            decays = []
         else:
-            decays = [(decay, kwargs)] if decay else []
+            decays = decay if isinstance(decay, (tuple, list)) else [decay]
 
         self.decay, self.decay_step = [], []
+        for decay_ in decays:
+            decay_, decay_kwargs = self.unpack(decay_)
 
-        for decay_, decay_kwargs in decays:
             if decay_ is None:
                 raise ValueError('Missing `name` key in the decay configuration')
 
@@ -715,7 +725,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             elif decay_ in DECAYS:
                 decay_ = DECAYS.get(decay_)
             else:
-                raise ValueError('Unknown learning rate decay method', decay_)
+                raise ValueError(f'Unknown learning rate scheduler: {decay_}')
 
             # Parse step parameters
             step_params = {
@@ -738,10 +748,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 decay_kwargs.pop(key, None)
 
             # Create decay or store parameters for later usage
-            if optimizer:
-                decay_ = decay_(optimizer, **decay_kwargs)
-            else:
-                decay = (decay_, decay_kwargs)
+            decay_ = decay_(self.optimizer, **decay_kwargs)
 
             self.decay.append(decay_)
             self.decay_step.append(step_params)
