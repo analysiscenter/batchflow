@@ -343,9 +343,6 @@ class Layer:
 
     def image(self, data):
         """ Display data as an image. """
-        image_keys = ['vmin', 'vmax', 'interpolation', 'alpha', 'extent']
-        image_config = filter_config(self.config, image_keys, prefix='image_')
-
         # Assemble colormap from given parameters
         cmap = self.config.get('cmap', None)
         # If a single color provided, prepend 'white' color, so that a resulting tuple defines binary colormap
@@ -360,12 +357,15 @@ class Layer:
         mask_color = self.config.get('mask_color', None)
         cmap.set_bad(color=mask_color)
 
+        image_keys = ['alpha', 'vmin', 'vmax', 'extent']
+        image_config = filter_config(self.config, image_keys, prefix='image_')
+
         image = self.ax.imshow(data, cmap=cmap, **image_config)
 
         return image
 
     def histogram(self, data):
-        """ Display data as 1-D histogramogram. """
+        """ Display data as 1-D histogram. """
         histogram_keys = ['bins', 'color', 'alpha', 'label']
         histogram_config = filter_config(self.config, histogram_keys, prefix='histogram_')
 
@@ -455,7 +455,9 @@ class Subplot:
         self.ax.set_axis_off()
 
     def plot(self, mode, data, config):
-        """ Update subplot config with given params, create subplot layers, annotate subplot. """
+        """ Update subplot config with given parameters, for every data item create and delegate data plotting to it
+        with parameters relevant to this subplot, annotate subplot (add title, labels, colorbar, grid etc.).
+        """
         self.config.update(config)
 
         for layer_index, layer_data in enumerate(data):
@@ -467,7 +469,7 @@ class Subplot:
         self.annotations.update(annotations)
 
     def annotate(self, mode):
-        """ Apply requested annotation functions to given axis with chosen parameters. """
+        """ Apply requested annotation functions to subplot axis with parameters from subplot config. """
         # pylint: disable=too-many-branches
         annotations = {}
 
@@ -589,13 +591,6 @@ class Subplot:
         if grid in ('major', 'both') and minor_config:
             self.add_grid(self.ax, grid_type='major', **major_config)
 
-        spine_colors = self.config.get('spine_color')
-        if spine_colors is not None:
-            spines = self.ax.spines.values()
-            spine_colors = spine_colors if isinstance(spine_colors, list) else [spine_colors] * len(spines)
-            for spine, color in zip(spines, spine_colors):
-                spine.set_edgecolor(color)
-
         facecolor = self.config.get('facecolor', None)
         if facecolor is not None:
             self.ax.set_facecolor(facecolor)
@@ -649,8 +644,9 @@ class Subplot:
             The length of handles and labels (if both provided) should be the same.
         labels : str or list of str
             A list of labels to show next to the artists.
-        colors : valid matplotlib color or a list of them
+        colors : str, matplotlib colormap object or tuple
             Color to use for patches creation if those are not provided explicitly.
+            If str. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
         alphas : number or list of numbers from 0 to 1
             Legend handles opacity.
         size : int
@@ -695,7 +691,7 @@ class Subplot:
         return legend
 
     def add_text(self, text, size=10, x=0.5, y=0.5, ha='center', va='center', bbox='default', **kwargs):
-        """ Add text to axis.
+        """ Add text to subplot.
 
         A convenient method for adding text in box (usually on empty ax).
 
@@ -725,7 +721,7 @@ class Subplot:
 
     @staticmethod
     def add_grid(ax, grid_type, x_n=None, y_n=None, zorder=0, **kwargs):
-        """ Set axis grid parameters. """
+        """ Set parameters for subplot axis grid. """
         if grid_type == 'minor':
             locator = AutoMinorLocator
         elif grid_type == 'major':
@@ -745,22 +741,17 @@ class Subplot:
 class Plot:
     """ Multiple images plotter.
 
-    General idea is to display graphs for provided data while passing other keyword arguments to corresponding
+    General idea is to display graphs and annotate them based on config of provided parameters for various
     `matplotlib` functions (e.g. `figsize` goes to figure initialization, `title` goes to `plt.set_title`, etc.).
 
     The logic behind the process is the following:
-    1. Parse data:
-        - Calculate subplots sizes - look through all data items
-          and estimate every subplot shape taking max of all its layers shapes.
-        - Put provided arrays into double nested list.
-          Nestedness levels define subplot and layer data order correspondingly.
-        - Infer images combination mode.
-    2. Parse figure axes if provided, else create them with either parsed parameters or inferred ones.
-    3. Obtain default config for chosen mode and merge them with provided config.
-    4. For every axis-data pair:
-        - If no data provided for axis, set it off.
-        - Else filter config relevant for ax, plot data relevant to the ax and annotate it.
-    6. Save figure if needed.
+    1. Parse data — put provided arrays into double nested list. Nestedness levels define subplot and layer data order
+       correspondingly. Also infer images combination mode — either overlay, separate or mixed.
+    2. Parse figure axes if provided, else create them.
+    3. Obtain default config for chosen plotting mode and update it with provided parameters.
+    4. For every data item choose corresponding subplot and delegate data plotting to it.
+    5. Annotate figure.
+    6. Save plot.
 
     General parameters
     ----------
@@ -770,17 +761,17 @@ class Plot:
         Shape of data items must match chosen plotting mode (see below).
     mode : 'image', 'histogram', 'curve', 'loss'
         If 'image' plot given arrays as images.
-        If 'histogram' plot histogramogram of flattened array.
+        If 'histogram' plot histogram of flattened array.
         If 'curve' plot given arrays as curve lines.
         If 'loss' plot given arrays as loss curves.
     combine : 'overlay', 'separate' or 'mixed'
-        Whether overlay images on a single axis, show them on separate ones or use mixed approach.
+        Whether overlay images on a single subplot, show them on separate ones or use mixed approach.
     kwargs :
-        - For one of `ax_image`, `ax_histogram`, `ax_curve`, `ax_loss` methods (depending on chosen mode).
+        - For one of `image`, `histogram`, `curve`, `loss` methods (depending on chosen mode).
             Parameters and data nestedness levels must match.
             Every param with 'image_', 'histogram_', 'curve_', 'loss_' prefix is redirected to corresponding method.
             See detailed parameters listings below.
-        - For `annotate_axis`.
+        - For `annotate`.
             Every param with 'title_', 'suptitle_', 'xlabel_', 'ylabel_', 'xticks_', 'yticks_', 'xlim_', 'ylim_',
             colorbar_', 'legend_' or 'grid_' prefix is redirected to corresponding matplotlib method.
             Also 'facecolor', 'set_axisbelow', 'disable_axes' arguments are accepted.
@@ -789,65 +780,101 @@ class Plot:
     ------------------------------
     figsize : tuple
         Size of displayed figure. If not provided, infered from data shapes.
-    facecolor : valid matplotlib color
-        Figure background color.
+    facecolor : string or tuple of 3 or 4 numbers
+        Figure background color. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
+    dpi : float
+        The resolution of the figure in dots-per-inch.
+    ncols, nrows : int
+        Number of figure columns/rows.
+    tight_layout : bool
+        If True adjust subplot parameters using tight_layout with default padding.
+    figure_{parameter} : misc
+        Any parameter valid for `plt.subplots`
 
     Parameters for 'image' mode
-    ----------------------------
-    cmap : valid matplotlib colormap or color
-        Defines colormap to display single-channel images with.
-    alpha : number in (0, 1) range
-        Image opacity (0 means fully transparent, i.e. invisible, and 1 - totally opaque).
-        Useful when `combine='overlay'`.
+    ---------------------------
     transpose: tuple
         Order of axes for displayed images.
-    mask : number or tuple of numbers
-        Values that should be masked on image display.
-    mask_color : valid matplotlib color
-        Color to display masked values with.
+    dilate : bool, int, tuple of two ints or dict
+        Parameter for image dilation via `cv2.dilate`.
+        If bool, indicates whether image should be dilated once with default kernel (`np.ones((1,3))`).
+        If int, indcates how many times image should be dilate with default kernel.
+        If tuple of two ints, defines shape of kernel image should be dilate with.
+        If dict, must contain keyword arguments for `cv2.dilate`.
+    mask : number, str, callable or tuple of any of them
+        Parameter indicating which values should be masked.
+        If a number, mask this value in data.
+        If str, must consists of operator and a number (e.g. '<0.5', '==2', '>=1000').
+        If a callable, must return boolean mask with the same shape as original image that mark image pixels to mask.
+        If a tuple, contain any combination of items of types above.
+    cmap : str or matplotlib colormap object
+        Сolormap to display single-channel images with. Must be valid matplotlib colormap (e.g. 'ocean', 'tab20b').
+    mask_color : string or tuple of 3 or 4 numbers
+        Color to display masked values with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
+    alpha : number in (0, 1) range
+        Image opacity (0 means fully transparent, i.e. invisible, 1 - totally opaque). Useful when `combine='overlay'`.
+    vmin, vmax : number
+        Limits for normalizing image into (0, 1) range. Values beyond range are clipped (default matplotlib behaviour).
+    extent : tuple of 4 numbers
+        The bounding box in data coordinates that the image will fill.
     image_{parameter} : misc
         Any parameter valid for `plt.imshow`.
 
     Parameters for 'histogram' mode
-    ----------------------------
-    color : valid matplotlib color
-        Defines color to display histogramogram with.
+    -------------------------------
+    flatten : bool
+        Whether convert input array to 1d before plot. Default is True.
+    mask : number, str, callable or tuple of any of them
+        Parameter indicating which values should be masked.
+        If a number, mask this value in data.
+        If str, must consists of operator and a number (e.g. '<0.5', '==2', '>=1000').
+        If a callable, must return boolean mask with the same shape as original image that mark image pixels to mask.
+        If a tuple, contain any combination of items of types above.
+    color : string or tuple of 3 or 4 numbers
+        Color to display histogram with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
     alpha : number in (0, 1) range
-        Hisotgram opacity (0 means fully transparent, i.e. invisible, and 1 - totally opaque).
+        Histogram opacity (0 means fully transparent, i.e. invisible, and 1 - totally opaque).
         Useful when `combine='overlay'`.
     bins : int
-        Number of bins for histogramogram.
-    mask : number or tuple of numbers
-        Values that should be masked on image display.
-    mask_color : valid matplotlib color
-        Color to display masked values with.
+        Number of bins for histogram.
     histogram_{parameter} : misc
         Any parameter valid for `plt.hist`.
 
+    Parameters for 'curve' mode
+    ---------------------------
+    color : string or tuple of 3 or 4 numbers
+        Color to display curve with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
+    linestyle : str
+        Style to display curve with. Must be valid matplotlib line style (e.g. 'dashed', ':').
+    alpha : number in (0, 1) range
+        Curve opacity (0 means fully transparent, i.e. invisible, 1 - totally opaque). Useful when `combine='overlay'`.
+    curve_{parameter} : misc
+        Any parameter valid for `plt.plot`.
+
     Parameters for 'loss' mode
     ----------------------------
-    color : valid matplotlib color
-        Defines color to display loss curve with.
+    color : string or tuple of 3 or 4 numbers
+        Color to display loss curve with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
+    linestyle : str
+        Style to display loss curve with. Must be valid matplotlib line style (e.g. 'dashed', ':').
+    linewidth : number
+        Width of loss curve.
     alpha : number in (0, 1) range
-        Loss curve opacity (0 means fully transparent, i.e. invisible, and 1 - totally opaque).
-        Useful when `combine='overlay'`.
-    rolling_mean : number
-
-    rolling_final : number
-
-    loss_{parameter} : misc
+        Curve opacity (0 means fully transparent, i.e. invisible, 1 - totally opaque). Useful when `combine='overlay'`.
+    window : None or int
+        Size of the window to use for moving average calculation of loss curve.
+    loss_{parameter}, lr_{parameter} : misc
         Any parameter valid for `plt.plot`.
 
     Parameters for axes annotation
     ------------------------------
     {text_object}_label: str
-        Value of axes text object.
-        Valid objects are 'suptitle', 'title', 'xlabel', 'ylabel', 'legend'.
+        Value of axes text object. Valid objects are 'suptitle', 'title', 'xlabel', 'ylabel', 'legend'.
     {text_object}_color : str or tuple
         Color of axes text object.
         Valid objects are 'suptitle', 'title', 'xlabel', 'ylabel', 'legend'.
-        If str, must be valid matplotlib colormap.
-        If tuple, must be a valid rgb color.
+        If str. Must be valid matplotlib colormap.
+        If tuple. Must be a valid rgb color.
     {text_object}_size : number
         Size of axes text object.
         Valid objects are 'suptitle', 'title', 'xlabel', 'ylabel', 'legend'.
@@ -877,27 +904,53 @@ class Plot:
 
     Data display scenarios
     ----------------------
-    1. The simplest one if when one provide a single data array.
-    2. A more advanced use case is when one provide a list of arrays:
-       a. Images are put on same axis and overlaid: data=[image_1, image_2] (combine='overlay' is default);
-       b. Images are put on separate axes: data=[image_1, image_2], combine='separate';
-    3. The most complex scenario is when one wish to display images in a 'mixed' manner.
-       For example, to overlay first two images but to display the third one separately, one must use:
-       data = [[image_1, image_2], image_3] (combine='mixed' is set automatically if data is double-nested);
+    1. The simplest one if when one provide a single data array — in that case data is displayed on a single subplot:
+       >>> Plot(array)
+    2. A more advanced use case is when one provide a list of arrays — plot behaviour depends on `combine` parameter:
+       a. Images are put on same subplot and overlaid one over another if `combine='overlay'` (which is default):
+          >>> Plot([image_0, mask_0])
+       b. Images are put on separate subplots if `combine='separate'`.
+          >>> Plot([image_0, image_1], combine='separate')
+    3. The most complex scenario is displaying images in a 'mixed' manner (ones overlaid and others separated).
+       For example, to overlay first two images but to display the third one separately, use the following notation:
+       >>> Plot([[image_0, mask_0], image_1]); (`combine='mixed'` is set automatically if data is double-nested).
 
-    The order of arrrays inside the double-nested structure basically declares, which of them belong to the same axis
+    The order of arrays inside the double-nested structure basically declares, which of them belong to the same subplot
     and therefore should be rendered one over another, and which must be displayed separately.
 
-    Note that in general parameters should resemble data nestedness level.
-    That allows binding axes and parameters that correspond each other.
+    If a parameter is provided in a list, each subplot uses its item on position corresponding to its index and
+    every subplot layer in turn uses item from that sublist on positions that correspond to its index w.r.t. to subplot.
+    Therefore, such parameters must resemble data nestedness level, since that allows binding subplots and parameters.
     However, it's possible for parameter to be a single item — in that case it's shared across all subplots and layers.
+
+    For example, to display two images separately with same colormap, the following code required:
+    >>> Plot([image_0, image_1], cmap='viridis')
+    If one wish to use different colormaps for every image, the code should be like this:
+    >>> Plot([image_0, image_1], cmap=['viridis', 'magma'])
+    Finally, if a more complex data provided, the parameter nestedness level must resemble the one in data:
+    >>> Plot([[image_0, mask_0], [image_1, mask_1]], cmap=[['viridis', 'red'], ['magma', 'green']])
 
     Advanced parameters managing
     ----------------------------
-    The list of parameters expected by specific plot method is rather short.
-    But there is a way to provide parameter to a plot method, even if it's not hard-coded.
-    One must use specific prefix for that.
-    Address docs of `ax_image``, `ax_histogram`, `ax_curve`, `ax_loss` and `annotate_axis` for details.
+    The list of parameters expected by specific plot method is limited to the ones most frequently used.
+    However there is a way to provide any parameter to a plot method, using specific prefix:
+    - 'image_' — for `Axes.imshow`
+    — 'histogram_' — for `Axes.hist`
+    - 'curve_' —  for `Axes.plot`
+    - 'loss_' — for `Axes.plot`
+    - 'curve_', 'lr_' — for `Axes.plot`
+    - 'text_' — for every text object (title, label etc.)
+    - 'title_' — for `Axes.set_title`
+    - 'xlabel_' — for `Axes.set_xlabel`
+    - 'ylabel_' — for `Axes.set_ylabel`
+    - 'xticks_' — for `Axes.set_xticks`
+    - 'yticks_' — for `Axes.set_yticks`
+    - 'tick_' — for `Axes.tick_params`
+    - 'xlim_' — for `Axes.set_xlim`
+    - 'ylim_' — for `Axes.set_ylim`
+    - 'colorbar_' — for `Axes.colorbar`
+    - 'legend_' — for `Axes.legend`
+    - 'minor_grid_', 'major_grid_' — `Axes.grid`
 
     This also allows one to pass arguments of the same name for different plotting steps.
     E.g. `plt.set_title` and `plt.set_xlabel` both require `size` argument.
@@ -1025,7 +1078,7 @@ class Plot:
 
     def make_default_config(self, mode, n_subplots, data, ncols=None, ratio=None, scale=1, max_fig_width=25,
                             nrows=None, xlim=(None, None), ylim=(None, None), **kwargs):
-        """ Infer default figure params from shapes of provided data. """
+        """ Infer default figure parameters from shapes of provided data. """
         config = {'tight_layout': True, 'facecolor': 'snow'}
 
         if mode in ('image', 'histogram'):
@@ -1108,7 +1161,7 @@ class Plot:
 
         if axes is None:
             default_config = self.make_default_config(mode=mode, n_subplots=n_subplots, data=data, **kwargs)
-            subplots_keys = ['figsize', 'facecolor', 'dpi', 'ncols', 'nrows', 'tight_layout', 'gridspec_kw']
+            subplots_keys = ['figsize', 'facecolor', 'dpi', 'ncols', 'nrows', 'tight_layout']
             config = filter_config(kwargs, subplots_keys, prefix='figure_')
             config = {**default_config, **config}
 
@@ -1300,8 +1353,8 @@ class Plot:
              adjust_figsize='image', axes=None, axis=None, ax=None, subplots=None, **kwargs):
         """ Plot data on subplots.
 
-        Parses axes from kwargs if provided, else creates them.
-        Filters parameters and calls chosen plot method for every axis-data pair.
+        If a first call and has no subplots, parse axes from kwargs if provided, else create them.
+        For every data item choose relevant parameters from config and delegate data plotting to corresponding subplot.
         """
         self.config = {**self.ANNOTATION_DEFAULTS, **kwargs}
 
@@ -1415,7 +1468,7 @@ def plot_image(data, **kwargs):
     return Plot(data, mode='image', **kwargs)
 
 def plot_histogram(data, **kwargs):
-    """ Shorthand for histogramogram plotting. """
+    """ Shorthand for histogram plotting. """
     return Plot(data, mode='histogram', **kwargs)
 
 def plot_curve(data, **kwargs):
