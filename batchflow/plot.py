@@ -297,7 +297,7 @@ class Layer:
                 loss, lr = data, None
 
             window = self.config.get('window')
-            if window is None:
+            if window is None or loss is None:
                 smoothed = None
             else:
                 smoothed = convolve(loss, np.ones(window), mode='nearest') / window
@@ -385,22 +385,24 @@ class Layer:
         return line
 
     def loss(self, data):
-        """ Display data as a polygonal chain, optionally display running mean and learning rate with nice defaults. """
+        """ Display a combination of loss curve, its smoothed version and learning rate with nice defaults. """
         loss, smoothed, lr = data
-
-        label = self.config.get('label', f'loss #{self.index + 1}')
-        loss_label = label + f' ⟶ {loss[-1]:2.3f}'
-        final_window = self.config.get('final_window', None)
-        if final_window is not None:
-            final = np.mean(loss[-final_window:]) #pylint: disable=invalid-unary-operand-type
-            loss_label += f"\nmean over last {final_window} iterations={final:2.3f}"
 
         curves = []
 
         curve_keys = ['color', 'linestyle', 'linewidth', 'alpha']
-        loss_config = filter_config(self.config, curve_keys, prefix='curve_')
-        loss_curve = self.ax.plot(loss, label=loss_label, **loss_config)
-        curves.extend(loss_curve)
+
+        if loss is not None:
+            label = self.config.get('label', f'loss #{self.index + 1}')
+            loss_label = label + f' ⟶ {loss[-1]:2.3f}'
+            final_window = self.config.get('final_window', None)
+            if final_window is not None:
+                final = np.mean(loss[-final_window:]) #pylint: disable=invalid-unary-operand-type
+                loss_label += f"\nmean over last {final_window} iterations={final:2.3f}"
+
+            loss_config = filter_config(self.config, curve_keys, prefix='curve_')
+            loss_curve = self.ax.plot(loss, label=loss_label, **loss_config)
+            curves.extend(loss_curve)
 
         if smoothed is not None:
             smoothed_color = scale_lightness(loss_config['color'], scale=.5)
@@ -411,8 +413,9 @@ class Layer:
         if lr is not None:
             lr_label = f'learning rate №{self.index + 1} ⟶ {lr[-1]:.0e}'
             lr_config = filter_config(self.config, curve_keys, prefix='lr_')
-            lr_curve = self.subplot.twin_ax.plot(lr, label=lr_label, **lr_config)
-            self.twin_ax.set_ylabel('Learning rate', fontsize=12)
+            lr_ax = self.ax if loss is None else self.twin_ax
+            lr_curve = lr_ax.plot(lr, label=lr_label, **lr_config)
+            lr_ax.set_ylabel('Learning rate', fontsize=12)
             curves.extend(lr_curve)
 
         return curves
@@ -919,7 +922,7 @@ class Plot:
         if mode not in ('curve', 'loss'):
             msg = "Tuple is a valid data item only in modes ('curve', 'loss')."
             raise ValueError(msg)
-        return tuple(np.array(item) for item in data)
+        return tuple(None if item is None else np.array(item) for item in data)
 
     @staticmethod
     def parse_array(data, mode):
@@ -1237,7 +1240,7 @@ class Plot:
         'grid': 'major',
     }
 
-    CURVE_COLORS = ['cornflowerblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistogramle', 'firebrick',
+    CURVE_COLORS = ['cornflowerblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
                     'forestgreen', 'navy', 'gold', 'red', 'turquoise', 'darkorchid',
                     'darkkhaki', 'royalblue', 'yellow', 'chocolate', 'darkslategray', 'wheat']
 
@@ -1314,7 +1317,7 @@ class Plot:
             if axes is not None:
                 msg = "Subplots already created and new axes cannot be specified."
                 raise ValueError(msg)
-            active_subplots = [self.subplots[idx] for idx in to_list(subplots)]
+            active_subplots = self.subplots if subplots is None else [self.subplots[idx] for idx in to_list(subplots)]
 
         mode_defaults = getattr(self, f"{mode.upper()}_DEFAULTS")
 
