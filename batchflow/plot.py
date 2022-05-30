@@ -6,9 +6,10 @@ from datetime import datetime
 from numbers import Number
 import operator
 
-import numpy as np
 
 import cv2
+import numpy as np
+
 from scipy.ndimage import convolve
 from matplotlib import pyplot as plt
 from matplotlib.collections import PatchCollection
@@ -32,8 +33,15 @@ STR_TO_OPERATION = {
 }
 
 def evaluate_str_comparison(arg0, string):
-    """ Find comparison operator in string and apply it against given argument
-    and those parsed from the string to the right of the found operator.
+    """ Find comparison operator in string and apply it against given argument and those parsed from the string
+    to the right of the found operator.
+
+    Used for evaluation of string expressions that are provided as masking conditions for visualized data.
+
+    Examples
+    --------
+    >>> evaluate_str_comparison(np.arange(5), '<3')
+    array([ True,  True,  True, False, False])
     """
     for key in STR_TO_OPERATION:
         if key in string:
@@ -47,23 +55,23 @@ def evaluate_str_comparison(arg0, string):
 class CycledList(list):
     """ List that repeats itself from desired position (default is 0).
 
-        Examples
-        --------
-        >>> l = CycledList(['a', 'b', 'c'])
-        >>> [l[i] for i in range(9)]
-        ['a', 'b', 'c', 'a', 'b', 'c', 'a', 'b', 'c']
+    Examples
+    --------
+    >>> l = CycledList(['a', 'b', 'c'])
+    >>> [l[i] for i in range(9)]
+    ['a', 'b', 'c', 'a', 'b', 'c', 'a', 'b', 'c']
 
-        >>> l = CycledList(['a', 'b', 'c', 'd'], cycle_from=2)
-        >>> [l[i] for i in range(9)]
-        ['a', 'b', 'c', 'd', 'c', 'd', 'c', 'd', 'c']
+    >>> l = CycledList(['a', 'b', 'c', 'd'], cycle_from=2)
+    >>> [l[i] for i in range(9)]
+    ['a', 'b', 'c', 'd', 'c', 'd', 'c', 'd', 'c']
 
-        >>> l = CycledList(['a', 'b', 'c', 'd', 'e'], cycle_from=-1)
-        >>> [l[i] for i in range(9)]
-        ['a', 'b', 'c', 'd', 'e', 'e', 'e', 'e', 'e']
+    >>> l = CycledList(['a', 'b', 'c', 'd', 'e'], cycle_from=-1)
+    >>> [l[i] for i in range(9)]
+    ['a', 'b', 'c', 'd', 'e', 'e', 'e', 'e', 'e']
 
-        Notes
-        -----
-        Contrary to `chain(lst, cycle(lst[cycle_from:]))` itertools solution this one is indexable.
+    Notes
+    -----
+    Contrary to `chain(lst, cycle(lst[cycle_from:]))` itertools solution this one is indexable.
     """
     def __init__(self, *args, cycle_from=0, **kwargs):
         self.cycle_from = cycle_from
@@ -120,75 +128,79 @@ def contains_numbers(iterable):
     """ Check if first iterable item is a number. """
     return isinstance(iterable[0], Number)
 
-def maybe_index(key, value, index):
-    """ Get i-th element of parameter if index is provided and parameter value is a list else return it unchanged.
+class PlotConfig(dict):
+    """ Dictionary with additional indexing and filtering capabilities. """
+    def maybe_index(self, key, index):
+        """ Get i-th element of parameter if index is provided and parameter value is a list else return it unchanged.
 
-    Parameters
-    ----------
-    key : str
-        Parameter name.
-    value : misc
-        Parameter value.
-    index : None or int
-        If not None, a number to use for parameter indexing.
+        Parameters
+        ----------
+        key : str
+            Parameter name.
+        value : misc
+            Parameter value.
+        index : None or int
+            If not None, a number to use for parameter indexing.
+        index : int
+            Index of argument value to retrieve.
+            If none provided, get whole argument value.
+            If value is non-indexable, get it without indexing.
 
-    Raises
-    ------
-    ValueError
-        If parameter is a list but the index is greater than its length.
-    """
-    if index is not None and isinstance(value, list):
-        try:
-            return value[index]
-        except IndexError as e:
-            msg = f"Tried to obtain element #{index} from `{key}={value}`. Either provide parameter value "\
-                    f"as a single item (to use the same `{key}` several times) or add more elements to it."
-            raise ValueError(msg) from e
-    return value
+        Raises
+        ------
+        ValueError
+            If parameter is a list but the index is greater than its length.
+        """
+        value = self[key]
 
-def filter_config(config, keys=None, prefix='', index=None):
-    """ Make a subdictionary of parameters with required keys.
+        if index is not None and isinstance(value, list):
+            try:
+                return value[index]
+            except IndexError as e:
+                msg = f"Tried to obtain element #{index} from `{key}={value}`. Either provide parameter value "\
+                        f"as a single item (to use the same `{key}` several times) or add more elements to it."
+                raise ValueError(msg) from e
+        return value
 
-    Parameter are retrieved if:
-    a. It is explicitly requested (via `keys` arg).
-    b. Its name starts with given prefix (defined by `prefix` arg).
+    def __getitem__(self, index):
+        if index is None:
+            return self
+        if isinstance(index, int):
+            return type(self)({key: self.maybe_index(key, index) for key in self})
+        return super().__getitem__(index)
 
-    Parameters
-    ----------
-    config : dict
-        Arguments to filter.
-    keys : str or sequence
-        Key(s) to retrieve. If str, return key value.
-        If list — return dict of pairs (key, value) for every existing key.
-    prefix : str, optional
-        Arguments with keys starting with given prefix will also be retrieved.
-        Defaults to `''`, i.e. no prefix used.
-    index : int
-        Index of argument value to retrieve.
-        If none provided, get whole argument value.
-        If value is non-indexable, get it without indexing.
-    """
-    if isinstance(keys, str):
-        value = config.get(keys, None)
-        return maybe_index(keys, value, index)
+    def filter(self, keys=None, prefix=''):
+        """ Make a subconfig of parameters with required keys.
 
-    if keys is None:
-        keys = list(config.keys())
-    elif prefix:
-        keys += [key.split(prefix)[1] for key in config if key.startswith(prefix)]
+        Parameter are retrieved if:
+        a. It is explicitly requested (via `keys` arg).
+        b. Its name starts with given prefix (defined by `prefix` arg).
 
-    result = {}
+        Parameters
+        ----------
+        config : dict
+            Arguments to filter.
+        keys : str or sequence
+            Key(s) to retrieve. If str, return key value.
+            If list — return dict of pairs (key, value) for every existing key.
+        prefix : str, optional
+            Arguments with keys starting with given prefix will also be retrieved.
+            Defaults to `''`, i.e. no prefix used.
+        """
+        if keys is None:
+            keys = list(self.keys())
+        elif prefix:
+            keys += [key.split(prefix)[1] for key in self if key.startswith(prefix)]
 
-    for key in keys:
-        if prefix + key in config:
-            value = config[prefix + key]
-        elif key in config:
-            value = config[key]
-        else:
-            continue
-        result[key] = maybe_index(key, value, index)
+        result = type(self)()
 
-    return result
+        for key in keys:
+            if prefix + key in self:
+                result[key] = self[prefix + key]
+            elif key in self:
+                result[key] = self[key]
+
+        return result
 
 def make_cmap(colors):
     """ Make colormap from provided color/colors list. """
@@ -358,7 +370,7 @@ class Layer:
         cmap.set_bad(color=mask_color)
 
         image_keys = ['alpha', 'vmin', 'vmax', 'extent']
-        image_config = filter_config(self.config, image_keys, prefix='image_')
+        image_config = self.config.filter(image_keys, prefix='image_')
 
         image = self.ax.imshow(data, cmap=cmap, **image_config)
 
@@ -367,7 +379,7 @@ class Layer:
     def histogram(self, data):
         """ Display data as 1-D histogram. """
         histogram_keys = ['bins', 'color', 'alpha', 'label']
-        histogram_config = filter_config(self.config, histogram_keys, prefix='histogram_')
+        histogram_config = self.config.filter(histogram_keys, prefix='histogram_')
 
         _, _, bar = self.ax.hist(data, **histogram_config)
 
@@ -377,8 +389,8 @@ class Layer:
         """ Display data as a polygonal chain. """
         x, y = data
 
-        curve_keys = ['color', 'linestyle', 'alpha']
-        curve_config = filter_config(self.config, curve_keys, prefix='curve_')
+        curve_keys = ['color', 'linestyle', 'alpha', 'label']
+        curve_config = self.config.filter(curve_keys, prefix='curve_')
 
         line = self.ax.plot(x, y, **curve_config)[0]
 
@@ -400,7 +412,7 @@ class Layer:
                 final = np.mean(loss[-final_window:]) #pylint: disable=invalid-unary-operand-type
                 loss_label += f"\nmean over last {final_window} iterations={final:2.3f}"
 
-            loss_config = filter_config(self.config, curve_keys, prefix='curve_')
+            loss_config = self.config.filter(curve_keys, prefix='curve_')
             loss_curve = self.ax.plot(loss, label=loss_label, **loss_config)
             curves.extend(loss_curve)
 
@@ -412,7 +424,7 @@ class Layer:
 
         if lr is not None:
             lr_label = f'learning rate №{self.index + 1} ⟶ {lr[-1]:.0e}'
-            lr_config = filter_config(self.config, curve_keys, prefix='lr_')
+            lr_config = self.config.filter(curve_keys, prefix='lr_')
             lr_ax = self.ax if loss is None else self.twin_ax
             lr_curve = lr_ax.plot(lr, label=lr_label, **lr_config)
             lr_ax.set_ylabel('Learning rate', fontsize=12)
@@ -430,7 +442,7 @@ class Subplot:
         self.ax = ax
         self._twin_ax = None
         self.layers = []
-        self.config = {}
+        self.config = None
         self.annotations = {}
 
     def __getitem__(self, key):
@@ -458,10 +470,10 @@ class Subplot:
         """ Update subplot config with given parameters, for every data item create and delegate data plotting to it
         with parameters relevant to this subplot, annotate subplot (add title, labels, colorbar, grid etc.).
         """
-        self.config.update(config)
+        self.config = config
 
         for layer_index, layer_data in enumerate(data):
-            layer_config = filter_config(config, index=layer_index)
+            layer_config = config[layer_index]
             layer = Layer(self, mode, layer_index, layer_config, layer_data)
             self.layers.append(layer)
 
@@ -474,11 +486,11 @@ class Subplot:
         annotations = {}
 
         text_keys = ['size', 'family', 'color']
-        text_config = filter_config(self.config, text_keys, prefix='text_')
+        text_config = self.config.filter(text_keys, prefix='text_')
 
         # title
         keys = ['title', 'y']
-        title_config = filter_config(self.config, keys, prefix='title_')
+        title_config = self.config.filter(keys, prefix='title_')
         label = None
         if 'label' in title_config:
             label = title_config.pop('label')
@@ -491,22 +503,22 @@ class Subplot:
 
         # xlabel
         keys = ['xlabel']
-        xlabel_config = filter_config(self.config, keys, prefix='xlabel_')
+        xlabel_config = self.config.filter(keys, prefix='xlabel_')
         xlabel_config = {**text_config, **xlabel_config}
         if xlabel_config and 'xlabel' in xlabel_config:
             annotations['xlabel'] = self.ax.set_xlabel(**xlabel_config)
 
         # ylabel
         keys = ['ylabel']
-        ylabel_config = filter_config(self.config, keys, prefix='ylabel_')
+        ylabel_config = self.config.filter(keys, prefix='ylabel_')
         ylabel_config = {**text_config, **ylabel_config}
         if ylabel_config and 'ylabel' in ylabel_config:
             annotations['ylabel'] = self.ax.set_ylabel(**ylabel_config)
 
         # xticks
-        xticks_config = filter_config(self.config, [], prefix='xticks_')
-        ticks = filter_config(self.config, 'ticks')
-        xticks = filter_config(self.config, 'xticks')
+        xticks_config = self.config.filter([], prefix='xticks_')
+        ticks = self.config.get('ticks', None)
+        xticks = self.config.get('xticks', None)
         xticks = ticks if ticks is not None else xticks
         if xticks is not None:
             xticks_config['ticks'] = xticks
@@ -514,9 +526,9 @@ class Subplot:
             self.ax.set_xticks(**xticks_config)
 
         # yticks
-        yticks_config = filter_config(self.config, [], prefix='yticks_')
-        ticks = filter_config(self.config, 'ticks')
-        yticks = filter_config(self.config, 'yticks')
+        yticks_config = self.config.filter([], prefix='yticks_')
+        ticks = self.config.get('ticks', None)
+        yticks = self.config.get('yticks', None)
         yticks = ticks if ticks is not None else yticks
         if yticks is not None:
             yticks_config['ticks'] = yticks
@@ -525,19 +537,19 @@ class Subplot:
 
         # ticks
         keys = ['labeltop', 'labelright', 'labelcolor', 'direction']
-        tick_config = filter_config(self.config, keys, prefix='tick_')
+        tick_config = self.config.filter(keys, prefix='tick_')
         if tick_config:
             self.ax.tick_params(**tick_config)
 
         # xlim
-        xlim_config = filter_config(self.config, ['xlim'], prefix='xlim_')
+        xlim_config = self.config.filter(['xlim'], prefix='xlim_')
         if 'xlim' in xlim_config:
             xlim_config['left'] = xlim_config.get('left', xlim_config.pop('xlim'))
         if xlim_config:
             self.ax.set_xlim(**xlim_config)
 
         # ylim
-        ylim_config = filter_config(self.config, ['ylim'], prefix='ylim_')
+        ylim_config = self.config.filter(['ylim'], prefix='ylim_')
         if 'ylim' in ylim_config:
             ylim_config['bottom'] = ylim_config.get('bottom', ylim_config.pop('ylim'))
         if ylim_config:
@@ -545,13 +557,13 @@ class Subplot:
 
         # colorbar
         keys = ['colorbar', 'width', 'pad', 'fake', 'annotations']
-        colorbar_config = filter_config(self.config, keys, prefix='colorbar_')
+        colorbar_config = self.config.filter(keys, prefix='colorbar_')
         if colorbar_config:
             colorbar_config['image'] = self.layers[0].object
 
             if 'pad' not in colorbar_config:
                 pad = 0.4
-                labelright = filter_config(self.config, 'labelright', prefix='tick_')
+                labelright = self.config.get('labelright', None)
                 if labelright:
                     ax_x1 = self.plotter.get_bbox(self.ax).x1
                     yticklabels = self.ax.get_yticklabels()
@@ -563,31 +575,28 @@ class Subplot:
             annotations['colorbar'] = self.add_colorbar(**colorbar_config)
 
         # legend
-        if mode == 'loss':
-            self.config['handles'] = [layer.object for layer in self.layers]
+        if mode in ('loss', 'curve'):
+            self.config['label'] = [layer.object for layer in self.layers]
 
-        keys = ['labels', 'handles', 'size', 'loc', 'ha', 'va', 'handletextpad']
-        legend_config = filter_config(self.config, keys, prefix='legend_')
-        if legend_config.get('labels') or legend_config.get('handles'):
-            if 'cmap' in self.config:
-                colors = filter_config(self.config, 'cmap')
-            if 'color' in self.config:
-                colors = filter_config(self.config, 'color')
-            if 'colors' in legend_config:
-                colors = legend_config.pop('colors')
-            legend_config['colors'] = colors
-            legend_config['alphas'] = self.config.get('alpha')
-            annotations['legend'] = self.add_legend(mode=mode, **legend_config)
+        label = self.config.get('label')
+        if label is not None:
+            color = self.config.get('cmap') or self.config.get('color')
+            alpha = self.config.get('alpha', 1)
+
+            legend_keys = ['size', 'loc', 'ha', 'va', 'handletextpad']
+            legend_config = self.config.filter(legend_keys, prefix='legend_')
+
+            annotations['legend'] = self.add_legend(mode=mode, label=label, color=color, alpha=alpha, **legend_config)
 
         # grid
-        grid = filter_config(self.config, 'grid')
+        grid = self.config.get('grid', None)
         grid_keys = ['color', 'linestyle', 'freq']
 
-        minor_config = filter_config(self.config, grid_keys, prefix='minor_grid_')
+        minor_config = self.config.filter(grid_keys, prefix='minor_grid_')
         if grid in ('minor', 'both') and minor_config:
             self.add_grid(self.ax, grid_type='minor', **minor_config)
 
-        major_config = filter_config(self.config, grid_keys, prefix='major_grid_')
+        major_config = self.config.filter(grid_keys, prefix='major_grid_')
         if grid in ('major', 'both') and minor_config:
             self.add_grid(self.ax, grid_type='major', **major_config)
 
@@ -628,7 +637,7 @@ class Subplot:
 
         return colorbar
 
-    def add_legend(self, mode='image', handles=None, labels=None, colors='none', alphas=1, size=10, **kwargs):
+    def add_legend(self, mode='image', label=None, color='none', alpha=1, size=10, **kwargs):
         """ Add patches to ax legend.
 
         Parameters
@@ -639,54 +648,51 @@ class Subplot:
             Mode to match legend hadles patches to.
             If from ('image', 'histogram'), use rectangular legend patches.
             If from ('curve', 'loss'), use line legend patches.
-        handles : None or sequence of `matplotlib.artist.Artist`
-            A list of Artists (lines, patches) to be added to the legend.
-            The length of handles and labels (if both provided) should be the same.
-        labels : str or list of str
-            A list of labels to show next to the artists.
-        colors : str, matplotlib colormap object or tuple
+        labels : str, Artist or list
+            If str, a text to show next to the legend patch/line.
+            If Artist, must be valid handle for `plt.legend` (line, patch etc.)
+            If a list, can contain objects of types described above.
+        color : str, matplotlib colormap object or tuple
             Color to use for patches creation if those are not provided explicitly.
             If str. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
-        alphas : number or list of numbers from 0 to 1
+        alpha : number or list of numbers from 0 to 1
             Legend handles opacity.
         size : int
             Legend size.
         kwargs : misc
             For `matplotlib.legend`.
         """
-        if (handles is None and labels is None) or (handles is not None and labels is not None):
-            raise ValueError("One and only one of `handles`, `labels` must be specified.")
-
         # get legend that already exists
         legend = self.ax.get_legend()
         old_handles = getattr(legend, 'legendHandles', [])
         handler_map = getattr(legend, '_custom_handler_map', {})
 
         # make new handles
-        if handles is None:
-            labels = to_list(labels)
-            colors = colors if isinstance(colors, list) else [colors] * len(labels)
-            alphas = alphas if isinstance(alphas, list) else [alphas] * len(labels)
+        new_handles = []
+        labels = to_list(label)
+        colors = color if isinstance(color, list) else [color] * len(labels)
+        alphas = alpha if isinstance(alpha, list) else [alpha] * len(labels)
 
-            new_handles = []
-            for color, alpha, label in zip(colors, alphas, labels):
-                if label is None:
-                    continue
+        for label_item, label_color, label_alpha in zip(labels, colors, alphas):
+            if label is None:
+                continue
+            if isinstance(label, str):
                 if mode in ('image', 'histogram'):
-                    if is_color_like(color):
-                        handle = Patch(color=color, alpha=alpha, label=label)
+                    if is_color_like(label_color):
+                        handle = Patch(color=label_color, alpha=label_alpha, label=label_item)
                     else:
-                        handle = PatchCollection(patches=[], cmap=color, label=label)
+                        handle = PatchCollection(patches=[], cmap=label_color, label=label_item)
                         handler_map[PatchCollection] = ColorMappingHandler()
                 elif mode in ('curve', 'loss'):
-                    handle = Line2D(xdata=[0], ydata=[0], color=color, alpha=alpha, label=label)
+                    handle = Line2D(xdata=[0], ydata=[0], color=label_color, alpha=label_alpha, label=label_item)
                 new_handles.append(handle)
-        else:
-            new_handles = to_list(handles)
+            elif not label.get_label().startswith('_'):
+                new_handles.append(label_item)
 
-        # extend existing handles and labels with new ones
-        kwargs['handles'] = old_handles + new_handles
-        legend = self.ax.legend(prop={'size': size}, handler_map=handler_map, **kwargs)
+        if len(new_handles) > 0:
+            # extend existing handles and labels with new ones
+            handles = old_handles + new_handles
+            legend = self.ax.legend(prop={'size': size}, handles=handles,  handler_map=handler_map, **kwargs)
 
         return legend
 
@@ -1119,7 +1125,7 @@ class Plot:
                     if shape is None:
                         continue
 
-                    transpose = filter_config(kwargs, 'transpose', index=idx)
+                    transpose = PlotConfig(kwargs)[idx].get('transpose', None)
                     transpose = transpose or self.IMAGE_DEFAULTS['transpose']
 
                     min_height = ylim[idx][0] or 0
@@ -1132,7 +1138,7 @@ class Plot:
                     subplot_width = abs(max_width - min_width)
                     widths.append(subplot_width)
 
-                mean_height, mean_width = np.mean(heights), np.mean(widths)
+                mean_height, mean_width = np.nanmean(heights), np.nanmean(widths)
                 if np.isnan(mean_height) or np.isnan(mean_width):
                     ratio = 1
                 else:
@@ -1162,7 +1168,7 @@ class Plot:
         if axes is None:
             default_config = self.make_default_config(mode=mode, n_subplots=n_subplots, data=data, **kwargs)
             subplots_keys = ['figsize', 'facecolor', 'dpi', 'ncols', 'nrows', 'tight_layout']
-            config = filter_config(kwargs, subplots_keys, prefix='figure_')
+            config = self.config.filter(subplots_keys, prefix='figure_')
             config = {**default_config, **config}
 
             figure, axes = plt.subplots(**config)
@@ -1349,14 +1355,25 @@ class Plot:
         'major_grid_color': '#CCCCCC',
     }
 
-    def plot(self, data=None, combine='overlay', mode='image', save=False, show=True,
-             adjust_figsize='image', axes=None, axis=None, ax=None, subplots=None, **kwargs):
+    PLOT_DEFAULTS = {
+        'save': False,
+        'show': True,
+        'adjust_figsize': 'image',
+    }
+
+    SAVE_DEFAULTS = {
+        'bbox_inches': 'tight',
+        'pad_inches': 0,
+        'save_dpi': 100
+    }
+
+    def plot(self, data=None, combine='overlay', mode='image', axes=None, axis=None, ax=None, subplots=None, **kwargs):
         """ Plot data on subplots.
 
         If a first call and has no subplots, parse axes from kwargs if provided, else create them.
         For every data item choose relevant parameters from config and delegate data plotting to corresponding subplot.
         """
-        self.config = {**self.ANNOTATION_DEFAULTS, **kwargs}
+        self.config = PlotConfig({**self.PLOT_DEFAULTS, **self.ANNOTATION_DEFAULTS, **self.SAVE_DEFAULTS, **kwargs})
 
         data, combine, n_subplots = self.parse_data(data=data, combine=combine, mode=mode)
 
@@ -1383,24 +1400,24 @@ class Plot:
                 continue
 
             subplot_idx = None if combine == 'overlay' else idx
-            subplot_config = filter_config(self.config, index=subplot_idx)
-            subplot_config = {**mode_defaults, **subplot_config}
+            subplot_config = self.config[subplot_idx]
+            subplot_config = PlotConfig({**mode_defaults, **subplot_config})
 
             subplot.plot(mode, subplot_data, subplot_config)
 
         figure_objects = self.annotate()
         self.figure_objects = figure_objects
 
-        if adjust_figsize == mode or adjust_figsize is True:
+        if self.config['adjust_figsize'] is True or self.config['adjust_figsize'] == mode:
             self.adjust_figsize()
 
-        if show:
+        if self.config['show']:
             self.show()
         else:
             self.close()
 
-        if save or 'savepath' in kwargs:
-            self.save(**kwargs)
+        if self.config['save'] or 'savepath' in self.config:
+            self.save()
 
         return self
 
@@ -1418,11 +1435,11 @@ class Plot:
         annotations = {}
 
         text_keys = ['size', 'family', 'color']
-        text_config = filter_config(self.config, text_keys, prefix='text_')
+        text_config = self.config.filter(text_keys, prefix='text_')
 
         # suptitle
         keys = ['suptitle', 't', 'y']
-        suptitle_config = filter_config(self.config, keys, prefix='suptitle_')
+        suptitle_config = self.config.filter(keys, prefix='suptitle_')
         t = None
         if 'label' in suptitle_config:
             t = suptitle_config.pop('label')
@@ -1442,19 +1459,13 @@ class Plot:
     def show(self):
         self.figure = plt.figure(self.figure)
 
-    def save(self, **kwargs):
+    def save(self):
         """ Save plot. """
-        default_config = {
-            'savepath': datetime.now().strftime('%Y-%m-%d_%H:%M:%S.png'),
-            'bbox_inches': 'tight',
-            'pad_inches': 0,
-            'dpi': 100
-        }
+        default_savepath = datetime.now().strftime('%Y-%m-%d_%H:%M:%S.png')
+        savepath = self.config.get('savepath', default_savepath)
 
-        save_keys = ['savepath', 'bbox_inches', 'pad_inches', 'dpi']
-        save_config = filter_config(kwargs, save_keys, prefix='save_')
-        save_config = {**default_config, **save_config}
-        savepath = save_config.pop('savepath')
+        save_keys = ['bbox_inches', 'pad_inches', 'dpi']
+        save_config = self.config.filter(save_keys, prefix='save_')
 
         self.figure.savefig(fname=savepath, **save_config)
 
