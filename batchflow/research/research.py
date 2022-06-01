@@ -1,17 +1,10 @@
 #pylint:disable=logging-fstring-interpolation, too-many-arguments
 """ Research class for muliple parallel experiments. """
 
-import os
-import sys
 import time
 import itertools
-import subprocess
-import re
-import glob
 import warnings
-import shutil
 import psutil
-import dill
 import multiprocess as mp
 import tqdm
 
@@ -86,7 +79,7 @@ class Research:
         self.gpu_check_delay = 5
         self.dump_monitor = True
 
-        self._is_loaded = False
+        self.is_loaded = False
         self._is_executed = False
         self._env_meta_to_collect = []
 
@@ -412,7 +405,7 @@ class Research:
     def terminate(self, kill_processes=False, force=False, wait=True):
         """ Kill all research processes. """
         # TODO: killed processes don't release GPU.
-        if not self._is_loaded:
+        if not self.is_loaded:
             if not force and self.monitor and self.monitor.in_progress:
                 answer = input(f'{self.name} is in progress. Are you sure? [y/n]').lower()
                 answer = len(answer) > 0 and 'yes'.startswith(answer)
@@ -470,6 +463,7 @@ class Research:
 
     @classmethod
     def load(cls, name):
+        """ Load research. """
         storage = LocalResearchStorage(name, loglevel='info', mode='r', storage='local')
         return storage.research
 

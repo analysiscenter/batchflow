@@ -489,7 +489,8 @@ class TestResearch:
         var2 = research.results.df['var2'].values
         a = np.array([np.nan, np.nan, 9., 16.])
         b = np.array([1., 4., np.nan, np.nan])
-        assert ((var1 == a) | (np.isnan(var1) & np.isnan(a))).all() and ((var2 == b) | (np.isnan(var2) & np.isnan(b))).all()
+        assert ((var1 == a) | (np.isnan(var1) & np.isnan(a))).all() and \
+               ((var2 == b) | (np.isnan(var2) & np.isnan(b))).all()
 
     @pytest.mark.parametrize('create_id_prefix', [False, True, 4])
     @pytest.mark.parametrize('domain', [

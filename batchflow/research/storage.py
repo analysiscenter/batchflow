@@ -62,7 +62,7 @@ class BaseExperimentStorage:
         self.results[name] = results
 
     def create_redirection_streams(self):
-        """ The method must create self.stdout_file and self.stderr_file to redirect streams. 
+        """ The method must create self.stdout_file and self.stderr_file to redirect streams.
         Use contextlib.nullcontext() as dummy redirections. """
         raise AttributeError('`create_redirection_streams` method must be defined.')
 
@@ -392,7 +392,7 @@ class BaseResearchStorage:
         raise AttributeError('`_store_env` method must be defined.')
 
     def create_redirection_streams(self):
-        """ The method must create self.stdout_file and self.stderr_file to redirect streams. 
+        """ The method must create self.stdout_file and self.stderr_file to redirect streams.
         Use contextlib.nullcontext() as dummy redirections. """
         raise AttributeError('`create_redirection_streams` method must be defined.')
 
@@ -486,7 +486,7 @@ class LocalResearchStorage(BaseResearchStorage):
         with open(os.path.join(name, 'research.dill'), 'rb') as f:
             self.research = dill.load(f)
         self.research.storage = self
-        self.research._is_loaded = True
+        self.research.is_loaded = True
 
         self.results = ResearchResults(self.research.name, True)
         self.profiler = ResearchProfiler(self.research.name, self.research.profile)
@@ -540,18 +540,6 @@ class LocalResearchStorage(BaseResearchStorage):
             with open(filename, 'r') as file:
                 env[name] = file.read().strip()
         return env
-
-    # @classmethod
-    # def load(cls, name):
-    #     """ Load research object. """
-    #     if not cls.folder_is_research(name):
-    #         raise TypeError(f'Folder "{name}" is not research folder.')
-    #     return cls._load(name)
-
-    # def _load(name):
-    #     storage = BaseResearchStorage(name, loglevel='info', mode='r', storage='local')
-    #     storage.research._is_loaded = True # pylint: disable=protected-access
-    #     return storage.research
 
     @classmethod
     def remove(cls, name, ask=True, force=False):
