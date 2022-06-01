@@ -38,7 +38,7 @@ def make_initialization_inputs(inputs, device=None):
         pass
     elif isinstance(inputs, tuple):
         inputs = torch.rand(*inputs, device=device)
-    elif isinstance(inputs, (tuple, list)):
+    elif isinstance(inputs, list):
         inputs = [make_initialization_inputs(item, device=device) for item in inputs]
     return inputs
 
@@ -51,7 +51,9 @@ def get_shape(inputs, default_shape=None):
         shape = inputs.shape
     elif isinstance(inputs, torch.Tensor):
         shape = tuple(inputs.shape)
-    elif isinstance(inputs, (tuple, list)):
+    elif isinstance(inputs, (tuple, torch.Size)):
+        shape = inputs
+    elif isinstance(inputs, list):
         shape = [get_shape(item) for item in inputs]
     else:
         raise TypeError(f'Inputs can be array, tensor, or sequence, got {type(inputs)} instead!')

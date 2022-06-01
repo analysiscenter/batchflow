@@ -220,6 +220,5 @@ class AlphaDropout(Dropout):
     """ Multi-dimensional alpha-dropout layer. """
     LAYERS = {
         1: nn.AlphaDropout,
-        2: nn.AlphaDropout,
-        3: nn.AlphaDropout,
+        2: nn.FeatureAlphaDropout,
     }

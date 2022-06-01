@@ -179,7 +179,7 @@ class KSAC(nn.Module):
 
         # Global pooling
         self.global_pooling = Block(inputs=inputs, layout='V>cnab', channels=feature_channels, kernel_size=1,
-                                        dim=self.n, shape=inputs.size()[2:], align_corners=True)
+                                    dim=self.n, shape=inputs.size()[2:], align_corners=True)
         tensors.append(self.global_pooling(inputs))
 
         # Concatenation of features

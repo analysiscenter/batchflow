@@ -1,7 +1,7 @@
 """ Resizing Torch layers. """
-import torch
 from torch import nn
 import torch.nn.functional as F
+from torchvision.transforms.functional import center_crop
 
 from ..utils import get_shape
 
@@ -34,43 +34,20 @@ class Reshape(nn.Module):
 
 class Crop(nn.Module):
     """ Crop tensor to desired shape.
-    TODO: add `central_crop`
 
     Parameters
     ----------
-    inputs
-        Input tensor.
     resize_to : tuple or torch.Tensor
         Tensor or shape to resize input tensor to.
     """
     def __init__(self, resize_to):
         super().__init__()
-        self.resize_to = resize_to
+        self.output_shape = get_shape(resize_to)[2:]
 
     def forward(self, inputs):
-        i_shape = get_shape(inputs)
-        r_shape = get_shape(self.resize_to)
-        output = inputs
-        for i, (i_shape_, r_shape_) in enumerate(zip(i_shape[2:], r_shape[2:])):
-            if i_shape_ > r_shape_:
-                # Decrease input tensor's shape by slicing desired shape out of it
-                shape = [slice(None, None)] * len(i_shape)
-                shape[i + 2] = slice(None, r_shape_)
-                output = output[shape]
-            elif i_shape_ < r_shape_:
-                # Increase input tensor's shape by zero padding
-                zeros_shape = list(i_shape)
-                zeros_shape[i + 2] = r_shape_
-                zeros = torch.zeros(zeros_shape, device=inputs.device)
-
-                shape = [slice(None, None)] * len(i_shape)
-                shape[i + 2] = slice(None, i_shape_)
-                zeros[shape] = output
-                output = zeros
-            else:
-                pass
-            i_shape = get_shape(output)
+        output = center_crop(inputs, self.output_shape)
         return output
+
 
 
 class Interpolate(nn.Module):

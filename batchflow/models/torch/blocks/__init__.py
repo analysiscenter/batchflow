@@ -3,4 +3,4 @@ from .core import Block, DefaultBlock, Downsample, Upsample
 from .named_blocks import VGGBlock, ResBlock, ResNeStBlock, DenseBlock, MBConvBlock, InvResBlock, ConvNeXtBlock
 from .attention import SEBlock, SCSEBlock, SimpleSelfAttention, BAM, CBAM, FPA, SelectiveKernelConv, SplitAttentionConv
 from .pyramid import PyramidPooling, ASPP, KSAC
-from ..layers import Combine # convenience
+from ..layers import Combine, Branch # convenience

@@ -10,19 +10,15 @@ class Branch(nn.Module):
     """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
-        self.input_id, self.output_id = None, None
 
-        if kwargs.get('layout'):
+        if kwargs.get('layout') or kwargs.get('base_block'):
             from ..blocks import Block
             self.layer = Block(inputs=inputs, **kwargs)
         else:
             self.layer = nn.Identity()
 
     def forward(self, x):
-        self.input_id = id(x)
-        output = self.layer(x)
-        self.output_id = id(output)
-        return output
+        return self.layer(x)
 
 
 class AttentionWrapper(nn.Module):
