@@ -280,9 +280,8 @@ class Subplot:
         # image
         'cmap': CycledList(['Greys_r'] + MASK_COLORS, cycle_from=1),
         # ticks
-        'labeltop': True,
-        'labelright': True,
-        'direction': 'inout',
+        'labeltop': False,
+        'labelright': False,
         # axes order
         'transpose': (0, 1, 2),
         # values masking
@@ -442,7 +441,7 @@ class Subplot:
             self.ax.set_yticks(**yticks_config)
 
         # ticks
-        keys = ['labeltop', 'labelright', 'labelcolor', 'direction']
+        keys = ['labeltop', 'labelright', 'labelcolor']
         tick_config = self.config.filter(keys, prefix='tick_')
         if tick_config:
             self.ax.tick_params(**tick_config)
