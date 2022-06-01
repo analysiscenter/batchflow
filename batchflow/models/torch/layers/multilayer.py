@@ -1,11 +1,13 @@
 """ Convenient combining block """
 import inspect
 
+import torch
 from torch import nn
 
 from .core import Dense, DenseAlongAxis, BatchNorm, LayerNorm, Dropout, AlphaDropout
-from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
-                  SeparableConv, SeparableConvTranspose
+from .conv import (Conv, ConvTranspose,
+                   DepthwiseConv, DepthwiseConvTranspose, SeparableConv, SeparableConvTranspose,
+                   MultiKernelConv, SharedKernelConv, AvgPoolConv, BilinearConvTranspose)
 from .pooling import AvgPool, MaxPool, GlobalAvgPool, GlobalMaxPool
 from .resize import IncreaseDim, Reshape, Interpolate, PixelShuffle
 from .activation import Activation
@@ -57,9 +59,7 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
     In order to initialize all of the layers, we need an example of tensor to be used as inputs for this module.
     It can be either a torch.Tensor or a tuple with its shape. In case of tuple, one can also specify `device` to use.
 
-
     Under the hood, we introspect layer constructors to find which parameters should be passed where.
-
     """
     LETTERS_LAYERS = {
         # Core
@@ -78,6 +78,10 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         'T': 'separable_conv_transpose',
         'w': 'depthwise_conv',
         'W': 'depthwise_conv_transpose',
+        'k': 'shared_kernel_conv',
+        'K': 'multi_kernel_conv',
+        'q': 'avg_pool_conv',
+        'Q': 'bilinear_conv_transpose',
 
         # Pool
         'v': 'avg_pool',
@@ -118,6 +122,10 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         'separable_conv_transpose': SeparableConvTranspose,
         'depthwise_conv': DepthwiseConv,
         'depthwise_conv_transpose': DepthwiseConvTranspose,
+        'multi_kernel_conv': MultiKernelConv,
+        'shared_kernel_conv': SharedKernelConv,
+        'avg_pool_conv': AvgPoolConv,
+        'bilinear_conv_transpose': BilinearConvTranspose,
 
         'avg_pool': AvgPool,
         'max_pool': MaxPool,
@@ -137,11 +145,8 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
     DEFAULT_LETTERS = LETTERS_LAYERS.keys()
     LETTERS_GROUPS = dict(zip(DEFAULT_LETTERS, DEFAULT_LETTERS))
     LETTERS_GROUPS.update({
-        'C': 'c',
-        't': 'c',
-        'T': 'c',
-        'w': 'c',
-        'W': 'c',
+        'C': 'c', 't': 'c', 'T': 'c', 'w': 'c', 'W': 'c',
+        'k': 'c', 'K': 'c', 'q': 'c', 'Q': 'c',
         'v': 'p',
         'V': 'P',
         'D': 'd',
@@ -160,9 +165,10 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         inputs = make_initialization_inputs(inputs, device=device)
         self.device = get_device(inputs)
 
+        self.shapes = {}
+        self.configuration = {}
         self.layout = layout
         self.kwargs = kwargs
-
         self.initialize(inputs)
 
 
@@ -184,10 +190,14 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
 
     def initialize(self, inputs):
         """ Create necessary modules from instance parameters. """
-        self.shapes = {}
+        # TODO: warning on empty layout?
         self.layout = self.layout or ''
+
+        only_ascii_letters = self.layout.encode(encoding='ascii', errors='ignore').decode(encoding='ascii')
+        non_ascii_letters = set(self.layout) - set(only_ascii_letters)
+        if non_ascii_letters:
+            raise ValueError(f'Layout `{self.layout}` contains non ASCII letters {non_ascii_letters}!')
         self.layout = self.layout.replace(' ', '')
-        # TODO: warning on empty layout
 
         layout_dict = {}
         for letter in self.layout:
@@ -247,6 +257,15 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
             self[layer_name] = layer
             self.shapes[layer_name] = (input_shapes, output_shapes)
 
+            self.configuration[(i, letter)] = {
+                'layer_name': layer_name,
+                'letter_group': letter_group,
+                'layer_class': layer_class,
+                'indexer': layout_dict[letter_group][:],
+                'args': {key : value for key, value in args.items()
+                         if key != 'inputs' and not isinstance(value, torch.Tensor)},
+            }
+
     def forward(self, x):
         branches = []
 
@@ -278,10 +297,10 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
 
         Examples
         --------
-        Add custom `Q` letter::
+        Add custom `E` letter::
 
-            MultiLayer.add_letter('Q', my_module, 'custom_module_params')
-            block = MultiLayer(inputs=x, layout='cnap Q', channels=32,
+            MultiLayer.add_letter('E', my_module, 'custom_module_params')
+            block = MultiLayer(inputs=x, layout='cnap E', channels=32,
                                custom_module_params={'key': 'value'})
             x = block(x)
         """

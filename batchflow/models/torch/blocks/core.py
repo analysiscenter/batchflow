@@ -3,7 +3,7 @@ from torch import nn
 
 from ..repr_mixin import ModuleDictReprMixin
 from ..layers import MultiLayer
-from ..utils import get_shape
+from ..utils import get_shape, make_initialization_inputs
 from .... import Config
 
 
@@ -55,6 +55,7 @@ class Block(ModuleDictReprMixin, nn.ModuleDict):
 
     def __init__(self, *args, inputs=None, base_block=MultiLayer, n_repeats=1, **kwargs):
         super().__init__()
+        inputs = make_initialization_inputs(inputs, device=kwargs.get('device'))
 
         self.input_shape, self.device = get_shape(inputs), inputs.device
         self.base_block, self.n_repeats = base_block, n_repeats
@@ -133,18 +134,19 @@ class Upsample(Block):
         The upsampling factor to apply.
     """
     def __init__(self, inputs=None, layout='b', factor=2, shape=None, **kwargs):
-        if set('tT').intersection(layout):
-            kwargs = {
-                'kernel_size': 2*factor - 1,
-                'stride': factor,
-                'channels': 'same',
-                **kwargs
-            }
-        if set('b').intersection(layout):
-            kwargs = {
-                'scale_factor': factor,
-                **kwargs
-            }
+        if kwargs.get('base_block') is None:
+            if set('tT').intersection(layout):
+                kwargs = {
+                    'kernel_size': 2*factor - 1,
+                    'stride': factor,
+                    'channels': 'same',
+                    **kwargs
+                }
+            if set('b').intersection(layout):
+                kwargs = {
+                    'scale_factor': factor,
+                    **kwargs
+                }
         super().__init__(inputs=inputs, layout=layout, shape=shape, **kwargs)
 
 
@@ -157,17 +159,18 @@ class Downsample(Block):
         The downsampling factor to apply.
     """
     def __init__(self, inputs=None, layout='p', factor=2, **kwargs):
-        if set('pv').intersection(layout):
-            kwargs = {
-                'pool_size': factor,
-                'pool_stride': factor,
-                **kwargs
-            }
-        elif set('cCvV').intersection(layout):
-            kwargs = {
-                'kernel_size': factor,
-                'stride': factor,
-                'channels': 'same',
-                **kwargs
-            }
+        if kwargs.get('base_block') is None:
+            if set('pv').intersection(layout):
+                kwargs = {
+                    'pool_size': factor,
+                    'pool_stride': factor,
+                    **kwargs
+                }
+            elif set('cCvV').intersection(layout):
+                kwargs = {
+                    'kernel_size': factor,
+                    'stride': factor,
+                    'channels': 'same',
+                    **kwargs
+                }
         super().__init__(inputs=inputs, layout=layout, **kwargs)
