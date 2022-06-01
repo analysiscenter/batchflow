@@ -772,10 +772,6 @@ class Experiment:
     def profile_info(self):
         return self.profiler.profile_info
 
-    def dump_profile_info(self):
-        if self.dump_results and self.profiler is not None:
-            self.profile_info.reset_index().to_feather(os.path.join(self.full_path, 'profiler.feather'))
-
     def __str__(self):
         repr = ''
         spacing = ' ' * 4
@@ -934,7 +930,6 @@ class Executor:
                 if self.research:
                     self.research.monitor.stop_experiment(experiment)
                 experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
-                # experiment.storage.copy_results_to_research_storage()
 
         self.close()
 
@@ -942,13 +937,10 @@ class Executor:
         """ Close storages. """
         for experiment in self.experiments:
             experiment.storage.close()
+
         self.storage.close_files()
         if self.research is None:
             self.storage.close()
-
-    # def __del__(self):
-    #     print("Close again.", self.experiments[0].storage._closed)
-    #     self.close()
 
     @parallel(init='_parallel_init_call')
     def parallel_call(self, experiment, iteration, unit_name):

@@ -19,7 +19,7 @@ from .domain import Domain
 from .distributor import Distributor, DynamicQueue
 from .experiment import Experiment, Executor
 from .utils import to_list
-from .storage import BaseResearchStorage
+from .storage import BaseResearchStorage, LocalResearchStorage
 
 from ..utils_random import make_seed_sequence
 
@@ -121,43 +121,6 @@ class Research:
         self.domain.set_update(function, when, **kwargs)
         return self
 
-    def _get_env_state(self, cwd='.', dst=None, replace=None, commands=None, *args, **kwargs):
-        """ Execute commands and save output. """
-        if cwd == '.' and dst is None:
-            dst = 'cwd'
-        elif dst is None:
-            dst = os.path.split(os.path.realpath(cwd))[1]
-
-        if isinstance(commands, (tuple, list)):
-            args = [*commands, *args]
-        elif isinstance(commands, dict):
-            kwargs = {**commands, **kwargs}
-
-        all_commands = [('env_state', command) for command in args]
-        all_commands = [*all_commands, *kwargs.items()]
-
-        for filename, command in all_commands:
-            if command.startswith('#'):
-                if command[1:] == 'python':
-                    result = sys.version
-                else:
-                    raise ValueError(f'Unknown env: {command}')
-            else:
-                process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, cwd=cwd)
-                output, _ = process.communicate()
-                result = output.decode('utf')
-            if replace is not None:
-                for key, value in replace.items():
-                    result = re.sub(key, value, result)
-            if self.dump_results:
-                if not os.path.exists(os.path.join(self.name, 'env', dst)):
-                    os.makedirs(os.path.join(self.name, 'env', dst))
-                with open(os.path.join(self.name, 'env', dst, filename + '.txt'), 'a') as file:
-                    file.write(result)
-            else:
-                self._env[os.path.join(dst, filename)] = self._env.get(os.path.join(dst, filename), '') + result
-
-
     def attach_env_meta(self):
         """ Get version of packages (by "pip list" and "conda list") and python version. Results will be stored
         in research folder (if it is created) or in _env attribute.
@@ -187,19 +150,6 @@ class Research:
         replace = {'"image/png": ".*?"': '"image/png": "..."'}
         self._env_meta_to_collect.append(dict(cwd=cwd, dst=None, replace=replace, commands=commands))
         return self
-
-    @property
-    def env(self):
-        """ Environment state. """
-        env = dict()
-        if self.dump_results:
-            filenames = glob.glob(os.path.join(self.name, 'env', '*'))
-            for filename in filenames:
-                name = os.path.splitext(os.path.basename(filename))[0]
-                with open(filename, 'r') as file:
-                    env[name] = file.read().strip()
-            return env
-        return self._env
 
     def get_devices(self, devices):
         """ Return list if lists. Each sublist consists of devices for each branch.
@@ -265,14 +215,6 @@ class Research:
 
             devices = [[_transform_item(branch_config) for branch_config in worker_config] for worker_config in devices]
         return devices
-
-    def create_research_folder(self):
-        """ Create folder for the research results. """
-        os.makedirs(self.name)
-        for subfolder in ['env', 'experiments']:
-            config_path = os.path.join(self.name, subfolder)
-            if not os.path.exists(config_path):
-                os.makedirs(config_path)
 
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
@@ -502,56 +444,6 @@ class Research:
                             if self.logger:
                                 self.logger.info(f"Terminate {process_type} [pid:{pid}]")
 
-    @classmethod
-    def load(cls, name):
-        """ Load research object. """
-        if not cls.folder_is_research(name):
-            raise TypeError(f'Folder "{name}" is not research folder.')
-        return cls._load(name)
-
-    def _load(name):
-        with open(os.path.join(name, 'research.dill'), 'rb') as f:
-            research = dill.load(f)
-
-        if research.dump_results:
-            research.storage = BaseResearchStorage(research, research.loglevel, mode='r', storage='local')
-            research.storage.load()
-            research._is_loaded = True # pylint: disable=protected-access
-        return research
-
-    @classmethod
-    def remove(cls, name, ask=True, force=False):
-        """ Remove research folder.
-
-        Parameters
-        ----------
-        name : str
-            research path to remove.
-        ask : bool, optional
-            display a dialogue with a question about removing or not, by default True.
-        force : bool
-            Remove folder even if it is not research folder.
-        """
-        if not os.path.exists(name):
-            warnings.warn(f"Folder {name} doesn't exist.")
-        else:
-            if not force:
-                if not cls.folder_is_research(name):
-                    raise ValueError(f'{name} is not a research folder.')
-            answer = True
-            if ask:
-                answer = input(f'Remove {name}? [y/n]').lower()
-                answer = len(answer) > 0 and 'yes'.startswith(answer)
-            if answer:
-                shutil.rmtree(name)
-
-    @classmethod
-    def folder_is_research(cls, name):
-        """ Check if folder contains research."""
-        if not os.path.exists(name):
-            raise FileNotFoundError(f"Folder {name} doesn't exist.")
-        return os.path.isfile(os.path.join(name, 'research.dill'))
-
     @property
     def is_finished(self):
         """ Whether all tasks are completed or not. """
@@ -575,6 +467,15 @@ class Research:
             repr += 2 * '\n'
 
         return repr
+
+    @classmethod
+    def load(cls, name):
+        storage = LocalResearchStorage(name, loglevel='info', mode='r', storage='local')
+        return storage.research
+
+    @classmethod
+    def remove(cls, name, ask=True, force=False):
+        LocalResearchStorage.remove(name, ask, force)
 
     def __del__(self):
         self.terminate(force=True)

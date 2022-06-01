@@ -7,9 +7,11 @@ import re
 import glob
 import json
 import io
+import warnings
 import subprocess
 import contextlib
 from collections import OrderedDict
+import shutil
 import dill
 import multiprocess as mp
 
@@ -58,6 +60,11 @@ class BaseExperimentStorage:
         results = self.results.get(name, OrderedDict())
         results[self.experiment.iteration] = value
         self.results[name] = results
+
+    def create_redirection_streams(self):
+        """ The method must create self.stdout_file and self.stderr_file to redirect streams. 
+        Use contextlib.nullcontext() as dummy redirections. """
+        raise AttributeError('`create_redirection_streams` method must be defined.')
 
     def close(self):
         raise AttributeError('`close` method must be defined.')
@@ -271,6 +278,7 @@ class ClearMLExperimentStorage(BaseExperimentStorage):
     def close(self):
         """ Close task and profiler. """
         self.task.close()
+        self.task.mark_completed()
         self._update_research_profiler()
 
     # Initialization methods
@@ -383,6 +391,11 @@ class BaseResearchStorage:
         _ = args, kwargs
         raise AttributeError('`_store_env` method must be defined.')
 
+    def create_redirection_streams(self):
+        """ The method must create self.stdout_file and self.stderr_file to redirect streams. 
+        Use contextlib.nullcontext() as dummy redirections. """
+        raise AttributeError('`create_redirection_streams` method must be defined.')
+
     def close_files(self):
         """ Close stdout/stderr files (if rederection was performed). """
         for name in ['stdout', 'stderr']:
@@ -448,8 +461,9 @@ class LocalResearchStorage(BaseResearchStorage):
 
     Parameters
     ----------
-    research : Research or Executor
-        type depends on the instance which creates storage
+    research : Research, Executor or str
+        type Research/Executor depends on the instance which creates storage.
+        str is for loading.
     loglevel : str, optional
         logging level, by default 'error'
     """
@@ -457,17 +471,26 @@ class LocalResearchStorage(BaseResearchStorage):
         super().__init__(research, storage)
 
         self.loglevel = loglevel or 'info'
-        self.path = research.name
         if mode == 'w':
+            self.path = research.name
             self._create_folder()
             self._dump_research(research)
             self._create_logger()
+            self.results = ResearchResults(self.research.name, True)
+            self.profiler = ResearchProfiler(self.research.name, self.research.profile)
+        elif mode == 'r':
+            self.load(research)
+
+    def load(self, name):
+        """ Load results and profiling stats. """
+        with open(os.path.join(name, 'research.dill'), 'rb') as f:
+            self.research = dill.load(f)
+        self.research.storage = self
+        self.research._is_loaded = True
 
         self.results = ResearchResults(self.research.name, True)
         self.profiler = ResearchProfiler(self.research.name, self.research.profile)
 
-    def load(self):
-        """ Load results and profiling stats. """
         self.results.load()
         self.profiler.load()
 
@@ -503,7 +526,7 @@ class LocalResearchStorage(BaseResearchStorage):
     def _store_env(self, result, dst, filename):
         subfolder = os.path.join(self.path, 'env', dst)
         if not os.path.exists(subfolder):
-            os.makedirs()
+            os.makedirs(subfolder)
         with open(os.path.join(subfolder, filename + '.txt'), 'a') as file:
             file.write(result)
 
@@ -517,6 +540,51 @@ class LocalResearchStorage(BaseResearchStorage):
             with open(filename, 'r') as file:
                 env[name] = file.read().strip()
         return env
+
+    # @classmethod
+    # def load(cls, name):
+    #     """ Load research object. """
+    #     if not cls.folder_is_research(name):
+    #         raise TypeError(f'Folder "{name}" is not research folder.')
+    #     return cls._load(name)
+
+    # def _load(name):
+    #     storage = BaseResearchStorage(name, loglevel='info', mode='r', storage='local')
+    #     storage.research._is_loaded = True # pylint: disable=protected-access
+    #     return storage.research
+
+    @classmethod
+    def remove(cls, name, ask=True, force=False):
+        """ Remove research folder.
+
+        Parameters
+        ----------
+        name : str
+            research path to remove.
+        ask : bool, optional
+            display a dialogue with a question about removing or not, by default True.
+        force : bool
+            Remove folder even if it is not research folder.
+        """
+        if not os.path.exists(name):
+            warnings.warn(f"Folder {name} doesn't exist.")
+        else:
+            if not force:
+                if not cls.folder_is_research(name):
+                    raise ValueError(f'{name} is not a research folder.')
+            answer = True
+            if ask:
+                answer = input(f'Remove {name}? [y/n]').lower()
+                answer = len(answer) > 0 and 'yes'.startswith(answer)
+            if answer:
+                shutil.rmtree(name)
+
+    @classmethod
+    def folder_is_research(cls, name):
+        """ Check if folder contains research."""
+        if not os.path.exists(name):
+            raise FileNotFoundError(f"Folder {name} doesn't exist.")
+        return os.path.isfile(os.path.join(name, 'research.dill'))
 
 class ClearMLResearchStorage(BaseResearchStorage):
     """ Research storage in ClearML.
@@ -543,8 +611,8 @@ class ClearMLResearchStorage(BaseResearchStorage):
         self._create_logger()
 
     def close(self):
-        # self.task.mark_completed()
         self.task.close()
+        self.task.mark_completed()
 
     def _create_logger(self):
         self.logger = ClearMLLogger(self.task.get_logger())
