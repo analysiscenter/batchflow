@@ -1,10 +1,7 @@
-""" Plot functions. """
-from ast import literal_eval
-from colorsys import rgb_to_hls, hls_to_rgb
+""" Plot primitives. """
 from copy import copy
 from datetime import datetime
 from numbers import Number
-import operator
 
 
 import cv2
@@ -13,208 +10,16 @@ import numpy as np
 from scipy.ndimage import convolve
 from matplotlib import pyplot as plt
 from matplotlib.collections import PatchCollection
-from matplotlib.colors import ColorConverter, ListedColormap, is_color_like
-from matplotlib.patches import Patch, Rectangle
+from matplotlib.colors import is_color_like
+from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
-from matplotlib.legend_handler import HandlerBase
 from matplotlib.ticker import MaxNLocator, AutoMinorLocator
 from mpl_toolkits import axes_grid1
-from numba import njit
 
-from .utils import to_list
+from .utils import CycledList, ColorMappingHandler, PlotConfig
+from .utils import evaluate_str_comparison, is_binary, contains_numbers, make_cmap, scale_lightness
+from ..utils import to_list
 
-STR_TO_OPERATION = {
-    '<': operator.lt,
-    '<=': operator.le,
-    '==': operator.eq,
-    '!=': operator.ne,
-    '>=': operator.ge,
-    '>': operator.gt
-}
-
-def evaluate_str_comparison(arg0, string):
-    """ Find comparison operator in string and apply it against given argument and those parsed from the string
-    to the right of the found operator.
-
-    Used for evaluation of string expressions that are provided as masking conditions for visualized data.
-
-    Examples
-    --------
-    >>> evaluate_str_comparison(np.arange(5), '<3')
-    array([ True,  True,  True, False, False])
-    """
-    for key in STR_TO_OPERATION:
-        if key in string:
-            operation = STR_TO_OPERATION[key]
-            arg1 = literal_eval(string.split(key)[-1])
-            return operation(arg0, arg1)
-    msg = f"Given string '{string}' does not contain any of supported operators: {list(STR_TO_OPERATION.keys())}"
-    raise ValueError(msg)
-
-
-class CycledList(list):
-    """ List that repeats itself from desired position (default is 0).
-
-    Examples
-    --------
-    >>> l = CycledList(['a', 'b', 'c'])
-    >>> [l[i] for i in range(9)]
-    ['a', 'b', 'c', 'a', 'b', 'c', 'a', 'b', 'c']
-
-    >>> l = CycledList(['a', 'b', 'c', 'd'], cycle_from=2)
-    >>> [l[i] for i in range(9)]
-    ['a', 'b', 'c', 'd', 'c', 'd', 'c', 'd', 'c']
-
-    >>> l = CycledList(['a', 'b', 'c', 'd', 'e'], cycle_from=-1)
-    >>> [l[i] for i in range(9)]
-    ['a', 'b', 'c', 'd', 'e', 'e', 'e', 'e', 'e']
-
-    Notes
-    -----
-    Contrary to `chain(lst, cycle(lst[cycle_from:]))` itertools solution this one is indexable.
-    """
-    def __init__(self, *args, cycle_from=0, **kwargs):
-        self.cycle_from = cycle_from
-        super().__init__(*args, **kwargs)
-
-    def __getitem__(self, idx):
-        if idx >= len(self):
-            pos = self.cycle_from + len(self) * (self.cycle_from < 0)
-            if pos < 0:
-                raise IndexError(f"List of length {len(self)} is looped from {self.cycle_from} index")
-            idx = pos + (idx - pos) % (len(self) - pos)
-        return super().__getitem__(idx)
-
-
-class ColorMappingHandler(HandlerBase):
-    """ Handler transforming empty patches into colored patches corresponding to collection colormap.
-
-    Notes
-    -----
-    Used as `handler_map` argument for `plt.legend` to make colormap patches.
-    """
-    def __init__(self, n_segments=8, **kwargs):
-        self.n_segments = n_segments
-        super().__init__(**kwargs)
-
-    def create_artists(self, legend, orig_handle, xdescent, ydescent, width, height, fontsize, trans):
-        """ Create a rectangle consisting of sequential patches with colors of colormap. """
-        _ = legend, fontsize
-        segment_width = width / self.n_segments
-        cmap = orig_handle.cmap
-
-        segments = []
-        for segment_index in range(self.n_segments):
-            anchor = [xdescent + segment_index * segment_width, ydescent]
-            facecolor = cmap(segment_index / self.n_segments)
-            segment = Rectangle(anchor, segment_width, height, facecolor=facecolor, transform=trans)
-            segments.append(segment)
-
-        label = orig_handle.get_label()
-        patch = PatchCollection(segments, match_original=True, edgecolor=None, cmap=cmap.name, label=label)
-
-        return [patch]
-
-@njit
-def is_binary(array):
-    """ Fast check that array consists of 0 and 1 only. """
-    for item in array:
-        if item not in (0., 1.):
-            return False
-    return True
-
-
-def contains_numbers(iterable):
-    """ Check if first iterable item is a number. """
-    return isinstance(iterable[0], Number)
-
-class PlotConfig(dict):
-    """ Dictionary with additional indexing and filtering capabilities. """
-    def maybe_index(self, key, index):
-        """ Get i-th element of parameter if index is provided and parameter value is a list else return it unchanged.
-
-        Parameters
-        ----------
-        key : str
-            Parameter name.
-        value : misc
-            Parameter value.
-        index : None or int
-            If not None, a number to use for parameter indexing.
-        index : int
-            Index of argument value to retrieve.
-            If none provided, get whole argument value.
-            If value is non-indexable, get it without indexing.
-
-        Raises
-        ------
-        ValueError
-            If parameter is a list but the index is greater than its length.
-        """
-        value = self[key]
-
-        if index is not None and isinstance(value, list):
-            try:
-                return value[index]
-            except IndexError as e:
-                msg = f"Tried to obtain element #{index} from `{key}={value}`. Either provide parameter value "\
-                        f"as a single item (to use the same `{key}` several times) or add more elements to it."
-                raise ValueError(msg) from e
-        return value
-
-    def __getitem__(self, index):
-        if index is None:
-            return self
-        if isinstance(index, int):
-            return type(self)({key: self.maybe_index(key, index) for key in self})
-        return super().__getitem__(index)
-
-    def filter(self, keys=None, prefix=''):
-        """ Make a subconfig of parameters with required keys.
-
-        Parameter are retrieved if:
-        a. It is explicitly requested (via `keys` arg).
-        b. Its name starts with given prefix (defined by `prefix` arg).
-
-        Parameters
-        ----------
-        config : dict
-            Arguments to filter.
-        keys : str or sequence
-            Key(s) to retrieve. If str, return key value.
-            If list — return dict of pairs (key, value) for every existing key.
-        prefix : str, optional
-            Arguments with keys starting with given prefix will also be retrieved.
-            Defaults to `''`, i.e. no prefix used.
-        """
-        if keys is None:
-            keys = list(self.keys())
-        elif prefix:
-            keys += [key.split(prefix)[1] for key in self if key.startswith(prefix)]
-
-        result = type(self)()
-
-        for key in keys:
-            if prefix + key in self:
-                result[key] = self[prefix + key]
-            elif key in self:
-                result[key] = self[key]
-
-        return result
-
-def make_cmap(colors):
-    """ Make colormap from provided color/colors list. """
-    colors = [ColorConverter().to_rgb(color) if isinstance(color, str) else color for color in to_list(colors)]
-    cmap = ListedColormap(colors)
-    return cmap
-
-def scale_lightness(color, scale):
-    """ Make new color with modified lightness from existing. """
-    if isinstance(color, str):
-        color = ColorConverter.to_rgb(color)
-    hue, light, saturation = rgb_to_hls(*color)
-    new_color = hls_to_rgb(h=hue, l=min(1, light * scale), s=saturation)
-    return new_color
 
 
 class Layer:
@@ -237,6 +42,16 @@ class Layer:
         preprocessed_data = self.preprocess(data)
         self.object = getattr(self, mode)(preprocessed_data)
 
+    # Aliases to attributes of parent subplot
+    @property
+    def ax(self):
+        return self.subplot.ax
+
+    @property
+    def twin_ax(self):
+        return self.subplot.twin_ax
+
+    # Preprocessing methods
     def transpose(self, data):
         """ Change array axes order if needed. """
         transpose = self.config.get('transpose', None)
@@ -318,14 +133,6 @@ class Layer:
 
         return data
 
-    @property
-    def ax(self):
-        return self.subplot.ax
-
-    @property
-    def twin_ax(self):
-        return self.subplot.twin_ax
-
     def update_lims(self):
         """ Recalculate plot limits. """
         self.ax.relim()
@@ -352,7 +159,7 @@ class Layer:
         if self.mode == 'loss':
             raise NotImplementedError("Updating layer data is not in supported in 'loss' mode. ")
 
-
+    # Plotting methods
     def image(self, data):
         """ Display data as an image. """
         # Assemble colormap from given parameters
@@ -437,9 +244,10 @@ class Subplot:
     """ Implements plotter subplot, managing new layers creation and axis annotation.
         Basically acts as a proxy over `matplotlib.axes`.
     """
-    def __init__(self, plotter, ax):
+    def __init__(self, plotter, ax, index):
         self.plotter = plotter
         self.ax = ax
+        self.index = index
         self._twin_ax = None
         self.layers = []
         self.config = None
@@ -450,6 +258,7 @@ class Subplot:
             return self.layers[key]
         raise ValueError(f"Only integer keys are supported for layers indexing, got {type(key)}.")
 
+    # Properties
     @property
     def twin_ax(self):
         """ Twin axis of original subplot axis that shares the x-axis with it. Created on demand. """
@@ -462,24 +271,121 @@ class Subplot:
         """ Indicator that subplot has no layers. """
         return len(self.layers) == 0
 
-    def disable(self):
-        """ Hide subplot. """
-        self.ax.set_axis_off()
+    # Modes default parameters
+    MASK_COLORS = ['firebrick', 'mediumseagreen', 'thistle', 'darkorange', 'navy', 'gold',
+                    'red', 'turquoise', 'darkorchid', 'darkkhaki', 'royalblue', 'yellow',
+                    'chocolate', 'forestgreen', 'lightpink', 'darkslategray', 'deepskyblue', 'wheat']
 
-    def plot(self, mode, data, config):
+    IMAGE_DEFAULTS = {
+        # image
+        'cmap': CycledList(['Greys_r'] + MASK_COLORS, cycle_from=1),
+        # ticks
+        'labeltop': True,
+        'labelright': True,
+        'direction': 'inout',
+        # axes order
+        'transpose': (0, 1, 2),
+        # values masking
+        'mask_color': (0, 0, 0, 0),
+        # grid
+        'grid': False,
+        'minor_grid_x_n': 2,
+        'minor_grid_y_n': 2,
+    }
+
+    HISTOGRAM_DEFAULTS = {
+        # preprocessing
+        'flatten': True,
+        # histogram
+        'bins': 50,
+        'color': CycledList(MASK_COLORS),
+        'alpha': 0.8,
+        # axis labels
+        'xlabel': 'Values',
+        'ylabel': 'Counts',
+        # common
+        'set_axisbelow': True,
+        'colorbar': False,
+        # grid
+        'grid': 'major',
+    }
+
+    CURVE_COLORS = ['cornflowerblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
+                    'forestgreen', 'navy', 'gold', 'red', 'turquoise', 'darkorchid',
+                    'darkkhaki', 'royalblue', 'yellow', 'chocolate', 'darkslategray', 'wheat']
+
+    CURVE_DEFAULTS = {
+        # curve
+        'color': CycledList(CURVE_COLORS),
+        # axis labels
+        'xlabel': 'x',
+        'ylabel': 'y',
+        # common
+        'colorbar': False,
+        # grid
+        'grid': 'both',
+    }
+
+    LOSS_DEFAULTS = {
+        # main
+        'window': 20,
+        'final_window': 50,
+        # curve
+        'color': CycledList(CURVE_COLORS[::2]),
+        # learning rate
+        'lr_color': CycledList(CURVE_COLORS[1::2]),
+        # title
+        'title_label': 'Loss values and learning rate',
+        # axis labels
+        'xlabel': 'Iterations', 'ylabel': 'Loss',
+        # common
+        'colorbar': False,
+        # grid
+        'grid': 'both',
+        'minor_grid_y_n': 4,
+        # legend
+        'legend': True,
+    }
+
+    ANNOTATION_DEFAULTS = {
+        'facecolor': 'snow',
+        # text
+        'text_color': 'k',
+        # title
+        'title_size': 25,
+        # axis labels
+        'xlabel_size': '12', 'ylabel_size': '12',
+        # colorbar
+        'colorbar': False,
+        # grid
+        'minor_grid_color': '#CCCCCC',
+        'minor_grid_linestyle': '--',
+        'major_grid_color': '#CCCCCC',
+    }
+
+    @classmethod
+    def get_defaults(cls, mode):
+        """ Get dictionary with default parameters corresponding to given mode. """
+        return getattr(cls, f"{mode.upper()}_DEFAULTS")
+
+    # Plot delegator
+    def plot(self, mode, data, config=None):
         """ Update subplot config with given parameters, for every data item create and delegate data plotting to it
         with parameters relevant to this subplot, annotate subplot (add title, labels, colorbar, grid etc.).
         """
-        self.config = config
+        self.config = PlotConfig({**self.get_defaults(mode), **self.ANNOTATION_DEFAULTS})
+        if config is not None:
+            self.config.update(config)
 
         for layer_index, layer_data in enumerate(data):
-            layer_config = config[layer_index]
-            layer = Layer(self, mode, layer_index, layer_config, layer_data)
+            layer_config = self.config.filter(index=layer_index)
+            layer = Layer(self, mode=mode, index=layer_index, config=layer_config, data=layer_data)
             self.layers.append(layer)
 
         annotations = self.annotate(mode)
         self.annotations.update(annotations)
 
+    # Annotation methods
     def annotate(self, mode):
         """ Apply requested annotation functions to subplot axis with parameters from subplot config. """
         # pylint: disable=too-many-branches
@@ -594,11 +500,11 @@ class Subplot:
 
         minor_config = self.config.filter(grid_keys, prefix='minor_grid_')
         if grid in ('minor', 'both') and minor_config:
-            self.add_grid(self.ax, grid_type='minor', **minor_config)
+            self.add_grid(grid_type='minor', **minor_config)
 
         major_config = self.config.filter(grid_keys, prefix='major_grid_')
         if grid in ('major', 'both') and minor_config:
-            self.add_grid(self.ax, grid_type='major', **major_config)
+            self.add_grid(grid_type='major', **major_config)
 
         facecolor = self.config.get('facecolor', None)
         if facecolor is not None:
@@ -606,10 +512,10 @@ class Subplot:
 
         self.ax.set_axisbelow(self.config.get('set_axisbelow', False))
 
-        if self.config.get('disable_axes'):
-            self.ax.set_axis_off()
+        if self.config.get('disable'):
+            self.disable()
         elif not self.ax.axison:
-            self.ax.set_axis_on()
+            self.enable()
 
         # Change scale of axis, if needed
         if self.config.get('log') or self.config.get('log_loss'):
@@ -674,9 +580,9 @@ class Subplot:
         alphas = alpha if isinstance(alpha, list) else [alpha] * len(labels)
 
         for label_item, label_color, label_alpha in zip(labels, colors, alphas):
-            if label is None:
+            if label_item is None:
                 continue
-            if isinstance(label, str):
+            if isinstance(label_item, str):
                 if mode in ('image', 'histogram'):
                     if is_color_like(label_color):
                         handle = Patch(color=label_color, alpha=label_alpha, label=label_item)
@@ -686,7 +592,7 @@ class Subplot:
                 elif mode in ('curve', 'loss'):
                     handle = Line2D(xdata=[0], ydata=[0], color=label_color, alpha=label_alpha, label=label_item)
                 new_handles.append(handle)
-            elif not label.get_label().startswith('_'):
+            elif not label_item.get_label().startswith('_'):
                 new_handles.append(label_item)
 
         if len(new_handles) > 0:
@@ -725,8 +631,7 @@ class Subplot:
 
         return self.ax.text(x=x, y=y, s=text, size=size, ha=ha, va=va, bbox=bbox, **kwargs)
 
-    @staticmethod
-    def add_grid(ax, grid_type, x_n=None, y_n=None, zorder=0, **kwargs):
+    def add_grid(self, grid_type, x_n=None, y_n=None, zorder=0, **kwargs):
         """ Set parameters for subplot axis grid. """
         if grid_type == 'minor':
             locator = AutoMinorLocator
@@ -734,14 +639,22 @@ class Subplot:
             locator = MaxNLocator
 
         if x_n is not None:
-            set_locator = getattr(ax.xaxis, f'set_{grid_type}_locator')
+            set_locator = getattr(self.ax.xaxis, f'set_{grid_type}_locator')
             set_locator(locator(x_n))
 
         if y_n is not None:
-            set_locator = getattr(ax.yaxis, f'set_{grid_type}_locator')
+            set_locator = getattr(self.ax.yaxis, f'set_{grid_type}_locator')
             set_locator(locator(y_n))
 
-        ax.grid(which=grid_type, zorder=zorder, **kwargs)
+        self.ax.grid(which=grid_type, zorder=zorder, **kwargs)
+
+    def enable(self):
+        """ Show subplot. """
+        self.ax.set_axis_on()
+
+    def disable(self):
+        """ Hide subplot. """
+        self.ax.set_axis_off()
 
 
 class Plot:
@@ -966,7 +879,7 @@ class Plot:
     def __init__(self, data=None, combine='overlay', mode='image', **kwargs):
         self.figure = None
         self.subplots = None
-        self.config = {}
+        self.config = None
 
         self.plot(data=data, combine=combine, mode=mode, **kwargs)
 
@@ -975,6 +888,16 @@ class Plot:
             return self.subplots[key]
         raise ValueError(f"Only integer keys are supported for subplots indexing, got {type(key)}.")
 
+    def __call__(self, mode, **kwargs):
+        self.plot(mode=mode, **kwargs)
+
+    def __repr__(self):
+        return ''
+
+    def __str__(self):
+        return f"<Batchflow Plotter with {len(self.axes)} axes>"
+
+    # Data conversion methods
     @staticmethod
     def parse_tuple(data, mode):
         """ Validate that tuple data item is provided with correct plot mode and convert its objects to arrays. """
@@ -1082,10 +1005,11 @@ class Plot:
 
         return data_list, combine, n_subplots
 
-    def make_default_config(self, mode, n_subplots, data, ncols=None, ratio=None, scale=1, max_fig_width=25,
-                            nrows=None, xlim=(None, None), ylim=(None, None), **kwargs):
-        """ Infer default figure parameters from shapes of provided data. """
-        config = {'tight_layout': True, 'facecolor': 'snow'}
+    # Figure manipulation methods
+    @staticmethod
+    def infer_ncols_nrows(mode, n_subplots, ncols, nrows, **kwargs):
+        """ Infer number of figure columns and rows from number of provided data items. """
+        _ = kwargs
 
         if mode in ('image', 'histogram'):
             default_ncols = 4
@@ -1102,7 +1026,13 @@ class Plot:
         elif nrows is None:
             nrows = ceil_div(n_subplots, ncols)
 
-        config['ncols'], config['nrows'] = ncols, nrows
+        return ncols, nrows
+
+    @staticmethod
+    def infer_figsize(mode, n_subplots, data, ncols, nrows, ratio, scale,
+                      max_fig_width, xlim, ylim, transpose, **kwargs):
+        """ Infer default figure size from shapes of provided data. """
+        _ = kwargs
 
         if mode in ('image', 'histogram'):
             fig_width = 8 * ncols * scale
@@ -1125,9 +1055,6 @@ class Plot:
                     if shape is None:
                         continue
 
-                    transpose = PlotConfig(kwargs)[idx].get('transpose', None)
-                    transpose = transpose or self.IMAGE_DEFAULTS['transpose']
-
                     min_height = ylim[idx][0] or 0
                     max_height = ylim[idx][1] or shape[transpose[0]]
                     subplot_height = abs(max_height - min_height)
@@ -1138,7 +1065,7 @@ class Plot:
                     subplot_width = abs(max_width - min_width)
                     widths.append(subplot_width)
 
-                mean_height, mean_width = np.nanmean(heights), np.nanmean(widths)
+                mean_height, mean_width = np.mean(heights), np.mean(widths)
                 if np.isnan(mean_height) or np.isnan(mean_width):
                     ratio = 1
                 else:
@@ -1156,32 +1083,38 @@ class Plot:
             fig_width = max_fig_width
             fig_height = fig_width * ratio
 
-        config['figsize'] = (fig_width, fig_height)
+        figsize = (fig_width, fig_height)
+        return figsize
 
-        return config
-
-    def make_figure(self, mode, n_subplots, data, axes=None, figure=None, **kwargs):
+    def make_subplots(self, mode, n_subplots, data, axes=None, figure=None):
         """ Create figure and axes if needed. """
         if axes is None and figure is not None:
             axes = figure.axes
 
         if axes is None:
-            default_config = self.make_default_config(mode=mode, n_subplots=n_subplots, data=data, **kwargs)
-            subplots_keys = ['figsize', 'facecolor', 'dpi', 'ncols', 'nrows', 'tight_layout']
-            config = self.config.filter(subplots_keys, prefix='figure_')
-            config = {**default_config, **config}
+            if self.config['ncols'] is None or self.config['nrows'] is None:
+                self.config['ncols'], self.config['nrows'] = self.infer_ncols_nrows(mode, n_subplots, **self.config)
 
-            figure, axes = plt.subplots(**config)
+            if self.config['figsize'] is None:
+                self.config['figsize'] = self.infer_figsize(mode, n_subplots, data, **self.config)
+
+            figure_keys = ['figsize', 'ncols', 'nrows', 'facecolor', 'dpi', 'tight_layout']
+            figure_config = self.config.filter(figure_keys, prefix='figure_')
+
+            figure, axes = plt.subplots(**figure_config)
             axes = to_list(axes)
         else:
             axes = to_list(axes)
-            figure = axes[0].figure
-            config = {}
-
             if len(axes) < n_subplots:
                 raise ValueError(f"Not enough axes provided — got ({len(axes)}) for {n_subplots} subplots.")
 
-        return figure, axes, config
+            figure = axes[0].figure
+            self.config['ncols'], self.config['nrows'] = figure.axes[0].get_subplotspec().get_gridspec().get_geometry()
+            self.config['figsize'] = figure.get_size_inches()
+
+        subplots = [Subplot(self, ax=ax, index=ax_num) for ax_num, ax in enumerate(axes)]
+
+        return figure, subplots
 
     def get_bbox(self, obj):
         """ Get object bounding box in inches. """
@@ -1191,9 +1124,6 @@ class Plot:
 
     def adjust_figsize(self):
         """ Look through subplots annotation objects and add figsize corrections for their widths and heights. """
-        ncols, nrows = self.figure.axes[0].get_subplotspec().get_gridspec().get_geometry()
-        fig_width, fig_height = self.figure.get_size_inches()
-
         extra_width = 0
         extra_height = 0
         if 'suptitle' in self.figure_objects:
@@ -1252,183 +1182,89 @@ class Plot:
             ax_widths.append(width)
             ax_heights.append(height)
 
+        nrows, ncols = self.config['ncols'], self.config['nrows']
         ax_widths = np.array(ax_widths).reshape(nrows, ncols)
         extra_width += ax_widths.max(axis=1).sum()
 
         ax_heights = np.array(ax_heights).reshape(nrows, ncols)
         extra_height += ax_heights.max(axis=0).sum()
 
+        fig_width, fig_height = self.config['figsize']
         new_figsize = (fig_width + extra_width, fig_height + extra_height)
         self.figure.set_size_inches(new_figsize)
 
-    MASK_COLORS = ['firebrick', 'mediumseagreen', 'thistle', 'darkorange', 'navy', 'gold',
-                    'red', 'turquoise', 'darkorchid', 'darkkhaki', 'royalblue', 'yellow',
-                    'chocolate', 'forestgreen', 'lightpink', 'darkslategray', 'deepskyblue', 'wheat']
-
-    IMAGE_DEFAULTS = {
-        # image
-        'cmap': CycledList(['Greys_r'] + MASK_COLORS, cycle_from=1),
-        # ticks
-        'labeltop': True,
-        'labelright': True,
-        'direction': 'inout',
-        # axes order
-        'transpose': (0, 1, 2),
-        # values masking
-        'mask_color': (0, 0, 0, 0),
-        # grid
-        'grid': False,
-        'minor_grid_x_n': 2,
-        'minor_grid_y_n': 2,
-    }
-
-    HISTOGRAM_DEFAULTS = {
-        # preprocessing
-        'flatten': True,
-        # histogram
-        'bins': 50,
-        'color': CycledList(MASK_COLORS),
-        'alpha': 0.8,
-        # axis labels
-        'xlabel': 'Values',
-        'ylabel': 'Counts',
-        # common
-        'set_axisbelow': True,
-        'colorbar': False,
-        # grid
-        'grid': 'major',
-    }
-
-    CURVE_COLORS = ['cornflowerblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
-                    'forestgreen', 'navy', 'gold', 'red', 'turquoise', 'darkorchid',
-                    'darkkhaki', 'royalblue', 'yellow', 'chocolate', 'darkslategray', 'wheat']
-
-    CURVE_DEFAULTS = {
-        # curve
-        'color': CycledList(CURVE_COLORS),
-        # axis labels
-        'xlabel': 'x',
-        'ylabel': 'y',
-        # common
-        'colorbar': False,
-        # grid
-        'grid': 'both',
-    }
-
-    LOSS_DEFAULTS = {
-        # main
-        'window': 20,
-        'final_window': 50,
-        # curve
-        'color': CycledList(CURVE_COLORS[::2]),
-        # learning rate
-        'lr_color': CycledList(CURVE_COLORS[1::2]),
-        # title
-        'title_label': 'Loss values and learning rate',
-        # axis labels
-        'xlabel': 'Iterations', 'ylabel': 'Loss',
-        # common
-        'colorbar': False,
-        # grid
-        'grid': 'both',
-        'minor_grid_y_n': 4,
-        # legend
-        'legend': True,
-    }
-
-    ANNOTATION_DEFAULTS = {
+    # Figure rendering and saving defaults
+    DEFAULT_CONFIG = {
+        # general
+        'tight_layout': True,
         'facecolor': 'snow',
-        # text
-        'text_color': 'k',
+        # figsize-related
+        'ncols': None, 'nrows': None, # infer from data
+        'figsize': None, 'ratio': None, # infer from data
+        'scale': 1,
+        'max_fig_width': 25,
+        'xlim': (None, None),
+        'ylim': (None, None),
+        'transpose': (0, 1, 2), # for 'image' mode
         # suptitle
+        'text_color' : 'k',
         'suptitle_size': 30,
-        # title
-        'title_size': 25,
-        # axis labels
-        # 'xlabel': '', 'ylabel': '',
-        'xlabel_size': '12', 'ylabel_size': '12',
-        # colorbar
-        'colorbar': False,
-        # grid
-        'minor_grid_color': '#CCCCCC',
-        'minor_grid_linestyle': '--',
-        'major_grid_color': '#CCCCCC',
-    }
-
-    PLOT_DEFAULTS = {
-        'save': False,
-        'show': True,
-        'adjust_figsize': 'image',
-    }
-
-    SAVE_DEFAULTS = {
+        # save
         'bbox_inches': 'tight',
         'pad_inches': 0,
-        'save_dpi': 100
+        'save_dpi': 100,
     }
 
-    def plot(self, data=None, combine='overlay', mode='image', axes=None, axis=None, ax=None, subplots=None, **kwargs):
+    # Plotting delegator
+    def plot(self, data=None, combine='overlay', mode='image', axes=None, axis=None, ax=None,
+             adjust_figsize='image', show=True, save=False, positions=None, **kwargs):
         """ Plot data on subplots.
 
-        If a first call and has no subplots, parse axes from kwargs if provided, else create them.
+        If a first call (from `__init__`), parse axes from kwargs if they are provided, else create them.
         For every data item choose relevant parameters from config and delegate data plotting to corresponding subplot.
         """
-        self.config = PlotConfig({**self.PLOT_DEFAULTS, **self.ANNOTATION_DEFAULTS, **self.SAVE_DEFAULTS, **kwargs})
+        self.config = PlotConfig(self.DEFAULT_CONFIG)
+        self.config.update(**kwargs)
 
         data, combine, n_subplots = self.parse_data(data=data, combine=combine, mode=mode)
 
         axes = axes or axis or ax
         if self.subplots is None:
-            fig, axes, fig_config = self.make_figure(mode=mode, n_subplots=n_subplots, data=data, axes=axes, **kwargs)
-            self.figure, self.figure_config = fig, fig_config
-            self.subplots = [Subplot(self, ax) for ax in axes]
-            active_subplots = subplots or self.subplots
+            self.figure, self.subplots = self.make_subplots(mode=mode, n_subplots=n_subplots, data=data, axes=axes)
         else:
             if axes is not None:
                 msg = "Subplots already created and new axes cannot be specified."
                 raise ValueError(msg)
-            active_subplots = self.subplots if subplots is None else [self.subplots[idx] for idx in to_list(subplots)]
 
-        mode_defaults = getattr(self, f"{mode.upper()}_DEFAULTS")
-
-        for idx, subplot in enumerate(active_subplots):
-            subplot_data = data[idx] if idx < len(data) else None
+        positions = list(range(len(data))) if positions is None else to_list(positions)
+        for absolute_index, subplot in enumerate(self.subplots):
+            relative_index = positions.index(absolute_index) if absolute_index in positions else None
+            subplot_data = None if relative_index is None else data[relative_index]
 
             if subplot_data is None:
                 if subplot.empty:
                     subplot.disable()
                 continue
 
-            subplot_idx = None if combine == 'overlay' else idx
-            subplot_config = self.config[subplot_idx]
-            subplot_config = PlotConfig({**mode_defaults, **subplot_config})
-
+            subplot_index = None if combine == 'overlay' else relative_index
+            subplot_config = self.config.filter(index=subplot_index)
             subplot.plot(mode, subplot_data, subplot_config)
 
         figure_objects = self.annotate()
         self.figure_objects = figure_objects
 
-        if self.config['adjust_figsize'] is True or self.config['adjust_figsize'] == mode:
+        if adjust_figsize is True or adjust_figsize == mode:
             self.adjust_figsize()
 
-        if self.config['show']:
+        if show:
             self.show()
         else:
             self.close()
 
-        if self.config['save'] or 'savepath' in self.config:
+        if save or 'savepath' in self.config:
             self.save()
 
         return self
-
-    def __call__(self, mode, **kwargs):
-        self.plot(mode=mode, **kwargs)
-
-    def __repr__(self):
-        return ''
-
-    def __str__(self):
-        return f"<Batchflow Plotter with {len(self.axes)} axes>"
 
     def annotate(self):
         """ Put suptitle with given parameters over figure and apply `tight_layout`. """
@@ -1456,6 +1292,7 @@ class Plot:
 
         return annotations
 
+    # Result finalizing methods
     def show(self):
         self.figure = plt.figure(self.figure)
 
