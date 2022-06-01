@@ -1293,7 +1293,7 @@ class Plot:
 
     # Result finalizing methods
     def show(self):
-        self.figure = plt.figure(self.figure)
+        plt.show()
 
     def save(self):
         """ Save plot. """
