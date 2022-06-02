@@ -1,32 +1,19 @@
 """ Run multiple notebooks. """
-# pylint: disable=import-error
-import os
-
 import warnings
 from glob import glob
 import pytest
 
 
 
-NOTEBOOKS_DIR = './plot_notebooks/'
-NOTEBOOKS = glob(NOTEBOOKS_DIR + '*.ipynb')
+PLOT_NOTEBOOKS = glob('./plot_notebooks/*.ipynb')
+PLOT_TUTORIALS = glob('./../../examples/plot/*.ipynb')
 
-TUTORIALS_DIR = './../../examples/plot/'
-TUTORIALS = glob(TUTORIALS_DIR + '*.ipynb')
-
-PARAMETERS = []
-# Run every notebook in test directory
-PARAMETERS += [path for path in NOTEBOOKS]
-
-# Run plot notebooks inside tutorials dir
-PARAMETERS += [path for path in TUTORIALS]
-
-_ = [print(item) for item in PARAMETERS]
+PATHS = PLOT_NOTEBOOKS + PLOT_TUTORIALS
 
 # Some of the actions are appropriate in notebooks, but better be ignored in tests
 BAD_PREFIXES = ['get_ipython']
-                
-@pytest.mark.parametrize('path', PARAMETERS)
+
+@pytest.mark.parametrize('path', PATHS)
 def test_run_notebooks(path):
     """ There are a lot of examples in different notebooks, and all of them should be working.
 
@@ -35,6 +22,7 @@ def test_run_notebooks(path):
     path : str
         Location of notebook to run.
     """
+    # pylint: disable=exec-used
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         from nbconvert import PythonExporter
