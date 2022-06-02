@@ -6,7 +6,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from .utils import calc_padding
+from .utils import compute_padding
 from ..utils import get_num_channels, get_num_dims, safe_eval
 
 
@@ -33,29 +33,13 @@ class BaseConv(nn.Module):
             'bias': bias,
         }
 
-        calculated_padding = calc_padding(inputs, padding=padding, transposed=self.TRANSPOSED, **args)
-        nested_padding = isinstance(calculated_padding, tuple) and isinstance(calculated_padding[0], tuple)
-
-        self.padding = None
-        if calculated_padding == 0:
-            args['padding'] = 0
-        elif (custom_padding or self.TRANSPOSED) and nested_padding:
-            args['padding'] = 0
-            self.padding = sum(calculated_padding, ())
-        elif padding == 'same' and nested_padding:
-            args['padding'] = tuple(max(0, max(item)) for item in calculated_padding)
-        else:
-            args['padding'] = padding
+        args.update(compute_padding(padding=padding, shape=inputs.shape[2:], kernel_size=kernel_size,
+                                    dilation=dilation, stride=stride, transposed=self.TRANSPOSED))
 
         self.layer = self.LAYERS[get_num_dims(inputs)](**args)
 
     def forward(self, x):
-        if self.padding is not None:
-            x = F.pad(x, self.padding[::-1])
         return self.layer(x)
-
-    def extra_repr(self):
-        return f'custom_padding={self.padding is not None}'
 
     def __repr__(self):
         msg = super().__repr__()

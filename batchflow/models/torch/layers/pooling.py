@@ -4,7 +4,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from .utils import calc_padding
+from .utils import compute_padding
 from ..utils import get_num_dims
 
 
@@ -17,24 +17,13 @@ class BasePool(nn.Module):
     def __init__(self, inputs=None, pool_size=2, pool_stride=2, padding='same'):
         super().__init__()
 
-        if padding is not None:
-            padding = calc_padding(inputs=inputs, padding=padding, kernel_size=pool_size, stride=pool_stride)
-
-            if isinstance(padding, tuple) and isinstance(padding[0], tuple):
-                self.padding = sum(padding, ())
-            elif isinstance(padding, int):
-                self.padding = (padding, ) * (2 * get_num_dims(inputs))
-            else:
-                raise ValueError('Incorrect padding!')
-        else:
-            self.padding = None
+        padding = compute_padding(padding=padding, shape=inputs.shape[2:], kernel_size=pool_size,
+                                  dilation=1, stride=pool_stride, transposed=False)['padding']
 
         layer = self.LAYERS[get_num_dims(inputs)]
-        self.layer = layer(kernel_size=pool_size, stride=pool_stride)
+        self.layer = layer(kernel_size=pool_size, stride=pool_stride, padding=padding)
 
     def forward(self, x):
-        if self.padding:
-            x = F.pad(x, self.padding[::-1])
         return self.layer(x)
 
 class AvgPool(BasePool):

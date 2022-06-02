@@ -11,7 +11,7 @@ from .... import Config
 class Block(ModuleDictReprMixin, nn.ModuleDict):
     """ Convenient wrapper for chaining multiple base large blocks.
     Serves as a link between smaller, like individual layers and their sequences
-     and larger, like named blocks and stages, model parts.
+    and larger, like named blocks and stages, model parts.
 
     Depending on the supplied arguments, does the following:
         - no positional `args`, no explicit `base_block`: the same as :class:`~.torch.layers.MultiLayer`.

@@ -59,7 +59,8 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
     In order to initialize all of the layers, we need an example of tensor to be used as inputs for this module.
     It can be either a torch.Tensor or a tuple with its shape. In case of tuple, one can also specify `device` to use.
 
-    Under the hood, we introspect layer constructors to find which parameters should be passed where.
+    Under the hood, we inspect layer constructors to find which parameters should be passed for layer creation.
+    If we see `inputs` argument, we also provide an example of input tensor to the layer.
     """
     LETTERS_LAYERS = {
         # Core
@@ -173,12 +174,11 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
 
 
     def fill_layer_params(self, layer_name, layer_class, inputs, counters):
-        """ Inspect which parameters should be passed to the layer and get them from instance. """
+        """ Inspect which parameters should be passed to the layer and get them from stored `kwargs`. """
         layer_params = inspect.getfullargspec(layer_class.__init__)[0]
         layer_params.remove('self')
 
-        args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
-                for param in layer_params if param in self.kwargs}
+        args = {param: self.kwargs.get(param, None) for param in layer_params if param in self.kwargs}
         if 'inputs' in layer_params:
             args['inputs'] = inputs
 
