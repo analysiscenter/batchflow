@@ -36,7 +36,7 @@ def compute_padding(padding, shape, kernel_size, dilation, stride, transposed=Fa
             padding = _compute_same_padding(size=size, kernel_size=k, dilation=d, stride=s)
             result['padding'].append(padding)
         else:
-            padding, output_padding = _compute_same_padding_transposed(kernel_size=ks, dilation=d, stride=s)
+            padding, output_padding = _compute_same_padding_transposed(kernel_size=k, dilation=d, stride=s)
             result['padding'].append(padding)
             result['output_padding'].append(output_padding)
     return result
