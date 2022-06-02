@@ -2,7 +2,6 @@
 #pylint: disable=not-callable, invalid-name
 import torch
 from torch import nn
-import torch.nn.functional as F
 
 from .utils import compute_padding
 from ..utils import get_num_dims

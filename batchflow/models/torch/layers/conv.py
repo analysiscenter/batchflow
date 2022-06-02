@@ -4,7 +4,6 @@ from math import ceil, sqrt, prod
 
 import torch
 from torch import nn
-import torch.nn.functional as F
 
 from .utils import compute_padding
 from ..utils import get_num_channels, get_num_dims, safe_eval
@@ -17,7 +16,7 @@ class BaseConv(nn.Module):
     TRANSPOSED = False
 
     def __init__(self, inputs=None, channels=None, kernel_size=3, stride=1, dilation=1, groups=1,
-                 padding='same', custom_padding=False, bias=False):
+                 padding='same', bias=False):
         super().__init__()
 
         if isinstance(channels, str):
@@ -291,12 +290,12 @@ class AvgPoolConv(Conv):
     }
 
     def __init__(self, inputs=None, channels=None, factor=2, kernel_size=None, stride=None, dilation=1, groups=1,
-                 padding='same', custom_padding=False, bias=False):
+                 padding='same', bias=False):
         kernel_size = kernel_size if kernel_size is not None else 2 * factor - 1
         stride = stride if stride is not None else factor
 
         super().__init__(inputs=inputs, channels=channels, kernel_size=kernel_size, stride=stride, dilation=dilation,
-                         groups=groups, padding=padding, custom_padding=custom_padding, bias=bias)
+                         groups=groups, padding=padding, bias=bias)
 
 
 
