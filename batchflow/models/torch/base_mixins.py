@@ -39,9 +39,9 @@ class VisualizationMixin:
         """ Create information string. """
         message = ''
         bold_code = '\033[1m\033[4m' if bold else ''
-        endl_code = '\033[0m\n' if bold else ''
+        endl_code = '\033[0m' if bold else ''
 
-        template_header = '\n' + bold_code + '{}:' + endl_code
+        template_header = '\n' + bold_code + '{}:' + endl_code + '\n'
 
         if config:
             message += template_header.format('Config')

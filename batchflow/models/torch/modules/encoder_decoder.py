@@ -3,7 +3,7 @@ from torch import nn
 
 
 from ..repr_mixin import ModuleDictReprMixin
-from ..blocks import Block, DefaultBlock, Upsample, Downsample, Combine
+from ..blocks import Block, Branch, Upsample, Downsample, Combine, DefaultBlock
 from ..utils import get_shape
 from ...utils import unpack_args
 from ....config import Config
@@ -35,6 +35,8 @@ class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
         For example, `'sbd'` allows to use throw skip connection -> block -> downsampling.
     downsample : dict, optional
         Parameters for downsampling, see :class:`~.blocks.Downsample`.
+    skip : dict, optional
+        Parameters for additional operations on skip connections, see :class:`~.blocks.Block`.
     blocks : dict, optional
         Parameters for processing blocks, see :class:`~.blocks.Block`.
     """
@@ -43,6 +45,7 @@ class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
     DEFAULTS = {
         'num_stages': None,
         'order': ['skip', 'block', 'downsampling'],
+        'skip': {},
         'blocks': {'base_block': DefaultBlock},
         'downsample': {'layout': 'p', 'pool_size': 2, 'pool_stride': 2}
     }
@@ -65,6 +68,7 @@ class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
         num_stages = kwargs.pop('num_stages')
         order = ''.join([item[0] for item in kwargs.pop('order')])
 
+        skip_params = kwargs.pop('skip')
         block_params = kwargs.pop('blocks')
         downsample_params = kwargs.pop('downsample')
 
@@ -77,20 +81,23 @@ class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
                     block = Block(inputs=inputs, **args)
                     inputs = block(inputs)
                     block_name = f'block-{i}'
+                    output_shapes = get_shape(inputs)
 
                 elif letter in {'d', 'p'}:
                     args = {**kwargs, **downsample_params, **unpack_args(downsample_params, i, num_stages)}
                     block = Downsample(inputs=inputs, **args)
                     inputs = block(inputs)
                     block_name = f'downsample-{i}'
+                    output_shapes = get_shape(inputs)
 
                 elif letter in {'s'}:
-                    block = nn.Identity()
+                    args = {**kwargs, **skip_params, **unpack_args(skip_params, i, num_stages)}
+                    block = Branch(inputs=inputs, **args)
+                    skip = block(inputs)
                     block_name = f'skip-{i}'
+                    output_shapes = get_shape(skip)
                 else:
                     raise ValueError(f'Unknown letter "{letter}" in order, use one of "b", "d", "p", "s"!')
-
-                output_shapes = get_shape(inputs)
 
                 self[block_name] = block
                 self.shapes[block_name] = (input_shapes, output_shapes)
@@ -109,7 +116,8 @@ class EncoderModule(ModuleDictReprMixin, nn.ModuleDict):
             if letter in {'b', 'd', 'p'}:
                 tensor = block(tensor)
             elif letter in {'s'}:
-                outputs.append(tensor)
+                skip = block(tensor)
+                outputs.append(skip)
         outputs.append(tensor)
 
         # Prepare output type: sequence or individual tensor
