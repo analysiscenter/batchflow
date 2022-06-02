@@ -5,6 +5,10 @@ from torch import nn
 
 
 
+def to_n_tuple(value, n):
+    return value if isinstance(value, (tuple, list)) else (value,) * n
+
+
 def safe_eval(expression, value, names=None):
     """ Safely evaluates expression given value and names.
     Supposed to be used to parse string parameters and allow dependencies between parameters (e.g. number of channels)

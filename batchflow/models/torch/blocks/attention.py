@@ -1,6 +1,4 @@
-""" Contains attention layers.
-Note that we can't import :class:`~.Block` directly due to recursive imports.
-"""
+""" Contains attention layers. """
 import numpy as np
 import torch
 from torch import nn
@@ -170,7 +168,8 @@ class BAM(nn.Module):
             branch={'layout': 'Vfnaf >',
                     'features': [in_channels//ratio, in_channels],
                     'dim': get_num_dims(inputs),
-                    'activation': 'relu', 'bias': True, **kwargs})
+                    'activation': 'relu', 'bias': True, **kwargs}
+        )
 
         self.desc_kwargs = {
             'class': self.__class__.__name__,
@@ -300,7 +299,7 @@ class FPA(nn.Module):
         num_dims = get_num_dims(inputs)
 
         self.attention = Block(inputs=inputs, layout='V >' + layout + 'b', kernel_size=1,
-                                   channels='same', shape=spatial_shape, dim=num_dims, **kwargs)
+                               channels='same', shape=spatial_shape, dim=num_dims, **kwargs)
 
         enc_layout = ('B' + downsample_layout + layout) * depth # B pcna B pcna B pcna
         emb_layout = layout + upsample_layout # cnat
@@ -336,8 +335,8 @@ class FPA(nn.Module):
             out_channels = get_num_channels(inputs)
             inner_channels = out_channels // bottleneck
             self.pyramid = Block(dict(layout=layout, kernel_size=1, channels=inner_channels),
-                                     pyramid_args,
-                                     dict(layout=layout, kernel_size=1, channels=out_channels), inputs=inputs, **kwargs)
+                                 pyramid_args,
+                                 dict(layout=layout, kernel_size=1, channels=out_channels), inputs=inputs, **kwargs)
         else:
             self.pyramid = Block(pyramid_args, inputs=inputs, **kwargs)
 
@@ -417,8 +416,9 @@ class SelectiveKernelConv(nn.Module):
 
         self.combine = Combine(op='sum')
         tensor = self.combine(tensors)
-        self.fuse = Block(inputs=tensor, layout='Vfna>', features='max(same // {}, {})'.format(ratio, min_features),
-                              dim=num_dims, bias=bias)
+        self.fuse = Block(inputs=tensor, layout='Vfna>',
+                          features='max(same // {}, {})'.format(ratio, min_features),
+                          dim=num_dims, bias=bias)
 
         fused_tensor = self.fuse(tensor)
         self.attention_branches = nn.ModuleList([
@@ -495,8 +495,8 @@ class SplitAttentionConv(nn.Module):
         }
 
         self.inner_radix_conv = Block(inputs=inputs, layout=layout, channels=self.channels,
-                                          groups=self.cardinality*self.radix, stride=stride, padding=padding,
-                                          **kwargs)
+                                      groups=self.cardinality*self.radix, stride=stride, padding=padding,
+                                      **kwargs)
         inputs = self.inner_radix_conv(inputs)
         x = inputs
 
@@ -507,9 +507,9 @@ class SplitAttentionConv(nn.Module):
 
         inner_conv1d_layout = 'V>' + 'cnac'
         self.avgpool_conv1d = Block(inputs=inputs, layout=inner_conv1d_layout,
-                                        channels=[self.inner_channels, self.channels],
-                                        kernel_size=1, groups=self.cardinality, dim=channel_dim,
-                                        bias=True)
+                                    channels=[self.inner_channels, self.channels],
+                                    kernel_size=1, groups=self.cardinality, dim=channel_dim,
+                                    bias=True)
         inputs = self.avgpool_conv1d(inputs)
 
         self.rsoftmax = RadixSoftmax(self.radix, self.cardinality)

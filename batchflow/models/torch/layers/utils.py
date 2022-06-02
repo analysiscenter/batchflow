@@ -1,49 +1,64 @@
 """ Utils for individual layers. """
+from math import floor, ceil
 import numpy as np
 
-from ..utils import get_shape, get_num_dims
+from ..utils import to_n_tuple, get_shape, get_num_dims
 
 
-def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, stride=1, **kwargs):
-    """ Get padding values for various convolutions/poolings. """
-    _ = kwargs
+def compute_padding(padding, shape, kernel_size, dilation, stride, transposed=False):
+    """ Compute padding.
+    If supplied padding not `same`, just return the same value.
 
-    dims = get_num_dims(inputs)
-    shape = get_shape(inputs)
+    If `padding` is `same`, then compute amount of padding, taking `stride` into account:
+        - if not `transposed` (regular conv or pooling), then compute padding
+        required for making output shape equal to `ceil(shape / stride)`.
+        - if `transposed` (transposed conv), then compute padding and output padding
+        required for making output shape equal to `shape * stride`.
 
-    if isinstance(padding, str):
-        if padding == 'valid':
-            result = 0
-        elif padding == 'same':
-            if transposed:
-                result = 0
-            else:
-                if isinstance(kernel_size, int):
-                    kernel_size = (kernel_size,) * dims
-                if isinstance(dilation, int):
-                    dilation = (dilation,) * dims
-                if isinstance(stride, (int, np.int64)):
-                    stride = (stride,) * dims
-                result = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
+    Under the hood, iterates over possible values of `padding` and `output_padding` parameters,
+    until condition (difference between desired size and computed output size) is met.
+    """
+    if padding != 'same':
+        return {'padding': padding}
 
-                if all(item == 0 for item in sum(result, ())):
-                    result = 0
+    n = len(shape)
+    kernel_size = to_n_tuple(kernel_size, n)
+    dilation = to_n_tuple(dilation, n)
+    stride = to_n_tuple(stride, n)
+
+    result = {'padding': []}
+    if transposed:
+        result['output_padding'] = []
+
+    for size, ks, d, s in zip(shape, kernel_size, dilation, stride):
+        if not transposed:
+            padding = _compute_same_padding(size=size, kernel_size=ks, dilation=d, stride=s)
+            result['padding'].append(padding)
         else:
-            raise ValueError("padding can be 'same' or 'valid'")
-    elif isinstance(padding, (int, tuple)):
-        result = padding
-    else:
-        raise ValueError("padding can be 'same' or 'valid' or int or tuple of int")
+            padding, output_padding = _compute_same_padding_transposed(kernel_size=ks, dilation=d, stride=s)
+            result['padding'].append(padding)
+            result['output_padding'].append(output_padding)
     return result
 
-def _get_padding(kernel_size=None, input_shape=None, dilation=1, stride=1):
-    kernel_size = dilation * (kernel_size - 1) + 1
-    if stride >= input_shape:
-        padding = max(0, kernel_size - input_shape)
-    else:
-        if input_shape % stride == 0:
-            padding = kernel_size - stride
-        else:
-            padding = kernel_size - input_shape % stride
-    padding = (padding // 2, padding - padding // 2)
-    return padding
+
+def _compute_same_padding(size, kernel_size, dilation, stride):
+    # Pre-compute some variables
+    desired_size = ceil(size / stride)
+    effective_kernel_size = dilation * (kernel_size - 1) + 1
+    underestimated_size = (size - effective_kernel_size) / stride + 1
+
+    # Search for correct padding value
+    for padding in range(0, effective_kernel_size):
+        size_difference = desired_size - floor(underestimated_size + 2 * padding / stride)
+        if size_difference == 0:
+            return padding
+
+def _compute_same_padding_transposed(kernel_size, dilation, stride):
+    # Pre-compute some variables
+    effective_kernel_size = dilation * (kernel_size - 1) + 1
+    kernel_residual = effective_kernel_size - stride
+
+    for output_padding in range(stride)[::-1]:
+        two_padding = kernel_residual + output_padding
+        if two_padding % 2 == 0:
+            return two_padding // 2, output_padding
