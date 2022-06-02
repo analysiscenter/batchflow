@@ -26,6 +26,8 @@ class BasePool(nn.Module):
                 self.padding = (padding, ) * (2 * get_num_dims(inputs))
             else:
                 raise ValueError('Incorrect padding!')
+        else:
+            self.padding = None
 
         layer = self.LAYERS[get_num_dims(inputs)]
         self.layer = layer(kernel_size=pool_size, stride=pool_stride)

@@ -10,6 +10,7 @@ import pandas as pd
 
 import torch
 from torch import nn
+from torch.optim.swa_utils import AveragedModel, SWALR
 
 try:
     import cupy as cp
@@ -127,6 +128,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             - `loss`. No default value, so this key is required.
             - `optimizer`. Default is `Adam`.
             - `decay`. Default is to not use learning rate decay.
+
+        - additional parameters:
+            - `sam` and `sam_rho` enable sharpness-aware minimization: a technique for improving model generatlization.
+            - `weights_averaging` enables model weights averaging.
+
 
 
     We recommend looking at :class:`~.torch.layers.Block` to learn about parameters for model building blocks,
@@ -253,6 +259,15 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         If True, then each gradient is scaled according to its own L2 norm.
         If False, then one common gradient norm is computed and used as a scaler for all gradients.
 
+    weights_averaging : dict
+        If provided, we create additional copy of the model,
+        which is updated with weights from the main model during train.
+        Subkeys `start_iter`, `frequency` and `last_iter` define the range and frequency of updates.
+        `avg_fn` can be used to change the logic of updates:
+            - `swa` makes it so that weights from each update contribute equally.
+            - `ema` makes it so that weights are aggregated with exponential moving average.
+            - a callable, that takes `averaged_parameter, model_parameter, num_averaged` can be passed.
+
     profile : bool
         Whether to collect stats of model training timings.
         If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
@@ -304,7 +319,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         The learning rate decay algorithm might be defined in multiple formats.
         All decays require to have 'frequency' as a key in a configuration dictionary.
         Parameter 'frequency' sets how often do decay step: at every `'frequency'`
-        iteration. Each decay might have optional parameters 'first_iter' and 'last_iter'
+        iteration. Each decay might have optional parameters 'start_iter' and 'last_iter'
         that defines the closed range of iterations where decay is at work.
         If you want to use a learning rate warmup and decay together,
         you should use a list of decays (see examples).
@@ -324,13 +339,13 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         Examples:
 
-        - ``{'decay': {'name: 'exp', 'frequency': 5, 'first_iter': 6, 'last_iter': 20}}``
+        - ``{'decay': {'name: 'exp', 'frequency': 5, 'start_iter': 6, 'last_iter': 20}}``
         - ``{'decay': {'name': 'StepLR', 'steps_size': 10000, 'frequency': 5}}``
-        - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5, 'frequency': 15, 'first_iter': 400}``
+        - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5, 'frequency': 15, 'start_iter': 400}``
         - .. code-block:: python
 
             {'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
-                       {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'first_iter': 901}]
+                       {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'start_iter': 901}]
 
 
     Examples
@@ -365,7 +380,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     PRESERVE = [
         'full_config', 'config', 'model',
         'inputs_shapes', 'targets_shapes', 'classes',
-        'loss', 'optimizer', 'decay', 'decay_step',
+        'loss', 'optimizer', 'scaler', 'decay', 'decay_step',
         'sync_counter', 'microbatch_size',
         'iteration', 'last_train_info', 'last_predict_info',
         'lr_list', 'syncs', 'decay_iters',
@@ -375,9 +390,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     def __init__(self, config=None):
         if isinstance(config, str):
             config = {'load/path': config}
-
-        self.full_config = Config(config)
         self.model_lock = Lock()
+
+        # Configs
+        self.external_config = Config(config)
+        self.full_config = Config(config)
 
         # Shapes of inputs and targets
         self.placeholder_batch_size = 2
@@ -387,6 +404,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         # Pytorch model
         self.model = None
+        self._model_cpu_backup = None
 
         # Leading device and list of all devices to use
         self.device = None
@@ -413,6 +431,20 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.sam_rho = 0.0
         self.sam_individual_norm = True
 
+        # WA: model weight averaging
+        self.weight_averaging = None
+        self.wa_model = None
+        self.wa_config = None
+        self.wa_decay = None
+        self.wa_iters = []
+        self.wa_finalized = False
+
+        # TTA: test time augmentations
+        self.tta_wrapped = False
+
+        # TRT: tensorRT
+        self.trt_wrapped = False
+
         # Store info about passed train/predict iterations
         self.iteration = 0
         self.last_train_info = {}
@@ -423,15 +455,12 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self._loss_list = []
         self.loss_list = []
 
-        # Profile kernels used
+        # Profile
         self.profile = False
         self.profilers = []
         self.profile_info = None
 
-        # Store the config for later usage
-        self.external_config = Config(config)
-
-        #
+        # Load model from file or initialize anew
         load = self.external_config.get('load')
         if load:
             self.load(**load)
@@ -622,15 +651,17 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             return [list(sequence)]
         return [list(item) for item in sequence]
 
-    def make_placeholder_data(self, batch_size=None, to_device=True):
+    def make_placeholder_data(self, batch_size=None, unwrap=True, to_device=True):
         """ Create a sequence of tensor, based on the parsed `inputs_shapes`. """
         batch_size = batch_size or self.placeholder_batch_size
 
         data = [np.random.random((batch_size, *shape[1:])).astype(np.float32)
                 for shape in self.inputs_shapes]
 
-        data = data[0] if len(data) == 1 else data
-        data = self.transfer_to_device(data) if to_device else data
+        if unwrap:
+            data = data[0] if len(data) == 1 else data
+        if to_device:
+            data = self.transfer_to_device(data)
         return data
 
 
@@ -641,6 +672,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.make_optimizer()
         self.make_decay()
         self.scaler = torch.cuda.amp.GradScaler()
+
+        self.setup_weights_averaging()
 
     def unpack(self, value):
         """ Unpack argument to actual value and kwargs. """
@@ -729,7 +762,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             # Parse step parameters
             step_params = {
-                'first_iter': 0,
+                'start_iter': 0,
                 'last_iter': np.inf,
                 **decay_kwargs
             }
@@ -744,7 +777,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 decay_kwargs = {**decay_dict, **decay_kwargs}
 
             # Remove unnecessary keys from kwargs
-            for key in ['first_iter', 'last_iter', 'frequency']:
+            for key in ['start_iter', 'last_iter', 'frequency']:
                 decay_kwargs.pop(key, None)
 
             # Create decay or store parameters for later usage
@@ -752,6 +785,30 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             self.decay.append(decay_)
             self.decay_step.append(step_params)
+
+    def setup_weights_averaging(self):
+        """ Prepare WA-model: check all required keys and store copy on CPU. """
+        wa_config = self.config.get('weights_averaging') or self.config.get('wa') or self.config.get('swa')
+
+
+        if wa_config is not None:
+            required_keys = ['start_iter', 'last_iter', 'frequency']
+            for key in required_keys:
+                if key not in wa_config:
+                    raise ValueError(f'Key `{key}` is missing in weights averaging configuration!')
+
+            avg_fn = wa_config.get('avg_fn', None)
+            if avg_fn in ['stochastic', 'swa']:
+                avg_fn = None
+            elif avg_fn in ['exponential', 'ema']:
+                avg_fn = lambda wa_parameter, model_parameter, num_averaged: 0.1 * wa_parameter + 0.9 * model_parameter
+
+            self.weight_averaging = True
+            self.wa_config = Config(wa_config)
+            self.wa_model = AveragedModel(self.model, device='cpu', avg_fn=avg_fn)
+
+            if 'swalr' in wa_config:
+                self.wa_decay = SWALR(self.optimizer, **wa_config['swalr'])
 
 
     # Set pre-initialized model or chain multiple building blocks to create model
@@ -784,6 +841,35 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         self.model_to_device()
         self.make_infrastructure()
+
+    def finalize_wa(self):
+        """ Replace the model with weight-averaged one. """
+        if self.weight_averaging and not self.wa_finalized:
+            self.wa_iters.append(self.iteration)
+            self.model = self.wa_model.module
+            self.model_to_device()
+
+            self.make_optimizer()
+            self.scaler = torch.cuda.amp.GradScaler()
+
+            self.wa_finalized = True
+
+    def wrap_tta(self, wrapper='ClassificationTTAWrapper', transforms=None, merge_mode='mean'):
+        """ Wrap model with test-time augmentations. """
+        import ttach
+        transforms = transforms if transforms is not None else ttach.aliases.vlip_transform()
+        self.model = getattr(ttach, wrapper)(self.model, transforms=transforms, merge_mode=merge_mode)
+        self.tta_wrapped = True
+
+    def wrap_trt(self, batch_size, use_onnx=True, fp16_mode=True, **kwargs):
+        """ !!. """
+        from torch2trt import torch2trt
+        inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
+
+        self.model = torch2trt(self.model.eval(), inputs=inputs, max_batch_size=batch_size,
+                               fp16_mode=fp16_mode, use_onnx=use_onnx, **kwargs)
+        self.trt_wrapped = True
+
 
     def initialize_weights(self):
         """ Initialize model weights with a pre-defined or supplied callable. """
@@ -853,8 +939,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         raise TypeError('Passed data should either be a `np.ndarray`, `torch.Tensor`'
                         f' or a container of them, got {type(data)}.')
 
-    def model_to_device(self):
+    def model_to_device(self, model=None):
         """ Put model on device(s). If needed, apply DataParallel wrapper. """
+        model = model if model is not None else self.model
+
         if len(self.devices) > 1:
             self.model = nn.DataParallel(self.model, self.devices)
         else:
@@ -993,6 +1081,21 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             for callback in self.callbacks:
                 callback.on_iter_end()
 
+            # Use current weights for weights averaging
+            if self.weight_averaging:
+                start_iter, frequency, last_iter = self.wa_config.get(['start_iter', 'frequency', 'last_iter'])
+
+                if self.iteration >= last_iter and not self.wa_finalized:
+                    self.finalize_wa()
+
+                elif (start_iter <= self.iteration <= last_iter and
+                    (self.iteration - start_iter) % frequency == 0):
+                    self.wa_model.update_parameters(self.model)
+                    self.wa_iters.append(self.iteration)
+
+                    if self.wa_decay:
+                        self.wa_decay.step()
+
             # Aggregate the outputs from microbatches
             result = self.aggregate_microbatches(outputs, chunked_outputs, single_output)
 
@@ -1066,8 +1169,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             # Apply decay to learning rate, if needed
             if self.decay:
                 for decay, decay_step in zip(self.decay, self.decay_step):
-                    step_cond = (self.iteration - decay_step['first_iter']) % decay_step['frequency'] == 0
-                    range_cond = decay_step['first_iter'] <= self.iteration <= decay_step['last_iter']
+                    step_cond = (self.iteration - decay_step['start_iter']) % decay_step['frequency'] == 0
+                    range_cond = decay_step['start_iter'] <= self.iteration <= decay_step['last_iter']
                     if step_cond and range_cond:
                         decay.step()
                         self.decay_iters.append(self.iteration)
