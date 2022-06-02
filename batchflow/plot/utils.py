@@ -8,9 +8,8 @@ from matplotlib.collections import PatchCollection
 from matplotlib.colors import ColorConverter, ListedColormap
 from matplotlib.patches import Rectangle
 from matplotlib.legend_handler import HandlerBase
-from numba import njit
 
-
+from ..decorators import njit
 
 class CycledList(list):
     """ List that repeats itself from desired position (default is 0).
