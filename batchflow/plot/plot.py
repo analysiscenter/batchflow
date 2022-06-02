@@ -3,8 +3,6 @@ from copy import copy
 from datetime import datetime
 from numbers import Number
 
-
-import cv2
 import numpy as np
 
 from scipy.ndimage import convolve
@@ -69,6 +67,8 @@ class Layer:
 
     def dilate(self, data):
         """ Apply dilation to array. """
+        # pylint: disable=import-outside-toplevel
+        import cv2
         dilation_config = self.config.get('dilate', False)
         if dilation_config:
             if dilation_config is True:
@@ -463,7 +463,7 @@ class Subplot:
         # colorbar
         keys = ['colorbar', 'width', 'pad', 'fake', 'annotations']
         colorbar_config = self.config.filter(keys, prefix='colorbar_')
-        if colorbar_config:
+        if colorbar_config and mode == 'image':
             colorbar_config['image'] = self.layers[0].object
 
             if 'pad' not in colorbar_config:
@@ -878,7 +878,7 @@ class Plot:
     def __init__(self, data=None, combine='overlay', mode='image', **kwargs):
         self.figure = None
         self.subplots = None
-        self.config = None
+        self.config = PlotConfig(self.DEFAULT_CONFIG)
 
         self.plot(data=data, combine=combine, mode=mode, **kwargs)
 
@@ -1222,7 +1222,6 @@ class Plot:
         If a first call (from `__init__`), parse axes from kwargs if they are provided, else create them.
         For every data item choose relevant parameters from config and delegate data plotting to corresponding subplot.
         """
-        self.config = PlotConfig(self.DEFAULT_CONFIG)
         self.config.update(**kwargs)
 
         data, combine, n_subplots = self.parse_data(data=data, combine=combine, mode=mode)
@@ -1255,9 +1254,7 @@ class Plot:
         if adjust_figsize is True or adjust_figsize == mode:
             self.adjust_figsize()
 
-        if show:
-            self.show()
-        else:
+        if not show:
             self.close()
 
         if save or 'savepath' in self.config:
@@ -1292,9 +1289,6 @@ class Plot:
         return annotations
 
     # Result finalizing methods
-    def show(self):
-        plt.show()
-
     def save(self):
         """ Save plot. """
         default_savepath = datetime.now().strftime('%Y-%m-%d_%H:%M:%S.png')
