@@ -366,7 +366,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         'sync_counter', 'microbatch_size',
         'iteration', 'last_train_info', 'last_predict_info',
         'lr_list', 'syncs', 'decay_iters',
-        '_loss_list', 'loss_list',
+        '_loss_list', 'loss_list', 'operations'
     ]
 
     def __init__(self, config=None):
@@ -535,7 +535,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.callbacks = [callback.set_model(self) for callback in config.get('callbacks', [])]
 
         # Parse operations, that should be applied to model predictions, into a dictionary
-        operations = config['output']
+        operations = self.config['output']
         if not isinstance(operations, dict):
             operations = operations or []
             operations = list(operations) if isinstance(operations, (tuple, list)) else [operations]
@@ -545,11 +545,13 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self._parse_devices()
         self._parse_placeholder_shapes()
 
+
     def _parse_devices(self):
         """ Extract `devices` and `benchmark` from config.
         If the config value is not set, use the best available accelerator.
         """
-        devices = self.config.get('device')
+        config = self.external_config
+        devices = config.get('device')
 
         if devices is None:
             if torch.cuda.is_available():
@@ -576,7 +578,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                             if device not in self.devices[:i]]
             self.device = self.devices[0]
 
-        torch.backends.cudnn.benchmark = self.config.get('benchmark', 'cuda' in self.device.type)
+        torch.backends.cudnn.benchmark = config.get('benchmark', 'cuda' in self.device.type)
 
     def _parse_placeholder_shapes(self):
         """ Extract `inputs_shapes`, `targets_shapes`, `classes` from config. """

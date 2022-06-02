@@ -6,6 +6,7 @@ import sys
 from copy import copy, deepcopy
 import itertools
 import traceback
+import contextlib
 from collections import OrderedDict
 import json
 import time
@@ -16,7 +17,8 @@ from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify
+from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify, \
+                   MultiOut, create_output_stream
 from .profiler import ExperimentProfiler, ExecutorProfiler
 
 class PipelineWrapper:
@@ -77,7 +79,10 @@ class PipelineWrapper:
         """ Generator returns batches from pipeline. Generator will stop when StopIteration will be raised. """
         self.reset()
         while True:
-            yield (self.pipeline.next_batch(), *self._get_vars_values())
+            try:
+                yield (self.pipeline.next_batch(), *self._get_vars_values())
+            except StopIteration:
+                return
 
     def _get_vars_values(self):
         return [self.pipeline.v(var) for var in self.variables if var is not None]
@@ -367,6 +372,8 @@ class Experiment:
         self.random = None
 
         self._profiler = None
+        self.stdout_file = None
+        self.stderr_file = None
 
     @property
     def is_alive(self):
@@ -671,7 +678,7 @@ class Experiment:
         with open(os.path.join(self.name, self.experiment_path, 'config.dill'), 'wb') as file:
             dill.dump(self.config_alias, file)
         with open(os.path.join(self.name, self.experiment_path, 'config.json'), 'w') as file:
-            json.dump(jsonify(self.config.config), file)
+            json.dump(jsonify(self.config_alias.alias().config), file)
 
     def init(self, index, config, executor=None):
         """ Create all instances of units to start experiment. """
@@ -687,6 +694,7 @@ class Experiment:
             self.id = config.pop_config('id').config()['id']
         else:
             self.id = generate_id(config, self.random)
+        self.pop_index_keys(config)
         self.config_alias = config
         self.config = config.config()
 
@@ -697,7 +705,9 @@ class Experiment:
             'name': 'executor',
             'monitor': None,
             'debug': False,
-            'profile': False
+            'profile': False,
+            'redirect_stdout': True,
+            'redirect_stderr': True
         }
         for attr in defaults:
             if self.research:
@@ -709,6 +719,11 @@ class Experiment:
         if self.dump_results:
             self.create_folder()
             self.dump_config()
+
+        self.stdout_file = create_output_stream(self.dump_results, self.redirect_stdout,
+                                                 'stdout.txt', self.full_path, common=False)
+        self.stderr_file = create_output_stream(self.dump_results, self.redirect_stderr,
+                                                 'stderr.txt', self.full_path, common=False)
 
         self.instances = OrderedDict()
 
@@ -729,6 +744,13 @@ class Experiment:
         else: # 0, False, None
             self._profiler = None
 
+    def pop_index_keys(self, config):
+        """ Remove auxilary keys used to create prefix. """
+        for key in config.keys():
+            if key[0] == '#':
+                config.pop_config(key)
+        config.pop_config('_prefix')
+
     def create_logger(self):
         """ Create experiment logger. """
         name = f"{self.name}." if self.name else ""
@@ -741,38 +763,46 @@ class Experiment:
         """ Close experiment logger. """
         self.logger.removeHandler(self.logger.handlers[0])
 
+    def create_stream(self, name, *streams):
+        """ Create contextmanager to redirect stdout/stderr. """
+        streams = [stream for stream in streams if not isinstance(stream, contextlib.nullcontext)]
+        if len(streams) > 0:
+            if name == 'stdout':
+                return contextlib.redirect_stdout(MultiOut(*streams))
+            return contextlib.redirect_stderr(MultiOut(*streams)) # 'stderr'
+        return contextlib.nullcontext()
+
     def call(self, name, iteration, n_iters=None):
         """ Execute one iteration of the experiment. """
-        if self.is_alive or name.startswith('__'):
-            if self._profiler:
-                self._profiler.enable()
+        context_manager_out = self.create_stream('stdout', self.stdout_file, self.executor.common_stdout)
+        context_manager_err = self.create_stream('stderr', self.stderr_file, self.executor.common_stderr)
 
-            self.last = self.last or (iteration + 1 == n_iters)
-            self.iteration = iteration
+        with context_manager_out, context_manager_err:
+            if self.is_alive or name.startswith('__'):
+                if self._profiler:
+                    self._profiler.enable()
 
-            self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
-            exception = (StopIteration, KeyboardInterrupt) if self.debug else Exception
-            try:
-                self.outputs[name], unit_time = self.actions[name](iteration, n_iters, last=self.last)
-            except exception as e: #pylint:disable=broad-except
-                self.is_failed = True
-                self.last = True
-                if isinstance(e, StopIteration):
-                    self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
-                    if self.monitor:
-                        self.monitor.stop_iteration(name, self)
-                else:
-                    self.exception = e
-                    ex_traceback = e.__traceback__
-                    msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
-                    self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
-                    if self.monitor:
-                        self.monitor.fail_item_execution(name, self, msg)
-            else:
-                if self.monitor:
-                    self.monitor.execute_iteration(name, self)
-            if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
-                self.is_alive = False
+                self.last = self.last or (iteration + 1 == n_iters)
+                self.iteration = iteration
+
+                self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
+                exception = (StopIteration, KeyboardInterrupt) if self.debug else Exception
+                try:
+                    self.outputs[name], unit_time = self.actions[name](iteration, n_iters, last=self.last)
+                except exception as e: #pylint:disable=broad-except
+                    self.is_failed = True
+                    self.last = True
+                    if isinstance(e, StopIteration):
+                        self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
+                    else:
+                        self.exception = e
+                        ex_traceback = e.__traceback__
+                        msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
+                        self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
+                        if self.monitor:
+                            self.monitor.fail_item_execution(name, self, msg)
+                if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
+                    self.is_alive = False
 
         if self._profiler:
             self._profiler.disable(iteration, name, unit_time=unit_time, experiment=self.id)
@@ -811,6 +841,13 @@ class Experiment:
                 repr += spacing * 2 + f"kwargs={kwargs}\n" + spacing + ")\n"
 
         return repr
+
+    def close_files(self):
+        """ Close stdout/stderr files (if rederection was performed. """
+        if not isinstance(self.stdout_file, (contextlib.nullcontext, type(None))):
+            self.stdout_file.close()
+        if not isinstance(self.stderr_file, (contextlib.nullcontext, type(None))):
+            self.stderr_file.close()
 
     def __getstate__(self):
         return self.__dict__
@@ -879,6 +916,8 @@ class Executor:
 
         self.create_experiments()
         self.pid = None
+        self.common_stdout = None
+        self.common_stderr = None
 
     def create_experiments(self):
         """ Initialize experiments. """
@@ -893,27 +932,40 @@ class Executor:
 
     def run(self):
         """ Run experiments. """
-        self.pid = os.getpid() if self.research and self.research.parallel else None
+        redirect_stdout = self.experiments[0].redirect_stdout
+        redirect_stderr = self.experiments[0].redirect_stderr
+        dump_results = self.experiments[0].dump_results
+        path = self.experiments[0].name
 
-        iterations = range(self.n_iters) if self.n_iters else itertools.count()
-        for experiment in self.experiments:
-            if self.research:
-                self.research.monitor.start_experiment(experiment)
+        self.common_stdout = create_output_stream(dump_results, redirect_stdout, 'stdout.txt', path, common=True)
+        self.common_stderr = create_output_stream(dump_results, redirect_stderr, 'stderr.txt', path, common=True)
 
-        for iteration in iterations:
-            for unit_name, unit in self.experiment_template.actions.items():
-                if unit.root or len(self.experiments) == 1:
-                    self.call_root(iteration, unit_name)
-                else:
-                    self.parallel_call(iteration, unit_name, target=self.target, debug=self.debug) #pylint:disable=unexpected-keyword-arg
-            if not any([experiment.is_alive for experiment in self.experiments]):
-                break
+        with self.common_stdout, self.common_stderr:
+            self.pid = os.getpid() if self.research and self.research.parallel else None
 
-        for index, experiment in enumerate(self.experiments):
-            if self.research:
-                self.research.monitor.stop_experiment(experiment)
-            experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
-            experiment.close_logger()
+            iterations = range(self.n_iters) if self.n_iters else itertools.count()
+            for experiment in self.experiments:
+                if self.research:
+                    self.research.monitor.start_experiment(experiment)
+
+            for iteration in iterations:
+                for unit_name, unit in self.experiment_template.actions.items():
+                    if unit.root or len(self.experiments) == 1:
+                        self.call_root(iteration, unit_name)
+                    else:
+                        self.parallel_call(iteration, unit_name, target=self.target, debug=self.debug) #pylint:disable=unexpected-keyword-arg
+                if not any([experiment.is_alive for experiment in self.experiments]):
+                    break
+                if self.research:
+                    for experiment in self.experiments:
+                        if experiment.is_alive:
+                            self.research.monitor.execute_iteration(experiment)
+            for index, experiment in enumerate(self.experiments):
+                if self.research:
+                    self.research.monitor.stop_experiment(experiment)
+                experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
+                experiment.close_logger()
+                experiment.close_files()
         self.send_results()
         self.dump_profile_info()
 

@@ -1,8 +1,10 @@
 """ Tests for Research and correspong classes. """
 # pylint: disable=no-name-in-module, missing-docstring, redefined-outer-name
 import os
+import sys
 from contextlib import ExitStack as does_not_raise
 import pytest
+import psutil
 
 import numpy as np
 
@@ -327,24 +329,22 @@ class TestExecutor:
         executor = Executor(experiment, target='f', configs=[{'n': 10}, {'n': 20}], n_iters=None)
         executor.run()
 
-    @pytest.mark.parametrize('save_to, save_output_dict', [
-        ['a', False],
-        [['a'], False],
-        [['a', 'b'], False],
-        [['a', 'b', 'c'], False],
-        [None, True]
+    @pytest.mark.parametrize('save_to, save_output_dict, expectation', [
+        ['a', False, does_not_raise()],
+        [['a'], False, pytest.raises(ValueError)],
+        [['a', 'b'], False, pytest.raises(ValueError)],
+        [['a', 'b', 'c'], False, does_not_raise()],
+        [None, True, does_not_raise()]
     ])
-    def test_multiple_output(self, save_to, save_output_dict):
+    def test_multiple_output(self, save_to, save_output_dict, expectation):
         def func():
             return {'a': 1, 'b': 2, 'c': 3}
 
-        research = Research().add_callable(func, save_to=save_to, save_output_dict=save_output_dict)
-        research.run(dump_results=False)
+        experiment = Experiment().add_callable(func, save_to=save_to, save_output_dict=save_output_dict)
+        executor = Executor(experiment, target='f', n_iters=1, debug=True)
 
-        if isinstance(save_to, list) and len(save_to) != 3:
-            assert len(research.monitor.exceptions) != 0
-        else:
-            assert len(research.monitor.exceptions) == 0
+        with expectation:
+            executor.run()
 
 class TestResearch:
     @pytest.mark.parametrize('parallel', [False, True])
@@ -370,7 +370,8 @@ class TestResearch:
         assert len(research.monitor.exceptions) == 0
         assert len(research.results.df) == 10
 
-    def test_domain_update(self):
+    @pytest.mark.parametrize('create_id_prefix', [False, True])
+    def test_domain_update(self, create_id_prefix):
         def update():
             return Option('x', [4, 5, 6])
 
@@ -379,7 +380,7 @@ class TestResearch:
             .save(O('func'), 'sum')
             .update_domain(update, when=['%5', '%8'], n_reps=2)
         )
-        research.run(n_iters=1, dump_results=False, bar=False)
+        research.run(n_iters=1, dump_results=False, bar=False, create_id_prefix=create_id_prefix)
 
         assert len(research.monitor.exceptions) == 0
         assert len(research.results.df) == 15
@@ -447,7 +448,37 @@ class TestResearch:
 
         results = research.results.df.dtypes.values
 
-        assert all(results == [np.dtype(i) for i in ['O', 'O', 'O', 'int64', 'float64', 'float64']])
+        # columns : id,  layout, units, iteration, loss, accuracy
+        assert all(results == [np.dtype(i) for i in ['O', 'O', 'O', 'int64', 'float32', 'float64']])
+
+        process = psutil.Process(os.getpid())
+        assert len(process.children()) <= 1
+
+    @pytest.mark.parametrize('create_id_prefix', [False, True, 4])
+    @pytest.mark.parametrize('domain', [
+        Domain(x=[1, 2], y=[2, 3, 4]),
+        Domain(x=[1, 2]) @ Domain(y=[2, 3]),
+        None
+    ])
+    def test_prefixes(self, tmp_path, create_id_prefix, domain):
+        research = (
+            Research(name=os.path.join(tmp_path, 'research'), domain=domain)
+            .add_callable(lambda: 1, save_to='a')
+        )
+        research.run(dump_results=True, n_iters=1, create_id_prefix=create_id_prefix)
+
+        if create_id_prefix is False:
+            # id includes only hash
+            assert research.results.df.id.apply(lambda x: len(x.split('_')) == 1).all()
+        else:
+            # id includes prefix for each parameter, repetition index and hash
+            n_params = 2 if domain is not None else 0
+            assert research.results.df.id.apply(lambda x: len(x.split('_')) == n_params + 2).all()
+            parsed_id = research.results.df.id.apply(lambda x: x.split('_'))
+
+            # check the number of digits for each prefix code
+            assert parsed_id.apply(lambda x: all([len(i) == create_id_prefix for i in x[:-1]])).all()
+
 
     def test_remove(self, simple_research):
         simple_research.run(n_iters=1)
@@ -486,6 +517,38 @@ class TestResearch:
 
         assert research.results.df.iloc[0].a == f(2)
         assert research.results.df.iloc[0].b == f(3)
+
+    @pytest.mark.parametrize('redirect_stdout', [0, 1, 2, 3])
+    @pytest.mark.parametrize('redirect_stderr', [0, 1, 2, 3])
+    def test_redirect_stdout(self, redirect_stdout, redirect_stderr, tmp_path):
+        def f(a):
+            print(a)
+            print(a, file=sys.stderr)
+
+        research = (Research()
+            .add_callable(f, a=2)
+        )
+
+        research.run(name=os.path.join(tmp_path, 'research'), n_iters=2,
+                     redirect_stdout=redirect_stdout, redirect_stderr=redirect_stderr)
+
+        for param, filename in zip([redirect_stdout, redirect_stderr], ['stdout.txt', 'stderr.txt']):
+            n_files = len(research.results.artifacts_to_df(name=filename))
+            assert (filename in os.listdir(research.name)) is (param in [1, 3])
+            assert (n_files == len(research.results.configs)) is (param in [2, 3])
+
+            output = '2\n' + '-' * 30 + '\n\n\n' + '-'*30 + '\n'
+
+            if param in [1, 3]:
+                with open(os.path.join(research.name, filename)) as file:
+                    lines = ''.join(file.readlines())
+                    assert lines == output * 2
+
+            if param in [2, 3]:
+                for full_path in research.results.artifacts_to_df(name=filename)['full_path']:
+                    with open(full_path) as file:
+                        lines = ''.join(file.readlines())
+                        assert lines == output * 2
 
 
 class TestResults:
@@ -535,4 +598,4 @@ class TestResults:
         assert len(df) == 1
 
 # #TODO: logging tests, test that exceptions in one branch don't affect other bracnhes,
-# #      divices splitting, ...
+# #      devices splitting, ...

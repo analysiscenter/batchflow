@@ -3,8 +3,7 @@
 
 import os
 import sys
-import datetime
-import csv
+import time
 import itertools
 import subprocess
 import re
@@ -55,6 +54,9 @@ class Research:
         self.n_configs = n_configs
         self.n_reps = n_reps
         self.repeat_each = repeat_each
+        self.create_id_prefix = False
+        self.redirect_stdout = True
+        self.redirect_stderr = True
 
         self._env = dict() # current state of git repo and other environment information.
 
@@ -85,6 +87,7 @@ class Research:
         self.gpu_check_delay = 5
         self.dump_monitor = True
 
+        self._is_loaded = False
         self._is_executed = False
         self._env_meta_to_collect = []
 
@@ -178,7 +181,7 @@ class Research:
             path to repo, by default '.'
         """
         commands = {
-            'commit': "git log --name-status HEAD^..HEAD",
+            'commit': "git log -1",
             'diff': 'git diff',
             'status': 'git status -uno',
         }
@@ -275,8 +278,9 @@ class Research:
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
-            debug=False, finalize=True, git_meta=False, env_meta=False, seed=None, profile=False, dump_monitor=False,
-            memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5):
+            debug=False, finalize=True, git_meta=False, env_meta=False, seed=None, profile=False,
+            memory_ratio=None, n_gpu_checks=3, gpu_check_delay=5, create_id_prefix=False,
+            redirect_stdout=True, redirect_stderr=True):
         """ Run research.
 
         Parameters
@@ -329,6 +333,16 @@ class Research:
             the number of such checks
         gpu_check_delay : float, optional
             time in seconds between checks.
+        create_id_prefix : bool or int, optional
+            add prefix to experiment id to allow to sort them by the order of parameters in domain. If int,
+            the number of digits for the parameter code formatting.
+        redirect_stdout, redirect_stderr : int or bool, optional
+            how to redirect stdout/stderr to files:
+                0 or False - no redirection,
+                1 or True - redirect to common research file "stdout.txt"/"stderr.txt"
+                2 - redirect output streams of experiments into separate file in experiments folders
+                3 - redirect to common file and to separate experiments files
+            Is applicable only with `dump_results=True`.
 
         Returns
         -------
@@ -340,7 +354,6 @@ class Research:
         If `update_domain` callable is defined, domain will be updated with the corresponding function
         accordingly to `when` parameter of :meth:`~.Research.update_domain`.
         """
-
         self.name = name or self.name
 
         self.workers = workers
@@ -358,8 +371,9 @@ class Research:
         self.memory_ratio = memory_ratio
         self.n_gpu_checks = n_gpu_checks
         self.gpu_check_delay = gpu_check_delay
-
-        self.dump_monitor = dump_monitor
+        self.create_id_prefix = create_id_prefix
+        self.redirect_stdout = redirect_stdout
+        self.redirect_stderr = redirect_stderr
 
         if debug and (parallel or executor_target not in ['f', 'for']):
             raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")
@@ -376,7 +390,8 @@ class Research:
         if dump_results and os.path.exists(self.name):
             raise ValueError(f"Research with name '{self.name}' already exists")
 
-        self.domain.set_iter_params(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each)
+        self.domain.set_iter_params(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each,
+                                    create_id_prefix=self.create_id_prefix, seed=self.random_seed)
 
         if self.domain.size is None and (self.domain.update_func is None or self.domain.update_each == 'last'):
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
@@ -411,10 +426,10 @@ class Research:
         self.profiler = ResearchProfiler(self.name, self.profile)
 
         def _start_distributor():
-            self.monitor.start(self.dump_results and self.dump_monitor)
             self.distributor.run()
             self.monitor.stop()
 
+        self.monitor.start()
         if self.parallel:
             try:
                 self.process = mp.Process(target=_start_distributor)
@@ -423,32 +438,49 @@ class Research:
                 self.monitor.detach(self.process)
                 if not detach:
                     self.process.join()
+                    self.terminate()
             except KeyboardInterrupt as e:
                 self.logger.info("Research has been stopped by KeyboardInterrupt.")
-                self.terminate()
+                self.terminate(force=True, wait=False)
                 raise e
         else:
             if detach:
                 warnings.warn("detach can't be enabled when parallel=False")
             _start_distributor()
+            self.terminate()
         return self
 
-    def terminate(self, kill_processes=False):
+    def terminate(self, kill_processes=False, force=False, wait=True):
         """ Kill all research processes. """
         # TODO: killed processes don't release GPU.
-        self.logger.info("Stop research.")
-        if kill_processes and self.monitor is not None:
-            self.logger.info("Terminate research processes")
-            order = {'EXECUTOR': 0, 'WORKER': 1, 'DETACHED_PROCESS': 2}
-            processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
-            for pid, process_type in processes_to_kill:
-                if pid is not None and psutil.pid_exists(pid):
-                    process = psutil.Process(pid)
-                    process.terminate()
-                    self.logger.info(f"Terminate {process_type} [pid:{pid}]")
+        if not self._is_loaded:
+            if not force and self.monitor.in_progress:
+                answer = input(f'{self.name} is in progress. Are you sure? [y/n]').lower()
+                answer = len(answer) > 0 and 'yes'.startswith(answer)
+            else:
+                answer = True
+            if force or answer:
+                self.logger.info("Stop research.")
+                if self.monitor is not None:
+                    self.monitor.stop(wait=wait)
 
-        if self.monitor is not None:
-            self.monitor.stop(wait=False)
+                self.monitor.close_manager()
+                self.results.close_manager()
+                self.profiler.close_manager()
+
+                if self.detach:
+                    kill_processes = True
+
+                if kill_processes and self.monitor is not None:
+                    self.logger.info("Terminate research processes")
+
+                    order = {'EXECUTOR': 1, 'WORKER': 2, 'DETACHED_PROCESS': 3, 'MONITOR': 4}
+                    processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
+                    for pid, process_type in processes_to_kill:
+                        if pid is not None and psutil.pid_exists(pid):
+                            process = psutil.Process(pid)
+                            process.terminate()
+                            self.logger.info(f"Terminate {process_type} [pid:{pid}]")
 
     def create_logger(self):
         """ Create research logger. """
@@ -479,6 +511,7 @@ class Research:
             research.profiler = ResearchProfiler(research.name, research.profile)
             research.results.load()
             research.profiler.load()
+            research._is_loaded = True # pylint: disable=protected-access
         return research
 
     @classmethod
@@ -539,7 +572,7 @@ class Research:
         return repr
 
     def __del__(self):
-        self.terminate()
+        self.terminate(force=True)
 
 class ResearchMonitor:
     #pylint:disable=attribute-defined-outside-init
@@ -557,15 +590,16 @@ class ResearchMonitor:
     COLUMNS = ['time', 'task_idx', 'id', 'it', 'name', 'status', 'exception', 'worker', 'pid', 'worker_pid',
                'process_pid', 'finished', 'withdrawn', 'remains']
     SHARED_VARIABLES = ['finished_experiments', 'finished_iterations', 'remained_experiments',
-                        'generated_experiments']
+                        'generated_experiments', 'stopped']
 
     def __init__(self, research, path=None, bar=True):
         self.queue = mp.JoinableQueue()
         self.stop_signal = mp.JoinableQueue()
-        self.exceptions = mp.Manager().list()
-        self.shared_values = mp.Manager().dict()
-        self.current_iterations = mp.Manager().dict()
-        self.processes = mp.Manager().dict()
+        self._manager = mp.Manager()
+        self.exceptions = self._manager.list()
+        self.shared_values = self._manager.dict()
+        self.current_iterations = self._manager.dict()
+        self.processes = self._manager.dict()
 
         self.research = research
         self.path = path
@@ -599,6 +633,13 @@ class ResearchMonitor:
         return self.finished_experiments + self.in_queue + self.remained_experiments
 
     @property
+    def n(self):
+        """ Current iteration. """
+        if self.n_iters:
+            return self.finished_iterations + sum(self.current_iterations.values())
+        return self.finished_experiments + len(self.current_iterations)
+
+    @property
     def in_progress(self):
         """ The number of experiments in progress. """
         return len(self.current_iterations)
@@ -608,103 +649,63 @@ class ResearchMonitor:
         """ The number of experiments in queue of tasks. """
         return self.generated_experiments - self.finished_experiments
 
-    def send(self, status, experiment=None, worker=None, **kwargs):
-        """ Send signal to monitor. """
-        signal = {
-            'time': str(datetime.datetime.now()),
-            'status': status,
-            **kwargs
-        }
-        if experiment is not None:
-            signal = {**signal, **{
-                'id': experiment.id,
-                'pid': experiment.executor.pid,
-            }}
-        if worker is not None:
-            signal = {**signal, **{
-                'worker': worker.index,
-                'worker_pid': worker.pid,
-            }}
-        self.queue.put(signal)
-        if 'exception' in signal:
-            self.exceptions.append(signal)
-
     def detach(self, process):
-        self.send('DETACH_PROCESS', process_pid=process.pid)
+        self.processes[process.pid] = 'DETACHED_PROCESS'
 
     def start_worker(self, worker):
-        self.send('START_WORKER', worker=worker)
+        self.processes[worker.pid] = 'WORKER'
 
     def start_experiment(self, experiment):
         """" Signal when experiment starts. """
-        self.send('START_EXP', experiment, experiment.executor.worker)
+        self.processes[experiment.executor.pid] = 'EXECUTOR'
+        self.current_iterations[experiment.id] = 0
+
+    def tasks_info(self, generated, remains):
+        self.generated_experiments = generated
+        self.remained_experiments = remains
 
     def stop_experiment(self, experiment):
         """" Signal when experiment stops. """
-        self.send('FINISH_EXP', experiment, experiment.executor.worker, it=experiment.iteration)
+        self.current_iterations.pop(experiment.id)
+        self.finished_iterations += experiment.iteration + 1
+        self.finished_experiments += 1
 
-    def execute_iteration(self, name, experiment):
+    def execute_iteration(self, experiment):
         """" Signal for iteration execution. """
-        self.send('EXECUTE_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration)
+        self.current_iterations[experiment.id] = experiment.iteration
 
     def fail_item_execution(self, name, experiment, msg):
         """" Signal for iteration execution fail. """
-        self.send('FAIL_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration, exception=msg)
-
-    def stop_iteration(self, name, experiment):
-        """" Signal for StopIteration exception. """
-        self.send('STOP_IT', experiment, experiment.executor.worker, name=name, it=experiment.iteration)
+        self.exceptions.append({
+            'id': experiment.id,
+            'pid': experiment.executor.pid,
+            'name': name,
+            'it': experiment.iteration,
+            'exception': msg
+        })
 
     def handler(self):
         """ Signals handler. """
-        signal = self.queue.get()
         with self.bar as progress:
-            while signal is not None:
-                status = signal.get('status')
-                if status == 'START_WORKER':
-                    self.processes[signal['worker_pid']] = 'WORKER'
-                elif status == 'DETACH_PROCESS':
-                    self.processes[signal['process_pid']] = 'DETACHED_PROCESS'
-                elif status == 'TASKS':
-                    self.remained_experiments = signal['remains']
-                    self.generated_experiments = signal['generated']
-                elif status == 'START_EXP':
-                    self.processes[signal['pid']] = 'EXECUTOR'
-                    self.current_iterations[signal['id']] = 0
-                elif status == 'EXECUTE_IT':
-                    self.current_iterations[signal['id']] = signal['it']
-                elif status == 'FINISH_EXP':
-                    self.current_iterations.pop(signal['id'])
-                    self.finished_iterations += signal['it'] + 1
-                    self.finished_experiments += 1
-
-                if status in ['START_EXP', 'EXECUTE_IT', 'FINISH_EXP']:
-                    if self.n_iters:
-                        progress.n = self.finished_iterations + sum(self.current_iterations.values())
-                    else:
-                        progress.n = self.finished_experiments + len(self.current_iterations)
+            last_update = False
+            while True:
+                if (progress.n != self.n) or (progress.total != self.total):
+                    progress.n = self.n
                     progress.total = self.total
                     progress.refresh()
-
-                if self.dump:
-                    with open(os.path.join(self.path, 'monitor.csv'), 'a') as f:
-                        writer = csv.writer(f)
-                        writer.writerow([str(signal.get(column, '')) for column in self.COLUMNS])
-                signal = self.queue.get()
+                if last_update:
+                    break
+                time.sleep(0.01)
+                if not self.queue.empty():
+                    last_update = True
         self.stop_signal.put(None)
 
-    def start(self, dump):
+    def start(self):
         """ Start handler. """
         if self.stopped:
-            self.dump = dump
-            if self.dump:
-                filename = os.path.join(self.path, 'monitor.csv')
-                if not os.path.exists(filename):
-                    with open(filename, 'w') as f:
-                        writer = csv.writer(f)
-                        writer.writerow(self.COLUMNS)
             self.process = mp.Process(target=self.handler)
             self.process.start()
+            self.processes[self.process.pid] = 'MONITOR'
             self.stopped = False
 
     def stop(self, wait=True):
@@ -715,3 +716,11 @@ class ResearchMonitor:
                 self.stop_signal.get()
             self.stopped = True
         tqdm.tqdm._instances.clear() #pylint:disable=protected-access
+
+    def close_manager(self):
+        """ Close manager. """
+        self.exceptions = list(self.exceptions)
+        self.shared_values = dict(self.shared_values)
+        self.current_iterations = dict(self.current_iterations)
+        self.processes = dict(self.processes)
+        self._manager.shutdown()

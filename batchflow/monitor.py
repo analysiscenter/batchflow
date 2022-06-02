@@ -48,6 +48,8 @@ class ResourceMonitor:
         self.pid = os.getpid()
         self.running = False
 
+        self.manager = None
+
         self.stop_queue = None
         self.shared_list = None
         self.process = None
@@ -71,8 +73,8 @@ class ResourceMonitor:
     def start(self):
         """ Start a separate process with function calls every `frequency` seconds. """
         self.running = True
-        manager = Manager()
-        self.shared_list = manager.list()
+        self.manager = Manager()
+        self.shared_list = self.manager.list()
         self.stop_queue = Queue()
 
         self.start_time = time.time()
@@ -109,6 +111,7 @@ class ResourceMonitor:
             self.stop_queue.put(True)
             self.process.join()
             self.running = False
+            self.manager.shutdown()
 
     def __enter__(self):
         self.start()

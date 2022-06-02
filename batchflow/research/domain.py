@@ -130,6 +130,15 @@ class ConfigAlias:
             return ConfigAlias(res)
         return None
 
+    def set_prefix(self, keys, n_digits):
+        """ Create prefix from keys. """
+        prefix = ''
+        for key in keys:
+            prefix += self.alias().get('#' + key, 'null') + '_'
+        fmt = ("{:0" + str(n_digits) + "d}").format(self.config()['repetition'])
+        self['_prefix'] = prefix + fmt + '_'
+        return self
+
     def __getitem__(self, key):
         """ Returns true value (not alias). """
         return self.config()[key]
@@ -243,7 +252,19 @@ class Domain:
         self.repeat_each = None
         self.n_updates = 0
         self.additional = True
+        self.create_id_prefix = False
         self.random_state = None
+
+        self.values_indices = dict()
+
+    def _get_all_options_names(self):
+        options = []
+        for cube in self.cubes:
+            for option in cube:
+                alias = option[0].alias
+                if alias not in options and alias != 'repetition':
+                    options.append(alias)
+        return options
 
     def create_aliases(self, options):
         """ Create aliases by wrapping into Alias class for each key and value of the dict. """
@@ -259,7 +280,8 @@ class Domain:
             aliases_options += [(parameter, values)]
         return aliases_options
 
-    def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=0, additional=True, seed=None):
+    def set_iter_params(self, n_items=None, n_reps=1, repeat_each=None, produced=0, additional=True,
+                        create_id_prefix=False, seed=None):
         """ Set parameters for iterator.
 
         Parameters
@@ -294,6 +316,7 @@ class Domain:
             self.repeat_each = repeat_each or 100
         self.n_produced = produced
         self.additional = additional
+        self.create_id_prefix = create_id_prefix
         self.random_state = make_rng(seed)
         self.reset_iter()
 
@@ -319,8 +342,9 @@ class Domain:
                 domain = update['function'](**kwargs)
                 domain.updates = self.updates
                 domain.n_updates = self.n_updates + 1
-                domain.set_iter_params(produced=generated, additional=self.additional,
-                                       seed=self.random_state, **update['iter_kwargs'])
+                domain.values_indices = self.values_indices
+                domain.set_iter_params(produced=generated, additional=self.additional, seed=self.random_state,
+                                       create_id_prefix=self.create_id_prefix, **update['iter_kwargs'])
                 return domain
         return None
 
@@ -406,7 +430,7 @@ class Domain:
             result = other
         elif other.cubes is None:
             result = self
-        elif isinstance(other, Domain):
+        else: # Domain
             result = Domain()
             result.cubes = self.cubes + other.cubes
             result.weights = np.concatenate((self.weights, other.weights))
@@ -434,6 +458,7 @@ class Domain:
     def create_iter(self):
         """ Create iterator. """
         blocks = self._get_sampling_blocks()
+        keys = self._get_all_options_names()
 
         def _iterator():
             while True:
@@ -459,7 +484,10 @@ class Domain:
                 else:
                     additional = ConfigAlias()
                 while self.n_items is None or i < self.n_items:
-                    yield next(iterator) + additional # pylint: disable=stop-iteration-return
+                    res = next(iterator) + additional # pylint: disable=stop-iteration-return
+                    if self.create_id_prefix:
+                        res.set_prefix(keys, n_digits=int(self.create_id_prefix))
+                    yield res
                     i += 1
             else:
                 i = 0
@@ -471,7 +499,10 @@ class Domain:
                         else:
                             additional = ConfigAlias()
                         for sample in samples:
-                            yield sample + additional
+                            res = sample + additional
+                            if self.create_id_prefix:
+                                res.set_prefix(keys, n_digits=int(self.create_id_prefix))
+                            yield res
                     i += self.repeat_each
         self._iterator = _iterator_with_repetitions()
 
@@ -487,7 +518,7 @@ class Domain:
         """ Get domain iterator. """
         if self._iterator is None:
             self.set_iter_params(self.n_items, self.n_reps, self.repeat_each, self.n_produced,
-                                 self.additional, self.random_state)
+                                 self.additional, self.create_id_prefix, self.random_state)
             self.create_iter()
         return self._iterator
 
@@ -556,7 +587,19 @@ class Domain:
         """
         if not isinstance(values, (list, tuple, np.ndarray)):
             raise TypeError('`values` must be array-like object but {} were given'.format(type(values)))
-        return [ConfigAlias([[name, value]]) for value in values]
+        res = []
+        for value in values:
+            if self.create_id_prefix:
+                n_digits = self.create_id_prefix if self.create_id_prefix is not True else 1
+                option_values = self.values_indices.get(name.alias, dict())
+                current_index = option_values.get(value.alias, len(option_values))
+                option_values[value.alias] = current_index
+                self.values_indices[name.alias] = option_values
+                fmt = ("{:0" + str(n_digits) + "d}").format(current_index)
+                res.append(ConfigAlias([[name, value], ["#" + name.alias, fmt]]))
+            else:
+                res.append(ConfigAlias([[name, value]]))
+        return res
 
     def option_sample(self, name, values, size=None):
         """ Return `ConfigAlias` objects created on the base of Sampler-option.
@@ -573,7 +616,16 @@ class Domain:
 
         if not isinstance(values, Sampler):
             raise TypeError('`values` must be Sampler but {} was given'.format(type(values)))
-        res = [ConfigAlias([[name, values.sample(1)[0, 0]]]) for _ in range(size or 1)]
+        res = []
+        for _ in range(size or 1):
+            if self.create_id_prefix:
+                n_digits = self.create_id_prefix if self.create_id_prefix is not True else 1
+                current_index = self.values_indices.get(name.alias, -1) + 1
+                self.values_indices[name.alias] = current_index
+                fmt = ("{:0" + str(n_digits) + "d}").format(current_index)
+                res.append(ConfigAlias([[name, values.sample(1)[0, 0]], ["#" + name.alias, fmt]]))
+            else:
+                res.append(ConfigAlias([[name, values.sample(1)[0, 0]]]))
         if size is None:
             res = res[0]
         return res

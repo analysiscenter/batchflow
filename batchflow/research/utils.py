@@ -6,6 +6,7 @@ import logging
 import hashlib
 import itertools
 import json
+import contextlib
 from collections import OrderedDict
 from copy import deepcopy
 import dill
@@ -14,6 +15,22 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+
+class MultiOut:
+    """ Wrapper for several outputs streams. """
+    def __init__(self, *args):
+        self.handlers = args
+
+    def write(self, s):
+        for f in self.handlers:
+            f.write(s + '\n' + '-' * 30 + '\n')
+
+    def flush(self):
+        for f in self.handlers:
+            f.flush()
+
+    def __getattr__(self, attr):
+        return getattr(self.handlers[0], attr)
 
 def to_list(value):
     return value if isinstance(value, list) else [value]
@@ -167,11 +184,25 @@ def parse_name(name):
         raise ValueError(f'name must be "namespace_name.unit_name" but {name} were given')
     return name_components
 
-def generate_id(config, random):
+def generate_id(config, random, create_prefix=False):
     """ Generate id for experiment. """
-    name = hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8]
+    name = config.alias()['_prefix'] if create_prefix else ''
+    name += hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8]
     name += ''.join(str(i) for i in random.integers(10, size=8))
     return name
+
+def create_output_stream(dump_results, redirect, filename, path, common=True):
+    """ Create stream to redirect stdout/stderr. """
+    if bool(redirect):
+        values = [1, 3] if common else [2, 3]
+        if dump_results and redirect in values:
+            filename = os.path.join(path, filename)
+            file = open(filename, 'a')
+        else:
+            file = open(os.devnull, 'w')
+    else:
+        file = contextlib.nullcontext()
+    return file
 
 def plot_results_by_config(results, variables, figsize=None, layout=None, **kwargs):
     """

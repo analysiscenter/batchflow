@@ -23,8 +23,9 @@ class ResearchResults:
     def __init__(self, name, dump_results=True, **kwargs):
         self.name = name
         self.dump_results = dump_results
-        self.results = mp.Manager().dict()
-        self.configs = mp.Manager().dict()
+        self._manager = mp.Manager()
+        self.results = self._manager.dict()
+        self.configs = self._manager.dict()
         self.artifacts = dict()
 
         self.kwargs = kwargs
@@ -40,6 +41,9 @@ class ResearchResults:
             self.load_configs()
             self.load_results(**kwargs)
             self.load_artifacts(**kwargs)
+        self.results = dict(self.results)
+        self.configs = dict(self.configs)
+        self.close_manager()
 
     def load_configs(self):
         """ Load all experiment configs. """
@@ -322,11 +326,13 @@ class ResearchResults:
             for experiment_id in self.artifacts:
                 artifacts = self.artifacts[experiment_id]
                 df += [pd.DataFrame({'id': [experiment_id], **artifact}) for artifact in artifacts]
-            df = pd.concat(df)
-            if include_config:
-                df = pd.merge(self.configs_to_df(use_alias, concat_config, remove_auxilary, drop_columns),
-                              df, how='inner', on='id')
-            return df
+            if len(df) > 0:
+                df = pd.concat(df)
+                if include_config:
+                    df = pd.merge(self.configs_to_df(use_alias, concat_config, remove_auxilary, drop_columns),
+                                df, how='inner', on='id')
+                return df
+            return pd.DataFrame({})
         raise ValueError("Research without dump can't have artifacts.")
 
     def filter_ids_by_configs(self, config=None, alias=None, domain=None, **kwargs):
@@ -378,3 +384,9 @@ class ResearchResults:
                 if all(item in _config.items() for item in alias.items()):
                     filtered_ids += [experiment_id]
         return filtered_ids
+
+    def close_manager(self):
+        """ Close manager. """
+        self.results = dict(self.results)
+        self.configs = dict(self.configs)
+        self._manager.shutdown()

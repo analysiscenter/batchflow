@@ -104,7 +104,8 @@ class ResearchProfiler(ExperimentProfiler):
     def __init__(self, research_name, detailed=True):
         self.research_name = research_name
         self.detailed = detailed
-        self.experiments_info = mp.Manager().dict()
+        self._manager = mp.Manager()
+        self.experiments_info = self._manager.dict()
 
     def put(self, experiment, df):
         self.experiments_info[experiment] = df
@@ -119,3 +120,8 @@ class ResearchProfiler(ExperimentProfiler):
         for path in glob.glob(paths):
             experiment = os.path.basename(os.path.dirname(path))
             self.experiments_info[experiment] = pd.read_feather(path).set_index(['unit', 'id'])
+
+    def close_manager(self):
+        """ Close manager. """
+        self.experiments_info = dict(self.experiments_info)
+        self._manager.shutdown()
