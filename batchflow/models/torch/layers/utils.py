@@ -1,8 +1,7 @@
 """ Utils for individual layers. """
 from math import floor, ceil
-import numpy as np
 
-from ..utils import to_n_tuple, get_shape, get_num_dims
+from ..utils import to_n_tuple
 
 
 def compute_padding(padding, shape, kernel_size, dilation, stride, transposed=False):
@@ -18,6 +17,8 @@ def compute_padding(padding, shape, kernel_size, dilation, stride, transposed=Fa
     Under the hood, iterates over possible values of `padding` and `output_padding` parameters,
     until condition (difference between desired size and computed output size) is met.
     """
+    if padding == 'valid':
+        return {'padding': 0}
     if padding != 'same':
         return {'padding': padding}
 
@@ -52,6 +53,7 @@ def _compute_same_padding(size, kernel_size, dilation, stride):
         size_difference = desired_size - floor(underestimated_size + 2 * padding / stride)
         if size_difference == 0:
             return padding
+    raise ValueError('Never raised')
 
 def _compute_same_padding_transposed(kernel_size, dilation, stride):
     # Pre-compute some variables
@@ -62,3 +64,4 @@ def _compute_same_padding_transposed(kernel_size, dilation, stride):
         two_padding = kernel_residual + output_padding
         if two_padding % 2 == 0:
             return two_padding // 2, output_padding
+    raise ValueError('Never raised')
