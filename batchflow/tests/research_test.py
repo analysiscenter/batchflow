@@ -20,7 +20,7 @@ class Model:
         self.dataset = CIFAR10()
         self.model_config = {
             'head/layout': C('layout'),
-            'head/units': C('units'),
+            'head/features': C('features'),
             'classes': 10,
             'loss': 'ce',
             'device': 'cpu',
@@ -79,7 +79,7 @@ def simple_research(tmp_path):
 
 @pytest.fixture
 def research_with_controller(tmp_path):
-    domain = Domain({'layout': ['f', 'faf']}) @ Domain({'units': [[10], [100, 10]]})
+    domain = Domain({'layout': ['f', 'faf']}) @ Domain({'features': [[10], [100, 10]]})
     research = (Research(name=os.path.join(tmp_path, 'research'), domain=domain, n_reps=2)
         .add_instance('controller', Model)
         .add_pipeline('controller.train_ppl')
@@ -419,7 +419,7 @@ class TestResearch:
         dataset = CIFAR10()
         model_config = {
             'head/layout': C('layout'),
-            'head/units': C('units'),
+            'head/features': C('features'),
             'loss': 'ce',
             'classes': 10,
             'device': 'cpu',
@@ -450,7 +450,7 @@ class TestResearch:
         def eval_metrics(ppl, metrics, **kwargs):
             return ppl.v('metrics').evaluate(metrics, **kwargs)
 
-        domain = Domain({'layout': ['f', 'faf']}) @ Domain({'units': [[10], [100, 10]]})
+        domain = Domain({'layout': ['f', 'faf']}) @ Domain({'features': [[10], [100, 10]]})
 
         args = (root_ppl, branch_ppl) if branches else (root_ppl+branch_ppl, )
 
