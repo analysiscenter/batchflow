@@ -9,7 +9,10 @@ from matplotlib.colors import ColorConverter, ListedColormap
 from matplotlib.patches import Rectangle
 from matplotlib.legend_handler import HandlerBase
 
-from ..decorators import njit
+try:
+    from numba import njit
+except ImportError:
+    from ..decorators import njit
 
 class CycledList(list):
     """ List that repeats itself from desired position (default is 0).
@@ -173,7 +176,7 @@ def evaluate_str_comparison(arg0, string):
     raise ValueError(msg)
 
 
-@njit
+@njit()
 def is_binary(array):
     """ Fast check that array consists of 0 and 1 only. """
     for item in array:
