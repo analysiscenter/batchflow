@@ -952,15 +952,17 @@ class Plot:
                     height += xlabel_height
 
                 yticks_objects = ax.get_yticklabels()
-                first_ytick_bbox = self.get_bbox(yticks_objects[0]) # first lower xticklabel bbox
-                lower_yticks_width = max(0, ax_bbox.x0 - first_ytick_bbox.x0)
-                width += lower_yticks_width
+                if len(yticks_objects) > 0:
+                    first_ytick_bbox = self.get_bbox(yticks_objects[0]) # first lower xticklabel bbox
+                    lower_yticks_width = max(0, ax_bbox.x0 - first_ytick_bbox.x0)
+                    width += lower_yticks_width
 
-                last_ytick_bbox = self.get_bbox(yticks_objects[-1])
-                # if last yticklabel bbox is righter that the first, there are labels to the right of the subplot
-                if first_ytick_bbox.x0 != last_ytick_bbox.x0:
-                    right_yticks_width = max(0, last_ytick_bbox.x1 - ax_bbox.x1)
-                    width += right_yticks_width
+                if len(yticks_objects) > 1:
+                    last_ytick_bbox = self.get_bbox(yticks_objects[-1])
+                    # if last yticklabel bbox is righter that the first, there are labels to the right of the subplot
+                    if first_ytick_bbox.x0 != last_ytick_bbox.x0:
+                        right_yticks_width = max(0, last_ytick_bbox.x1 - ax_bbox.x1)
+                        width += right_yticks_width
 
                 if 'ylabel' in annotations:
                     ylabel_obj = annotations['ylabel']
