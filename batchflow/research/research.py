@@ -12,7 +12,7 @@ from .domain import Domain
 from .distributor import Distributor, DynamicQueue
 from .experiment import Experiment, Executor
 from .utils import to_list
-from .storage import BaseResearchStorage, LocalResearchStorage
+from .storage import BaseResearchStorage, LocalResearchStorage, MemoryResearchStorage
 
 from ..utils_random import make_seed_sequence
 
@@ -73,7 +73,6 @@ class Research:
         self.finalize = True
         self.random_seed = None
         self.profile = False
-        # self.profiler = None
         self.memory_ratio = None
         self.n_gpu_checks = 3
         self.gpu_check_delay = 5
@@ -342,14 +341,13 @@ class Research:
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
                           stacklevel=2)
 
-        if isinstance(self.dump_results, bool):
-            storage = 'local' if self.dump_results else 'memory'
-        else:
-            storage = self.dump_results
+        self.storage = self.dump_results
+        if isinstance(self.storage, bool):
+            self.storage = 'local' if self.storage else 'memory'
+        if isinstance(self.storage, str):
+            self.storage = BaseResearchStorage(self, self.loglevel, storage=self.storage)
 
-        self.storage = BaseResearchStorage(self, self.loglevel, storage=storage)
-
-        if self.dump_results:
+        if not isinstance(self.storage, MemoryResearchStorage):
             self.experiment = self.experiment.dump() # add final dump of experiment results
 
         self.logger = self.storage.logger
@@ -404,7 +402,6 @@ class Research:
 
     def terminate(self, kill_processes=False, force=False, wait=True):
         """ Kill all research processes. """
-        # TODO: killed processes don't release GPU.
         if not self.is_loaded:
             if not force and self.monitor and self.monitor.in_progress:
                 answer = input(f'{self.name} is in progress. Are you sure? [y/n]').lower()
@@ -464,7 +461,7 @@ class Research:
     @classmethod
     def load(cls, name):
         """ Load research. """
-        storage = LocalResearchStorage(name, loglevel='info', mode='r', storage='local')
+        storage = LocalResearchStorage(name, loglevel='info', mode='r')
         return storage.research
 
     @classmethod

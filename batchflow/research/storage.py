@@ -97,6 +97,9 @@ class MemoryExperimentStorage(BaseExperimentStorage):
     loglevel : str, optional
         logging level, by default 'error'
     """
+    def __new__(cls, *args, **kwargs):
+        return super().__new__(cls, *args, storage='memory', **kwargs)
+
     def __init__(self, experiment, loglevel=None, storage='memory'):
         super().__init__(experiment, loglevel, storage)
 
@@ -164,6 +167,9 @@ class LocalExperimentStorage(BaseExperimentStorage):
     loglevel : str, optional
         logging level, by default 'error'
     """
+    def __new__(cls, *args, **kwargs):
+        return super().__new__(cls, *args, storage='local', **kwargs)
+
     def __init__(self, experiment, loglevel=None,  storage='local'):
         super().__init__(experiment, loglevel, storage)
 
@@ -261,14 +267,16 @@ class ClearMLExperimentStorage(BaseExperimentStorage):
     loglevel : str, optional
         logging level, by default 'error'
     """
+    def __new__(cls, *args, **kwargs):
+        return super().__new__(cls, *args, storage='clearml', **kwargs)
+
     def __init__(self, experiment, loglevel=None, storage='clearml'):
         from clearml import Task
 
         super().__init__(experiment, loglevel, storage)
         self.task = Task.init(
             project_name=self.name,
-            task_name=self.experiment.id,
-            # add_task_init_call=True,
+            task_name=self.experiment.id
         )
         self.task.connect_configuration(self.experiment.config.config)
 
@@ -418,6 +426,9 @@ class MemoryResearchStorage(BaseResearchStorage):
     loglevel : str, optional
         logging level, by default 'error'
     """
+    def __new__(cls, *args, **kwargs):
+        return super().__new__(cls, *args, storage='memory', **kwargs)
+
     def __init__(self, research=None, loglevel=None, storage='memory'):
         super().__init__(research, storage)
         self.loglevel = loglevel or 'error'
@@ -432,6 +443,8 @@ class MemoryResearchStorage(BaseResearchStorage):
         self.experiments_stderr = self._manager.dict()
 
         self._env = dict()
+
+        self.experiment_storage_class = MemoryExperimentStorage
 
     def close(self):
         """ Close shared memory managers. """
@@ -467,6 +480,9 @@ class LocalResearchStorage(BaseResearchStorage):
     loglevel : str, optional
         logging level, by default 'error'
     """
+    def __new__(cls, *args, **kwargs):
+        return super().__new__(cls, *args, storage='local', **kwargs)
+
     def __init__(self, research, loglevel, mode='w', storage='local'):
         super().__init__(research, storage)
 
@@ -480,6 +496,8 @@ class LocalResearchStorage(BaseResearchStorage):
             self.profiler = ResearchProfiler(self.research.name, self.research.profile)
         elif mode == 'r':
             self.load(research)
+
+        self.experiment_storage_class = LocalExperimentStorage
 
     def load(self, name):
         """ Load results and profiling stats. """
@@ -584,6 +602,9 @@ class ClearMLResearchStorage(BaseResearchStorage):
     loglevel : str, optional
         logging level, by default 'error'
     """
+    def __new__(cls, *args, **kwargs):
+        return super().__new__(cls, *args, storage='clearml', **kwargs)
+
     def __init__(self, research, loglevel, mode='w', storage='clearml'):
         from clearml import Task
 
@@ -593,10 +614,11 @@ class ClearMLResearchStorage(BaseResearchStorage):
         self.task = Task.create(
             project_name=self.research.name,
             task_name='research',
-            add_task_init_call=True,
+            # add_task_init_call=True,
         )
 
         self._create_logger()
+        self.experiment_storage_class = ClearMLExperimentStorage
 
     def close(self):
         self.task.close()

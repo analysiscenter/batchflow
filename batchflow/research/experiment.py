@@ -288,9 +288,6 @@ class ExecutableUnit:
         for _src, _dst in zip(src, dst):
             if _dst is not None:
                 self.experiment.storage.update_variable(_dst, _src)
-                # results = self.experiment.results.get(_dst, OrderedDict())
-                # results[iteration] = _src
-                # self.experiment.results[_dst] = results
 
     @property
     def src(self):
@@ -689,15 +686,12 @@ class Experiment:
                   'redirect_stdout', 'redirect_stderr', 'dump_results']
 
         for attr in params:
-            value = getattr(self.executor, attr)#, defaults[attr])
+            value = getattr(self.executor, attr)
             setattr(self, attr, value)
 
-        if isinstance(self.dump_results, bool):
-            storage = 'local' if self.dump_results else 'memory'
-        else:
-            storage = self.dump_results
+        storage_class = self.executor.storage.experiment_storage_class
 
-        self.storage = BaseExperimentStorage(self, loglevel=self.loglevel, storage=storage)
+        self.storage = storage_class(self, loglevel=self.loglevel)
         self.logger = self.storage.logger
         self.profiler = self.storage.profiler
 
