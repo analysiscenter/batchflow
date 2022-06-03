@@ -274,7 +274,7 @@ class Subplot:
 
     @property
     def lr_ax(self):
-        """ Assume that if twin axes of subplot was never created, learning rate values were put on main axes. """
+        """ Assume that if twin axis of subplot was never created, learning rate values were put on main axis. """
         return self.ax if self._twin_ax is None else self.twin_ax
 
     # Modes default parameters
@@ -288,7 +288,7 @@ class Subplot:
         # ticks
         'labeltop': False,
         'labelright': False,
-        # axes order
+        # image axes order
         'transpose': (0, 1, 2),
         # values masking
         'mask_color': (0, 0, 0, 0),
@@ -556,8 +556,6 @@ class Subplot:
 
         Parameters
         ----------
-        ax : int or instance of `matploblib.axes.Axes`
-            Axes to put labels into. If and int, used for indexing `self.axes`.
         mode : 'image', 'histogram', 'curve', 'loss'
             Mode to match legend hadles patches to.
             If from ('image', 'histogram'), use rectangular legend patches.
@@ -617,8 +615,6 @@ class Subplot:
 
         Parameters
         ----------
-        ax : int or instance of `matploblib.axes.Axes`
-            Axes to put labels into. If an int, used for indexing `self.axes`.
         text : str
             Text to display.
         size : int
