@@ -1094,6 +1094,7 @@ class Plot:
 
 Plot.__doc__ += '\n'.join([GENERAL_DOC, IMAGE_DOC, HISTOGRAM_DOC, CURVE_DOC, LOSS_DOC, ANNOTATION_DOC, EXAMPLES_DOC])
 
+plot = Plot # an alias
 
 def plot_image(data, **kwargs):
     """ Shorthand for image plotting. """
