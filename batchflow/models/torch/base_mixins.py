@@ -10,6 +10,7 @@ import torch
 from ...monitor import GPUMemoryMonitor
 from ...notifier import Notifier
 from ...plot import plot_loss
+from ...decorators import deprecated
 
 # Also imports `tensorboard`, if necessary
 
@@ -135,7 +136,7 @@ class VisualizationMixin:
         writer.close()
 
 
-    def show_lr(self, **kwargs):
+    def plot_lr(self, **kwargs):
         """ Plot graph of learning rate over iterations. """
         params = {
             'title': 'Learning rate',
@@ -152,7 +153,7 @@ class VisualizationMixin:
 
         return plot_loss(data=data, **params)
 
-    def show_loss(self, overlay_lr=True, **kwargs):
+    def plot_loss(self, overlay_lr=True, **kwargs):
         """ Plot loss and learning rate over the same figure.
 
         Parameters
@@ -199,8 +200,13 @@ class VisualizationMixin:
 
         return plot_loss(data=data, **kwargs)
 
+    # Deprecated aliases
 
-    plot_loss = show_loss
+    deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead"
+
+    show_lr = deprecated(deprecation_msg.format('show_lr', 'plot_lr'))(plot_lr)
+
+    show_loss = deprecated(deprecation_msg.format('show_loss', 'plot_loss'))(plot_loss)
 
 
 class OptimalBatchSizeMixin:
