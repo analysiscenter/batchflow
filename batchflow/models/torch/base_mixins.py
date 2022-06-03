@@ -13,6 +13,7 @@ from ...plot import plot_loss
 
 # Also imports `tensorboard`, if necessary
 
+
 def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts=True, underscore_numbers=False):
     """ Backwards compatible version of pformat. """
     # pylint: disable=unexpected-keyword-arg
@@ -25,21 +26,21 @@ def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts
     return result
 
 
+
 class VisualizationMixin:
     """ Collection of visualization (both textual and graphical) tools for a :class:`~.torch.TorchModel`. """
     # Textual visualization of the model
-    def information(self, config=False, devices=True, model=False, misc=True):
+    def information(self, config=False, devices=True, misc=True, bold=True):
         """ Show information about model configuration, used devices, train steps and more. """
-        print(self._information(config=config, devices=devices, model=model, misc=misc))
+        print(self._information(config=config, devices=devices, misc=misc, bold=bold))
 
-    def info(self):
-        """ Return the info message with default parameters. """
-        return self._information()
-
-    def _information(self, config=False, devices=True, model=False, misc=True):
+    def _information(self, config=False, devices=True, misc=True, bold=False):
         """ Create information string. """
         message = ''
-        template_header = '\n\033[1m\033[4m{}:\033[0m\n'
+        bold_code = '\033[1m\033[4m' if bold else ''
+        endl_code = '\033[0m' if bold else ''
+
+        template_header = '\n' + bold_code + '{}:' + endl_code + '\n'
 
         if config:
             message += template_header.format('Config')
@@ -51,24 +52,25 @@ class VisualizationMixin:
             if self.devices:
                 message += '\n'.join([f'Device {i} is {d}' for i, d in enumerate(self.devices)]) + '\n'
 
-        if model:
-            message += template_header.format('Model')
-            message += str(self.model) + '\n'
-
         if misc:
             message += template_header.format('Shapes')
 
             if self.inputs_shapes:
-                message += '\n'.join([f'Input {i} has shape {s}' for i, s in enumerate(self.inputs_shapes)]) + '\n'
+                message += '\n'.join([f'Input  {i}: {s}' for i, s in enumerate(self.inputs_shapes)]) + '\n'
             if self.targets_shapes:
-                message += '\n'.join([f'Target {i} has shape {s}' for i, s in enumerate(self.targets_shapes)]) + '\n'
+                message += '\n'.join([f'Target {i}: {s}' for i, s in enumerate(self.targets_shapes)]) + '\n'
             if self.classes:
                 message += f'Number of classes: {self.classes}\n'
 
             message += template_header.format('Model info')
             if self.model:
-                num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-                message += f'Total number of parameters in the model: {num_params:,}'
+                message += f'Order  of model parts: {self.model.config["order"]}\n'
+                message += f'Number of all model parameters in the model: {self.num_parameters:,}\n'
+
+                if self.model.config["order"] != self.model.config["trainable"]:
+                    message += f'Trainable model parts: {self.model.config["trainable"]}\n'
+                    message += f'Number of trainable parameters in the model: {self.num_trainable_parameters:,}\n'
+
 
             message += f'\nTotal number of passed training iterations: {self.iteration}\n'
 
@@ -81,15 +83,28 @@ class VisualizationMixin:
                 message += pformat(self.last_predict_info, sort_dicts=False) + '\n'
         return message[1:-1]
 
-    def short_repr(self):
-        """ Show simplified model layout. """
-        print(self._short_repr())
 
-    def _short_repr(self):
-        self.model.apply(lambda module: setattr(module, 'short_repr', True))
-        msg = repr(self.model)
-        self.model.apply(lambda module: setattr(module, 'short_repr', False))
-        return msg
+    def repr(self, verbosity=1, collapsible=True, show_num_parameters=False, extra=False,):
+        """ Show simplified model layout. """
+        self.model.repr(verbosity=verbosity, collapsible=collapsible,
+                        show_num_parameters=show_num_parameters, extra=extra)
+
+    def prepare_repr(self, verbosity=1, collapsible=True, show_num_parameters=False, extra=False):
+        return self.model.prepare_repr(verbosity=verbosity, collapsible=collapsible,
+                                       show_num_parameters=show_num_parameters, extra=extra)
+
+
+    @property
+    def num_frozen_parameters(self):
+        return sum(p.numel() for p in self.model.parameters() if not p.requires_grad)
+
+    @property
+    def num_trainable_parameters(self):
+        return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+
+    @property
+    def num_parameters(self):
+        return sum(p.numel() for p in self.model.parameters())
 
     # Graphs to describe model
     def save_graph(self, log_dir=None, **kwargs):

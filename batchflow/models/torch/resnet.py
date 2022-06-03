@@ -15,55 +15,54 @@ Jie Hu. et al. "`Squeeze-and-Excitation Networks
 <https://arxiv.org/abs/1709.01507>`_"
 """
 #pylint: disable=too-many-ancestors
-from .encoder_decoder import Encoder
+from .base import TorchModel
 from .blocks import ResBlock
 
 
 
-class ResNet(Encoder):
+class ResNet(TorchModel):
     """ Base ResNet model.
 
     Parameters
     ----------
     body : dict, optional
-        encoder : dict, optional
-            num_stages : int
-                Number of different layers. Default is 4.
+        num_stages : int
+            Number of different layers. Default is 4.
 
-            order : str, sequence of str
-                Determines order of applying layers.
-                See more in :class:`~.encoder_decoder.Encoder` documentation.
-                In default ResNet, only ``'block'`` is needed.
+        order : str, sequence of str
+            Determines order of applying layers.
+            See more in :class:`~.encoder_decoder.Encoder` documentation.
+            In default ResNet, only ``'block'`` is needed.
 
-            blocks : dict, optional
-                Parameters for pre-processing blocks. Each of the parameters can be represented
-                either by a single value or by a list with `num_stages` length.
-                If it is a `list`, then the i-th block is formed using the i-th value of the `list`.
-                If this is a single value, then all the blocks is formed using it.
+        blocks : dict, optional
+            Parameters for pre-processing blocks. Each of the parameters can be represented
+            either by a single value or by a list with `num_stages` length.
+            If it is a `list`, then the i-th block is formed using the i-th value of the `list`.
+            If this is a single value, then all the blocks is formed using it.
 
-                base : callable, list of callable
-                    Tensor processing function. Default is :class:`~ResBlock`.
-                layout : str, list of str
-                    A sequence of letters, each letter meaning individual operation.
-                    See more in :class:`~.layers.conv_block.BaseConvBlock` documentation.
-                filters : int, str, list of int, list of str
-                    If `str`, then number of filters is calculated by its evaluation. ``'S'`` and ``'same'``
-                    stand for the number of filters in the previous tensor. Note the `eval` usage under the hood.
-                    If `int`, then number of filters in the block.
-                n_reps : int, list of int
-                    Number of times to repeat the whole block.
-                downsample : bool, int, list of bool, list of int
-                    If `int`, in first repetition of block downsampling with a factor ``downsample``.
-                    If ``True``, in first repetition of block downsampling with a factor 2.
-                    If ``False``, without downsampling.
-                bottleneck : bool, int, list of bool, list of int
-                    If ``True``, then construct a canonical bottleneck block from the given layout.
-                    If ``False``, then bottleneck is not used.
-                se : bool, list of bool
-                    If ``True``, then construct a SE-ResNet block from the given layout.
-                    If ``False``, then squeeze and excitation is not used.
-                other args : dict
-                    Parameters for the base block.
+            base : callable, list of callable
+                Tensor processing function. Default is :class:`~ResBlock`.
+            layout : str, list of str
+                A sequence of letters, each letter meaning individual operation.
+                See more in :class:`~.layers.conv_block.BaseConvBlock` documentation.
+            channels : int, str, list of int, list of str
+                If `str`, then number of channels is calculated by its evaluation. ``'S'`` and ``'same'``
+                stand for the number of channels in the previous tensor. Note the `eval` usage under the hood.
+                If `int`, then number of channels in the block.
+            n_reps : int, list of int
+                Number of times to repeat the whole block.
+            downsample : bool, int, list of bool, list of int
+                If `int`, in first repetition of block downsampling with a factor ``downsample``.
+                If ``True``, in first repetition of block downsampling with a factor 2.
+                If ``False``, without downsampling.
+            bottleneck : bool, int, list of bool, list of int
+                If ``True``, then construct a canonical bottleneck block from the given layout.
+                If ``False``, then bottleneck is not used.
+            se : bool, list of bool
+                If ``True``, then construct a SE-ResNet block from the given layout.
+                If ``False``, then squeeze and excitation is not used.
+            other args : dict
+                Parameters for the base block.
 
     Notes
     -----
@@ -75,21 +74,37 @@ class ResNet(Encoder):
         """ Define model's defaults: general architecture. """
         config = super().default_config()
 
-        config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
-                                        pool_size=3, pool_strides=2)
+        config.update({
+            'initial_block': {
+                'layout': 'cnap',
+                'channels': 64,
+                'kernel_size': 7,
+                'stride': 2,
+                'pool_size': 3,
+                'pool_stride': 2
+            },
+            'body': {
+                'type': 'encoder',
+                'output_type': 'tensor',
+                'num_stages': 4,
+                'order': ['block'],
+                'blocks': {
+                    'base_block': ResBlock,
+                    'layout': 'cnacn',
+                    'channels': [64, 128, 256, 512],
+                    'n_reps': [1, 1, 1, 1],
+                    'downsample': [False, True, True, True],
+                    'bottleneck': False,
+                    'attention': False,
+                }
+            },
+            'head': {
+                'layout': 'Vdf',
+                'dropout_rate' : 0.4,
+            },
 
-        config['body/encoder/num_stages'] = 4
-        config['body/encoder/order'] = ['skip', 'block']
-        config['body/encoder/blocks'] += dict(base=ResBlock, layout='cnacn',
-                                              filters=[64, 128, 256, 512],
-                                              n_reps=[1, 1, 1, 1],
-                                              downsample=[False, True, True, True],
-                                              bottleneck=False,
-                                              se=False)
-
-        config['head'] += dict(layout='Vdf', dropout_rate=.4)
-
-        config['loss'] = 'ce'
+            'loss': 'ce',
+        })
         return config
 
 
@@ -99,7 +114,7 @@ class ResNet18(ResNet):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/n_reps'] = [2, 2, 2, 2]
+        config['body/blocks/n_reps'] = [2, 2, 2, 2]
         return config
 
 class ResNet34(ResNet):
@@ -107,7 +122,7 @@ class ResNet34(ResNet):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/n_reps'] = [3, 4, 6, 3]
+        config['body/blocks/n_reps'] = [3, 4, 6, 3]
         return config
 
 class ResNet50(ResNet34):
@@ -115,8 +130,8 @@ class ResNet50(ResNet34):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/layout'] = 'cn'
-        config['body/encoder/blocks/bottleneck'] = True
+        config['body/blocks/layout'] = 'cn'
+        config['body/blocks/bottleneck'] = True
         return config
 
 class ResNet101(ResNet50):
@@ -124,7 +139,7 @@ class ResNet101(ResNet50):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/n_reps'] = [3, 4, 23, 3]
+        config['body/blocks/n_reps'] = [3, 4, 23, 3]
         return config
 
 class ResNet152(ResNet50):
@@ -132,7 +147,7 @@ class ResNet152(ResNet50):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/n_reps'] = [3, 8, 36, 3]
+        config['body/blocks/n_reps'] = [3, 8, 36, 3]
         return config
 
 
@@ -142,7 +157,7 @@ class ResNeXt18(ResNet18):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/groups'] = 32
+        config['body/blocks/groups'] = 32
         return config
 
 class ResNeXt34(ResNet34):
@@ -150,7 +165,7 @@ class ResNeXt34(ResNet34):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/groups'] = 32
+        config['body/blocks/groups'] = 32
         return config
 
 class ResNeXt50(ResNet50):
@@ -158,7 +173,7 @@ class ResNeXt50(ResNet50):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/groups'] = 32
+        config['body/blocks/groups'] = 32
         return config
 
 class ResNeXt101(ResNet101):
@@ -166,7 +181,7 @@ class ResNeXt101(ResNet101):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/groups'] = 32
+        config['body/blocks/groups'] = 32
         return config
 
 class ResNeXt152(ResNet152):
@@ -174,7 +189,7 @@ class ResNeXt152(ResNet152):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/groups'] = 32
+        config['body/blocks/groups'] = 32
         return config
 
 
@@ -184,8 +199,8 @@ class SEResNet18(ResNet18):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/self_attention/ratio'] = 16
+        config['body/blocks/attention'] = 'se'
+        config['body/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNet34(ResNet34):
@@ -193,8 +208,8 @@ class SEResNet34(ResNet34):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/self_attention/ratio'] = 16
+        config['body/blocks/attention'] = 'se'
+        config['body/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNet50(ResNet50):
@@ -202,8 +217,8 @@ class SEResNet50(ResNet50):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/self_attention/ratio'] = 16
+        config['body/blocks/attention'] = 'se'
+        config['body/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNet101(ResNet101):
@@ -211,8 +226,8 @@ class SEResNet101(ResNet101):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/self_attention/ratio'] = 16
+        config['body/blocks/attention'] = 'se'
+        config['body/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNet152(ResNet152):
@@ -220,8 +235,8 @@ class SEResNet152(ResNet152):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/self_attention/ratio'] = 16
+        config['body/blocks/attention'] = 'se'
+        config['body/blocks/self_attention/ratio'] = 16
         return config
 
 
@@ -231,8 +246,8 @@ class SEResNeXt18(ResNeXt18):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/self_attention/ratio'] = 16
+        config['body/blocks/attention'] = 'se'
+        config['body/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNeXt34(ResNeXt34):
@@ -240,8 +255,8 @@ class SEResNeXt34(ResNeXt34):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/self_attention/ratio'] = 16
+        config['body/blocks/attention'] = 'se'
+        config['body/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNeXt50(ResNeXt50):
@@ -249,8 +264,8 @@ class SEResNeXt50(ResNeXt50):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/self_attention/ratio'] = 16
+        config['body/blocks/attention'] = 'se'
+        config['body/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNeXt101(ResNeXt101):
@@ -258,8 +273,8 @@ class SEResNeXt101(ResNeXt101):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/self_attention/ratio'] = 16
+        config['body/blocks/attention'] = 'se'
+        config['body/blocks/self_attention/ratio'] = 16
         return config
 
 class SEResNeXt152(ResNeXt152):
@@ -267,6 +282,6 @@ class SEResNeXt152(ResNeXt152):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks/attention'] = 'se'
-        config['body/encoder/blocks/self_attention/ratio'] = 16
+        config['body/blocks/attention'] = 'se'
+        config['body/blocks/self_attention/ratio'] = 16
         return config

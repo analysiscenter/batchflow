@@ -373,7 +373,7 @@ class Notifier:
         #pylint: disable=protected-access
         num_graphs = len(self.data_containers) - index
         layout = (1, num_graphs) if self.layout.startswith('h') else (num_graphs, 1)
-        figsize = self.figsize or ((20, 5) if self.layout.startswith('h') else (20, 5*num_graphs))
+        figsize = self.figsize or ((20, 6) if self.layout.startswith('h') else (20, 6*num_graphs))
 
         if clear_display:
             display.clear_output(wait=True)
@@ -390,25 +390,28 @@ class Notifier:
                     data_x = np.array(source.ticks)[self.slice] - source.ticks[0]
                     data_y = source.data[self.slice]
                     x_label, y_label = 'Time, s', source.UNIT
+                    title = f'{name}\nMEAN: {np.mean(data_y):4.4}    STD: {np.std(data_y):4.4}'
                 else:
                     data_y = container['data']
                     data_x = list(range(len(data_y)))[self.slice]
                     data_y = data_y[self.slice]
                     x_label, y_label = 'Iteration', ''
+                    title = name
 
                 if plot_function is not None:
                     plot_function(fig=fig, ax=ax[i - index], i=i,
                                   data_x=data_x, data_y=data_y, container=container, notifier=self)
+
                 # Default plotting functionality
                 elif isinstance(data_y, (tuple, list)) or (isinstance(data_y, np.ndarray) and data_y.ndim == 1):
                     ax[i - index].plot(data_x, data_y)
-                    ax[i - index].set_title(name, fontsize=12)
+                    ax[i - index].set_title(title, fontsize=12)
                     ax[i - index].set_xlabel(x_label, fontsize=12)
                     ax[i - index].set_ylabel(y_label, fontsize=12, rotation='horizontal', labelpad=15)
                     ax[i - index].grid(True)
                 elif isinstance(data_y, np.ndarray) and data_y.ndim == 2:
                     ax[i - index].imshow(data_y)
-                    ax[i - index].set_title(name, fontsize=12)
+                    ax[i - index].set_title(title, fontsize=12)
 
         if add_suptitle:
             fmt = {
@@ -545,7 +548,7 @@ class Notifier:
 
     def __getattr__(self, key):
         """ Redirect everything to the underlying bar. """
-        if not key in self.__dict__ and hasattr(self.bar, key):
+        if not key.endswith('state__') and key not in self.__dict__ and hasattr(self.bar, key):
             return getattr(self.bar, key)
         raise AttributeError(key)
 
