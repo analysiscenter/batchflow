@@ -231,9 +231,9 @@ class Layer:
             curves.extend(smooth_curve)
 
         if lr is not None:
+            lr_ax = self.ax if loss is None else self.twin_ax
             lr_label = f'learning rate №{self.index + 1} ⟶ {lr[-1]:.0e}'
             lr_config = self.config.filter(curve_keys, prefix='lr_')
-            lr_ax = self.ax if loss is None else self.twin_ax
             lr_curve = lr_ax.plot(lr, label=lr_label, **lr_config)
             lr_ax.set_ylabel('Learning rate', fontsize=12)
             curves.extend(lr_curve)
@@ -271,6 +271,11 @@ class Subplot:
     def empty(self):
         """ Indicator that subplot has no layers. """
         return len(self.layers) == 0
+
+    @property
+    def lr_ax(self):
+        """ Assume that if twin axes of subplot was never created, learning rate values were put on main axes. """
+        return self.ax if self._twin_ax is None else self.twin_ax
 
     # Modes default parameters
     MASK_COLORS = ['firebrick', 'mediumseagreen', 'thistle', 'darkorange', 'navy', 'gold',
@@ -447,6 +452,16 @@ class Subplot:
         if tick_config:
             self.ax.tick_params(**tick_config)
 
+        # Change scale of axis, if needed
+        if self.config.get('log') or self.config.get('log_loss'):
+            self.ax.set_yscale('log')
+
+        if self.config.get('log_twin'):
+            self._twin_ax.set_yscale('log')
+
+        if self.config.get('log_lr'):
+            self.lr_ax.set_yscale('log')
+
         # xlim
         xlim_config = self.config.filter(['xlim'], prefix='xlim_')
         if 'xlim' in xlim_config:
@@ -516,13 +531,6 @@ class Subplot:
             self.disable()
         elif not self.ax.axison:
             self.enable()
-
-        # Change scale of axis, if needed
-        if self.config.get('log') or self.config.get('log_loss'):
-            self.ax.set_yscale('log')
-
-        if self.config.get('log_twin') or self.config.get('log_lr'):
-            self.twin_ax.set_yscale('log')
 
         return annotations
 
