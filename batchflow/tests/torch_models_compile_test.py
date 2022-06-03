@@ -10,7 +10,6 @@ from batchflow.models.torch import ResNet18, ResNet34, ResNet50, ResNet101, ResN
 from batchflow.models.torch import DenseNet121, DenseNet169, DenseNet201, DenseNet264
 
 from batchflow.models.torch import UNet, ResUNet, DenseUNet
-from batchflow.models.torch import DenseNetFC56, DenseNetFC67, DenseNetFC103
 
 
 
@@ -26,7 +25,6 @@ MODELS_CLF = [
 
 MODELS_SEG = [
     UNet, ResUNet, DenseUNet,
-    DenseNetFC56, DenseNetFC67, # DenseNetFC103,
 ]
 
 
@@ -37,6 +35,7 @@ def base_config_clf():
     config = {
         'classes': 10,
         'loss': 'ce',
+        'device': 'cpu',
     }
     return config
 
@@ -47,7 +46,8 @@ def base_config_segment():
     config = {
         'inputs_shapes': (1, 64, 64),
         'classes': 10,
-        'loss': 'ce'
+        'loss': 'ce',
+        'device': 'cpu',
     }
     return config
 

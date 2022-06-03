@@ -5,41 +5,74 @@ Jegou S. et al "`The One Hundred Layers Tiramisu:
 Fully Convolutional DenseNets for Semantic Segmentation
 <https://arxiv.org/abs/1611.09326>`_"
 """
-from .encoder_decoder import Encoder, EncoderDecoder
+from .base import TorchModel
 from .blocks import DenseBlock
 
 
 
-class DenseNet(Encoder):
+class DenseNet(TorchModel):
     """ DenseNet architecture. """
     @classmethod
     def default_config(cls):
         """ Define model defaults. See :meth: `~.TorchModel.default_config`"""
         config = super().default_config()
-        config['common/conv/bias'] = False
-        config['initial_block'] += dict(layout='cnap', filters=16,
-                                        kernel_size=7, strides=2,
-                                        pool_size=3, pool_strides=2)
+        config.update({
+            'initial_block' : {
+                'layout': 'cnap',
+                'channels': 16,
+                'kernel_size': 7,
+                'stride': 2,
+                'pool_size': 3,
+                'pool_stride': 2
+            },
 
-        config['body/encoder/num_stages'] = 4
-        config['body/encoder/blocks'] += dict(base=DenseBlock, layout='nacd',
-                                              num_layers=None, growth_rate=None,
-                                              skip=True, bottleneck=True,
-                                              dropout_rate=0.2, filters=None)
-        config['body/encoder/downsample'] += dict(layout='nacv', kernel_size=1, strides=1,
-                                                  pool_size=2, pool_strides=2,
-                                                  filters='same')
+            'body': {
+                'type': 'encoder',
+                'output_type': 'tensor',
+                'num_stages': 4,
+                'order': ['block', 'downsampling'],
+                'blocks': {
+                    'base_block': DenseBlock,
+                    'layout': 'nacd',
+                    'num_layers': None,
+                    'growth_rate': None,
+                    'skip': True,
+                    'bottleneck': True,
+                    'dropout_rate': 0.2,
+                    'channels': None
+                },
+                'downsample': {
+                    'layout': 'nacv',
+                    'kernel_size': 1,
+                    'stride': 1,
+                    'pool_size': 2,
+                    'pool_stride': 2,
+                    'channels': 'same'
+                }
+            },
+            'head': {
+                'layout': 'Vf',
+            },
+
+            'common/bias': False,
+            'loss': 'ce',
+        })
+
         config['head'] += dict(layout='Vf')
         return config
 
 
 class DenseNetS(DenseNet):
-    """ Small verison of DenseNet architecture. Intended to be used for testing purposes mainly. """
+    """ Small version of DenseNet architecture. Intended to be used for testing purposes. """
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/num_stages'] = 2
-        config['body/encoder/blocks'] += dict(num_layers=[4, 4], growth_rate=32)
+        config.update({
+            'body/blocks': {
+                'num_layers': [6, 6, 6, 6],
+                'growth_rate': 6,
+            }
+        })
         return config
 
 class DenseNet121(DenseNet):
@@ -47,8 +80,12 @@ class DenseNet121(DenseNet):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks'] += dict(num_layers=[6, 12, 24, 32],
-                                              growth_rate=32)
+        config.update({
+            'body/blocks': {
+                'num_layers': [6, 12, 24, 32],
+                'growth_rate': 32,
+            }
+        })
         return config
 
 class DenseNet169(DenseNet):
@@ -56,8 +93,12 @@ class DenseNet169(DenseNet):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks'] += dict(num_layers=[6, 12, 32, 16],
-                                              growth_rate=32)
+        config.update({
+            'body/blocks': {
+                'num_layers': [6, 12, 32, 16],
+                'growth_rate': 32,
+            }
+        })
         return config
 
 class DenseNet201(DenseNet):
@@ -65,8 +106,12 @@ class DenseNet201(DenseNet):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks'] += dict(num_layers=[6, 12, 48, 32],
-                                              growth_rate=32)
+        config.update({
+            'body/blocks': {
+                'num_layers': [6, 12, 48, 32],
+                'growth_rate': 32,
+            }
+        })
         return config
 
 class DenseNet264(DenseNet):
@@ -74,69 +119,10 @@ class DenseNet264(DenseNet):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks'] += dict(num_layers=[6, 12, 64, 48],
-                                              growth_rate=32)
-        return config
-
-
-
-class SegmentationDenseNet(EncoderDecoder):
-    """ FC DenseNet architecture for segmentation tasks. """
-    @classmethod
-    def default_config(cls):
-        """ Define model defaults. See :meth: `~.TorchModel.default_config`"""
-        config = super().default_config()
-        config['common/conv/bias'] = False
-        config['initial_block'] += dict(layout='c', filters=48, kernel_size=3, strides=1)
-
-        config['body/encoder/num_stages'] = 6
-        config['body/encoder/blocks'] += dict(base=DenseBlock, layout='nacd',
-                                              num_layers=None, growth_rate=None,
-                                              skip=True, bottleneck=False,
-                                              dropout_rate=0.2, filters=None)
-        config['body/encoder/downsample'] += dict(layout='nacdp', kernel_size=1, strides=1,
-                                                  pool_size=2, pool_strides=2, dropout_rate=.2,
-                                                  filters='same')
-
-        config['body/embedding'] += dict(base=DenseBlock, num_layers=None, growth_rate=None)
-
-        config['body/decoder/blocks'] += dict(base=DenseBlock, layout='nacd',
-                                              num_layers=None, growth_rate=None,
-                                              skip=False, bottleneck=False,
-                                              dropout_rate=0.2, filters=None)
-        config['body/decoder/upsample'] += dict(layout='t')
-        config['body/decoder/order'] = ['upsample', 'combine', 'block']
-        return config
-
-
-class DenseNetFC56(SegmentationDenseNet):
-    """ FC DenseNet-56 architecture. """
-    @classmethod
-    def default_config(cls):
-        config = super().default_config()
-        config['body/encoder/blocks'] += dict(num_layers=4, growth_rate=12)
-        config['body/embedding'] += dict(num_layers=4, growth_rate=12)
-        config['body/decoder/blocks'] += dict(num_layers=4, growth_rate=12)
-        return config
-
-class DenseNetFC67(SegmentationDenseNet):
-    """ FC DenseNet-67 architecture. """
-    @classmethod
-    def default_config(cls):
-        config = super().default_config()
-        config['body/encoder/blocks'] += dict(num_layers=5, growth_rate=16)
-        config['body/embedding'] += dict(num_layers=5, growth_rate=16)
-        config['body/decoder/blocks'] += dict(num_layers=5, growth_rate=16)
-        return config
-
-class DenseNetFC103(SegmentationDenseNet):
-    """ FC DenseNet-103 architecture. """
-    @classmethod
-    def default_config(cls):
-        config = super().default_config()
-        config['body/encoder/blocks'] += dict(num_layers=[4, 5, 7, 10, 12, 15],
-                                              growth_rate=16)
-        config['body/embedding'] += dict(num_layers=15, growth_rate=16)
-        config['body/decoder/blocks'] += dict(num_layers=[4, 5, 7, 10, 12, 15],
-                                              growth_rate=16)
+        config.update({
+            'body/blocks': {
+                'num_layers': [6, 12, 64, 48],
+                'growth_rate': 32,
+            }
+        })
         return config

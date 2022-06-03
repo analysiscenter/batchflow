@@ -75,7 +75,7 @@ class Activation(nn.Module):
     FUNCTIONS = {f.lower(): f for f in dir(nn)}
     FUNCTIONS['rsoftmax'] = RadixSoftmax
 
-    def __init__(self, activation, *args, **kwargs):
+    def __init__(self, activation='relu', *args, **kwargs):
         super().__init__()
         self.args, self.kwargs = tuple(), {}
 

@@ -1,23 +1,34 @@
 """ Simonyan K., Zisserman A. "`Very Deep Convolutional Networks for Large-Scale Image Recognition
 <https://arxiv.org/abs/1409.1556>`_"
 """
-from .encoder_decoder import Encoder
+from .base import TorchModel
 from .blocks import VGGBlock
 
 
 
-class VGG(Encoder):
+class VGG(TorchModel):
     """ Base VGG architecture. """
     @classmethod
     def default_config(cls):
         """ Define model's defaults: general architecture. """
         config = super().default_config()
-        config['common/conv/bias'] = False
+        config.update({
+            'body': {
+                'type': 'encoder',
+                'output_type': 'tensor',
+                'order': ['block', 'downsampling'],
+                'blocks': {
+                    'base_block': VGGBlock,
+                }
+            },
+            'head': {
+                'layout': 'Vdf',
+                'dropout_rate': 0.4,
+            },
 
-        config['body/encoder/order'] = ['block', 'downsampling']
-        config['body/encoder/blocks'] += dict(base=VGGBlock, layout='cna')
-        config['head'] += dict(layout='Vdf', dropout_rate=.2)
-        config['loss'] = 'ce'
+            'common/conv/bias' : False,
+            'loss': 'ce',
+        })
         return config
 
 
@@ -26,10 +37,16 @@ class VGG7(VGG):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/num_stages'] = 3
-        config['body/encoder/blocks'] += dict(filters=[64, 128, 256],
-                                              depth3=2,
-                                              depth1=[0, 0, 1])
+        config.update({
+            'body': {
+                'num_stages': 3,
+                'blocks': {
+                    'channels': [64, 128, 256],
+                    'depth3': 2,
+                    'depth1': [0, 0, 1],
+                }
+            }
+        })
         return config
 
 class VGG16(VGG):
@@ -37,9 +54,16 @@ class VGG16(VGG):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/num_stages'] = 5
-        config['body/encoder/blocks'] += dict(filters=[64, 128, 256, 512, 512],
-                                              depth3=[2, 2, 3, 3, 3], depth1=0)
+        config.update({
+            'body': {
+                'num_stages': 5,
+                'blocks': {
+                    'channels': [64, 128, 256, 512, 512],
+                    'depth3': [2, 2, 3, 3, 3],
+                    'depth1': 0,
+                }
+            }
+        })
         return config
 
 class VGG19(VGG):
@@ -47,7 +71,14 @@ class VGG19(VGG):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/num_stages'] = 5
-        config['body/encoder/blocks'] += dict(filters=[64, 128, 256, 512, 512],
-                                              depth3=[2, 2, 4, 4, 4], depth1=0)
+        config.update({
+            'body': {
+                'num_stages': 5,
+                'blocks': {
+                    'channels': [64, 128, 256, 512, 512],
+                    'depth3': [2, 2, 4, 4, 4],
+                    'depth1': 0,
+                }
+            }
+        })
         return config
