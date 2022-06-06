@@ -613,8 +613,7 @@ class ClearMLResearchStorage(BaseResearchStorage):
         super().__init__(research, storage)
         self.task = Task.create(
             project_name=self.research.name,
-            task_name='research',
-            # add_task_init_call=True,
+            task_name='research'
         )
 
         self._create_logger()
