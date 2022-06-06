@@ -101,6 +101,7 @@ class ResBlock(Block):
             downsample = 2 if downsample is True else downsample
             stride_downsample[0] *= downsample
             branch_stride_downsample *= downsample
+
         if bottleneck:
             # Bottleneck: apply 1x1 conv before and after main flow computations to change number of channels
             bottleneck = 4 if bottleneck is True else bottleneck
@@ -109,11 +110,13 @@ class ResBlock(Block):
             stride = [1] + stride + [1]
             stride_downsample = [1] + stride_downsample + [1]
             groups = [1] + groups + [1]
-            channels = [channels[0]] + channels + [channels[0] * bottleneck]
+            channels = [channels[0] * bottleneck] + channels + [channels[0]]
+
         if attention:
             # Attention: add self-attention to the main flow
             layout += 'S'
-        if get_num_channels(inputs) != channels[-1]:
+
+        if get_num_channels(inputs) != channels[-1] or np.prod(stride_downsample) != 1:
             # If main flow changes the number of channels, so must do the side branch.
             # No activation, because it will be applied after summation with the main flow
             branch_params = {'layout': branch_layout, 'channels': channels[-1],
