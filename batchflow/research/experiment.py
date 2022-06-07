@@ -17,7 +17,7 @@ from .domain import ConfigAlias
 from .named_expr import E, O, EC
 from .utils import generate_id, must_execute, to_list, parse_name, MultiOut
 from .profiler import ExecutorProfiler
-from .storage import BaseExperimentStorage, BaseResearchStorage
+from .storage import BaseResearchStorage
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
