@@ -38,7 +38,7 @@ class Layer:
                 self.config['vmax'] = 1
 
         preprocessed_data = self.preprocess(data)
-        self.object = getattr(self, mode)(preprocessed_data)
+        self.objects = getattr(self, mode)(preprocessed_data)
 
     # Aliases to attributes of parent subplot
     @property
@@ -48,6 +48,10 @@ class Layer:
     @property
     def twin_ax(self):
         return self.subplot.twin_ax
+
+    @property
+    def main_object(self):
+        return self.objects[0]
 
     # Preprocessing methods
     def transpose(self, data):
@@ -98,6 +102,14 @@ class Layer:
             data = np.ma.array(data, mask=mask)
         return data
 
+    def smooth(self, data):
+        """ Calculate running average on given data with provided window. """
+        window = self.config.get('window')
+        if window is not None and window < len(data):
+            data = convolve(data, np.ones(window), mode='nearest') / window
+            return data
+        return None
+
     def preprocess(self, data):
         """ Look through layer config for requested data transformations and apply them. """
         if self.mode == 'image':
@@ -111,11 +123,15 @@ class Layer:
 
         if self.mode == 'curve':
             if isinstance(data, np.ndarray) or (isinstance(data, list) and contains_numbers(data)):
-                if hasattr(self, 'object'):
-                    xdata = self.object.get_xdata()
+                if len(self.objects) > 0:
+                    xdata = self.main_object.get_xdata()
                 else:
                     xdata = range(len(data))
+
                 data = [xdata, data]
+
+            smoothed = self.smooth(data[1].squeeze())
+            data = [*data, smoothed]
 
         if self.mode == 'loss':
             if isinstance(data, tuple):
@@ -123,11 +139,10 @@ class Layer:
             else:
                 loss, lr = data, None
 
-            window = self.config.get('window')
-            if window is None or loss is None:
+            if loss is None:
                 smoothed = None
             else:
-                smoothed = convolve(loss, np.ones(window), mode='nearest') / window
+                smoothed = self.smooth(loss)
 
             data = [loss, smoothed, lr]
 
@@ -142,18 +157,18 @@ class Layer:
         """ Preprocess given data and pass it to `set_data`. Does not work in 'histogram' and 'loss' mode. """
         if self.mode == 'image':
             data = self.preprocess(data)
-            self.object.set_data(data)
+            self.main_object.set_data(data)
 
             vmin = self.config.get('vmin', np.nanmin(data))
             vmax = self.config.get('vmax', np.nanmax(data))
-            self.object.set_clim([vmin, vmax])
+            self.main_object.set_clim([vmin, vmax])
 
         if self.mode == 'histogram':
             raise NotImplementedError("Updating layer data is not in supported in 'histogram' mode. ")
 
         if self.mode == 'curve':
             x_data, y_data = self.preprocess(data)
-            self.object.set_data(x_data, y_data)
+            self.main_object.set_data(x_data, y_data)
             self.update_lims()
 
         if self.mode == 'loss':
@@ -181,7 +196,7 @@ class Layer:
 
         image = self.ax.imshow(data, cmap=cmap, **image_config)
 
-        return image
+        return [image]
 
     def histogram(self, data):
         """ Display data as 1-D histogram. """
@@ -190,18 +205,24 @@ class Layer:
 
         _, _, bar = self.ax.hist(data, **histogram_config)
 
-        return bar
+        return [bar]
 
     def curve(self, data):
         """ Display data as a polygonal chain. """
-        x, y = data
+        x, y, y_smoothed = data
 
         curve_keys = ['color', 'linestyle', 'alpha', 'label']
         curve_config = self.config.filter(curve_keys, prefix='curve_')
 
-        line = self.ax.plot(x, y, **curve_config)[0]
+        curves = self.ax.plot(x, y, **curve_config)
 
-        return line
+        if y_smoothed is not None:
+            smoothed_color = scale_lightness(curve_config['color'], scale=.5)
+            smoothed_label = curve_config['label'] + ' smoothed' if 'label' in curve_config else None
+            smoothed_curve = self.ax.plot(x, y_smoothed, label=smoothed_label, color=smoothed_color, linestyle='--')
+            curves.extend(smoothed_curve)
+
+        return curves
 
     def loss(self, data):
         """ Display a combination of loss curve, its smoothed version and learning rate with nice defaults. """
@@ -225,13 +246,14 @@ class Layer:
 
         if smoothed is not None:
             smoothed_color = scale_lightness(loss_config['color'], scale=.5)
-            smoothed_loss_label = label + ' running mean'
-            smooth_curve = self.ax.plot(smoothed, label=smoothed_loss_label, color=smoothed_color, linestyle='--')
-            curves.extend(smooth_curve)
+            smooth_window = self.config.get('window')
+            smoothed_loss_label = f'{label} smoothed with window {smooth_window}'
+            smoothed_curve = self.ax.plot(smoothed, label=smoothed_loss_label, color=smoothed_color, linestyle='--')
+            curves.extend(smoothed_curve)
 
         if lr is not None:
             lr_ax = self.ax if loss is None else self.twin_ax
-            lr_label = f'learning rate №{self.index + 1} ⟶ {lr[-1]:.0e}'
+            lr_label = f'learning rate №{self.index + 1} ⟶ {lr[-1]:.5f}'
             lr_config = self.config.filter(curve_keys, prefix='lr_')
             lr_curve = lr_ax.plot(lr, label=lr_label, **lr_config)
             lr_ax.set_ylabel('Learning rate', fontsize=12)
@@ -479,7 +501,7 @@ class Subplot:
         keys = ['colorbar', 'width', 'pad', 'fake', 'annotations']
         colorbar_config = self.config.filter(keys, prefix='colorbar_')
         if colorbar_config and mode == 'image':
-            colorbar_config['image'] = self.layers[0].object
+            colorbar_config['image'] = self.layers[0].main_object
 
             if 'pad' not in colorbar_config:
                 pad = 0.4
@@ -496,7 +518,7 @@ class Subplot:
 
         # legend
         if mode in ('loss', 'curve'):
-            self.config['label'] = [layer.object for layer in self.layers]
+            self.config['label'] = [obj for layer in self.layers for obj in layer.objects]
 
         label = self.config.get('label')
         if label is not None:
@@ -658,6 +680,19 @@ class Subplot:
     def disable(self):
         """ Make subplot invisible. """
         self.ax.set_axis_off()
+
+    def clear(self):
+        """ Clear subplot axis. """
+        self.ax.clear()
+        self.layers = []
+        self.annotations = {}
+
+    def clear_layers(self):
+        """ Remove subplot layers. """
+        for layer in self.layers:
+            for obj in layer.objects:
+                obj.remove()
+        self.layers = []
 
 
 class Plot:
@@ -875,7 +910,12 @@ class Plot:
     Finally, if a more complex data provided, the parameter nestedness level must resemble the one in data:
     >>> Plot([[image_0, mask_0], [image_1, mask_1]], cmap=[['viridis', 'red'], ['magma', 'green']])
     """
+    MODES = ['image', 'histogram', 'curve', 'loss']
+
     def __init__(self, data=None, combine='overlay', mode='image', **kwargs):
+        if mode not in self.MODES:
+            raise ValueError(f"Unknown mode '{mode}'. Expected one of {self.MODES}.")
+
         self.figure = None
         self.subplots = None
         self.config = PlotConfig(self.DEFAULT_CONFIG)
@@ -1209,7 +1249,7 @@ class Plot:
         'transpose': (0, 1, 2), # for 'image' mode
         # suptitle
         'text_color' : 'k',
-        'suptitle_size': 30,
+        'suptitle_size': 20,
         # save
         'bbox_inches': 'tight',
         'pad_inches': 0,
@@ -1291,13 +1331,29 @@ class Plot:
         return annotations
 
     # Result finalizing methods
-    def save(self):
-        """ Save plot. """
-        default_savepath = datetime.now().strftime('%Y-%m-%d_%H:%M:%S.png')
-        savepath = self.config.get('savepath', default_savepath)
+    def redraw(self):
+        """ Draw figure again by creating dummy figure and using its manager to display original figure. """
+        dummy_figure = plt.figure()
+        new_manager = dummy_figure.canvas.manager
+        new_manager.canvas.figure = self.figure
+        self.figure.set_canvas(new_manager.canvas)
+        plt.show(block=False)
 
-        save_keys = ['bbox_inches', 'pad_inches', 'dpi']
+    def clear(self):
+        self.figure.clear()
+
+    def clear_subplots(self):
+        for subplot in self.subplots():
+            subplot.clear_layers()
+
+    def save(self, **kwargs):
+        """ Save plot. """
+        save_keys = ['savepath', 'bbox_inches', 'pad_inches', 'dpi']
         save_config = self.config.filter(save_keys, prefix='save_')
+        save_config.update(kwargs)
+
+        default_savepath = datetime.now().strftime('%Y-%m-%d_%H:%M:%S.png')
+        savepath = save_config.pop('savepath', default_savepath)
 
         self.figure.savefig(fname=savepath, **save_config)
 

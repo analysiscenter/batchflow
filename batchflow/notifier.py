@@ -11,7 +11,7 @@ with warnings.catch_warnings():
     from tqdm.autonotebook import tqdm as tqdm_auto
 
 import numpy as np
-import matplotlib.pyplot as plt
+
 try:
     from IPython import display
 except ImportError:
@@ -20,6 +20,8 @@ except ImportError:
 from .named_expr import NamedExpression, eval_expr
 from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .utils_telegram import TelegramMessage
+from .plot import plot
+
 
 
 class DummyBar:
@@ -133,7 +135,7 @@ class Notifier:
     def __init__(self, bar='a', disable=False, frequency=1, monitors=None, graphs=None, log_file=None,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  telegram=False, token=None, chat_id=None, silent=True,
-                 window=None, layout='h', figsize=None, savepath=None, **kwargs):
+                 window=None, layout='h', figsize=None, savepath=None, plot_config=None, **kwargs):
         # Prepare data containers like monitors and pipeline variables
         if monitors:
             monitors = monitors if isinstance(monitors, (tuple, list)) else [monitors]
@@ -148,6 +150,23 @@ class Notifier:
         self.has_monitors = False
         self.has_graphs = len(graphs) > 0
         self.n_monitors = len(monitors)
+
+        if self.has_graphs:
+            num_graphs = len(graphs)
+
+            if layout.startswith('h'):
+                nrows, ncols = (1, num_graphs)
+                figsize = figsize or (6 * num_graphs, 6)
+            else:
+                nrows, ncols = (num_graphs, 1)
+                figsize = figsize or (6, 6 * num_graphs)
+
+            plot_config = {
+                'adjust_figsize': True,
+                **({} if plot_config is None else plot_config)
+            }
+
+            self.plotter = plot(nrows=nrows, ncols=ncols, figsize=figsize, show=False, **plot_config)
 
         self.data_containers = []
         for container in monitors + graphs:
@@ -232,7 +251,6 @@ class Notifier:
 
         self.bar = None
         self.bar_func = lambda total: bar_func(total=total, **kwargs)
-
 
         # Make bar with known / unknown total length
         self.compute_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
@@ -370,48 +388,8 @@ class Notifier:
 
     def update_plots(self, index=0, add_suptitle=False, savepath=None, clear_display=True):
         """ Draw plots anew. """
-        #pylint: disable=protected-access
-        num_graphs = len(self.data_containers) - index
-        layout = (1, num_graphs) if self.layout.startswith('h') else (num_graphs, 1)
-        figsize = self.figsize or ((20, 6) if self.layout.startswith('h') else (20, 6*num_graphs))
-
         if clear_display:
             display.clear_output(wait=True)
-        fig, ax = plt.subplots(*layout, figsize=figsize)
-        ax = ax if isinstance(ax, np.ndarray) else [ax]
-
-        for i, container in enumerate(self.data_containers):
-            if i >= index:
-                source = container['source']
-                name = container['name']
-                plot_function = container.get('plot_function')
-
-                if isinstance(source, ResourceMonitor):
-                    data_x = np.array(source.ticks)[self.slice] - source.ticks[0]
-                    data_y = source.data[self.slice]
-                    x_label, y_label = 'Time, s', source.UNIT
-                    title = f'{name}\nMEAN: {np.mean(data_y):4.4}    STD: {np.std(data_y):4.4}'
-                else:
-                    data_y = container['data']
-                    data_x = list(range(len(data_y)))[self.slice]
-                    data_y = data_y[self.slice]
-                    x_label, y_label = 'Iteration', ''
-                    title = name
-
-                if plot_function is not None:
-                    plot_function(fig=fig, ax=ax[i - index], i=i,
-                                  data_x=data_x, data_y=data_y, container=container, notifier=self)
-
-                # Default plotting functionality
-                elif isinstance(data_y, (tuple, list)) or (isinstance(data_y, np.ndarray) and data_y.ndim == 1):
-                    ax[i - index].plot(data_x, data_y)
-                    ax[i - index].set_title(title, fontsize=12)
-                    ax[i - index].set_xlabel(x_label, fontsize=12)
-                    ax[i - index].set_ylabel(y_label, fontsize=12, rotation='horizontal', labelpad=15)
-                    ax[i - index].grid(True)
-                elif isinstance(data_y, np.ndarray) and data_y.ndim == 2:
-                    ax[i - index].imshow(data_y)
-                    ax[i - index].set_title(title, fontsize=12)
 
         if add_suptitle:
             fmt = {
@@ -421,18 +399,81 @@ class Notifier:
                 'colour': None,
             }
             suptitle = self.bar.format_meter(**fmt)
+            self.plotter.plot(suptitle=suptitle)
 
-            if fig._suptitle:
-                suptitle = '\n'.join([suptitle, fig._suptitle.get_text()])
-            fig.suptitle(suptitle, y=0.99, fontsize=14)
+        for i, container in enumerate(self.data_containers):
+            if i >= index:
+                subplot_index = i - index
+                subplot = self.plotter[subplot_index]
+                subplot.clear()
+
+                source = container['source']
+                name = container['name']
+                plot_function = container.get('plot_function')
+                plot_config = container.get('plot_config', {})
+
+                if isinstance(source, ResourceMonitor):
+                    data_x = np.array(source.ticks)[self.slice] - source.ticks[0]
+                    data_y = source.data[self.slice]
+
+                    plot_config = {
+                        'title':  f'{name}\nMEAN: {np.mean(data_y):4.4}    STD: {np.std(data_y):4.4}',
+                        'xlabel': 'Time, s',
+                        'ylabel': source.UNIT,
+                        'ylabel_rotation': 'horizontal',
+                        **plot_config
+                    }
+                else:
+                    data_y = container['data']
+                    data_x = list(range(len(data_y)))[self.slice]
+                    data_y = data_y[self.slice]
+
+                    plot_config = {
+                        'title':  name,
+                        'xlabel': 'Iteration',
+                        **plot_config
+                    }
+
+                if plot_function is not None:
+                    plot_function(fig=subplot.ax.figure, ax=subplot.ax, i=i,
+                                  data_x=data_x, data_y=data_y, container=container, notifier=self)
+
+                # Default plotting functionality
+                elif isinstance(data_y, (tuple, list)) or (isinstance(data_y, np.ndarray) and data_y.ndim == 1):
+                    data_x = np.array(data_x)
+                    data_y = np.array(data_y)
+
+                    if 'loss' in name.lower():
+                        data = data_y
+                        mode = 'loss'
+                    else:
+                        data = (data_x, data_y)
+                        mode = 'curve'
+
+                    plot_config = {'window': 50, **plot_config}
+
+                elif isinstance(data_y, np.ndarray) and data_y.ndim in (2, 3):
+                    data = data_y
+                    mode = 'image'
+                else:
+                    msg = "Expected data to be 1-dimensional tuple/list/array or 2- or 3-dimensional array."
+                    if isinstance(data_y, np.ndarray):
+                        msg += f" Got {type(data_y)} instead of shape {data_y.shape}"
+                    else:
+                        msg += f" Got {type(data_y)} instead."
+                    raise ValueError(msg)
+
+                self.plotter.plot(data=data, mode=mode, positions=subplot_index, **plot_config)
+
+        self.plotter.redraw()
 
         savepath = savepath or (f'{self.savepath}_{self.bar.n}' if self.savepath is not None else None)
+
         if savepath:
-            plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
-        plt.show()
+            self.plotter.save(savepath=savepath)
 
         if self.telegram:
-            self.telegram_media.send(fig)
+            self.telegram_media.send(self.plotter.figure)
 
     def update_log_file(self):
         """ Update log file on the fly. """
