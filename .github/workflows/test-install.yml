@@ -112,6 +112,16 @@ jobs:
 
     - name: Run basic tests
       run: |
-        pipenv install pytest
         cd batchflow/tests
+        echo "\
+        [[source]]
+        url = \"https://pypi.org/simple\"
+        verify_ssl = true
+        name = \"pypi\"
+
+        [packages]
+        pytest = \"*\"
+        batchflow = {git = \"https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}\"}
+        " >> Pipfile
+        pipenv install
         pipenv run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
