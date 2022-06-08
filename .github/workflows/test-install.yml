@@ -112,6 +112,7 @@ jobs:
 
     - name: Run basic tests
       run: |
+        pipenv --rm
         pipenv install pytest
         cd batchflow/tests
         pipenv run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
