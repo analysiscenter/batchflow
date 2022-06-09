@@ -8,18 +8,16 @@ import itertools
 import traceback
 import contextlib
 from collections import OrderedDict
-import json
 import time
-import dill
 
 from .. import Config, Pipeline, parallel, spawn_seed_sequence, make_rng, make_seed_sequence
 from ..named_expr import eval_expr
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import create_logger, generate_id, must_execute, to_list, parse_name, jsonify, \
-                   MultiOut, create_output_stream
-from .profiler import ExperimentProfiler, ExecutorProfiler
+from .utils import generate_id, must_execute, to_list, parse_name, MultiOut
+from .profiler import ExecutorProfiler
+from .storage import BaseResearchStorage
 
 class PipelineWrapper:
     """ Make callable or generator from `batchflow.pipeline`.
@@ -240,6 +238,9 @@ class ExecutableUnit:
             self.transform_method()
 
         if self.must_execute(iteration, n_iters, last):
+            total = (n_iters - 1) if n_iters is not None else None
+            self.experiment.logger.debug(f"Execute '{self.name}' [{iteration}/{total}]")
+
             self.iteration = iteration
             args = eval_expr(self.args, experiment=self.experiment)
             kwargs = eval_expr(self.kwargs, experiment=self.experiment)
@@ -257,7 +258,7 @@ class ExecutableUnit:
                 self.output = next(self.iterator)
 
             if self.save_to or self.save_output_dict:
-                self.save_output(iteration)
+                self.save_output()
 
             eval_time = time.time() - start_time
             return self.output, eval_time
@@ -268,7 +269,7 @@ class ExecutableUnit:
         """ Returns does unit must be executed for the current iteration. """
         return must_execute(iteration, self.when, n_iters, last)
 
-    def save_output(self, iteration):
+    def save_output(self):
         """ Save output of the unit. """
         if self.save_output_dict:
             dst = self.output.keys()
@@ -286,9 +287,7 @@ class ExecutableUnit:
 
         for _src, _dst in zip(src, dst):
             if _dst is not None:
-                results = self.experiment.results.get(_dst, OrderedDict())
-                results[iteration] = _src
-                self.experiment.results[_dst] = results
+                self.experiment.storage.update_variable(_dst, _src)
 
     @property
     def src(self):
@@ -348,17 +347,13 @@ class Experiment:
 
         self.last = False
         self.outputs = dict()
-        self.results = OrderedDict()
-
+        self.storage = None
         self.has_dump = False # does unit has any dump actions or not
         self.name = None # name of the executor/research
         self.dump_results = None
         self.loglevel = None
         self.monitor = None
-
         self.id = None #pylint:disable=invalid-name
-        self.experiment_path = None
-        self.full_path = None
         self.index = None
         self.config_alias = None
         self.config = None
@@ -367,11 +362,9 @@ class Experiment:
         self.instances = None
         self.logger = None
         self.iteration = None
-        self.exception = None
         self.random_seed = None
         self.random = None
-
-        self._profiler = None
+        self.profiler = None
         self.stdout_file = None
         self.stderr_file = None
 
@@ -646,6 +639,10 @@ class Experiment:
                 return False
         return True
 
+    @property
+    def results(self):
+        return self.storage.results
+
     def copy(self):
         """ Create copy of the experiment. Is needed to create experiments for branches. """
         instance_creators = copy(self.instance_creators)
@@ -663,22 +660,6 @@ class Experiment:
     def __deepcopy__(self, memo):
         _ = memo
         return self.copy()
-
-    def create_folder(self):
-        """ Create folder for experiment results. """
-        self.experiment_path = os.path.join('experiments', self.id)
-        self.full_path = os.path.join(self.name, self.experiment_path)
-        if not os.path.exists(self.full_path):
-            os.makedirs(self.full_path)
-        else:
-            raise ValueError(f'Experiment folder {self.full_path} already exists.')
-
-    def dump_config(self):
-        """ Dump config (as serialized ConfigAlias instance). """
-        with open(os.path.join(self.name, self.experiment_path, 'config.dill'), 'wb') as file:
-            dill.dump(self.config_alias, file)
-        with open(os.path.join(self.name, self.experiment_path, 'config.json'), 'w') as file:
-            json.dump(jsonify(self.config_alias.alias().config), file)
 
     def init(self, index, config, executor=None):
         """ Create all instances of units to start experiment. """
@@ -699,31 +680,18 @@ class Experiment:
         self.config = config.config()
 
         # Get attributes from research or kwargs of executor
-        defaults = {
-            'dump_results': False,
-            'loglevel': 'debug',
-            'name': 'executor',
-            'monitor': None,
-            'debug': False,
-            'profile': False,
-            'redirect_stdout': True,
-            'redirect_stderr': True
-        }
-        for attr in defaults:
-            if self.research:
-                value = getattr(self.research, attr)
-            else:
-                value = self.executor.kwargs.get(attr, defaults[attr])
+        params = ['loglevel', 'name', 'monitor', 'debug', 'profile',
+                  'redirect_stdout', 'redirect_stderr', 'dump_results']
+
+        for attr in params:
+            value = getattr(self.executor, attr)
             setattr(self, attr, value)
 
-        if self.dump_results:
-            self.create_folder()
-            self.dump_config()
+        storage_class = self.executor.storage.experiment_storage_class
 
-        self.stdout_file = create_output_stream(self.dump_results, self.redirect_stdout,
-                                                 'stdout.txt', self.full_path, common=False)
-        self.stderr_file = create_output_stream(self.dump_results, self.redirect_stderr,
-                                                 'stderr.txt', self.full_path, common=False)
+        self.storage = storage_class(self, loglevel=self.loglevel)
+        self.logger = self.storage.logger
+        self.profiler = self.storage.profiler
 
         self.instances = OrderedDict()
 
@@ -735,14 +703,6 @@ class Experiment:
             else:
                 self.actions[name].set_unit(config=config, experiment=self)
 
-        profile = self.profile
-
-        if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
-            self._profiler = ExperimentProfiler(detailed=True)
-        elif profile == 1 or profile is True:
-            self._profiler = ExperimentProfiler(detailed=False)
-        else: # 0, False, None
-            self._profiler = None
 
     def pop_index_keys(self, config):
         """ Remove auxilary keys used to create prefix. """
@@ -750,18 +710,6 @@ class Experiment:
             if key[0] == '#':
                 config.pop_config(key)
         config.pop_config('_prefix')
-
-    def create_logger(self):
-        """ Create experiment logger. """
-        name = f"{self.name}." if self.name else ""
-        name += f"{self.id}"
-        path = os.path.join(self.full_path, 'experiment.log') if self.dump_results else None
-
-        self.logger = create_logger(name, path, self.loglevel)
-
-    def close_logger(self):
-        """ Close experiment logger. """
-        self.logger.removeHandler(self.logger.handlers[0])
 
     def create_stream(self, name, *streams):
         """ Create contextmanager to redirect stdout/stderr. """
@@ -774,18 +722,21 @@ class Experiment:
 
     def call(self, name, iteration, n_iters=None):
         """ Execute one iteration of the experiment. """
-        context_manager_out = self.create_stream('stdout', self.stdout_file, self.executor.common_stdout)
-        context_manager_err = self.create_stream('stderr', self.stderr_file, self.executor.common_stderr)
+        context_manager_out = self.create_stream(
+            'stdout', self.storage.stdout_file, self.executor.storage.stdout_file
+        )
+        context_manager_err = self.create_stream(
+            'stderr', self.storage.stderr_file, self.executor.storage.stderr_file
+        )
 
         with context_manager_out, context_manager_err:
             if self.is_alive or name.startswith('__'):
-                if self._profiler:
-                    self._profiler.enable()
+                if self.profiler:
+                    self.profiler.enable()
 
                 self.last = self.last or (iteration + 1 == n_iters)
                 self.iteration = iteration
 
-                self.logger.debug(f"Execute '{name}' [{iteration}/{n_iters}]")
                 exception = (StopIteration, KeyboardInterrupt) if self.debug else Exception
                 try:
                     self.outputs[name], unit_time = self.actions[name](iteration, n_iters, last=self.last)
@@ -795,7 +746,6 @@ class Experiment:
                     if isinstance(e, StopIteration):
                         self.logger.info(f"Stop '{name}' [{iteration}/{n_iters}]")
                     else:
-                        self.exception = e
                         ex_traceback = e.__traceback__
                         msg = ''.join(traceback.format_exception(e.__class__, e, ex_traceback))
                         self.logger.error(f"Fail '{name}' [{iteration}/{n_iters}]: Exception\n{msg}")
@@ -804,19 +754,15 @@ class Experiment:
                 if self.is_failed and ((list(self.actions.keys())[-1] == name) or (not self.executor.finalize)):
                     self.is_alive = False
 
-        if self._profiler:
-            self._profiler.disable(iteration, name, unit_time=unit_time, experiment=self.id)
+        if self.profiler:
+            self.profiler.disable(iteration, name, unit_time=unit_time, experiment=self.id)
 
     def show_profile_info(self, **kwargs):
-        return self._profiler.show_profile_info(**kwargs)
+        return self.profiler.show_profile_info(**kwargs)
 
     @property
     def profile_info(self):
-        return self._profiler.profile_info
-
-    def dump_profile_info(self):
-        if self.dump_results and self._profiler is not None:
-            self.profile_info.reset_index().to_feather(os.path.join(self.full_path, 'profiler.feather'))
+        return self.profiler.profile_info
 
     def __str__(self):
         repr = ''
@@ -841,13 +787,6 @@ class Experiment:
                 repr += spacing * 2 + f"kwargs={kwargs}\n" + spacing + ")\n"
 
         return repr
-
-    def close_files(self):
-        """ Close stdout/stderr files (if rederection was performed. """
-        if not isinstance(self.stdout_file, (contextlib.nullcontext, type(None))):
-            self.stdout_file.close()
-        if not isinstance(self.stderr_file, (contextlib.nullcontext, type(None))):
-            self.stderr_file.close()
 
     def __getstate__(self):
         return self.__dict__
@@ -900,10 +839,7 @@ class Executor:
         self.experiment_template = experiment
         self.task_name = task_name or 'Task'
         self.target = target
-        self.debug = self.research.debug if self.research is not None else kwargs.get('debug', False)
-        self.finalize = self.research.finalize if self.research is not None else kwargs.get('finalize', False)
-
-        self.kwargs = kwargs
+        self.set_params(kwargs)
 
         self.worker = worker
         if worker is not None:
@@ -914,10 +850,37 @@ class Executor:
         self.random_seed = seed
         self.random = make_rng(seed)
 
+        if self.research is not None:
+            self.storage = self.research.storage
+        else:
+            storage = 'local' if self.dump_results else 'memory'
+            self.storage = BaseResearchStorage(self, storage=storage)
+
         self.create_experiments()
+
         self.pid = None
         self.common_stdout = None
         self.common_stderr = None
+
+    def set_params(self, kwargs):
+        """ Set params of executor. Is used to get attributes from research or from kwargs. """
+        defaults = {
+            'loglevel': 'debug',
+            'name': 'executor',
+            'monitor': None,
+            'debug': False,
+            'profile': False,
+            'redirect_stdout': True,
+            'redirect_stderr': True,
+            'dump_results': False,
+            'finalize': False
+        }
+        for attr in defaults:
+            if self.research:
+                value = getattr(self.research, attr)
+            else:
+                value = kwargs.get(attr, defaults[attr])
+            setattr(self, attr, value)
 
     def create_experiments(self):
         """ Initialize experiments. """
@@ -926,26 +889,20 @@ class Executor:
             full_config = ConfigAlias(config) + ConfigAlias(branch_config) + ConfigAlias(self.executor_config)
             experiment = self.experiment_template.copy()
             experiment.init(index, full_config, self)
-            experiment.create_logger()
             experiment.logger.info(f"{self.task_name}[{index}] has been started with config:\n {repr(config)}")
+
             self.experiments.append(experiment)
 
     def run(self):
         """ Run experiments. """
-        redirect_stdout = self.experiments[0].redirect_stdout
-        redirect_stderr = self.experiments[0].redirect_stderr
-        dump_results = self.experiments[0].dump_results
-        path = self.experiments[0].name
+        self.storage.create_redirection_streams()
 
-        self.common_stdout = create_output_stream(dump_results, redirect_stdout, 'stdout.txt', path, common=True)
-        self.common_stderr = create_output_stream(dump_results, redirect_stderr, 'stderr.txt', path, common=True)
-
-        with self.common_stdout, self.common_stderr:
+        with self.storage.stdout_file, self.storage.stderr_file:
             self.pid = os.getpid() if self.research and self.research.parallel else None
 
             iterations = range(self.n_iters) if self.n_iters else itertools.count()
-            for experiment in self.experiments:
-                if self.research:
+            if self.research:
+                for experiment in self.experiments:
                     self.research.monitor.start_experiment(experiment)
 
             for iteration in iterations:
@@ -960,14 +917,22 @@ class Executor:
                     for experiment in self.experiments:
                         if experiment.is_alive:
                             self.research.monitor.execute_iteration(experiment)
+
             for index, experiment in enumerate(self.experiments):
                 if self.research:
                     self.research.monitor.stop_experiment(experiment)
                 experiment.logger.info(f"{self.task_name}[{index}] has been finished.")
-                experiment.close_logger()
-                experiment.close_files()
-        self.send_results()
-        self.dump_profile_info()
+
+        self.close()
+
+    def close(self):
+        """ Close storages. """
+        for experiment in self.experiments:
+            experiment.storage.close()
+
+        self.storage.close_files()
+        if self.research is None:
+            self.storage.close()
 
     @parallel(init='_parallel_init_call')
     def parallel_call(self, experiment, iteration, unit_name):
@@ -992,19 +957,9 @@ class Executor:
                 for attr in ['_is_alive', '_is_failed', 'iteration']:
                     setattr(experiment, attr, getattr(self.experiments[0], attr))
 
-    def send_results(self):
-        """ Put experiment results and profiling into research results. """
-        if self.research is not None:
-            for experiment in self.experiments:
-                self.research.results.put(experiment.id, experiment.results, experiment.config_alias)
-                self.research.profiler.put(experiment.id, self.profile_info)
-
-    def dump_profile_info(self):
-        for experiment in self.experiments:
-            experiment.dump_profile_info()
-
     @property
-    def _profiler(self):
+    def profiler(self):
+        """ Executor profiler. """
         if self.experiments[0].profile:
             return ExecutorProfiler(self.experiments)
         return None
@@ -1012,12 +967,12 @@ class Executor:
     @property
     def profile_info(self):
         """ Profile info. """
-        if self._profiler:
-            return self._profiler.profile_info
+        if self.profiler:
+            return self.profiler.profile_info
         return None
 
     def show_profile_info(self, **kwargs):
-        return self._profiler.show_profile_info(**kwargs)
+        return self.profiler.show_profile_info(**kwargs)
 
 def _create_instance(experiments, item_name):
     if not isinstance(experiments, list):
@@ -1032,18 +987,7 @@ def _get_input(x, copy, *args, **kwargs): #pylint:disable=redefined-outer-name
 
 def _dump_results(variable, experiment):
     """ Callable to dump results. """
-    if experiment.dump_results:
-        variables_to_dump = list(experiment.results.keys()) if variable is None else to_list(variable)
-        for var in variables_to_dump:
-            values = experiment.results[var]
-            iteration = experiment.iteration
-            variable_path = os.path.join(experiment.full_path, 'results', var)
-            if not os.path.exists(variable_path):
-                os.makedirs(variable_path)
-            filename = os.path.join(variable_path, str(iteration))
-            with open(filename, 'wb') as file:
-                dill.dump(values, file)
-            del experiment.results[var]
+    experiment.storage.dump_results(variable)
 
 def _explicit_call(method, name, experiment):
     """ Add unit into research by explicit call in research-pipeline. """

@@ -6,6 +6,7 @@ import logging
 import hashlib
 import itertools
 import json
+import io
 import contextlib
 from collections import OrderedDict
 from copy import deepcopy
@@ -191,13 +192,16 @@ def generate_id(config, random, create_prefix=False):
     name += ''.join(str(i) for i in random.integers(10, size=8))
     return name
 
-def create_output_stream(dump_results, redirect, filename, path, common=True):
+def create_output_stream(redirect, dump=False, filename=None, path=None, common=True):
     """ Create stream to redirect stdout/stderr. """
     if bool(redirect):
         values = [1, 3] if common else [2, 3]
-        if dump_results and redirect in values:
-            filename = os.path.join(path, filename)
-            file = open(filename, 'a')
+        if redirect in values:
+            if dump:
+                filename = os.path.join(path, filename)
+                file = open(filename, 'a')
+            else:
+                file = io.StringIO()
         else:
             file = open(os.devnull, 'w')
     else:

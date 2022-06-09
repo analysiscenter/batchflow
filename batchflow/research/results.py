@@ -19,6 +19,8 @@ class ResearchResults:
         research name.
     dump_results : bool, optional
         does research dump results or not, by default True.
+    kwargs :
+        filtering kwargs for load.
     """
     def __init__(self, name, dump_results=True, **kwargs):
         self.name = name
@@ -27,8 +29,10 @@ class ResearchResults:
         self.results = self._manager.dict()
         self.configs = self._manager.dict()
         self.artifacts = dict()
-
         self.kwargs = kwargs
+
+        if dump_results and os.path.exists(name):
+            self.load()
 
     def put(self, experiment_id, results, config):
         self.results[experiment_id] = results
@@ -59,7 +63,7 @@ class ResearchResults:
 
         Parameters
         ----------
-        experiment_id : int str, or list, optional
+        experiment_id : str or list, optional
             exepriments to load, by default None.
         name : str or list, optional
             keys of results to load, by default None.
@@ -90,7 +94,7 @@ class ResearchResults:
                     name_results = experiment_results[_name]
                     new_values = self.load_iteration_files(path, iterations)
                     experiment_results[_name] = OrderedDict([*name_results.items(), *new_values.items()])
-        self.results = mp.Manager().dict(**results)
+        self.results = results
 
     def load_artifacts(self, experiment_id=None, name=None, config=None, alias=None, domain=None, **kwargs):
         """ Load and filter experiment artifacts (all files/folders in experiment folder except standart
@@ -98,7 +102,7 @@ class ResearchResults:
 
         Parameters
         ----------
-        experiment_id : int str, or list, optional
+        experiment_id : str or list, optional
             exepriments to load, by default None
         name : str or list, optional
             names of artifacts to load into artifacts list, by default None
@@ -134,7 +138,7 @@ class ResearchResults:
 
         Parameters
         ----------
-        experiment_id : int str, or list, optional
+        experiment_id : str or list, optional
             exepriments to load, by default None
         name : str or list, optional
             keys of results to load, by default None
@@ -170,7 +174,7 @@ class ResearchResults:
         Parameters
         ----------
         pivot : bool, optional
-            if True, two columns will be created: `name` (for results variavle) and `value`. If False, for each
+            if True, two columns will be created: `name` (for results variable) and `value`. If False, for each
             variable separate column will be created. By default True
         include_config : bool, optional
             include config into dataframe or not, by default True
