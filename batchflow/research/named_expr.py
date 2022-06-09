@@ -89,7 +89,7 @@ class O(E):
 class EP(E):
     """ NamedExpression for the experiment path. """
     def _transform(self, experiments):
-        return [exp.full_path for exp in experiments]
+        return [exp.storage.full_path for exp in experiments]
 
 class R(E):
     """ Research results. """

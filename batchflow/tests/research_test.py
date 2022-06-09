@@ -485,8 +485,9 @@ class TestResearch:
 
         research.run(workers=2, branches=2, dump_results=False, bar=False)
 
-        var1 = research.results.df['var1'].values
-        var2 = research.results.df['var2'].values
+        results = research.results.df.sort_values('x')
+        var1 = results['var1'].values
+        var2 = results['var2'].values
         a = np.array([np.nan, np.nan, 9., 16.])
         b = np.array([1., 4., np.nan, np.nan])
         assert ((var1 == a) | (np.isnan(var1) & np.isnan(a))).all() and \

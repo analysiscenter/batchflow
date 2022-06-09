@@ -354,8 +354,6 @@ class Experiment:
         self.loglevel = None
         self.monitor = None
         self.id = None #pylint:disable=invalid-name
-        self.experiment_path = None
-        self.full_path = None
         self.index = None
         self.config_alias = None
         self.config = None
