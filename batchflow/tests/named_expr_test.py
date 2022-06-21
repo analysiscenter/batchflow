@@ -270,3 +270,12 @@ def test_l(batch_size):
         assert np.allclose(batch.object[i].cattr, batch.object[i].other.cattr)
         assert batch.object[i].func_args == (1, 0)
         assert batch.object[i].func_kwargs == {'a': 5, 'b': 0}
+
+def test_callable():
+    """Test chained callables."""
+    batch = (Dataset(4).p
+        .update(B('object'), np.arange(4))
+        .update(B('object'), B('object').repeat(2).sum())
+    ).next_batch(4)
+
+    assert batch.object == 12
