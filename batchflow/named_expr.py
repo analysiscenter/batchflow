@@ -339,6 +339,7 @@ class AlgebraicNamedExpression(NamedExpression):
     def get(self, **kwargs):
         """ Return a value of an algebraic expression """
         if self.op == '#call':
+            kwargs.pop('_call', None)
             a = eval_expr(self.a, _call=False, **kwargs)
         else:
             a = eval_expr(self.a, **kwargs)
