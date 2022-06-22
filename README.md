@@ -63,14 +63,11 @@ and call `train_model`. Of course, you can also choose a loss function, an optim
 from batchflow.models.torch import ResNet34
 
 my_workflow = my_dataset.pipeline()
-              .init_model('dynamic', ResNet34, config={
-                          'inputs/images/shape': B('image_shape'),
-                          'labels/classes': 10,
-                          'initial_block/inputs': 'images'})
+              .init_model('model', ResNet34, config={'loss': 'ce', 'classes': 10})
               .load('/some/path')
               .some_transform()
               .another_transform()
-              .train_model('ResNet34', images=B('images'), labels=B('labels'))
+              .train_model('ResNet34', inputs=B('images'), targets=B('labels'))
               .run(BATCH_SIZE, shuffle=True)
 ```
 
@@ -81,7 +78,7 @@ For more advanced cases and detailed API see [the documentation](https://analysi
 
 > `BatchFlow` module is in the beta stage. Your suggestions and improvements are very welcome.
 
-> `BatchFlow` supports python 3.5 or higher.
+> `BatchFlow` supports python 3.6 or higher.
 
 ### Stable python package
 
