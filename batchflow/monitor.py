@@ -5,8 +5,6 @@ from ast import literal_eval
 from multiprocessing import Process, Manager, Queue
 
 import numpy as np
-
-from batchflow import plot
 try:
     import psutil
 except ImportError:
@@ -16,6 +14,8 @@ try:
 except ImportError:
     # Use this value to raise ImportError later
     nvidia_smi = None
+
+from .plotter import plot
 
 
 

@@ -20,7 +20,7 @@ except ImportError:
 from .named_expr import NamedExpression, eval_expr
 from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .utils_telegram import TelegramMessage
-from .plot import plot
+from .plotter import plot
 
 
 

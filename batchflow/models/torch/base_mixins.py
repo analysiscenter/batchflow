@@ -8,7 +8,7 @@ import torch
 
 from ...monitor import GPUMemoryMonitor
 from ...notifier import Notifier
-from ...plot import plot
+from ...plotter import plot
 from ...decorators import deprecated
 
 # Also imports `tensorboard`, if necessary
