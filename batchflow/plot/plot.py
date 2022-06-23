@@ -218,7 +218,7 @@ class Layer:
 
         if y_smoothed is not None:
             smoothed_color = scale_lightness(curve_config['color'], scale=.5)
-            smoothed_label = curve_config['label'] + ' smoothed' if 'label' in curve_config else None
+            smoothed_label = self.config.get('smoothed_label')
             smoothed_curve = self.ax.plot(x, y_smoothed, label=smoothed_label, color=smoothed_color, linestyle='--')
             curves.extend(smoothed_curve)
 
@@ -233,11 +233,11 @@ class Layer:
         curve_keys = ['color', 'linestyle', 'linewidth', 'alpha']
 
         if loss is not None:
-            label = self.config.get('label', f'loss #{self.index + 1}')
-            loss_label = label + f' ⟶ {loss[-1]:2.3f}'
+            loss_label = f'loss #{self.index + 1} ⟶ {loss[-1]:2.3f}'
             final_window = self.config.get('final_window', None)
             if final_window is not None:
-                final = np.mean(loss[-final_window:]) #pylint: disable=invalid-unary-operand-type
+                final_window = min(final_window, len(loss))
+                final = np.mean(loss[-final_window:])
                 loss_label += f"\nmean over last {final_window} iterations={final:2.3f}"
 
             loss_config = self.config.filter(curve_keys, prefix='curve_')
@@ -247,7 +247,7 @@ class Layer:
         if smoothed is not None:
             smoothed_color = scale_lightness(loss_config['color'], scale=.5)
             smooth_window = self.config.get('window')
-            smoothed_loss_label = f'{label} smoothed with window {smooth_window}'
+            smoothed_loss_label = f'loss #{self.index + 1} smoothed with window {smooth_window}'
             smoothed_curve = self.ax.plot(smoothed, label=smoothed_loss_label, color=smoothed_color, linestyle='--')
             curves.extend(smoothed_curve)
 
@@ -374,7 +374,7 @@ class Subplot:
     }
 
     ANNOTATION_DEFAULTS = {
-        'facecolor': 'snow',
+        'facecolor': 'white',
         # text
         'text_color': 'k',
         # title
@@ -928,7 +928,7 @@ class Plot:
         raise ValueError(f"Only integer keys are supported for subplots indexing, got {type(key)}.")
 
     def __call__(self, mode, **kwargs):
-        self.plot(mode=mode, **kwargs)
+        return self.plot(mode=mode, **kwargs)
 
     def __repr__(self):
         return ''
@@ -1094,13 +1094,13 @@ class Plot:
                     if shape is None:
                         continue
 
-                    min_height = ylim[idx][0] or 0
-                    max_height = ylim[idx][1] or shape[transpose[0]]
+                    min_height = 0 if ylim[idx][0] is None else ylim[idx][0]
+                    max_height = shape[transpose[0]] if ylim[idx][1] is None else ylim[idx][1]
                     subplot_height = abs(max_height - min_height)
                     heights.append(subplot_height)
 
-                    min_width = xlim[idx][0] or shape[transpose[1]]
-                    max_width = xlim[idx][1] or 0
+                    min_width = shape[transpose[1]] if xlim[idx][0] is None else xlim[idx][0]
+                    max_width = 0 if xlim[idx][1] is None else xlim[idx][1]
                     subplot_width = abs(max_width - min_width)
                     widths.append(subplot_width)
 
@@ -1238,7 +1238,7 @@ class Plot:
     DEFAULT_CONFIG = {
         # general
         'tight_layout': True,
-        'facecolor': 'snow',
+        'facecolor': 'white',
         # figsize-related
         'ncols': None, 'nrows': None, # infer from data
         'figsize': None, 'ratio': None, # infer from data
