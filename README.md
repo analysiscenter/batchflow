@@ -67,7 +67,7 @@ my_workflow = my_dataset.pipeline()
               .load('/some/path')
               .some_transform()
               .another_transform()
-              .train_model('ResNet34', inputs=B('images'), targets=B('labels'))
+              .train_model('ResNet34', inputs=B.images, targets=B.labels)
               .run(BATCH_SIZE, shuffle=True)
 ```
 
