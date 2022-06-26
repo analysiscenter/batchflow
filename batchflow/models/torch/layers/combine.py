@@ -2,7 +2,7 @@
 import torch
 from torch import nn
 from torchvision.transforms.functional import center_crop
-
+import numpy as np
 from ..utils import get_shape, get_num_channels, get_num_dims
 
 
@@ -125,10 +125,7 @@ class Combine(nn.Module):
 
     def sum_forward(self, inputs):
         """ Addition with broadcasting. """
-        result = 0
-        for item in inputs:
-            result = result + item
-        return result
+        return np.sum(inputs)
 
     def mul_forward(self, inputs):
         """ Multiplication with broadcasting. """
