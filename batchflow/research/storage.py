@@ -307,7 +307,7 @@ class ClearMLExperimentStorage(BaseExperimentStorage):
         for var in variables_to_dump:
             values = self.results[var]
             for iteration, value in values.items():
-                self.logger.report_scalar('', variable, value, iteration)
+                self.logger.report_scalar(var, var, value, iteration)
             del self.results[var]
 
     def _update_research_profiler(self):
