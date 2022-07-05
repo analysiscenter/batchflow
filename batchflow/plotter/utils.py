@@ -171,7 +171,7 @@ class PlotConfig(dict):
                     if key not in self:
                         self[key] = value
 
-            for key, value in kwargs:
+            for key, value in kwargs.items():
                 if key not in self:
                     self[key] = value
 

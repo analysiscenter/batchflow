@@ -4,7 +4,6 @@ import glob
 import shutil
 import logging
 import hashlib
-import itertools
 import json
 import contextlib
 from collections import OrderedDict
@@ -13,12 +12,10 @@ import dill
 from tqdm import tqdm_notebook
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 
-from batchflow import plot
-from batchflow.plotter.plot import Subplot
-from batchflow.utils import to_list
+from ..plotter import plot
+from ..plotter.plot import Subplot
+from ..utils import to_list
 
 
 class MultiOut:
