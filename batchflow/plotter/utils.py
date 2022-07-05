@@ -5,7 +5,7 @@ from numbers import Number
 import operator
 
 from matplotlib.collections import PatchCollection
-from matplotlib.colors import ColorConverter, ListedColormap
+from matplotlib.colors import ColorConverter, ListedColormap, to_rgba
 from matplotlib.patches import Rectangle
 from matplotlib.legend_handler import HandlerBase
 
@@ -79,18 +79,16 @@ class ColorMappingHandler(HandlerBase):
 
 
 class PlotConfig(dict):
-    """ Dictionary with additional filtering capabilities. """
+    """ Dictionary with additional slicing and filtering capabilities. """
 
-    def maybe_index(self, key, index):
-        """ Get i-th element of parameter if index is provided and parameter value is a list else return it unchanged.
+    def maybe_index(self, index=None):
+        """ Produce a new config with same keys, but values of list type indexed.
 
         Parameters
         ----------
-        key : str
-            Parameter name.
         index : int or None
-            Index to retrieve from value stored under provided key.
-            If none provided, get argument value as it is.
+            Index to retrieve from list config values.
+            If none provided, get value as it is.
             If value is not a list, do not index it (even if it's an iterable!).
 
         Raises
@@ -98,18 +96,24 @@ class PlotConfig(dict):
         ValueError
             If parameter is a list but the index is greater than its length.
         """
-        value = self[key]
+        if index is None:
+            return self
 
-        if index is not None and isinstance(value, list):
-            try:
-                return value[index]
-            except IndexError as e:
-                msg = f"Tried to obtain element #{index} from `{key}={value}`. Either provide parameter value "\
-                        f"as a single item (to use the same `{key}` several times) or add more elements to it."
-                raise ValueError(msg) from e
-        return value
+        result = type(self)()
 
-    def filter(self, keys=None, prefix='', index=None):
+        for key, value in self.items():
+            if isinstance(value, list):
+                try:
+                    value = value[index]
+                except IndexError as e:
+                    msg = f"Tried to obtain element #{index} from `{key}={value}`. Either provide parameter value "\
+                            f"as a single item (to use the same `{key}` several times) or add more elements to it."
+                    raise ValueError(msg) from e
+            result[key] = value
+
+        return result
+
+    def filter(self, keys=None, prefix=None, retrieve='get'):
         """ Make a subconfig of parameters with required keys.
 
         Parameter are retrieved if:
@@ -126,26 +130,53 @@ class PlotConfig(dict):
         prefix : str, optional
             Arguments with keys starting with given prefix will also be retrieved.
             Defaults to `''`, i.e. no prefix used.
-        index : int or None
-            Index to retrieve from value stored under provided key.
-            If none provided, get argument value as it is.
-            If value is not a list, do not index it (even if it's an iterable!).
+        retrieve : 'get' or 'pop'
+            Determines a way desired values are retrieved from config.
         """
+        retrieve = getattr(self, retrieve)
+
+        if keys is None and prefix is None:
+            raise ValueError("At least `keys` or `prefix` must be specified.")
+
         if keys is None:
-            keys = list(self.keys())
-        elif prefix:
-            keys += [key.split(prefix)[1] for key in self if key.startswith(prefix)]
+            keys = []
 
         result = type(self)()
 
-        for key in keys:
-            if prefix + key in self:
-                result[key] = self.maybe_index(prefix + key, index)
-            elif key in self:
-                result[key] = self.maybe_index(key, index)
+        all_keys = list(self.keys())
+        for key in all_keys:
+            result_key = None
+            if key in keys:
+                result_key = key
+            elif prefix is not None and key.startswith(prefix):
+                result_key = key.split(prefix)[1]
+
+            if result_key is not None:
+                result[result_key] = retrieve(key)
 
         return result
 
+    def update(self, other=None, skip_duplicates=False, **kwargs):
+        """ Update config, skipping already present keys if needed. """
+        if other is None:
+            other = {}
+
+        if skip_duplicates:
+            if hasattr(other, 'keys'):
+                for key in other.keys():
+                    if key not in self:
+                        self[key] = other[key]
+            else:
+                for key, value in other:
+                    if key not in self:
+                        self[key] = value
+
+            for key, value in kwargs:
+                if key not in self:
+                    self[key] = value
+
+            return type(self)({**other, **kwargs, **self})
+        return super().update(other, **kwargs)
 
 STR_TO_OPERATION = {
     '<': operator.lt,
@@ -167,9 +198,8 @@ def evaluate_str_comparison(arg0, string):
     >>> evaluate_str_comparison(np.arange(5), '<3')
     array([ True,  True,  True, False, False])
     """
-    for key in STR_TO_OPERATION:
+    for key, operation in STR_TO_OPERATION.items():
         if key in string:
-            operation = STR_TO_OPERATION[key]
             arg1 = literal_eval(string.split(key)[-1])
             return operation(arg0, arg1)
     msg = f"Given string '{string}' does not contain any of supported operators: {list(STR_TO_OPERATION.keys())}"
@@ -204,3 +234,33 @@ def scale_lightness(color, scale):
     hue, light, saturation = rgb_to_hls(*color)
     new_color = hls_to_rgb(h=hue, l=min(1, light * scale), s=saturation)
     return new_color
+
+def invert_color(color):
+    """ Invert color. """
+    return tuple(1 - x for x in to_rgba(color)[:3])
+
+def wrap_by_delimiter(string, width, delimiter=' ', newline='\n'):
+    """ Wraps the single paragraph in given `string` allowing breaks at `delimiter` positions only so that every line
+        is at most `width` characters long (except for longer indivisible w.r.t. to `delimiter` string items).
+    """
+    result = ''
+
+    line_len = 0
+    line_items = []
+
+    items = string.split(delimiter)
+    for item in items:
+        item_len = len(item)
+        if line_len > 0 and line_len + item_len > width:
+            line = delimiter.join(line_items)
+            result += line + delimiter + newline
+            line_items = []
+            line_len = 0
+        line_items.append(item)
+        line_len += item_len + len(delimiter)
+
+    if line_len > 0:
+        line = delimiter.join(line_items)
+        result += line
+
+    return result

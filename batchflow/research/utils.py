@@ -16,6 +16,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+from batchflow import plot
+from batchflow.plotter.plot import Subplot
+from batchflow.utils import to_list
+
+
 class MultiOut:
     """ Wrapper for several outputs streams. """
     def __init__(self, *args):
@@ -31,9 +36,6 @@ class MultiOut:
 
     def __getattr__(self, attr):
         return getattr(self.handlers[0], attr)
-
-def to_list(value):
-    return value if isinstance(value, list) else [value]
 
 def count_startswith(seq, name):
     return sum(1 for item in seq if item.startswith(name))
@@ -204,147 +206,178 @@ def create_output_stream(dump_results, redirect, filename, path, common=True):
         file = contextlib.nullcontext()
     return file
 
-def plot_results_by_config(results, variables, figsize=None, layout=None, **kwargs):
-    """
-    Given results from Research.run() draws plots of specified variables for all configs
+def plot_research(df, variables=None, subplots=None, aggregate=None, aggregate_fn='mean', same_color=None, layout=None,
+                  short_label=True, ignore=('id', 'name'), meta=('id', 'config', 'repetition', 'cv_split'), **kwargs):
+    """ Plot graphs of variables logged during research. Subplots are grouped by variables name by default.
+    All dataframe columns are treated as variables except 'iteration' and also those provided in `ignore` and `meta`.
+
 
     Parameters
     ----------
-    results : pandas.DataFrame
-        results produced by Research.run()
-    variables : tuple or list
-        variables to plot
-    figsize : tuple or None
-        figsize to pass to matplotlib. If None (default value) figsize is set to (x, y),
-        where x = (5 * number of variables), y = (5 * number of configs in `results`)
-    layout: 'flat', 'square' or None
-        plot arranging strategy when only one variable is needed (default: None, plots are arranged vertically)
+    df : pd.DataFrame
+        Dataframe of results produced by `Research.run`.
+    variables : None, str or list of str
+        Name(s) of dataframe column(s) containing variable(s) values to plot.
+        By default all dataframe columns are treated as `variables` except those from `meta`.
+    subplots : None, str or list of str
+        Name(s) of dataframe column(s) to use for grouping data over subplots.
+        By default research results are aggregated over `variables`.
+    aggregate : str or list of str
+        Name(s) of dataframe columns to use for aggregating on every subplot.
+        By default data is not aggregated.
+    aggregate_fn : str or callable
+        Determines how data is aggregated. Must be a valid `aggfunc` parameter for `pd.pivot_table`.
+    same_color : None or str
+        Color values of same groups with same colors. By default color every value sequence with its own color.
+        E.g. `plot_research(results_df, variables='loss', same_color='config')` will force plotter to use same color for
+        loss values corresponding to same config.
+    layout : None, 'horizontal' or 'vertical'
+        Determines how subplots should be arranged.
+        If 'horizontal', subplots are stretched in a single row, if 'vertical' — in a single column.
+        By default number of plot rows is set to the number of displayed variables
+        and number of columns is calculated to accomodate the plots.
+    short_label : bool
+        Whether shorten legend labels, omitting layer groupping parameters names and keeping only their values.
+        E.g. "{'optimizer': 'Adam'}, 0" instead of "config: {'optimizer': 'Adam'}, repetition: 0".
+    ignore : None, str or list of str
+        Name(s) of column(s) to ignore.
+    meta : str or list of str
+        Name(s) of column(s) to use for grouping data over subplots/layers.
+        Has lower priority than `ignore`, so if same name provided in both arguments, it's ignored.
     """
-    gbc = results.groupby('config')
-    n_configs = len(gbc)
-    n_vars = len(variables)
+    meta = to_list(meta)
+    ignore = to_list(ignore)
 
-    n_h, n_v = n_vars, n_configs
+    if variables is None:
+        variables = sorted(set(df.columns).difference(['iteration', *meta, *ignore]))
+    variables = to_list(variables)
 
-    if n_vars == 1:
-        if layout == 'flat':
-            n_h, n_v = n_configs, 1
-        if layout == 'square':
-            n_h = int(np.sqrt(n_configs))
-            n_v = np.ceil(n_configs / n_h).astype(int)
+    if subplots is None:
+        subplots = []
+    subplots = to_list(subplots)
 
-    if figsize is None:
-        figsize = (n_h * 5, n_v * 5)
-
-    _, axs = plt.subplots(n_v, n_h, figsize=figsize)
-    axs = axs.flatten() if isinstance(axs, np.ndarray) else (axs,)
-    for x, (config, df) in enumerate(gbc):
-        for y, val in enumerate(variables):
-            ax = axs[n_vars * x + y]
-
-            cols = ['repetition', 'cv_split'] if 'cv_split' in df.columns else 'repetition'
-
-            res = (df.pivot_table(index='iteration', columns=cols, values=val)
-                     .rename(columns=lambda s: 'rep ' + str(s), level=0))
-
-            if 'cv_split' in df.columns:
-                res = res.rename(columns=lambda s: 'split ' + str(s), level=1)
-
-            res.plot(ax=ax, **kwargs)
-            ax.set_title(config)
-            ax.set_xlabel('Iteration')
-            ax.set_ylabel(val.replace('_', ' ').capitalize())
-            ax.grid(True)
-            ax.legend()
-
-def show_research(df, layouts=None, titles=None, average_repetitions=False, log_scale=False,
-                  rolling_window=None, color=None, **kwargs): # pylint: disable=too-many-branches
-    """Show plots given by research dataframe.
-
-    Parameters
-    ----------
-    df : DataFrame
-        Research's results
-    layouts : list, optional
-        List of strings where each element consists two parts that splited by /. First part is the type
-        of calculated value wrote in the "name" column. Second is name of column  with the parameters
-        that will be drawn.
-    titles : list, optional
-        List of titles for plots that defined by layout.
-    average_repetitions : bool, optional
-        If True, then a separate line will be drawn for each repetition
-        else one mean line will be drawn for each repetition.
-    log_scale : bool or sequence of bools, optional
-        If True, values will be logarithmised.
-    rolling_window : int of sequence of ints, optional
-        Size of rolling window.
-    color: str or sequence of matplotlib.colors, optional
-        If str, should be a name of matplotlib colormap,
-        colors for plots will be selected from that colormap.
-        If sequence of colors, they will be used for plots,
-        if sequence length is less, than number of lines to plot,
-        colors will be repeated in cycle
-        If None (default), `mcolors.TABLEAU_COLORS` sequence is used
-    kwargs:
-        Additional named arguments directly passed to `plt.subplots`.
-        With default parameters:
-            - ``figsize = (9 * len(layouts), 7)``
-            - ``nrows = 1``
-            - ``ncols = len(layouts)``
-    """
-    if layouts is None:
-        layouts = []
-        for nlabel, ndf in df.groupby("name"):
-            ndf = ndf.drop(['config', 'name', 'iteration', 'repetition'], axis=1).dropna(axis=1)
-            for attr in ndf.columns.values:
-                layouts.append('/'.join([str(nlabel), str(attr)]))
-    titles = layouts if titles is None else titles
-    if isinstance(log_scale, bool):
-        log_scale = [log_scale] * len(layouts)
-    if isinstance(rolling_window, int) or (rolling_window is None):
-        rolling_window = [rolling_window] * len(layouts)
-    rolling_window = [x if x is not None else 1 for x in rolling_window]
-
-    if color is None:
-        color = list(mcolors.TABLEAU_COLORS.keys())
-    df_len = len(df['config'].unique())
-
-    if isinstance(color, str):
-        cmap = plt.get_cmap(color)
-        chosen_colors = [cmap(i/df_len) for i in range(df_len)]
+    if aggregate is None:
+        aggregate = []
+    elif aggregate is True:
+        aggregate = ['repetition']
     else:
-        chosen_colors = list(itertools.islice(itertools.cycle(color), df_len))
+        aggregate = to_list(aggregate)
 
-    kwargs = {'figsize': (9 * len(layouts), 7), 'nrows': 1, 'ncols': len(layouts), **kwargs}
+    for name in aggregate:
+        if name not in df.columns:
+            raise ValueError(f"Cannot aggregate data over `{name}` — nonexisting column name provided.")
 
-    _, ax = plt.subplots(**kwargs)
-    if len(layouts) == 1:
-        ax = (ax, )
+    meta = [name for name in meta if name not in aggregate and name not in ignore and name in df.columns]
+    subplots = [name for name in subplots if name in meta]
+    layers = [name for name in meta if name not in subplots]
 
-    for i, (layout, title, log, roll_w) in enumerate(list(zip(*[layouts, titles, log_scale, rolling_window]))):
-        name, attr = layout.split('/')
-        ndf = df[df['name'] == name]
-        for (clabel, cdf), curr_color in zip(ndf.groupby("config"), chosen_colors):
-            cdf = cdf.drop(['config', 'name'], axis=1).dropna(axis=1).astype('float')
-            if average_repetitions:
-                idf = cdf.groupby('iteration').mean().drop('repetition', axis=1)
-                y_values = idf[attr].rolling(roll_w).mean().values
-                if log:
-                    y_values = np.log(y_values)
-                ax[i].plot(idf.index.values, y_values, label=str(clabel), color=curr_color)
+    if same_color is None:
+        if len(layers) == 0:
+            unique_layers = [None]
+        else:
+            unique_layers = df[layers].drop_duplicates().apply(lambda row: tuple(row), axis=1).values
+    else:
+        if same_color not in layers:
+            msg = f"Can't color lines with same `{same_color}`"
+            if same_color in subplots:
+                msg += " since data is already grouped by this column over subplots."
+            elif same_color in aggregate:
+                msg += " since data is already aggregated over this column."
             else:
-                for repet, rdf in cdf.groupby('repetition'):
-                    rdf = rdf.drop('repetition', axis=1)
-                    y_values = rdf[attr].rolling(roll_w).mean().values
-                    if log:
-                        y_values = np.log(y_values)
-                    ax[i].plot(rdf['iteration'].values, y_values,
-                               label='/'.join([str(repet), str(clabel)]), color=curr_color)
-        ax[i].set_xlabel('iteration')
-        ax[i].set_title(title)
-        ax[i].legend()
-    plt.show()
+                msg += " since column with such name is not present in provided dataframe."
+            raise ValueError(msg)
+        unique_layers = df[same_color].unique()
+    name_to_color = {value: Subplot.CURVE_COLORS[index] for index, value in enumerate(unique_layers)}
 
+    data = []
+    color = []
+    title = []
+    label = []
+    ylabel = []
+
+    pivot_df = df.pivot_table(index='iteration', columns=subplots + layers, values=variables, aggfunc=aggregate_fn)
+    if len(layers) == 0:
+        index = pivot_df.columns
+    else:
+        index = set(column[:len(subplots) + 1] for column in pivot_df.columns)
+
+    for subplot_index in sorted(index):
+        subplot_data = []
+        subplot_color = []
+        subplot_label = []
+
+        subplot_df = pivot_df[subplot_index]
+
+        if isinstance(subplot_df, pd.Series):
+            subplot_df = subplot_df.to_frame()
+
+        for layer_index in subplot_df:
+            layer_df = subplot_df[layer_index]
+
+            layer_data = (layer_df.index.values, layer_df.values)
+            subplot_data.append(layer_data)
+
+            layer_index = layer_index if isinstance(layer_index, tuple) else (layer_index, )
+
+            if same_color is None:
+                layer_id = layer_index if len(layers) > 0 else None
+            else:
+                layer_id = layer_index[layers.index(same_color)]
+            layer_color = name_to_color[layer_id]
+            subplot_color.append(layer_color)
+
+            if len(layers) == 0:
+                layer_label = None if len(aggregate) == 0 else f"aggregated by {aggregate}"
+            elif short_label:
+                layer_label = ', '.join(map(str, layer_index))
+            else:
+                layer_label = ', '.join([': '.join(map(str, x)) for x in zip(layers, layer_index)])
+            subplot_label.append(layer_label)
+
+        data.append(subplot_data)
+        if same_color is not None:
+            color.append(subplot_color)
+
+        subplot_title = ', '.join(
+            [
+                ': '.join(map(str, x)) for x in
+                zip(
+                    ['variable', *subplots],
+                    to_list(subplot_index)
+                )
+            ]
+        )
+        title.append(subplot_title)
+        label.append(subplot_label)
+        subplot_ylabel = str(subplot_index[0]).replace('_', ' ').capitalize()
+        ylabel.append(subplot_ylabel)
+
+    plot_config = {
+        'subplot_width': 8,
+        'title': title,
+        'label': label,
+        'xlabel': 'Iteration',
+        'ylabel': ylabel,
+        **kwargs
+    }
+
+    if 'ncols' not in kwargs and 'nrows' not in kwargs:
+        if layout is None:
+            if len(index) == len(variables):
+                ncols, nrows = len(variables), 1
+            else:
+                ncols, nrows = len(index) // len(variables), len(variables)
+        elif layout == 'vertical':
+            ncols, nrows = 1, len(index)
+        elif layout == 'horizontal':
+            ncols, nrows = len(index), 1
+
+        plot_config = {**plot_config, 'ncols': ncols, 'nrows': nrows, 'ratio': nrows / ncols}
+
+    if same_color is not None:
+        plot_config = {'color': color, **plot_config}
+
+    return plot(data, mode='curve', **plot_config)
 
 def print_results(df, layout, average_repetitions=False, sort_by=None, ascending=True, n_last=100):
     """ Show results given by research dataframe.
@@ -380,7 +413,7 @@ def print_results(df, layout, average_repetitions=False, sort_by=None, ascending
     if average_repetitions:
         columns.extend([attr + ' (mean)', attr + ' (std)'])
     else:
-        repetition_cols = ['　(repetition {})'.format(i) for i in ndf['repetition'].unique()]
+        repetition_cols = [f'　(repetition {i})' for i in ndf['repetition'].unique()]
         columns.extend([attr + col_name for col_name in [*repetition_cols, ' (mean)', ' (std)']])
 
     for config, cdf in ndf.groupby("config"):
