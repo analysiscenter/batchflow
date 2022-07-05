@@ -201,11 +201,11 @@ class VisualizationMixin:
 
     # Deprecated aliases
 
-    deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead"
+    deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
 
-    show_lr = deprecated(deprecation_msg.format('show_lr', 'plot_lr'))(plot_lr)
+    show_lr = deprecated(deprecation_msg.format('TorchModel.show_lr', 'TorchModel.plot_lr'))(plot_lr)
 
-    show_loss = deprecated(deprecation_msg.format('show_loss', 'plot_loss'))(plot_loss)
+    show_loss = deprecated(deprecation_msg.format('TorchModel.show_loss', 'TorchModel.plot_loss'))(plot_loss)
 
 
 class OptimalBatchSizeMixin:

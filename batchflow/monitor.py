@@ -16,6 +16,7 @@ except ImportError:
     nvidia_smi = None
 
 from .plotter import plot
+from .decorators import deprecated
 
 
 
@@ -156,6 +157,8 @@ class ResourceMonitor:
 
         return plotter(data=data, mode='curve', positions=positions, **plot_config)
 
+    deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
+    visualize = deprecated(deprecation_msg.format('ResourceMonitor.visualize', 'ResourceMonitor.plot'))(plot)
 
 class CPUMonitor(ResourceMonitor):
     """ Track CPU usage. """
