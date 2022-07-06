@@ -100,10 +100,6 @@ class ConfigAlias:
         """
         return Config({item[0].value: item[1].value for item in self._config})
 
-    def fully_aliased(self):
-        """ Change all values in config to its aliased version. Is needed for dumping. """
-        return ConfigAlias({key.alias: value.alias for (key, value) in self._config})
-
     def pop_config(self, key):
         """ Pop item from ConfigAlias by config value (not by alias).
 
