@@ -579,8 +579,8 @@ class Experiment:
         method = self.get_method(name)
         if method is None:
             warning.warn(f'Method {name} was not found in any namespace.')
-        else:
-            return _explicit_call(method, name, self)
+            return None
+        return _explicit_call(method, name, self)
 
     def save(self, src, dst, when=1, save_output_dict=False, copy=False): #pylint:disable=redefined-outer-name
         """ Save something to research results.
