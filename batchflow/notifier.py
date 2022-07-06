@@ -21,6 +21,7 @@ from .named_expr import NamedExpression, eval_expr
 from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .utils_telegram import TelegramMessage
 from .plotter import plot
+from .decorators import deprecated
 
 
 
@@ -152,22 +153,11 @@ class Notifier:
         self.n_monitors = len(monitors)
 
         if self.has_graphs:
-            num_graphs = len(graphs)
-
-            if layout.startswith('h'):
-                nrows, ncols = (1, num_graphs)
-                figsize = figsize or (6 * num_graphs, 6)
-            else:
-                nrows, ncols = (num_graphs, 1)
-                figsize = figsize or (6, 6 * num_graphs)
-
-            plot_config = {
-                'adjust_figsize': True,
-                'legend_loc': 9,
-                **({} if plot_config is None else plot_config)
-            }
-
-            self.plotter = plot(nrows=nrows, ncols=ncols, figsize=figsize, show=False, **plot_config)
+            if plot_config is None:
+                plot_config = {}
+            self.plotter = self.make_plotter(num_graphs=len(graphs), layout=layout, figsize=figsize, **plot_config)
+        else:
+            self.plotter = None
 
         self.data_containers = []
         for container in monitors + graphs:
@@ -387,6 +377,39 @@ class Notifier:
         if postfix and not previous_postfix.startswith(postfix):
             self.bar.set_postfix_str(postfix)
 
+    def make_plotter(self, num_graphs=None, layout=None, figsize=None, **kwargs):
+        """ Make canvas for plotting graphs. """
+        if num_graphs is None:
+            num_graphs = len(self.data_containers)
+
+        plot_config = {
+            'adjust_figsize': True,
+            'legend_loc': 9,
+            'show': False,
+            **kwargs
+        }
+
+        if layout is not None:
+            if layout in ['h', 'horizontal']:
+                nrows, ncols = (1, num_graphs)
+                figsize = figsize or (6 * num_graphs, 6)
+            elif layout in ['v', 'vertical']:
+                nrows, ncols = (num_graphs, 1)
+                figsize = figsize or (6, 6 * num_graphs)
+            else:
+                raise ValueError(f"Valid `layout` is one of 'h', 'horizontal', 'v', 'vertical', got {layout} instead.")
+
+            plot_config = {
+                'nrows': nrows,
+                'ncols': ncols,
+                'figsize': figsize,
+                **plot_config
+            }
+        elif figsize is not None:
+            plot_config['figsize'] = figsize
+
+        return plot(**plot_config)
+
     def update_plots(self, index=0, add_suptitle=False, savepath=None, clear_display=True):
         """ Draw plots anew. """
         if clear_display:
@@ -434,9 +457,10 @@ class Notifier:
         if plot_function is not None:
             plot_function(ax=subplot.ax, index=index, x=x, y=y, container=container, notifier=self)
         elif isinstance(source, ResourceMonitor):
-            source.plot(plotter=self.plotter, positions=index, slice=self.slice, **plot_config)
+            source.plot(plotter=self.plotter, positions=index, **plot_config)
         else:
             plot_config['title'] = name
+            plot_config['label'] = None
             if isinstance(data, (tuple, list)) or (isinstance(data, np.ndarray) and data.ndim == 1):
                 plot_config = {
                     'xlabel': 'Iteration',
@@ -447,6 +471,7 @@ class Notifier:
                 if 'loss' in name.lower():
                     data = y
                     mode = 'loss'
+                    plot_config['label'] = 'loss'
                 else:
                     data = (x, y)
                     mode = 'curve'
@@ -489,9 +514,15 @@ class Notifier:
         self.telegram_text.send(f'`{text[:idx]}`\n`{text[idx:]}`')
 
     # Manual usage of notifier instance
-    def visualize(self):
+    def plot(self, num_graphs=None, layout='horizontal', **kwargs):
         """ Convenient alias for working with an instance. """
+        if self.plotter is None:
+            self.plotter = self.make_plotter(num_graphs=num_graphs, layout=layout, **kwargs)
         self.update_plots(clear_display=False)
+
+    deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
+    visualize = deprecated(deprecation_msg.format('Notifier.visualize', 'Notifier.plot'))(plot)
+
 
     def to_file(self, file):
         """ Log all the iteration-wise info (timestamps, descriptions) into file."""

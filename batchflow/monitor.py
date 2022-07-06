@@ -138,11 +138,12 @@ class ResourceMonitor:
             else:
                 name = f'{name} on devices `{str(used_gpus)[1:-1]}`'
 
-        stats = f'MEAN: {np.mean(self.data):4.4}    STD: {np.std(self.data):4.4}'
+        stats = f'MEAN: {np.mean(self.data):4.4} STD: {np.std(self.data):4.4}'
 
         plot_config = {
             'title': name,
             'label': stats,
+            'smoothed_label': '',
             'legend_loc': 9,
             'xlabel': 'Time, s',
             'ylabel': self.UNIT,

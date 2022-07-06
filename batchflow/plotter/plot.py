@@ -130,8 +130,7 @@ class Layer:
                     xdata = range(len(data))
 
                 data = [xdata, data]
-
-            smoothed = self.smooth(data[1].squeeze())
+            smoothed = self.smooth(data[1].squeeze() if data[1].ndim > 1 else data[1])
             if smoothed is not None:
                 data = [data[0], smoothed]
 
@@ -277,8 +276,10 @@ class Layer:
         if smoothed is not None:
             smoothed_color = scale_lightness(loss_config['color'], scale=.5)
             smooth_window = self.config.get('window')
-            smoothed_loss_label = f'{loss_name} smoothed with window {smooth_window}'
-            smoothed_curve = self.ax.plot(smoothed, label=smoothed_loss_label, color=smoothed_color, linestyle='--')
+            smoothed_label = self.config.get('smoothed_label', loss_name)
+            smoothed_label = smoothed_label + '\n' if smoothed_label else ''
+            smoothed_label += f'smoothed with window {smooth_window}'
+            smoothed_curve = self.ax.plot(smoothed, label=smoothed_label, color=smoothed_color, linestyle='--')
             curves.extend(smoothed_curve)
 
         if lr is not None:
@@ -742,15 +743,11 @@ class Subplot:
     def clear(self):
         """ Clear subplot axis. """
         self.ax.clear()
-        self.layers = []
-        self.annotations = {}
-
-    def clear_layers(self):
-        """ Remove subplot layers. """
         for layer in self.layers:
             for obj in layer.objects:
                 obj.remove()
         self.layers = []
+        self.annotations = {}
 
 
 class Plot:
@@ -1433,8 +1430,8 @@ class Plot:
         self.figure.clear()
 
     def clear_subplots(self):
-        for subplot in self.subplots():
-            subplot.clear_layers()
+        for subplot in self.subplots:
+            subplot.clear()
 
     def save(self, **kwargs):
         """ Save plot. """
