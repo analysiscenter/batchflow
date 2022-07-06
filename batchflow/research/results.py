@@ -4,6 +4,7 @@ import os
 import functools
 from collections import OrderedDict
 import glob
+import warnings
 import dill
 import multiprocess as mp
 import pandas as pd
@@ -395,7 +396,7 @@ class ResearchResults:
         self.configs = dict(self.configs)
         self._manager.shutdown()
 
-class CustomUnpickler(dill.Unpickler):
+class Unpickler(dill.Unpickler):
     """ Unpickler which will load object as a string if it can't be found. Is necessary
     to deal with objects imported from modules and removed. """
     def find_class(self, module, name):
@@ -403,11 +404,9 @@ class CustomUnpickler(dill.Unpickler):
         try:
             return super().find_class(module, name)
         except AttributeError:
+            warnings.warn(f"Can't get attribute {name} on <module {module}>")
             return f"<object {module}.{name}>"
 
 def deserialize(file, ignore=None, **kwargs):
-    """
-    Unpickle an object from a file.
-    See :func:`loads` for keyword arguments.
-    """
-    return CustomUnpickler(file, ignore=ignore, **kwargs).load()
+    """ Unpickle an object from a file. Attributed that can't be loaded will be changed by str. """
+    return Unpickler(file, ignore=ignore, **kwargs).load()
