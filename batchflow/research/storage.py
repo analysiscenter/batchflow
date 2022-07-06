@@ -224,7 +224,7 @@ class LocalExperimentStorage(BaseExperimentStorage):
     def _dump_config(self):
         """ Dump config as serialized ConfigAlias instance and as a dict in JSON. """
         with open(os.path.join(self.full_path, 'config.dill'), 'wb') as file:
-            dill.dump(self.experiment.config_alias.fully_aliased(), file)
+            dill.dump(self.experiment.config_alias, file)
         with open(os.path.join(self.full_path, 'config.json'), 'w') as file:
             json.dump(jsonify(self.experiment.config_alias.alias().config), file)
 

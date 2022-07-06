@@ -55,7 +55,7 @@ class ResearchResults:
             path = os.path.normpath(path)
             _experiment_id = path.split(os.sep)[-2]
             with open(path, 'rb') as f:
-                self.configs[_experiment_id] = dill.load(f)
+                self.configs[_experiment_id] = deserialize(f)
 
     def load_results(self, experiment_id=None, name=None, iterations=None,
                      config=None, alias=None, domain=None, **kwargs):
@@ -248,7 +248,7 @@ class ResearchResults:
         results = OrderedDict()
         for filename in files_to_load.values():
             with open(filename, 'rb') as f:
-                values = dill.load(f)
+                values = deserialize(f)
                 for iteration in values:
                     if iterations is None or iteration in iterations:
                         results[iteration] = values[iteration]
@@ -394,3 +394,20 @@ class ResearchResults:
         self.results = dict(self.results)
         self.configs = dict(self.configs)
         self._manager.shutdown()
+
+class CustomUnpickler(dill.Unpickler):
+    """ Unpickler which will load object as a string if it can't be found. Is necessary
+    to deal with objects imported from modules and removed. """
+    def find_class(self, module, name):
+        """ Get object class. """
+        try:
+            return super().find_class(module, name)
+        except AttributeError:
+            return f"<object {module}.{name}>"
+
+def deserialize(file, ignore=None, **kwargs):
+    """
+    Unpickle an object from a file.
+    See :func:`loads` for keyword arguments.
+    """
+    return CustomUnpickler(file, ignore=ignore, **kwargs).load()
