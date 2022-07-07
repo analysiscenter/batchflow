@@ -50,17 +50,6 @@ class RadixSoftmax(nn.Module):
         return x
 
 
-class SimpleGate(nn.Module):
-    def forward(self, x):
-        x1, x2 = x.chunk(2, dim=1)
-        return x1 * x2
-
-class SumGate(nn.Module):
-    def forward(self, x):
-        if x.shape[1] % 2 != 0:
-            raise ValueError('SumGate works only with even number of channels!')
-        return x[:, ::2] + x[:, 1::2]
-
 
 class Activation(nn.Module):
     """ Proxy activation module.
@@ -86,8 +75,6 @@ class Activation(nn.Module):
     FUNCTIONS = {f.lower(): f for f in dir(nn)}
     FUNCTIONS.update({
         'rsoftmax': RadixSoftmax,
-        'simplegate': SimpleGate, 'mulgate': SimpleGate,
-        'sumgate': SumGate,
     })
 
     def __init__(self, activation='relu', *args, **kwargs):
