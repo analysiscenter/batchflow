@@ -132,7 +132,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         - additional parameters:
             - `sam` and `sam_rho` enable sharpness-aware minimization: a technique for improving model generatlization.
             - `weights_averaging` enables model weights averaging.
-
+            - `gradient_clipping` enables backward hooks for gradient clipping.
 
 
     We recommend looking at :class:`~.torch.layers.Block` to learn about parameters for model building blocks,
@@ -347,6 +347,12 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             {'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
                        {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'start_iter': 901}]
 
+    gradient_clipping : number or callable
+        Enables gradient clipping as a backward hook.
+        If number, then acts as a clipping threshold for clamp.
+        If callable, then directly applied to each gradient during backprop.
+        Note that this is different from the usual `PyTorch` way to modify gradients in-place after the entire backprop.
+
 
     Examples
     --------
@@ -421,6 +427,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         self.operations = {}
         self.callbacks = []
+        self._hooks = []
 
         # Memory amortization: accumulate gradients to update weights later
         self.sync_frequency = 1
@@ -528,6 +535,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             'loss': None,
             'optimizer': 'Adam',
             'decay': None,
+            'gradient_clipping': None,
+            'weights_averaging': None,
 
             # SAM: sharpness-aware minimization
             'sam_rho': 0.0,
@@ -673,6 +682,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.make_decay()
         self.scaler = torch.cuda.amp.GradScaler()
 
+        self.setup_gradient_clipping()
         self.setup_weights_averaging()
 
     def unpack(self, value):
@@ -786,6 +796,19 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self.decay.append(decay_)
             self.decay_step.append(step_params)
 
+    def setup_gradient_clipping(self):
+        """ Clip gradients to avoid explosion. """
+        gradient_clipping = self.config.get('gradient_clipping')
+        if gradient_clipping:
+            if isinstance(gradient_clipping, (int, float)):
+                function = lambda grad: torch.clamp(grad, -gradient_clipping, gradient_clipping)
+            elif callable(gradient_clipping):
+                function = gradient_clipping
+
+            for p in self.model.parameters():
+                hook = p.register_hook(function)
+                self._hooks.append(hook)
+
     def setup_weights_averaging(self):
         """ Prepare WA-model: check all required keys and store copy on CPU. """
         wa_config = self.config.get('weights_averaging') or self.config.get('wa') or self.config.get('swa')
@@ -862,7 +885,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.tta_wrapped = True
 
     def wrap_trt(self, batch_size, use_onnx=True, fp16_mode=True, **kwargs):
-        """ !!. """
+        """ Convert PyTorch model to TensorRT engine. """
         from torch2trt import torch2trt
         inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
 
@@ -1141,6 +1164,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         with torch.cuda.amp.autocast(enabled=self.amp):
             loss = self.loss(predictions, targets)
             loss_ = loss / sync_frequency
+
+        # nan_in_loss = torch.isnan(loss).max().item()
+        # if not nan_in_loss:
         (self.scaler.scale(loss_) if self.amp else loss_).backward()
         self._loss_list.append(self.transfer_from_device(loss))
 
