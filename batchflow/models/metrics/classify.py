@@ -3,10 +3,12 @@ from copy import copy
 from functools import partial
 
 import numpy as np
-from matplotlib import pyplot as plt
 
 from ...decorators import mjit
 from . import Metrics, binarize, sigmoid, infmean
+from ...plotter import plot
+
+
 
 METRICS_ALIASES = {'sensitivity' : 'true_positive_rate',
                    'recall' : 'true_positive_rate',
@@ -159,7 +161,7 @@ class ClassificationMetrics(Metrics):
     def confusion_matrix(self):
         return self._confusion_matrix.sum(axis=0)
 
-    def plot_confusion_matrix(self, classes=None, normalize=False, figsize=(10, 10)):
+    def plot_confusion_matrix(self, classes=None, normalize=False, **kwargs):
         """ Plot confusion matrix.
 
         Parameters
@@ -168,8 +170,6 @@ class ClassificationMetrics(Metrics):
             Sequence of classes labels.
         normalize : bool
             Whether to normalize confusion matrix over target classes.
-        figsize : tuple of ints
-            Image width and height in inches.
         """
         confusion_matrix = np.array(self.confusion_matrix)
         if classes is None:
@@ -177,19 +177,16 @@ class ClassificationMetrics(Metrics):
         if normalize:
             confusion_matrix = confusion_matrix / np.nansum(confusion_matrix, axis=0)
 
-        fig, ax = plt.subplots(figsize=figsize)
-        image = ax.matshow(confusion_matrix)
-        ax.set_xticks(np.arange(confusion_matrix.shape[0]))
-        ax.set_xticklabels(classes, rotation=75, ha="left")
-        ax.set_xlabel("Actual class")
-        ax.set_yticks(np.arange(confusion_matrix.shape[0]))
-        ax.set_yticklabels(classes)
-        ax.set_ylabel("Predicted class")
-        ax.set_title("Normalized confusion matrix")
-        fig.colorbar(image, ax=ax, shrink=0.8)
-        fig.tight_layout()
-        plt.grid(False)
-        plt.show()
+        plot_config = {
+            'title': 'Normalized confusion matrix' if normalize else 'Confusion matrix',
+            'xlabel': 'Actual class',
+            'xticks': np.arange(confusion_matrix.shape[0]),
+            'ylabel': 'Predicted class',
+            'yticks': np.arange(confusion_matrix.shape[1]),
+            **kwargs
+        }
+
+        return plot(data=confusion_matrix, mode='matrix', **plot_config)
 
     def copy(self):
         """ Return a duplicate containing only the confusion matrix """
