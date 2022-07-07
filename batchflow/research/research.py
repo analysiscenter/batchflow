@@ -1,26 +1,18 @@
 #pylint:disable=logging-fstring-interpolation, too-many-arguments
 """ Research class for muliple parallel experiments. """
 
-import os
-import sys
 import time
 import itertools
-import subprocess
-import re
-import glob
 import warnings
-import shutil
 import psutil
-import dill
 import multiprocess as mp
 import tqdm
 
 from .domain import Domain
 from .distributor import Distributor, DynamicQueue
 from .experiment import Experiment, Executor
-from .results import ResearchResults
-from .utils import create_logger, to_list
-from .profiler import ResearchProfiler
+from .utils import to_list
+from .storage import BaseResearchStorage, LocalResearchStorage, MemoryResearchStorage
 
 from ..utils_random import make_seed_sequence
 
@@ -57,6 +49,7 @@ class Research:
         self.create_id_prefix = False
         self.redirect_stdout = True
         self.redirect_stderr = True
+        self.storage = None
 
         self._env = dict() # current state of git repo and other environment information.
 
@@ -74,20 +67,18 @@ class Research:
         self.tasks_queue = None
         self.distributor = None
         self.monitor = None
-        self.results = None
         self.logger = None
         self.process = None
         self.debug = False
         self.finalize = True
         self.random_seed = None
         self.profile = False
-        self.profiler = None
         self.memory_ratio = None
         self.n_gpu_checks = 3
         self.gpu_check_delay = 5
         self.dump_monitor = True
 
-        self._is_loaded = False
+        self.is_loaded = False
         self._is_executed = False
         self._env_meta_to_collect = []
 
@@ -122,43 +113,6 @@ class Research:
         self.domain.set_update(function, when, **kwargs)
         return self
 
-    def _get_env_state(self, cwd='.', dst=None, replace=None, commands=None, *args, **kwargs):
-        """ Execute commands and save output. """
-        if cwd == '.' and dst is None:
-            dst = 'cwd'
-        elif dst is None:
-            dst = os.path.split(os.path.realpath(cwd))[1]
-
-        if isinstance(commands, (tuple, list)):
-            args = [*commands, *args]
-        elif isinstance(commands, dict):
-            kwargs = {**commands, **kwargs}
-
-        all_commands = [('env_state', command) for command in args]
-        all_commands = [*all_commands, *kwargs.items()]
-
-        for filename, command in all_commands:
-            if command.startswith('#'):
-                if command[1:] == 'python':
-                    result = sys.version
-                else:
-                    raise ValueError(f'Unknown env: {command}')
-            else:
-                process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, cwd=cwd)
-                output, _ = process.communicate()
-                result = output.decode('utf')
-            if replace is not None:
-                for key, value in replace.items():
-                    result = re.sub(key, value, result)
-            if self.dump_results:
-                if not os.path.exists(os.path.join(self.name, 'env', dst)):
-                    os.makedirs(os.path.join(self.name, 'env', dst))
-                with open(os.path.join(self.name, 'env', dst, filename + '.txt'), 'a') as file:
-                    file.write(result)
-            else:
-                self._env[os.path.join(dst, filename)] = self._env.get(os.path.join(dst, filename), '') + result
-
-
     def attach_env_meta(self):
         """ Get version of packages (by "pip list" and "conda list") and python version. Results will be stored
         in research folder (if it is created) or in _env attribute.
@@ -188,19 +142,6 @@ class Research:
         replace = {'"image/png": ".*?"': '"image/png": "..."'}
         self._env_meta_to_collect.append(dict(cwd=cwd, dst=None, replace=replace, commands=commands))
         return self
-
-    @property
-    def env(self):
-        """ Environment state. """
-        env = dict()
-        if self.dump_results:
-            filenames = glob.glob(os.path.join(self.name, 'env', '*'))
-            for filename in filenames:
-                name = os.path.splitext(os.path.basename(filename))[0]
-                with open(filename, 'r') as file:
-                    env[name] = file.read().strip()
-            return env
-        return self._env
 
     def get_devices(self, devices):
         """ Return list if lists. Each sublist consists of devices for each branch.
@@ -267,14 +208,6 @@ class Research:
             devices = [[_transform_item(branch_config) for branch_config in worker_config] for worker_config in devices]
         return devices
 
-    def create_research_folder(self):
-        """ Create folder for the research results. """
-        os.makedirs(self.name)
-        for subfolder in ['env', 'experiments']:
-            config_path = os.path.join(self.name, subfolder)
-            if not os.path.exists(config_path):
-                os.makedirs(config_path)
-
 
     def run(self, name=None, workers=1, branches=1, n_iters=None, devices=None, executor_class=Executor,
             dump_results=True, parallel=True, executor_target='threads', loglevel=None, bar=True, detach=False,
@@ -339,10 +272,11 @@ class Research:
         redirect_stdout, redirect_stderr : int or bool, optional
             how to redirect stdout/stderr to files:
                 0 or False - no redirection,
-                1 or True - redirect to common research file "stdout.txt"/"stderr.txt"
+                True - redirect to common research file "stdout.txt"/"stderr.txt" when `dump_results=True`
+                       or to separate items in `research.storage.experiments_stdout` when `dump_results=False`
+                1 - redirect to common research file "stdout.txt"/"stderr.txt" (only when dump_results=True)
                 2 - redirect output streams of experiments into separate file in experiments folders
-                3 - redirect to common file and to separate experiments files
-            Is applicable only with `dump_results=True`.
+                3 - redirect to common file and to separate experiments files (only when dump_results=True)
 
         Returns
         -------
@@ -372,11 +306,24 @@ class Research:
         self.n_gpu_checks = n_gpu_checks
         self.gpu_check_delay = gpu_check_delay
         self.create_id_prefix = create_id_prefix
+
+        if redirect_stdout is True and not dump_results:
+            redirect_stdout = 2
+
+        if redirect_stderr is True and not dump_results:
+            redirect_stderr = 2
+
         self.redirect_stdout = redirect_stdout
         self.redirect_stderr = redirect_stderr
 
         if debug and (parallel or executor_target not in ['f', 'for']):
             raise ValueError("`debug` can be True only with `parallel=False` and `executor_target='for'`")
+
+        if not dump_results and redirect_stdout in (1, 3):
+            raise ValueError("`redirect_stdout` can be 0 or 2 only when `dump_results` is False")
+
+        if not dump_results and redirect_stderr in (1, 3):
+            raise ValueError("`redirect_stderr` can be 0 or 2 only when `dump_results` is False")
 
         self.debug = debug
         self.finalize = finalize
@@ -387,9 +334,6 @@ class Research:
         else:
             self.n_iters = n_iters
 
-        if dump_results and os.path.exists(self.name):
-            raise ValueError(f"Research with name '{self.name}' already exists")
-
         self.domain.set_iter_params(n_items=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each,
                                     create_id_prefix=self.create_id_prefix, seed=self.random_seed)
 
@@ -397,37 +341,35 @@ class Research:
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
                           stacklevel=2)
 
-        if self.dump_results:
-            self.create_research_folder()
+        self.storage = self.dump_results
+        if isinstance(self.storage, bool):
+            self.storage = 'local' if self.storage else 'memory'
+        if isinstance(self.storage, str):
+            self.storage = BaseResearchStorage(self, self.loglevel, storage=self.storage)
+
+        if not isinstance(self.storage, MemoryResearchStorage):
             self.experiment = self.experiment.dump() # add final dump of experiment results
-            self.dump_research()
-            self.loglevel = loglevel or 'info'
-        else:
-            self.loglevel = loglevel or 'error'
-        self.create_logger()
+
+        self.logger = self.storage.logger
 
         if git_meta:
             self.attach_git_meta()
         if env_meta:
             self.attach_env_meta()
-        for item in self._env_meta_to_collect:
-            args = item.pop('args', [])
-            kwargs = item.pop('kwargs', {})
-            self._get_env_state(*args, **item, **kwargs)
 
-        self.logger.info("Research is starting")
+        self.storage.collect_env_state(self._env_meta_to_collect)
 
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
         self.tasks_queue = DynamicQueue(self.domain, self, n_branches)
         self.distributor = Distributor(self.tasks_queue, self)
 
-        self.monitor = ResearchMonitor(self, self.name, bar=self.bar) # process execution signals
-        self.results = ResearchResults(self.name, self.dump_results)
-        self.profiler = ResearchProfiler(self.name, self.profile)
+        self.monitor = ResearchMonitor(self, bar=self.bar) # process execution signals
 
         def _start_distributor():
             self.distributor.run()
             self.monitor.stop()
+
+        self.logger.info("Research is starting")
 
         self.monitor.start()
         if self.parallel:
@@ -450,29 +392,38 @@ class Research:
             self.terminate()
         return self
 
+    @property
+    def results(self):
+        return self.storage.results
+
+    @property
+    def profiler(self):
+        return self.storage.profiler
+
     def terminate(self, kill_processes=False, force=False, wait=True):
         """ Kill all research processes. """
-        # TODO: killed processes don't release GPU.
-        if not self._is_loaded:
-            if not force and self.monitor.in_progress:
+        if not self.is_loaded:
+            if not force and self.monitor and self.monitor.in_progress:
                 answer = input(f'{self.name} is in progress. Are you sure? [y/n]').lower()
                 answer = len(answer) > 0 and 'yes'.startswith(answer)
             else:
                 answer = True
-            if force or answer:
-                self.logger.info("Stop research.")
-                if self.monitor is not None:
-                    self.monitor.stop(wait=wait)
 
-                self.monitor.close_manager()
-                self.results.close_manager()
-                self.profiler.close_manager()
+            if force or answer:
+                if self.logger:
+                    self.logger.info("Stop research.")
+                if self.monitor:
+                    self.monitor.stop(wait=wait)
+                    self.monitor.close()
+                if self.storage:
+                    self.storage.close()
 
                 if self.detach:
                     kill_processes = True
 
-                if kill_processes and self.monitor is not None:
-                    self.logger.info("Terminate research processes")
+                if kill_processes and self.monitor:
+                    if self.logger:
+                        self.logger.info("Terminate research processes")
 
                     order = {'EXECUTOR': 1, 'WORKER': 2, 'DETACHED_PROCESS': 3, 'MONITOR': 4}
                     processes_to_kill = sorted(self.monitor.processes.items(), key=lambda x: order[x[1]])
@@ -480,72 +431,8 @@ class Research:
                         if pid is not None and psutil.pid_exists(pid):
                             process = psutil.Process(pid)
                             process.terminate()
-                            self.logger.info(f"Terminate {process_type} [pid:{pid}]")
-
-    def create_logger(self):
-        """ Create research logger. """
-        name = f"{self.name}"
-        path = os.path.join(self.name, 'research.log') if self.dump_results else None
-
-        self.logger = create_logger(name, path, self.loglevel)
-
-    def dump_research(self):
-        """ Dump research object. """
-        with open(os.path.join(self.name, 'research.dill'), 'wb') as f:
-            dill.dump(self, f)
-        with open(os.path.join(self.name, 'research.txt'), 'w') as f:
-            f.write(str(self))
-
-    @classmethod
-    def load(cls, name):
-        """ Load research object. """
-        if not cls.folder_is_research(name):
-            raise TypeError(f'Folder "{name}" is not research folder.')
-        return cls._load(name)
-
-    def _load(name):
-        with open(os.path.join(name, 'research.dill'), 'rb') as f:
-            research = dill.load(f)
-        if research.dump_results:
-            research.results = ResearchResults(research.name, research.dump_results)
-            research.profiler = ResearchProfiler(research.name, research.profile)
-            research.results.load()
-            research.profiler.load()
-            research._is_loaded = True # pylint: disable=protected-access
-        return research
-
-    @classmethod
-    def remove(cls, name, ask=True, force=False):
-        """ Remove research folder.
-
-        Parameters
-        ----------
-        name : str
-            research path to remove.
-        ask : bool, optional
-            display a dialogue with a question about removing or not, by default True.
-        force : bool
-            Remove folder even if it is not research folder.
-        """
-        if not os.path.exists(name):
-            warnings.warn(f"Folder {name} doesn't exist.")
-        else:
-            if not force:
-                if not cls.folder_is_research(name):
-                    raise ValueError(f'{name} is not a research folder.')
-            answer = True
-            if ask:
-                answer = input(f'Remove {name}? [y/n]').lower()
-                answer = len(answer) > 0 and 'yes'.startswith(answer)
-            if answer:
-                shutil.rmtree(name)
-
-    @classmethod
-    def folder_is_research(cls, name):
-        """ Check if folder contains research."""
-        if not os.path.exists(name):
-            raise FileNotFoundError(f"Folder {name} doesn't exist.")
-        return os.path.isfile(os.path.join(name, 'research.dill'))
+                            if self.logger:
+                                self.logger.info(f"Terminate {process_type} [pid:{pid}]")
 
     @property
     def is_finished(self):
@@ -571,6 +458,16 @@ class Research:
 
         return repr
 
+    @classmethod
+    def load(cls, name):
+        """ Load research. """
+        storage = LocalResearchStorage(name, loglevel='info', mode='r')
+        return storage.research
+
+    @classmethod
+    def remove(cls, name, ask=True, force=False):
+        LocalResearchStorage.remove(name, ask, force)
+
     def __del__(self):
         self.terminate(force=True)
 
@@ -592,17 +489,16 @@ class ResearchMonitor:
     SHARED_VARIABLES = ['finished_experiments', 'finished_iterations', 'remained_experiments',
                         'generated_experiments', 'stopped']
 
-    def __init__(self, research, path=None, bar=True):
+    def __init__(self, research, bar=True):
         self.queue = mp.JoinableQueue()
         self.stop_signal = mp.JoinableQueue()
         self._manager = mp.Manager()
         self.exceptions = self._manager.list()
         self.shared_values = self._manager.dict()
         self.current_iterations = self._manager.dict()
-        self.processes = self._manager.dict()
+        self.processes = self._manager.dict({self._manager._process.pid: "MANAGER"})
 
         self.research = research
-        self.path = path
         self.bar = tqdm.tqdm(disable=(not bar), position=0, leave=True) if isinstance(bar, bool) else bar
 
         for key in self.SHARED_VARIABLES:
@@ -684,12 +580,23 @@ class ResearchMonitor:
             'exception': msg
         })
 
+    def fail_worker_execution(self, worker, msg):
+        self.exceptions.append({
+            'index': worker.index,
+            'pid': worker.pid,
+            'exception': msg
+        })
+
     def handler(self):
         """ Signals handler. """
         with self.bar as progress:
             last_update = False
+            exceptions = 0
             while True:
-                if (progress.n != self.n) or (progress.total != self.total):
+                if (progress.n != self.n) or (progress.total != self.total) or (len(self.exceptions) != exceptions):
+                    if len(self.exceptions) != exceptions:
+                        exceptions = len(self.exceptions)
+                        progress.set_description_str(f"Exceptions: {exceptions}")
                     progress.n = self.n
                     progress.total = self.total
                     progress.refresh()
@@ -717,7 +624,7 @@ class ResearchMonitor:
             self.stopped = True
         tqdm.tqdm._instances.clear() #pylint:disable=protected-access
 
-    def close_manager(self):
+    def close(self):
         """ Close manager. """
         self.exceptions = list(self.exceptions)
         self.shared_values = dict(self.shared_values)

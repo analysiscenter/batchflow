@@ -2,6 +2,7 @@
 # pylint: disable=no-name-in-module, missing-docstring, redefined-outer-name
 import os
 import sys
+import glob
 from contextlib import ExitStack as does_not_raise
 import pytest
 import psutil
@@ -12,14 +13,14 @@ from batchflow import Dataset, Pipeline, B, V, C
 from batchflow import NumpySampler as NS
 from batchflow.models.torch import ResNet
 from batchflow.opensets import CIFAR10
-from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, ResearchResults, Alias
+from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, S, ResearchResults, Alias
 
 class Model:
     def __init__(self):
         self.dataset = CIFAR10()
         self.model_config = {
             'head/layout': C('layout'),
-            'head/units': C('units'),
+            'head/features': C('features'),
             'classes': 10,
             'loss': 'ce',
             'device': 'cpu',
@@ -78,7 +79,7 @@ def simple_research(tmp_path):
 
 @pytest.fixture
 def research_with_controller(tmp_path):
-    domain = Domain({'layout': ['f', 'faf']}) @ Domain({'units': [[10], [100, 10]]})
+    domain = Domain({'layout': ['f', 'faf']}) @ Domain({'features': [[10], [100, 10]]})
     research = (Research(name=os.path.join(tmp_path, 'research'), domain=domain, n_reps=2)
         .add_instance('controller', Model)
         .add_pipeline('controller.train_ppl')
@@ -346,6 +347,11 @@ class TestExecutor:
         with expectation:
             executor.run()
 
+        executor.close()
+
+        process = psutil.Process(os.getpid())
+        assert len(process.children()) <= 1
+
 class TestResearch:
     @pytest.mark.parametrize('parallel', [False, True])
     @pytest.mark.parametrize('dump_results', [False, True])
@@ -353,6 +359,9 @@ class TestResearch:
     @pytest.mark.parametrize('branches, target', [[1, 'f'], [3, 'f'], [3, 't']])
     def test_simple_research(self, parallel, dump_results, target, workers, branches, simple_research):
         n_iters = 3
+
+        process = psutil.Process(os.getpid())
+        assert len(process.children()) <= 1
         simple_research.run(n_iters=n_iters, workers=workers, branches=branches, parallel=parallel,
                             dump_results=dump_results, executor_target=target)
 
@@ -362,6 +371,9 @@ class TestResearch:
         if dump_results:
             loaded_research = Research.load(simple_research.name)
             assert len(loaded_research.results.df) == 18
+
+        process = psutil.Process(os.getpid())
+        assert len(process.children()) <= 1
 
     def test_empty_domain(self):
         research = Research().add_callable('func', lambda: 100).save(O('func'), 'sum')
@@ -390,11 +402,16 @@ class TestResearch:
     def test_research_with_controller(self, workers, research_with_controller):
         research_with_controller.run(dump_results=True, parallel=True, workers=workers, bar=False, finalize=True)
 
+        process = psutil.Process(os.getpid())
+
         assert len(research_with_controller.monitor.exceptions) == 0
         assert len(research_with_controller.results.df) == 4
+        assert len(process.children()) <= 1
 
         loaded_research = Research.load(research_with_controller.name)
         assert len(loaded_research.results.df) == 4
+
+        assert len(process.children()) <= 1
 
     @pytest.mark.slow
     @pytest.mark.parametrize('branches', [False, True])
@@ -402,7 +419,7 @@ class TestResearch:
         dataset = CIFAR10()
         model_config = {
             'head/layout': C('layout'),
-            'head/units': C('units'),
+            'head/features': C('features'),
             'loss': 'ce',
             'classes': 10,
             'device': 'cpu',
@@ -433,7 +450,7 @@ class TestResearch:
         def eval_metrics(ppl, metrics, **kwargs):
             return ppl.v('metrics').evaluate(metrics, **kwargs)
 
-        domain = Domain({'layout': ['f', 'faf']}) @ Domain({'units': [[10], [100, 10]]})
+        domain = Domain({'layout': ['f', 'faf']}) @ Domain({'features': [[10], [100, 10]]})
 
         args = (root_ppl, branch_ppl) if branches else (root_ppl+branch_ppl, )
 
@@ -448,11 +465,33 @@ class TestResearch:
 
         results = research.results.df.dtypes.values
 
-        # columns : id,  layout, units, iteration, loss, accuracy
+        # columns : id, layout, units, iteration, loss, accuracy
         assert all(results == [np.dtype(i) for i in ['O', 'O', 'O', 'int64', 'float32', 'float64']])
 
         process = psutil.Process(os.getpid())
+        for p in process.children():
+            print(p, research.monitor.processes.get(p.pid, 'unknown'))
         assert len(process.children()) <= 1
+
+    def test_update_variable(self):
+        def my_call(x, storage):
+            if x > 2:
+                storage.update_variable('var1', x ** 2)
+            else:
+                storage.update_variable('var2', x ** 2)
+        research = (Research(domain=Option('x', [1, 2, 3, 4]))
+            .add_callable('func', my_call, x=EC('x'), storage=S())
+        )
+
+        research.run(workers=2, branches=2, dump_results=False, bar=False)
+
+        results = research.results.df.sort_values('x')
+        var1 = results['var1'].values
+        var2 = results['var2'].values
+        a = np.array([np.nan, np.nan, 9., 16.])
+        b = np.array([1., 4., np.nan, np.nan])
+        assert ((var1 == a) | (np.isnan(var1) & np.isnan(a))).all() and \
+               ((var2 == b) | (np.isnan(var2) & np.isnan(b))).all()
 
     @pytest.mark.parametrize('create_id_prefix', [False, True, 4])
     @pytest.mark.parametrize('domain', [
@@ -504,6 +543,20 @@ class TestResearch:
 
         assert simple_research.profiler.profile_info.shape[1] == shape
 
+    @pytest.mark.parametrize('loglevel, length_res, length_exp', list(zip(['info', 'debug'], [62, 104], [7, 14])))
+    def test_logging(self, loglevel, length_res, length_exp, tmp_path, simple_research):
+        path = os.path.join(tmp_path, 'research')
+        simple_research.run(name=path, n_iters=3, dump_results=True, loglevel=loglevel)
+
+        with open(os.path.join(path, 'research.log')) as file:
+            lines = file.readlines()
+            assert len(lines) == length_res
+
+        for path in glob.glob(os.path.join(path, 'experiments', '*')):
+            with open(os.path.join(path, 'experiment.log')) as file:
+                lines = file.readlines()
+                assert len(lines) == length_exp
+
     def test_coincided_names(self):
         def f(a):
             return a ** 10
@@ -518,9 +571,10 @@ class TestResearch:
         assert research.results.df.iloc[0].a == f(2)
         assert research.results.df.iloc[0].b == f(3)
 
-    @pytest.mark.parametrize('redirect_stdout', [0, 1, 2, 3])
-    @pytest.mark.parametrize('redirect_stderr', [0, 1, 2, 3])
-    def test_redirect_stdout(self, redirect_stdout, redirect_stderr, tmp_path):
+    @pytest.mark.parametrize('dump_results', [False, True])
+    @pytest.mark.parametrize('redirect_stdout', [True, 0, 1, 2, 3])
+    @pytest.mark.parametrize('redirect_stderr', [True, 0, 1, 2, 3])
+    def test_redirect_stdout(self, dump_results, redirect_stdout, redirect_stderr, tmp_path):
         def f(a):
             print(a)
             print(a, file=sys.stderr)
@@ -529,27 +583,49 @@ class TestResearch:
             .add_callable(f, a=2)
         )
 
-        research.run(name=os.path.join(tmp_path, 'research'), n_iters=2,
-                     redirect_stdout=redirect_stdout, redirect_stderr=redirect_stderr)
+        will_success = False
 
-        for param, filename in zip([redirect_stdout, redirect_stderr], ['stdout.txt', 'stderr.txt']):
-            n_files = len(research.results.artifacts_to_df(name=filename))
-            assert (filename in os.listdir(research.name)) is (param in [1, 3])
-            assert (n_files == len(research.results.configs)) is (param in [2, 3])
+        if dump_results:
+            will_success = True
+        else:
+            if not dump_results:
+                if redirect_stdout in [0, 2] or redirect_stdout is True:
+                    if redirect_stderr in [0, 2] or redirect_stderr is True:
+                        will_success = True
+        expectation = does_not_raise() if will_success else pytest.raises(ValueError)
 
-            output = '2\n' + '-' * 30 + '\n\n\n' + '-'*30 + '\n'
+        with expectation:
+            research.run(name=os.path.join(tmp_path, 'research'), n_iters=2, dump_results=dump_results,
+                        redirect_stdout=redirect_stdout, redirect_stderr=redirect_stderr)
 
-            if param in [1, 3]:
-                with open(os.path.join(research.name, filename)) as file:
-                    lines = ''.join(file.readlines())
+        if will_success:
+            for param, name in zip([redirect_stdout, redirect_stderr], ['stdout', 'stderr']):
+                output = '2\n' + '-' * 30 + '\n\n\n' + '-'*30 + '\n'
+                filename = name + '.txt'
+
+                if dump_results:
+                    n_files = len(research.results.artifacts_to_df(name=filename))
+                    assert (filename in os.listdir(research.name)) is (param in [1, 3])
+                    assert (n_files == len(research.results.configs)) is (param in [2, 3])
+
+                if param in [True, 1, 3]:
+                    if dump_results:
+                        with open(os.path.join(research.name, filename)) as file:
+                            lines = ''.join(file.readlines())
+                    else:
+                        lines = list(getattr(research.storage, 'experiments_'+name).values())[0]
                     assert lines == output * 2
 
-            if param in [2, 3]:
-                for full_path in research.results.artifacts_to_df(name=filename)['full_path']:
-                    with open(full_path) as file:
-                        lines = ''.join(file.readlines())
-                        assert lines == output * 2
+                if dump_results and param in [2, 3]:
+                    for full_path in research.results.artifacts_to_df(name=filename)['full_path']:
+                        with open(full_path) as file:
+                            lines = ''.join(file.readlines())
+                            assert lines == output * 2
 
+    def test_domain_with_objects(self, tmp_path):
+        domain = Domain(a=[print, Research])
+        research = Research(domain=domain).add_callable(lambda: 1)
+        research.run(name=os.path.join(tmp_path, 'research'), parallel=False)
 
 class TestResults:
     @pytest.mark.parametrize('parallel', [False, True])
@@ -597,5 +673,5 @@ class TestResults:
 
         assert len(df) == 1
 
-# #TODO: logging tests, test that exceptions in one branch don't affect other bracnhes,
+# #TODO: test that exceptions in one branch don't affect other bracnhes,
 # #      devices splitting, ...

@@ -116,6 +116,7 @@ class ResearchProfiler(ExperimentProfiler):
 
     def load(self):
         """ Load profiling. """
+        self.close_manager()
         paths = os.path.join(self.research_name, 'experiments', '*', 'profiler.feather')
         for path in glob.glob(paths):
             experiment = os.path.basename(os.path.dirname(path))

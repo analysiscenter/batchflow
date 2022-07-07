@@ -89,7 +89,7 @@ class O(E):
 class EP(E):
     """ NamedExpression for the experiment path. """
     def _transform(self, experiments):
-        return [exp.full_path for exp in experiments]
+        return [exp.storage.full_path for exp in experiments]
 
 class R(E):
     """ Research results. """
@@ -99,3 +99,8 @@ class R(E):
     def get(self, **kwargs):
         research = self._get(**kwargs)
         return research.results
+
+class S(E): # pylint: disable=invalid-name
+    """ Research storage. """
+    def _transform(self, experiments):
+        return [exp.storage for exp in experiments]
