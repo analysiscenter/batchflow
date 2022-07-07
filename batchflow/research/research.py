@@ -11,7 +11,7 @@ import tqdm
 from .domain import Domain
 from .distributor import Distributor, DynamicQueue
 from .experiment import Experiment, Executor
-from .utils import to_list
+from ..utils import to_list
 from .storage import BaseResearchStorage, LocalResearchStorage, MemoryResearchStorage
 
 from ..utils_random import make_seed_sequence

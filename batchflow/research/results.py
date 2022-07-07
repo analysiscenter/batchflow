@@ -7,7 +7,9 @@ import glob
 import multiprocess as mp
 import pandas as pd
 import numpy as np
-from .utils import to_list, deserialize
+
+from ..utils import to_list
+from .utils import deserialize
 
 class ResearchResults:
     """ Class to collect, load and process research results.

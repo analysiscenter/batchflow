@@ -6,7 +6,8 @@ from copy import copy, deepcopy
 from pprint import pformat
 import numpy as np
 
-from .utils import must_execute, to_list
+from .utils import must_execute
+from ..utils import to_list
 from .. import Config, Sampler, make_rng
 from ..named_expr import eval_expr
 
