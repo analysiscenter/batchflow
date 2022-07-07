@@ -75,11 +75,13 @@ class Layer:
         # pylint: disable=import-outside-toplevel
         import cv2
         dilation_config = self.config.get('dilate', False)
+
+        default_kernel = np.ones((3, 1), dtype=np.uint8)
         if dilation_config:
             if dilation_config is True:
-                dilation_config = {'kernel': np.ones((3, 1), dtype=np.uint8)}
+                dilation_config = {'kernel': default_kernel}
             elif isinstance(dilation_config, int):
-                dilation_config = {'iterations': dilation_config}
+                dilation_config = {'iterations': dilation_config, 'kernel': default_kernel}
             elif isinstance(dilation_config, tuple):
                 dilation_config = {'kernel': np.ones(dilation_config, dtype=np.uint8)}
 
@@ -180,6 +182,7 @@ class Layer:
         """ Display data as an image. """
         # Assemble colormap from given parameters
         cmap = self.config.get('cmap', None)
+
         # If a single color provided, prepend 'white' color, so that a resulting tuple defines binary colormap
         if is_color_like(cmap):
             cmap = ('white', cmap)
@@ -347,9 +350,9 @@ class Subplot:
     }
 
     # Modes default parameters
-    MASK_COLORS = ['firebrick', 'mediumseagreen', 'thistle', 'darkorange', 'navy', 'gold',
-                    'red', 'turquoise', 'darkorchid', 'darkkhaki', 'royalblue', 'yellow',
-                    'chocolate', 'forestgreen', 'lightpink', 'darkslategray', 'deepskyblue', 'wheat']
+    MASK_COLORS = ['mediumseagreen', 'thistle', 'darkorange', 'navy', 'gold', 'firebrick',
+                   'red', 'turquoise', 'darkorchid', 'darkkhaki', 'royalblue', 'yellow',
+                   'chocolate', 'forestgreen', 'lightpink', 'darkslategray', 'deepskyblue', 'wheat']
 
     IMAGE_DEFAULTS = {
         # image
@@ -448,17 +451,13 @@ class Subplot:
         if config is not None:
             self.config.update(config)
 
-        if data is None:
-            if self.config.get('disable') or self.main_object is None:
-                self.disable()
-        else:
-            for layer_index, layer_data in enumerate(data):
-                layer_config = self.config.maybe_index(layer_index)
-                layer = Layer(self, mode=mode, index=layer_index, config=layer_config, data=layer_data)
-                self.layers.append(layer)
+        for layer_index, layer_data in enumerate(data):
+            layer_config = self.config.maybe_index(layer_index)
+            layer = Layer(self, mode=mode, index=layer_index, config=layer_config, data=layer_data)
+            self.layers.append(layer)
 
-            annotations = self.annotate(mode)
-            self.annotations.update(annotations)
+        annotations = self.annotate(mode)
+        self.annotations.update(annotations)
 
     # Annotation methods
     def annotate(self, mode):
@@ -662,8 +661,8 @@ class Subplot:
         # make new handles
         new_handles = []
         labels = to_list(label)
-        colors = color if isinstance(color, list) else [color] * len(labels)
-        alphas = alpha if isinstance(alpha, list) else [alpha] * len(labels)
+        colors = [color] * len(labels) if isinstance(color, str) else color
+        alphas = [alpha] * len(labels) if isinstance(alpha, Number) else alpha
 
         for label_item, label_color, label_alpha in zip(labels, colors, alphas):
             if label_item is None:
@@ -982,8 +981,8 @@ class Plot:
             return self.subplots[key]
         raise ValueError(f"Only integer keys are supported for subplots indexing, got {type(key)}.")
 
-    def __call__(self, mode, **kwargs):
-        return self.plot(mode=mode, **kwargs)
+    def __call__(self, data, combine='overlay', mode='image', **kwargs):
+        return self.plot(data, combine=combine, mode=mode, **kwargs)
 
     def __repr__(self):
         return ''
@@ -1344,7 +1343,7 @@ class Plot:
 
     # Plotting delegator
     def plot(self, data=None, combine='overlay', mode='image', axes=None, axis=None, ax=None,
-             adjust_figsize='image', show=True, save=False, positions=None, **kwargs):
+             adjust_figsize='image', show=True, force_show=False, save=False, positions=None, **kwargs):
         """ Plot data on subplots.
 
         If a first call (from `__init__`), parse axes from kwargs if they are provided, else create them.
@@ -1366,6 +1365,12 @@ class Plot:
         for absolute_index, subplot in enumerate(self.subplots):
             relative_index = positions.index(absolute_index) if absolute_index in positions else None
             subplot_data = None if relative_index is None else data[relative_index]
+
+            if subplot_data is None:
+                if subplot.main_object is None:
+                    subplot.disable()
+                continue
+
             subplot_index = None if combine == 'overlay' else relative_index
             subplot_config = self.config.maybe_index(subplot_index)
 
@@ -1376,6 +1381,9 @@ class Plot:
 
         if adjust_figsize is True or adjust_figsize == mode:
             self.adjust_figsize()
+
+        if force_show:
+            self.force_show()
 
         if not show:
             self.close()
@@ -1418,6 +1426,10 @@ class Plot:
         return annotations
 
     # Result finalizing methods
+    @staticmethod
+    def force_show():
+        plt.show()
+
     def redraw(self):
         """ Draw figure again by creating dummy figure and using its manager to display original figure. """
         dummy_figure = plt.figure()
