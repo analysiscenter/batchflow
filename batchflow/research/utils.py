@@ -2,8 +2,6 @@
 import os
 import logging
 import hashlib
-import json
-import itertools
 import io
 import contextlib
 import warnings
@@ -33,7 +31,6 @@ class MultiOut:
     def __getattr__(self, attr):
         return getattr(self.handlers[0], attr)
 
-=======
 class Unpickler(dill.Unpickler):
     """ Unpickler which will load object as a string if it can't be found. Is necessary
     to deal with objects imported from modules and removed. """
@@ -48,9 +45,6 @@ class Unpickler(dill.Unpickler):
 def deserialize(file, ignore=None, **kwargs):
     """ Unpickle an object from a file. Attributed that can't be loaded will be changed by str. """
     return Unpickler(file, ignore=ignore, **kwargs).load()
-
-def to_list(value):
-    return value if isinstance(value, list) else [value]
 
 def count_startswith(seq, name):
     return sum(1 for item in seq if item.startswith(name))
