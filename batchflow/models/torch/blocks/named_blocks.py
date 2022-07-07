@@ -6,7 +6,7 @@ from ..utils import get_num_channels, safe_eval
 
 
 
-CONV_LETTERS = ['c', 'C', 'w', 'W', 't', 'T']
+CONV_LETTERS = ['c', 'C', 'w', 'W', 't', 'T', 'k', 'K', 'q', 'Q']
 
 
 

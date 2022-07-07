@@ -6,7 +6,7 @@ import torch
 from torch import nn
 
 from .utils import compute_padding
-from ..utils import get_num_channels, get_num_dims, safe_eval
+from ..utils import get_num_channels, get_num_dims, safe_eval, to_n_tuple
 
 
 
@@ -174,11 +174,18 @@ class MultiKernelConv(nn.ModuleList):
             channels_[0] = channels - sum(channels_[1:])
             channels = channels_
 
+        # Parse other parameters
+        n = len(kernel_size)
+        dilation = to_n_tuple(dilation, n)
+        groups = to_n_tuple(groups, n)
+
         # Create layers
-        for channels_, kernel_size_ in zip(channels, kernel_size):
-            padding_ = kernel_size_ // 2
+        for channels_, kernel_size_, groups_, dilation_ in zip(channels, kernel_size, groups, dilation):
+            padding_ = compute_padding(padding='same', shape=inputs.shape[2:], kernel_size=kernel_size_,
+                                       dilation=dilation_, stride=stride)['padding']
+
             layer = constructor(in_channels=in_channels, out_channels=channels_, kernel_size=kernel_size_,
-                                padding=padding_, stride=stride, groups=groups, dilation=dilation, bias=bias)
+                                padding=padding_, stride=stride, groups=groups_, dilation=dilation_, bias=bias)
             self.append(layer)
 
 

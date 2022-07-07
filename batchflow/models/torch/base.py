@@ -1454,6 +1454,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             # For each operation, add multiple aliases
             if output_operations:
+                if not isinstance(output_operations, (tuple, list)):
+                    output_operations = [output_operations]
+
                 for j, operation in enumerate(output_operations):
                     output_tensor, operation_name = self.apply_output_operation(tensor, operation)
                     if operation_name:
