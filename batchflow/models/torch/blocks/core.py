@@ -135,16 +135,21 @@ class Upsample(Block):
     """
     def __init__(self, inputs=None, layout='b', factor=2, shape=None, **kwargs):
         if kwargs.get('base_block') is None:
-            if set('tT').intersection(layout):
+            if set('b').intersection(layout):
+                kwargs = {
+                    'scale_factor': factor,
+                    **kwargs
+                }
+            elif set('X').intersection(layout):
+                kwargs = {
+                    'upscale_factor': factor,
+                    **kwargs
+                }
+            elif set('tT').intersection(layout):
                 kwargs = {
                     'kernel_size': 2*factor - 1,
                     'stride': factor,
                     'channels': 'same',
-                    **kwargs
-                }
-            if set('b').intersection(layout):
-                kwargs = {
-                    'scale_factor': factor,
                     **kwargs
                 }
         super().__init__(inputs=inputs, layout=layout, shape=shape, **kwargs)
@@ -164,6 +169,11 @@ class Downsample(Block):
                 kwargs = {
                     'pool_size': factor,
                     'pool_stride': factor,
+                    **kwargs
+                }
+            elif set('x').intersection(layout):
+                kwargs = {
+                    'downscale_factor': factor,
                     **kwargs
                 }
             elif set('cCvV').intersection(layout):
