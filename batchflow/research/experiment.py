@@ -1,13 +1,13 @@
 #pylint:disable=logging-fstring-interpolation
 """ Experiment and corresponding classes. """
 
-from logging import warning
 import os
 import sys
 from copy import copy, deepcopy
 import itertools
 import traceback
 import contextlib
+import warnings
 from collections import OrderedDict
 import time
 
@@ -578,7 +578,7 @@ class Experiment:
     def __getattr__(self, name):
         method = self.get_method(name)
         if method is None:
-            warning.warn(f'Method {name} was not found in any namespace.')
+            warnings.warn(f'Method {name} was not found in any namespace.')
             return None
         return _explicit_call(method, name, self)
 
