@@ -1,15 +1,11 @@
 """ Auxilary functions """
 import os
-import glob
-import shutil
 import logging
 import hashlib
 import itertools
-import json
 import io
 import contextlib
 import warnings
-from collections import OrderedDict
 from copy import deepcopy
 import dill
 import numpy as np
