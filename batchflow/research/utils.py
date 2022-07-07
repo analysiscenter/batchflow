@@ -8,10 +8,10 @@ import itertools
 import json
 import io
 import contextlib
+import warnings
 from collections import OrderedDict
 from copy import deepcopy
 import dill
-from tqdm import tqdm_notebook
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -33,6 +33,21 @@ class MultiOut:
     def __getattr__(self, attr):
         return getattr(self.handlers[0], attr)
 
+class Unpickler(dill.Unpickler):
+    """ Unpickler which will load object as a string if it can't be found. Is necessary
+    to deal with objects imported from modules and removed. """
+    def find_class(self, module, name):
+        """ Get object class. """
+        try:
+            return super().find_class(module, name)
+        except AttributeError:
+            warnings.warn(f"Can't get attribute {name} on <module {module}>")
+            return f"<object {module}.{name}>"
+
+def deserialize(file, ignore=None, **kwargs):
+    """ Unpickle an object from a file. Attributed that can't be loaded will be changed by str. """
+    return Unpickler(file, ignore=ignore, **kwargs).load()
+
 def to_list(value):
     return value if isinstance(value, list) else [value]
 
@@ -47,73 +62,6 @@ def get_metrics(pipeline, metrics_var, metrics_name, *args, agg='mean', **kwargs
     if len(values) == 1:
         return values[0]
     return values
-
-def convert_research_results(research_name, new_name=None, bar=True):
-    """ Convert research results from old format to the new. Only results will be transformed, old research can not be
-    converted to load by new Research version. """
-    # Copy research if needed
-    if new_name is not None:
-        shutil.copytree(research_name, new_name)
-        research_name = new_name
-
-    # Move configs from separate folder to experiment folders
-    configs = {}
-    for config in glob.glob(f'{research_name}/configs/*'):
-        for experiment_folder in glob.glob(f'{research_name}/results/{glob.escape(os.path.basename(config))}/*'):
-            exp_id = os.path.basename(experiment_folder)
-            configs[exp_id] = os.path.basename(config)
-
-    for exp_id, config in configs.items():
-        src = f'{research_name}/configs/{config}'
-        dst = f'{research_name}/results/{config}/{exp_id}/config.dill'
-        with open(src, 'rb') as f:
-            content = dill.load(f) # content is a ConfigAlias instance
-            content['updates'] = content['update'] # Rename column for the new format
-            content.pop_config('update')
-            content['device'] = None # Add column
-        with open(dst, 'wb') as f:
-            dill.dump(content, f)
-        with open(f'{research_name}/results/{config}/{exp_id}/config.json', 'w') as f:
-            json.dump(jsonify(content.config().config), f)
-
-    # Remove folder with configs
-    shutil.rmtree(f'{research_name}/configs')
-
-    # Remove one nested level
-    initial_results = glob.glob(f'{research_name}/results/*')
-    for exp_path in initial_results:
-        for path in os.listdir(exp_path):
-            src = os.path.join(exp_path, path)
-            dst = os.path.join(os.path.dirname(exp_path), path)
-            shutil.move(src, dst)
-    for path in initial_results:
-        shutil.rmtree(path)
-
-    # Rename 'results' folder to 'experiments'
-    shutil.move(f'{research_name}/results', f'{research_name}/experiments')
-
-    # Move files from experiment folder to subfodlers
-    for results_file in tqdm_notebook(glob.glob(f'{research_name}/experiments/*/*'), disable=(not bar)):
-        filename = os.path.basename(results_file)
-        content = get_content(results_file)
-        if content is not None:
-            content.pop('sample_index')
-            iterations = content.pop('iteration')
-
-            unit_name, iteration_in_name = filename.split('_')
-            iteration_in_name = int(iteration_in_name) - 1
-            dirname = os.path.dirname(results_file)
-            for var in content:
-                new_dict = OrderedDict()
-                for i, val in zip(iterations, content[var]):
-                    new_dict[i] = val
-                folder_for_var = f'{dirname}/results/{unit_name}_{var}'
-                if not os.path.exists(folder_for_var):
-                    os.makedirs(folder_for_var)
-                dst = f'{folder_for_var}/{iteration_in_name}'
-                with open(dst, 'wb') as f:
-                    dill.dump(new_dict, f)
-            os.remove(results_file)
 
 def get_content(path):
     """ Open research results file (if it is research results file, otherwise None). """

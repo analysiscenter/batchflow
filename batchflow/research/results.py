@@ -4,12 +4,10 @@ import os
 import functools
 from collections import OrderedDict
 import glob
-import warnings
-import dill
 import multiprocess as mp
 import pandas as pd
 import numpy as np
-from .utils import to_list
+from .utils import to_list, deserialize
 
 class ResearchResults:
     """ Class to collect, load and process research results.
@@ -395,18 +393,3 @@ class ResearchResults:
         self.results = dict(self.results)
         self.configs = dict(self.configs)
         self._manager.shutdown()
-
-class Unpickler(dill.Unpickler):
-    """ Unpickler which will load object as a string if it can't be found. Is necessary
-    to deal with objects imported from modules and removed. """
-    def find_class(self, module, name):
-        """ Get object class. """
-        try:
-            return super().find_class(module, name)
-        except AttributeError:
-            warnings.warn(f"Can't get attribute {name} on <module {module}>")
-            return f"<object {module}.{name}>"
-
-def deserialize(file, ignore=None, **kwargs):
-    """ Unpickle an object from a file. Attributed that can't be loaded will be changed by str. """
-    return Unpickler(file, ignore=ignore, **kwargs).load()
