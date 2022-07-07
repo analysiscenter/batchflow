@@ -9,7 +9,7 @@ from .conv import (Conv, ConvTranspose,
                    DepthwiseConv, DepthwiseConvTranspose, SeparableConv, SeparableConvTranspose,
                    MultiKernelConv, SharedKernelConv, AvgPoolConv, BilinearConvTranspose)
 from .pooling import AvgPool, MaxPool, GlobalAvgPool, GlobalMaxPool
-from .resize import IncreaseDim, Reshape, Interpolate, PixelShuffle
+from .resize import IncreaseDim, Reshape, Interpolate
 from .activation import Activation
 from .combine import Combine
 from .wrapper_letters import Branch, AttentionWrapper
