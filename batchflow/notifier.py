@@ -384,7 +384,7 @@ class Notifier:
 
         plot_config = {
             'adjust_figsize': True,
-            'legend_loc': 9,
+            'legend_loc': 'best',
             'show': False,
             **kwargs
         }
@@ -410,7 +410,7 @@ class Notifier:
 
         return plot(**plot_config)
 
-    def update_plots(self, index=0, add_suptitle=False, savepath=None, clear_display=True):
+    def update_plots(self, index=0, show=True, add_suptitle=False, savepath=None, clear_display=True):
         """ Draw plots anew. """
         if clear_display:
             display.clear_output(wait=True)
@@ -423,14 +423,15 @@ class Notifier:
                 'colour': None,
             }
             suptitle = self.bar.format_meter(**fmt)
-            self.plotter.plot(suptitle=suptitle)
+            self.plotter.plot(suptitle=suptitle, show=show)
 
         for i, container in enumerate(self.data_containers):
             if i >= index:
                 subplot_index = i - index
                 self.update_plot(container=container, index=subplot_index)
 
-        self.plotter.redraw()
+        if show:
+            self.plotter.redraw()
 
         savepath = savepath or (f'{self.savepath}_{self.bar.n}' if self.savepath is not None else None)
 
@@ -514,11 +515,11 @@ class Notifier:
         self.telegram_text.send(f'`{text[:idx]}`\n`{text[idx:]}`')
 
     # Manual usage of notifier instance
-    def plot(self, num_graphs=None, layout='horizontal', **kwargs):
+    def plot(self, num_graphs=None, layout='horizontal', show=True, **kwargs):
         """ Convenient alias for working with an instance. """
         if self.plotter is None:
             self.plotter = self.make_plotter(num_graphs=num_graphs, layout=layout, **kwargs)
-        self.update_plots(clear_display=False)
+        self.update_plots(clear_display=False, show=show)
 
     deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
     visualize = deprecated(deprecation_msg.format('Notifier.visualize', 'Notifier.plot'))(plot)
