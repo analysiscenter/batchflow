@@ -21,7 +21,7 @@ from .named_expr import NamedExpression, eval_expr
 from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .utils_telegram import TelegramMessage
 from .plotter import plot
-from .decorators import deprecated
+from .plotter.utils import PlotConfig
 
 
 
@@ -329,7 +329,7 @@ class Notifier:
             self.update_postfix()
 
             if self.has_graphs:
-                self.update_plots(index=self.n_monitors, add_suptitle=True)
+                self.update_plot(index=self.n_monitors, add_suptitle=True)
 
             if self.log_file:
                 self.update_log_file()
@@ -410,8 +410,10 @@ class Notifier:
 
         return plot(**plot_config)
 
-    def update_plots(self, index=0, add_suptitle=False, savepath=None, clear_display=True):
+    def update_plot(self, index=0, add_suptitle=False, savepath=None, clear_display=True, **kwargs):
         """ Draw plots anew. """
+        plot_config = PlotConfig(kwargs)
+
         if clear_display:
             display.clear_output(wait=True)
 
@@ -428,7 +430,8 @@ class Notifier:
         for i, container in enumerate(self.data_containers):
             if i >= index:
                 subplot_index = i - index
-                self.update_plot(container=container, index=subplot_index)
+                subplot_config = plot_config.maybe_index(subplot_index)
+                self.update_subplot(container=container, index=subplot_index, **subplot_config)
 
         self.plotter.redraw()
 
@@ -440,7 +443,7 @@ class Notifier:
         if self.telegram:
             self.telegram_media.send(self.plotter.figure)
 
-    def update_plot(self, container, index):
+    def update_subplot(self, container, index, **kwargs):
         """ Update subplot under given index by data from given container. """
         subplot = self.plotter[index]
         subplot.clear()
@@ -450,6 +453,7 @@ class Notifier:
         name = container['name']
         plot_function = container.get('plot_function')
         plot_config = container.get('plot_config', {})
+        plot_config.update(kwargs)
 
         x = np.arange(len(data))[self.slice]
         y = np.array(data)[self.slice]
@@ -459,32 +463,21 @@ class Notifier:
         elif isinstance(source, ResourceMonitor):
             source.plot(plotter=self.plotter, positions=index, **plot_config)
         else:
-            plot_config['title'] = name
-            plot_config['label'] = None
+            plot_config = {'title': name, 'label': None, **plot_config}
             if isinstance(data, (tuple, list)) or (isinstance(data, np.ndarray) and data.ndim == 1):
-                plot_config = {
-                    'xlabel': 'Iteration',
-                    'grid': 'major',
-                    **plot_config
-                }
+                plot_config = { 'xlabel': 'Iteration', 'grid': 'major', 'window': 50, **plot_config}
 
                 if 'loss' in name.lower():
                     data = y
                     mode = 'loss'
-                    plot_config['label'] = 'loss'
+                    plot_config = {'label': 'loss', **plot_config}
                 else:
                     data = (x, y)
                     mode = 'curve'
 
-                plot_config = {'window': 50, **plot_config}
             elif isinstance(data, np.ndarray) and data.ndim in (2, 3):
                 mode = 'image'
-                plot_config = {
-                    'grid': None,
-                    'label': None,
-                    'xlabel': None,
-                    **plot_config
-                }
+                plot_config = {'grid': None, 'label': None, 'xlabel': None, **plot_config}
             else:
                 msg = "Expected data to be 1-dimensional tuple/list/array or 2- or 3-dimensional array."
                 if isinstance(data, np.ndarray):
@@ -518,10 +511,9 @@ class Notifier:
         """ Convenient alias for working with an instance. """
         if self.plotter is None:
             self.plotter = self.make_plotter(num_graphs=num_graphs, layout=layout, **kwargs)
-        self.update_plots(clear_display=False)
+        self.update_plot(clear_display=False, **kwargs)
 
-    deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
-    visualize = deprecated(deprecation_msg.format('Notifier.visualize', 'Notifier.plot'))(plot)
+    visualize = plot
 
 
     def to_file(self, file):
