@@ -130,7 +130,7 @@ def get_module_performance(module, inputs, n_repeats=300, warmup=40, device=None
                 # Calculate backward operation time
                 with TimeTracker() as backward_timer:
                     outputs.backward(outputs)
- 
+
                 backward_time = backward_timer.value
                 backward_timings.append(backward_time)
 
