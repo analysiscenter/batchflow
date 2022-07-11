@@ -340,6 +340,7 @@ class Subplot:
     COMMON_DEFAULTS = {
         # title
         'title_size': 25,
+        'title_pad': 15,
         # axis labels
         'xlabel_size': '12',
         'ylabel_size': '12',
@@ -481,6 +482,8 @@ class Subplot:
             label = title_config.pop('label')
         if 'title' in title_config:
             label = title_config.pop('title')
+        if isinstance(label, list):
+            label = ', '.join(label)
 
         title_wrap_config = title_config.filter(prefix='wrap_', retrieve='pop')
         if title_wrap_config:
