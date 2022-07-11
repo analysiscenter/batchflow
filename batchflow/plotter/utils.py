@@ -4,6 +4,9 @@ from colorsys import rgb_to_hls, hls_to_rgb
 from numbers import Number
 import operator
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 from matplotlib.collections import PatchCollection
 from matplotlib.colors import ColorConverter, ListedColormap, to_rgba
 from matplotlib.patches import Rectangle
@@ -207,7 +210,7 @@ def evaluate_str_comparison(arg0, string):
 
 
 @njit()
-def is_binary(array):
+def is_binary_mask(array):
     """ Fast check that array consists of 0 and 1 only. """
     for item in array:
         if item not in (0., 1.):
@@ -227,6 +230,51 @@ def make_cmap(colors):
     return cmap
 
 
+def extend_cmap(cmap, color, share=0.1, n_points=256, mode='append'):
+    """ Make new colormap, adding a new color to existing one.
+
+    Parameters
+    ----------
+    cmap : valid matplotlib colormap
+        Base colormap to extend.
+    color : valid matplotlib color
+        Color to use for colormap extension.
+    share : number from 0 to 1
+        New color's share in extended colormap.
+    n_points : interger
+        Number of points to use for colormap creation.
+    mode : 'prepend' or 'append'
+        How to extend colormap — from the beginning or from the end.
+    """
+    if mode == 'append':
+        order = slice(None, None, 1)
+    elif mode == 'prepend':
+        order = slice(None, None, -1)
+    else:
+        raise ValueError(f"Valid modes are either 'prepend' or 'append', got {mode} instead.")
+
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
+
+    main_points = int(n_points * (1 - share))
+    extra_points = n_points - main_points
+
+    if isinstance(color, str):
+        color = to_rgba(color)
+    elif len(color) == 3:
+        color = list(color) + [1]
+    color = np.array(color)
+
+    main_colors = cmap(np.linspace(0, 1, main_points))[order]
+    step = (color - main_colors[-1]) / extra_points
+    steps = np.tile(step, extra_points).reshape(extra_points, 4)
+    extra_colors = main_colors[-1] + np.cumsum(steps, axis=0)
+    colors = main_colors.tolist() + extra_colors.tolist()
+    extended_cmap = make_cmap(colors[order])
+
+    return extended_cmap
+
+
 def scale_lightness(color, scale):
     """ Make new color with modified lightness from existing. """
     if isinstance(color, str):
@@ -235,9 +283,11 @@ def scale_lightness(color, scale):
     new_color = hls_to_rgb(h=hue, l=min(1, light * scale), s=saturation)
     return new_color
 
+
 def invert_color(color):
     """ Invert color. """
     return tuple(1 - x for x in to_rgba(color)[:3])
+
 
 def wrap_by_delimiter(string, width, delimiter=' ', newline='\n'):
     """ Wraps the single paragraph in given `string` allowing breaks at `delimiter` positions only so that every line

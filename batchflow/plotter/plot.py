@@ -1,7 +1,9 @@
 """ Plot primitives. """
 from copy import copy
 from datetime import datetime
+from itertools import cycle
 from numbers import Number
+from warnings import warn
 
 import numpy as np
 
@@ -15,8 +17,9 @@ from matplotlib.ticker import MaxNLocator, AutoMinorLocator
 from mpl_toolkits import axes_grid1
 
 from .utils import CycledList, ColorMappingHandler, PlotConfig
-from .utils import evaluate_str_comparison, is_binary, contains_numbers
+from .utils import evaluate_str_comparison, is_binary_mask, contains_numbers
 from .utils import make_cmap, scale_lightness, invert_color, wrap_by_delimiter
+from .cmaps import *
 from ..utils import to_list
 
 
@@ -31,12 +34,15 @@ class Layer:
         self.index = index
         self.config = config
 
-        if mode in ('image', 'histogram') and 'mask' not in self.config:
-            # Add `0` to a list of values that shouldn't be displayed if image is a binary mask
-            if is_binary(data.flatten()):
-                self.config['mask'] = 0
-                self.config['vmin'] = 0
-                self.config['vmax'] = 1
+        # If image is a binary mask, make zeros transparent and set single color for ones
+        if mode == 'image' and config['augment_mask'] and is_binary_mask(data.flatten()):
+            if self.config.get('mask') is not None:
+                msg = f"Since mask augmentation is requested, parameter `mask={self.config['mask']}` is ignored." \
+                        " To suppress this warning, provide explicitly `mask=None` " \
+                        f"for layer #{self.index} of subplot #{self.subplot.index}."
+                warn(msg)
+            self.config['mask'] = 0
+            self.config['cmap'] = next(self.subplot.mask_colors)
 
         preprocessed_data = self.preprocess(data)
         self.objects = getattr(self, mode)(preprocessed_data)
@@ -185,7 +191,7 @@ class Layer:
 
         # If a single color provided, prepend 'white' color, so that a resulting tuple defines binary colormap
         if is_color_like(cmap):
-            cmap = ('white', cmap)
+            cmap = (cmap, )
         # If a tuple of colors provided in `cmap` argument convert it into a colormap
         if isinstance(cmap, tuple):
             cmap = make_cmap(colors=cmap)
@@ -309,6 +315,8 @@ class Subplot:
         self.config = None
         self.annotations = {}
 
+        self.mask_colors = cycle(self.MASK_COLORS)
+
     def __getitem__(self, key):
         if isinstance(key, int):
             return self.layers[key]
@@ -357,7 +365,8 @@ class Subplot:
 
     IMAGE_DEFAULTS = {
         # image
-        'cmap': CycledList(['Greys_r'] + MASK_COLORS, cycle_from=1),
+        'cmap': 'batchflow',
+        'augment_mask': False,
         # ticks
         'labeltop': False,
         'labelright': False,
@@ -992,6 +1001,9 @@ class Plot:
 
     def __str__(self):
         return f"<Batchflow Plotter with {len(self.subplots)} subplots>"
+
+    def _ipython_display_(self):
+        return None
 
     # Data conversion methods
     @staticmethod
