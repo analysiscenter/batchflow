@@ -167,10 +167,10 @@ class ExecutableUnit:
     args, kwargs : optional
         args and kwargs for unit call, by default None.
     save_to : str, list or None, optional
-        names to save output from unit. Can't be not None with `save_output_dict` which is True.
+        names to save output from unit. Must be None if `save_output_dict` is True. By default None.
     save_output_dict : bool, optional
         if the output is a dict, use its keys as names of variables to store in results.
-        Can't be True with not None `save_to`
+        If True, `save_to` must be None. By default False.
     """
     def __init__(self, name, func=None, generator=None, root=False, when=1,
                  args=None, kwargs=None, save_to=None, save_output_dict=False, **other_kwargs):
