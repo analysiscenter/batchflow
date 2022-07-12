@@ -1,15 +1,18 @@
 """ Time and memory trackers for benchmark operations with nn.Module. """
 import numpy as np
 import torch
-from ptflops import get_model_complexity_info
+try:
+    import ptflops
+except ImportError:
+    ptflops = None
 
 from .utils import make_initialization_inputs
 
 # Different units for memory representation
 MEMORY_UNIT_CONSTANTS = {
-    'GB': 1 / (1024 ** 3),
-    'MB': 1 / (1024 ** 2),
-    'KB': 1 / 1024,
+    'GB': 1024 ** 3,
+    'MB': 1024 ** 2,
+    'KB': 1024,
     'B': 1.
 }
 
@@ -64,15 +67,14 @@ def get_module_performance(module, inputs, n_repeats=300, warmup=40, device=None
     module : nn.Module
         Input module for which we track performance.
     inputs : Tensor or sequence of ints
-        If Tensor, then it is a data which we use for tracking performance.
-        If sequence of ints, then it is a shape of tensor which will be generated for tracking performance.
+        If Tensor, then directly used as module input.
+        If sequence of ints, then interpreted as shape of a tensor to make. The shape must include batch dimension.
     n_repeats : int
-        Number of times to repeat forward and backward pass for tracking performance.
+        Number of times to repeat forward and backward pass.
     warmup : int
         Number of starting iterations that won't be tracked.
     device : str or torch.cuda.Device
-        Device for computations.
-        If str, then any option of device configuration from :class:`torch.nn.Module` is supported.
+        Device for computations. Any option of PyTorch device configuration is supported.
     track_backward : bool
         If True, then track time and memory for the backward operation.
     channels_last : bool
@@ -86,13 +88,14 @@ def get_module_performance(module, inputs, n_repeats=300, warmup=40, device=None
     Returns
     -------
     dict
-        Dictionary of results of the module performance.
-        It contains forward and backward (if required):
-            - parameters number
-            - MACs
-            - time (mean and std)
-            - allocated memory
-            - total time for forward and backward together.
+        Dictionary with results of measure module performance.
+        It contains:
+            - number of parameters in the module.
+            - MACs. Estimated for `PyTorch` native operations only.
+            - forward and backward (if required) statistics:
+                - time (mean and std).
+                - allocated memory.
+            - total time taken for all measurements.
     """
     memory_unit_constant = MEMORY_UNIT_CONSTANTS[memory_unit]
 
@@ -114,8 +117,8 @@ def get_module_performance(module, inputs, n_repeats=300, warmup=40, device=None
             if i < warmup:
                 with torch.cuda.amp.autocast(enabled=amp):
                     outputs = module(inputs)
-
-                outputs.backward(outputs)
+                if track_backward:
+                    outputs.backward(outputs)
                 continue
 
             with torch.cuda.amp.autocast(enabled=amp):
@@ -142,7 +145,7 @@ def get_module_performance(module, inputs, n_repeats=300, warmup=40, device=None
             outputs = module(inputs)
 
         forward_memory = memory.value
-        result['forward memory'] = forward_memory * memory_unit_constant
+        result['forward memory'] = forward_memory / memory_unit_constant
 
         if track_backward:
             result['backward time mean(ms)'] = np.mean(backward_timings)
@@ -153,12 +156,13 @@ def get_module_performance(module, inputs, n_repeats=300, warmup=40, device=None
                 outputs.backward(outputs)
 
             backward_memory = memory.value
-            result['backward memory'] = backward_memory * memory_unit_constant
+            result['backward memory'] = backward_memory / memory_unit_constant
 
-        macs, params = get_model_complexity_info(module, tuple(inputs.shape[1:]),
-                                                 as_strings=False, print_per_layer_stat=False)
-        result['macs'] = macs
-        result['parameters'] = float(params)
+        if ptflops is not None:
+            macs, params = ptflops.get_model_complexity_info(module, tuple(inputs.shape[1:]),
+                                                             as_strings=False, print_per_layer_stat=False)
+            result['macs'] = macs
+            result['parameters'] = float(params)
 
     result['time total(ms)'] = total_timer.value
     return result
