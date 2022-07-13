@@ -27,9 +27,8 @@ class PixelShuffle(nn.Module):
         channels //= (self.upscale_factor**ndims)
 
         factor_expand = [self.upscale_factor] * ndims
-        x = x.contiguous().view(                                                       # (B, C, r, r, H, W)
-            batch_size, channels, *factor_expand, *dims
-            )
+        x = x.contiguous().view(batch_size, channels,                                  # (B, C, r, r, H, W)
+                                *factor_expand, *dims)
 
         permute = [None] * (2 * ndims)
         permute[::2] = range(ndims + 2, 2 * ndims + 2)
