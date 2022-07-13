@@ -42,7 +42,8 @@ class Layer:
                         f"for layer #{self.index} of subplot #{self.subplot.index}."
                 warn(msg)
             self.config['mask'] = 0
-            self.config['cmap'] = next(self.subplot.mask_colors)
+            if not is_color_like(self.config['cmap']):
+                self.config['cmap'] = next(self.subplot.mask_colors)
 
         preprocessed_data = self.preprocess(data)
         self.objects = getattr(self, mode)(preprocessed_data)
@@ -985,7 +986,6 @@ class Plot:
         self.figure = None
         self.subplots = None
         self.config = PlotConfig(self.get_defaults(mode))
-
         self.plot(data=data, combine=combine, mode=mode, **kwargs)
 
     def __getitem__(self, key):
@@ -997,10 +997,10 @@ class Plot:
         return self.plot(data, combine=combine, mode=mode, **kwargs)
 
     def __repr__(self):
-        return ''
+        return f"<Plotter with {len(self.subplots)} subplots>"
 
     def __str__(self):
-        return f"<Batchflow Plotter with {len(self.subplots)} subplots>"
+        return f"<Plotter with {len(self.subplots)} subplots>"
 
     def _ipython_display_(self):
         return None
