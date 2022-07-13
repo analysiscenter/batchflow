@@ -76,7 +76,7 @@ class ColorMappingHandler(HandlerBase):
             segments.append(segment)
 
         label = orig_handle.get_label()
-        patch = PatchCollection(segments, match_original=True, edgecolor=None, cmap=cmap.name, label=label)
+        patch = PatchCollection(segments, match_original=True, edgecolor=None, cmap=cmap, label=label)
 
         return [patch]
 
