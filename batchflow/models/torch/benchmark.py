@@ -8,6 +8,8 @@ except ImportError:
 
 from .utils import make_initialization_inputs
 
+
+
 # Different units for memory representation
 MEMORY_UNIT_CONSTANTS = {
     'GB': 1024 ** 3,
@@ -34,7 +36,7 @@ class TimeTracker:
 
     @property
     def value(self):
-        """ Get an operation time. """
+        """ Get total operation time. """
         return self.start.elapsed_time(self.end)
 
 class MemoryTracker:
@@ -54,13 +56,16 @@ class MemoryTracker:
 
     @property
     def value(self):
-        """ Get allocated memory for a module. """
+        """ Get peak allocated memory. """
         return self.end_memory - self.start_memory
 
-def get_module_performance(module, inputs, n_repeats=300, warmup=40, device=None, track_backward=True,
+
+def get_module_performance(module, inputs, track_backward=True, n_repeats=300, warmup=40, device=None, 
                            channels_last=False, amp=False, memory_unit='MB'):
-    """ Track module #macs, #parameters, time and memory consumption on forward and backward
-    pass for a given input tensor or inputs shape.
+    """ Measure module performance: forward/backward time and memory consumption, number of parameters and operations.
+    Under the hood, works by passing `inputs` `n_repeats` times while fetching data from device sensors.
+
+    If `ptflops` library is installed, also outputs the number of multiply-add operations (MACs).
 
     Parameters
     ----------
@@ -69,14 +74,14 @@ def get_module_performance(module, inputs, n_repeats=300, warmup=40, device=None
     inputs : Tensor or sequence of ints
         If Tensor, then directly used as module input.
         If sequence of ints, then interpreted as shape of a tensor to make. The shape must include batch dimension.
+    track_backward : bool
+        If True, then track time and memory for the backward operation.
     n_repeats : int
         Number of times to repeat forward and backward pass.
     warmup : int
         Number of starting iterations that won't be tracked.
     device : str or torch.cuda.Device
         Device for computations. Any option of PyTorch device configuration is supported.
-    track_backward : bool
-        If True, then track time and memory for the backward operation.
     channels_last : bool
         Whether to use `torch.channels_last` memory format.
     amp : bool
@@ -89,13 +94,13 @@ def get_module_performance(module, inputs, n_repeats=300, warmup=40, device=None
     -------
     dict
         Dictionary with results of measure module performance.
-        It contains:
-            - number of parameters in the module.
-            - MACs. Estimated for `PyTorch` native operations only.
+        It contains following keys:
+            - `params`. Number of parameters in the module.
+            - `macs`. MACs, Estimated for `PyTorch` native operations only.
             - forward and backward (if required) statistics:
                 - time (mean and std).
                 - allocated memory.
-            - total time taken for all measurements.
+            - `total_time`. Total time taken for all measurements.
     """
     memory_unit_constant = MEMORY_UNIT_CONSTANTS[memory_unit]
 
@@ -137,32 +142,32 @@ def get_module_performance(module, inputs, n_repeats=300, warmup=40, device=None
                 backward_time = backward_timer.value
                 backward_timings.append(backward_time)
 
-        result['forward time mean(ms)'] = np.mean(forward_timings)
-        result['forward time std(ms)'] = np.std(forward_timings)
+        result['forward time mean, ms'] = np.mean(forward_timings)
+        result['forward time std, ms'] = np.std(forward_timings)
 
         # Calculate forward memory
         with MemoryTracker(device=device) as memory:
             outputs = module(inputs)
 
         forward_memory = memory.value
-        result['forward memory'] = forward_memory / memory_unit_constant
+        result[f'forward memory, {memory_unit}'] = forward_memory / memory_unit_constant
 
         if track_backward:
-            result['backward time mean(ms)'] = np.mean(backward_timings)
-            result['backward time std(ms)'] = np.std(backward_timings)
+            result['backward time mean, ms'] = np.mean(backward_timings)
+            result['backward time std, ms'] = np.std(backward_timings)
 
             # Calculate backward memory
             with MemoryTracker(device=device) as memory:
                 outputs.backward(outputs)
 
             backward_memory = memory.value
-            result['backward memory'] = backward_memory / memory_unit_constant
+            result[f'backward memory, {memory_unit}'] = backward_memory / memory_unit_constant
 
         if ptflops is not None:
-            macs, params = ptflops.get_model_complexity_info(module, tuple(inputs.shape[1:]),
-                                                             as_strings=False, print_per_layer_stat=False)
+            macs, _ = ptflops.get_model_complexity_info(module, tuple(inputs.shape[1:]),
+                                                        as_strings=False, print_per_layer_stat=False)
             result['macs'] = macs
-            result['parameters'] = float(params)
+        result['parameters'] = sum(p.numel() for p in module.parameters())
 
-    result['time total(ms)'] = total_timer.value
+    result['time total, ms'] = total_timer.value
     return result
