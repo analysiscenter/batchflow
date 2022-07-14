@@ -17,9 +17,8 @@ from matplotlib.ticker import MaxNLocator, AutoMinorLocator
 from mpl_toolkits import axes_grid1
 
 from .utils import CycledList, ColorMappingHandler, PlotConfig
-from .utils import evaluate_str_comparison, is_binary_mask, contains_numbers
+from .utils import evaluate_str_comparison, is_binary_mask, contains_numbers, ceil_div
 from .utils import make_cmap, scale_lightness, invert_color, wrap_by_delimiter
-from .cmaps import *
 from ..utils import to_list
 
 
@@ -454,13 +453,12 @@ class Subplot:
         return defaults
 
     # Plot delegator
-    def plot(self, mode, data, config=None):
+    def plot(self, mode, data, **kwargs):
         """ Update subplot config with given parameters, for every data item create and delegate data plotting to it
         with parameters relevant to this subplot, annotate subplot (add title, labels, colorbar, grid etc.).
         """
         self.config = self.get_defaults(mode)
-        if config is not None:
-            self.config.update(config)
+        self.config.update(kwargs)
 
         for layer_index, layer_data in enumerate(data):
             layer_config = self.config.maybe_index(layer_index)
@@ -524,24 +522,30 @@ class Subplot:
             annotations['ylabel'] = self.ax.set_ylabel(ylabel=ylabel, **ylabel_config)
 
         # xticks
-        xticks_config = self.config.filter(prefix='xticks_')
-        ticks = self.config.get('ticks', None)
-        xticks = self.config.get('xticks', None)
-        xticks = ticks if ticks is not None else xticks
-        if xticks is not None:
-            xticks_config['ticks'] = xticks
-        if xticks_config:
-            self.ax.set_xticks(**xticks_config)
+        xtick_config = self.config.filter(prefix='xtick_')
+        if 'locations' in xtick_config:
+            xtick_locations = xtick_config.pop('locations')
+            self.ax.set_xticks(xtick_locations)
+
+        if xtick_config:
+            if 'labels' not in xtick_config:
+                xtick_config['labels'] = [item.get_text() for item in self.ax.get_xticklabels()]
+            if 'size' in xtick_config:
+                xtick_config['fontsize'] = xtick_config.pop('size')
+            annotations['xticks'] = self.ax.set_xticklabels(**xtick_config)
 
         # yticks
-        yticks_config = self.config.filter(prefix='yticks_')
-        ticks = self.config.get('ticks', None)
-        yticks = self.config.get('yticks', None)
-        yticks = ticks if ticks is not None else yticks
-        if yticks is not None:
-            yticks_config['ticks'] = yticks
-        if yticks_config:
-            self.ax.set_yticks(**yticks_config)
+        ytick_config = self.config.filter(prefix='ytick_')
+        if 'locations' in ytick_config:
+            xtick_locations = ytick_config.pop('locations')
+            self.ax.set_yticks(xtick_locations)
+
+        if ytick_config:
+            if 'labels' not in ytick_config:
+                ytick_config['labels'] = [item.get_text() for item in self.ax.get_yticklabels()]
+            if 'size' in ytick_config:
+                ytick_config['fontsize'] = ytick_config.pop('size')
+            annotations['xticks'] = self.ax.set_yticklabels(**ytick_config)
 
         # ticks
         tick_keys = ['labeltop', 'labelright', 'labelcolor']
@@ -985,7 +989,7 @@ class Plot:
 
         self.figure = None
         self.subplots = None
-        self.config = PlotConfig(self.get_defaults(mode))
+        self.config = self.get_defaults(mode)
         self.plot(data=data, combine=combine, mode=mode, **kwargs)
 
     def __getitem__(self, key):
@@ -1125,7 +1129,6 @@ class Plot:
             default_ncols = 1
 
         # Make ncols/nrows
-        ceil_div = lambda a, b: -(-a // b)
         if ncols is None and nrows is None:
             ncols = min(default_ncols, n_subplots)
             nrows = ceil_div(n_subplots, ncols)
@@ -1357,8 +1360,8 @@ class Plot:
         return defaults
 
     # Plotting delegator
-    def plot(self, data=None, combine='overlay', mode='image', axes=None, axis=None, ax=None,
-             adjust_figsize='image', show=True, force_show=False, save=False, positions=None, **kwargs):
+    def plot(self, data=None, combine='overlay', mode='image', show=True, force_show=False, save=False,
+             axes=None, adjust_figsize='image', positions=None, **kwargs):
         """ Plot data on subplots.
 
         If a first call (from `__init__`), parse axes from kwargs if they are provided, else create them.
@@ -1368,7 +1371,6 @@ class Plot:
 
         data, combine, n_subplots = self.parse_data(data=data, combine=combine, mode=mode)
 
-        axes = axes or axis or ax
         if self.subplots is None:
             self.figure, self.subplots = self.make_subplots(mode=mode, n_subplots=n_subplots, data=data, axes=axes)
         else:
@@ -1389,7 +1391,7 @@ class Plot:
             subplot_index = None if combine == 'overlay' else relative_index
             subplot_config = self.config.maybe_index(subplot_index)
 
-            subplot.plot(mode, subplot_data, subplot_config)
+            subplot.plot(mode, subplot_data, **subplot_config)
 
         figure_objects = self.annotate()
         self.figure_objects = figure_objects
