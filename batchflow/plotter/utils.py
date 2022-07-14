@@ -314,3 +314,7 @@ def wrap_by_delimiter(string, width, delimiter=' ', newline='\n'):
         result += line
 
     return result
+
+def ceil_div(a, b):
+    """ Return the smallest integer greater than or equal to result of parameters division. """
+    return -(-a // b)
