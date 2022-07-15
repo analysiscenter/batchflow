@@ -377,38 +377,32 @@ class Notifier:
         if postfix and not previous_postfix.startswith(postfix):
             self.bar.set_postfix_str(postfix)
 
-    def make_plotter(self, num_graphs=None, layout=None, figsize=None, **kwargs):
+    def make_plotter(self, num_graphs=None, layout='horizontal', figsize=None, ncols=None, nrows=None, **kwargs):
         """ Make canvas for plotting graphs. """
         if num_graphs is None:
             num_graphs = len(self.data_containers)
 
+        if ncols is None and nrows is None:
+            if layout in ['h', 'horizontal']:
+                ncols, nrows = num_graphs, 1
+            elif layout in ['v', 'vertical']:
+                ncols, nrows = 1, num_graphs
+            else:
+                raise ValueError(f"Valid `layout` is one of 'h', 'horizontal', 'v', 'vertical', got {layout} instead.")
+        else:
+            ncols, nrows = plot.infer_ncols_nrows(num_graphs, ncols, nrows, 5)
+
+        if figsize is None:
+            figsize = (6 * ncols, 6 * nrows)
+
         plot_config = {
-            'adjust_figsize': True,
-            'legend_loc': 9,
-            'show': False,
+            'ncols': ncols,
+            'nrows': nrows,
+            'figsize': figsize,
             **kwargs
         }
 
-        if layout is not None:
-            if layout in ['h', 'horizontal']:
-                nrows, ncols = (1, num_graphs)
-                figsize = figsize or (6 * num_graphs, 6)
-            elif layout in ['v', 'vertical']:
-                nrows, ncols = (num_graphs, 1)
-                figsize = figsize or (6, 6 * num_graphs)
-            else:
-                raise ValueError(f"Valid `layout` is one of 'h', 'horizontal', 'v', 'vertical', got {layout} instead.")
-
-            plot_config = {
-                'nrows': nrows,
-                'ncols': ncols,
-                'figsize': figsize,
-                **plot_config
-            }
-        elif figsize is not None:
-            plot_config['figsize'] = figsize
-
-        return plot(**plot_config)
+        return plot(show=False, **plot_config)
 
     def update_plot(self, index=0, add_suptitle=False, savepath=None, clear_display=True, **kwargs):
         """ Draw plots anew. """
@@ -463,7 +457,7 @@ class Notifier:
         elif isinstance(source, ResourceMonitor):
             source.plot(plotter=self.plotter, positions=index, **plot_config)
         else:
-            plot_config = {'title': name, 'label': None, **plot_config}
+            plot_config = {'title': name, **plot_config}
             if isinstance(data, (tuple, list)) or (isinstance(data, np.ndarray) and data.ndim == 1):
                 plot_config = { 'xlabel': 'Iteration', 'grid': 'major', 'window': 50, **plot_config}
 
@@ -474,7 +468,7 @@ class Notifier:
                 else:
                     data = (x, y)
                     mode = 'curve'
-
+                    plot_config = {'label': None, **plot_config}
             elif isinstance(data, np.ndarray) and data.ndim in (2, 3):
                 mode = 'image'
                 plot_config = {'grid': None, 'label': None, 'xlabel': None, **plot_config}
@@ -507,10 +501,9 @@ class Notifier:
         self.telegram_text.send(f'`{text[:idx]}`\n`{text[idx:]}`')
 
     # Manual usage of notifier instance
-    def plot(self, num_graphs=None, layout='horizontal', **kwargs):
+    def plot(self, **kwargs):
         """ Convenient alias for working with an instance. """
-        if self.plotter is None:
-            self.plotter = self.make_plotter(num_graphs=num_graphs, layout=layout, **kwargs)
+        self.plotter = self.make_plotter(**kwargs)
         self.update_plot(clear_display=False, **kwargs)
 
     visualize = plot

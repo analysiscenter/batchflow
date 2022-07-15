@@ -85,13 +85,14 @@ class Layer:
         default_kernel = np.ones((3, 1), dtype=np.uint8)
         if dilation_config:
             if dilation_config is True:
-                dilation_config = {'kernel': default_kernel}
+                dilation_config = {'iterations': 1, 'kernel': default_kernel}
             elif isinstance(dilation_config, int):
                 dilation_config = {'iterations': dilation_config, 'kernel': default_kernel}
             elif isinstance(dilation_config, tuple):
                 dilation_config = {'kernel': np.ones(dilation_config, dtype=np.uint8)}
-
-            data = cv2.dilate(data, **dilation_config)
+            elif 'kernel' in dilation_config and isinstance(dilation_config['kernel'], tuple):
+                dilation_config['kernel'] = np.ones(dilation_config['kernel'], dtype=np.uint8)
+            data = cv2.dilate(data.astype(np.float32), **dilation_config)
         return data
 
     def mask(self, data):
@@ -365,8 +366,9 @@ class Subplot:
 
     IMAGE_DEFAULTS = {
         # image
-        'cmap': 'batchflow',
+        'cmap': 'Greys_r',
         'augment_mask': False,
+        'alpha': 1,
         # ticks
         'labeltop': False,
         'labelright': False,
@@ -415,6 +417,7 @@ class Subplot:
     CURVE_DEFAULTS = {
         # curve
         'color': CycledList(CURVE_COLORS),
+        'alpha': 1,
         # axis labels
         'xlabel': 'x',
         'ylabel': 'y',
@@ -430,6 +433,7 @@ class Subplot:
         'final_window': 50,
         # curve
         'color': CycledList(CURVE_COLORS[::2]),
+        'alpha': 1,
         # learning rate
         'lr_color': CycledList(CURVE_COLORS[1::2]),
         # title
@@ -453,7 +457,7 @@ class Subplot:
         return defaults
 
     # Plot delegator
-    def plot(self, mode, data, **kwargs):
+    def plot(self, data, mode='image', **kwargs):
         """ Update subplot config with given parameters, for every data item create and delegate data plotting to it
         with parameters relevant to this subplot, annotate subplot (add title, labels, colorbar, grid etc.).
         """
@@ -602,8 +606,11 @@ class Subplot:
 
         label = self.config.get('label')
         if label is not None:
-            color = self.config.get('cmap') or self.config.get('color')
-            alpha = self.config.get('alpha', 1)
+            if mode in ('image', 'matrix'):
+                color = [layer.config['cmap'] for layer in self]
+            else:
+                color = [layer.config['color'] for layer in self]
+            alpha = self.config['alpha']
 
             legend_keys = ['size', 'loc', 'ha', 'va', 'handletextpad']
             legend_config = self.config.filter(legend_keys, prefix='legend_')
@@ -632,13 +639,13 @@ class Subplot:
 
     def add_colorbar(self, image, width=.2, pad=None, color='black', colorbar=False, position='right'):
         """ Append colorbar to the subplot on the right. """
-        if colorbar is False:
+        if colorbar is None:
             return None
 
         divider = axes_grid1.make_axes_locatable(image.axes)
         cax = divider.append_axes(position=position, size=width, pad=pad)
 
-        if colorbar is None:
+        if colorbar is False:
             cax.set_axis_off()
             return None
 
@@ -838,8 +845,10 @@ class Plot:
         Number of figure columns/rows.
     tight_layout : bool
         Whether adjust subplot parameters using `plt.tight_layout` with default padding or not. Defaults is True.
+    sharex, sharey : bool
+        Whether to use same x/y-axis for all subplots.
     figure_{parameter} : misc
-        Any parameter valid for `plt.subplots`. For example, `figure_sharex=True`.
+        Any parameter valid for `plt.subplots`. For example, `figure_gridspec_kw=True`.
 
     Parameters for 'image' mode
     ---------------------------
@@ -983,13 +992,11 @@ class Plot:
     """
     MODES = ['image', 'matrix', 'histogram', 'curve', 'loss']
 
-    def __init__(self, data=None, combine='overlay', mode='image', **kwargs):
-        if mode not in self.MODES:
-            raise ValueError(f"Unknown mode '{mode}'. Expected one of {self.MODES}.")
-
+    def __init__(self, data=None, mode='image', combine='overlay', **kwargs):
         self.figure = None
         self.subplots = None
-        self.config = self.get_defaults(mode)
+        self.config = None
+        self.figure_config = None
         self.plot(data=data, combine=combine, mode=mode, **kwargs)
 
     def __getitem__(self, key):
@@ -1052,21 +1059,16 @@ class Plot:
         - `[[array_0, array_1]] when `combine='overlay'`
         - `[[array_0], [array_1]] when `combine='separate'`
         """
-        n_subplots = 0
-
         data_list = []
+
         if data is None:
             data_list = []
-            n_subplots = 1
         elif isinstance(data, tuple):
             data_list = [[cls.parse_tuple(data=data, mode=mode)]]
-            n_subplots = 1
         elif isinstance(data, np.ndarray):
             data_list = [[cls.parse_array(data=data, mode=mode)]]
-            n_subplots = 1
         elif isinstance(data, list) and contains_numbers(data):
             data_list = [[np.array(data)]]
-            n_subplots = 1
         elif isinstance(data, list):
             if any(isinstance(item, list) and not contains_numbers(item) for item in data):
                 combine = 'mixed'
@@ -1106,31 +1108,24 @@ class Plot:
                     data_list.extend(data_item)
                 elif combine in ('separate', 'mixed'):
                     data_list.append(data_item)
-                    n_subplots += 1
                 else:
                     msg = f"Valid combine modes are 'overlay', 'separate', 'mixed', got {combine}."
                     raise ValueError(msg)
 
             if combine == 'overlay':
                 data_list = [data_list]
-                n_subplots = 1
 
-        return data_list, combine, n_subplots
+        return data_list, combine
 
     # Figure manipulation methods
     @staticmethod
-    def infer_ncols_nrows(mode, n_subplots, ncols, nrows, **kwargs):
+    def infer_ncols_nrows(n_subplots, ncols, nrows, max_ncols, **kwargs):
         """ Infer number of figure columns and rows from number of provided data items. """
         _ = kwargs
 
-        if mode in ('image', 'matrix', 'histogram'):
-            default_ncols = 4
-        elif mode in ('curve', 'loss'):
-            default_ncols = 1
-
         # Make ncols/nrows
         if ncols is None and nrows is None:
-            ncols = min(default_ncols, n_subplots)
+            ncols = min(max_ncols, n_subplots)
             nrows = ceil_div(n_subplots, ncols)
         elif ncols is None:
             ncols = ceil_div(n_subplots, nrows)
@@ -1209,12 +1204,12 @@ class Plot:
 
         if axes is None:
             if self.config['ncols'] is None or self.config['nrows'] is None:
-                self.config['ncols'], self.config['nrows'] = self.infer_ncols_nrows(mode, n_subplots, **self.config)
+                self.config['ncols'], self.config['nrows'] = self.infer_ncols_nrows(n_subplots, **self.config)
 
             if self.config['figsize'] is None:
                 self.config['figsize'] = self.infer_figure_size(mode, n_subplots, data, **self.config)
 
-            figure_keys = ['figsize', 'ncols', 'nrows', 'facecolor', 'dpi', 'tight_layout']
+            figure_keys = ['figsize', 'ncols', 'nrows', 'facecolor', 'dpi', 'tight_layout', 'sharex', 'sharey']
             figure_config = self.config.filter(keys=figure_keys, prefix='figure_')
             figure, axes = plt.subplots(**figure_config)
             axes = to_list(axes)
@@ -1224,12 +1219,17 @@ class Plot:
                 raise ValueError(f"Not enough axes provided — got ({len(axes)}) for {n_subplots} subplots.")
 
             figure = axes[0].figure
-            self.config['ncols'], self.config['nrows'] = figure.axes[0].get_subplotspec().get_gridspec().get_geometry()
-            self.config['figsize'] = figure.get_size_inches()
+            ncols, nrows = figure.axes[0].get_subplotspec().get_gridspec().get_geometry()
+            figure_config = {
+                'ncols': ncols,
+                'nrows': nrows,
+                'figsize': figure.get_size_inches(),
+                'dpi': figure.dpi
+            }
 
         subplots = [Subplot(self, ax=ax, index=ax_num) for ax_num, ax in enumerate(axes)]
 
-        return figure, subplots
+        return figure, subplots, figure_config
 
     def get_bbox(self, obj):
         """ Get object bounding box in inches. """
@@ -1299,14 +1299,14 @@ class Plot:
             ax_widths.append(width)
             ax_heights.append(height)
 
-        nrows, ncols = self.config['ncols'], self.config['nrows']
+        nrows, ncols = self.figure_config['ncols'], self.figure_config['nrows']
         ax_widths = np.array(ax_widths).reshape(nrows, ncols)
         extra_width += ax_widths.max(axis=1).sum()
 
         ax_heights = np.array(ax_heights).reshape(nrows, ncols)
         extra_height += ax_heights.max(axis=0).sum()
 
-        fig_width, fig_height = self.config['figsize']
+        fig_width, fig_height = self.figure_config['figsize']
         new_figsize = (fig_width + extra_width, fig_height + extra_height)
         self.figure.set_size_inches(new_figsize)
 
@@ -1332,23 +1332,28 @@ class Plot:
     }
 
     IMAGE_DEFAULTS = {
+        'max_ncols': 4,
         'subplot_width': 8,
         'transpose': (0, 1, 2)
     }
 
     MATRIX_DEFAULTS = {
+        'max_ncols': 4,
         'subplot_width': 8
     }
 
     HISTOGRAM_DEFAULTS = {
+        'max_ncols': 4,
         'subplot_width': 8
     }
 
     CURVE_DEFAULTS = {
+        'max_ncols': 1,
         'subplot_width': 16
     }
 
     LOSS_DEFAULTS = {
+        'max_ncols': 1,
         'subplot_width': 16
     }
 
@@ -1361,18 +1366,26 @@ class Plot:
 
     # Plotting delegator
     def plot(self, data=None, combine='overlay', mode='image', show=True, force_show=False, save=False,
-             axes=None, adjust_figsize='image', positions=None, **kwargs):
+             axes=None, positions=None, n_subplots=None, adjust_figsize='image', **kwargs):
         """ Plot data on subplots.
 
         If a first call (from `__init__`), parse axes from kwargs if they are provided, else create them.
         For every data item choose relevant parameters from config and delegate data plotting to corresponding subplot.
         """
+        if mode not in self.MODES:
+            raise ValueError(f"Unknown mode '{mode}'. Expected one of {self.MODES}.")
+
+        self.config = self.get_defaults(mode)
         self.config.update(**kwargs)
 
-        data, combine, n_subplots = self.parse_data(data=data, combine=combine, mode=mode)
+        data, combine = self.parse_data(data=data, combine=combine, mode=mode)
+
+        if n_subplots is None:
+            n_subplots = 1 if combine == 'overlay' else len(data)
 
         if self.subplots is None:
-            self.figure, self.subplots = self.make_subplots(mode=mode, n_subplots=n_subplots, data=data, axes=axes)
+            figure, subplots, figure_config = self.make_subplots(mode=mode, n_subplots=n_subplots, data=data, axes=axes)
+            self.figure, self.subplots, self.figure_config = figure, subplots, figure_config
         else:
             if axes is not None:
                 msg = "Subplots already created and new axes cannot be specified."
@@ -1391,10 +1404,9 @@ class Plot:
             subplot_index = None if combine == 'overlay' else relative_index
             subplot_config = self.config.maybe_index(subplot_index)
 
-            subplot.plot(mode, subplot_data, **subplot_config)
+            subplot.plot(data=subplot_data, mode=mode, **subplot_config)
 
-        figure_objects = self.annotate()
-        self.figure_objects = figure_objects
+        self.figure_objects = self.annotate()
 
         if adjust_figsize is True or adjust_figsize == mode:
             self.adjust_figsize()
