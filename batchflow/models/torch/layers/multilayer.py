@@ -12,6 +12,7 @@ from .pooling import AvgPool, MaxPool, GlobalAvgPool, GlobalMaxPool
 from .resize import IncreaseDim, Reshape, Interpolate
 from .activation import Activation
 from .combine import Combine
+from .pixel_shuffle import PixelShuffle, PixelUnshuffle
 from .wrapper_letters import Branch, AttentionWrapper
 
 from ..repr_mixin import ModuleDictReprMixin
@@ -134,9 +135,9 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         'max_pool': MaxPool,
         'global_avg_pool': GlobalAvgPool,
         'global_max_pool': GlobalMaxPool,
-        'pixel_unshuffle': nn.PixelUnshuffle,
+        'pixel_unshuffle': PixelUnshuffle,
 
-        'pixel_shuffle': nn.PixelShuffle,
+        'pixel_shuffle': PixelShuffle,
         'resize_bilinear': Interpolate,
 
         'increase_dim': IncreaseDim,
