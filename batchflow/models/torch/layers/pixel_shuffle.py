@@ -63,7 +63,7 @@ class PixelUnshuffle(nn.Module):
         self.downscale_factor = downscale_factor
 
     def forward(self, x):
-        x = x.contiguous()                                                             # (B, C, H * r, B * r)
+        x = x.contiguous()                                                             # (B, C, H * r, W * r)
         batch_size, channels, *dims = x.size()
         ndims = len(dims)
 
