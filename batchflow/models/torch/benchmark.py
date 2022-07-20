@@ -60,7 +60,7 @@ class MemoryTracker:
         return self.end_memory - self.start_memory
 
 
-def get_module_performance(module, inputs, track_backward=True, n_repeats=300, warmup=40, device=None, 
+def get_module_performance(module, inputs, track_backward=True, n_repeats=300, warmup=40, device=None,
                            channels_last=False, amp=False, memory_unit='MB'):
     """ Measure module performance: forward/backward time and memory consumption, number of parameters and operations.
     Under the hood, works by passing `inputs` `n_repeats` times while fetching data from device sensors.
@@ -118,12 +118,12 @@ def get_module_performance(module, inputs, track_backward=True, n_repeats=300, w
             inputs.to(memory_format=torch.channels_last)
             module.to(memory_format=torch.channels_last)
 
-        for i in range(n_repeats + warmup):  
+        for i in range(n_repeats + warmup):
             with torch.cuda.amp.autocast(enabled=amp):
                 # Calculate forward operation time
                 with TimeTracker() as forward_timer:
                     outputs = module(inputs)
-                    
+
                 if i >= warmup:
                     forward_time = forward_timer.value
                     forward_timings.append(forward_time)
@@ -132,7 +132,7 @@ def get_module_performance(module, inputs, track_backward=True, n_repeats=300, w
                 # Calculate backward operation time
                 with TimeTracker() as backward_timer:
                     outputs.backward(outputs)
-                    
+
                 if i >= warmup:
                     backward_time = backward_timer.value
                     backward_timings.append(backward_time)
