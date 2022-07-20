@@ -6,7 +6,7 @@ try:
 except ImportError:
     ptflops = None
 
-from batchflow.models.torch.utils import make_initialization_inputs
+from .utils import make_initialization_inputs
 
 
 
