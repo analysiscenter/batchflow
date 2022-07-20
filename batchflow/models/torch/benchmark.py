@@ -6,7 +6,7 @@ try:
 except ImportError:
     ptflops = None
 
-from .utils import make_initialization_inputs
+from batchflow.models.torch.utils import make_initialization_inputs
 
 
 
@@ -118,29 +118,24 @@ def get_module_performance(module, inputs, track_backward=True, n_repeats=300, w
             inputs.to(memory_format=torch.channels_last)
             module.to(memory_format=torch.channels_last)
 
-        for i in range(n_repeats + warmup):
-            if i < warmup:
-                with torch.cuda.amp.autocast(enabled=amp):
-                    outputs = module(inputs)
-                if track_backward:
-                    outputs.backward(outputs)
-                continue
-
+        for i in range(n_repeats + warmup):  
             with torch.cuda.amp.autocast(enabled=amp):
                 # Calculate forward operation time
                 with TimeTracker() as forward_timer:
                     outputs = module(inputs)
-
-                forward_time = forward_timer.value
-                forward_timings.append(forward_time)
+                    
+                if i >= warmup:
+                    forward_time = forward_timer.value
+                    forward_timings.append(forward_time)
 
             if track_backward:
                 # Calculate backward operation time
                 with TimeTracker() as backward_timer:
                     outputs.backward(outputs)
-
-                backward_time = backward_timer.value
-                backward_timings.append(backward_time)
+                    
+                if i >= warmup:
+                    backward_time = backward_timer.value
+                    backward_timings.append(backward_time)
 
         result['forward time mean, ms'] = np.mean(forward_timings)
         result['forward time std, ms'] = np.std(forward_timings)
