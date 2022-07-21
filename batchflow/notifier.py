@@ -410,7 +410,7 @@ class Notifier:
 
         return plot(show=False, **plot_config)
 
-    def update_plot(self, index=0, add_suptitle=False, savepath=None, clear_display=True, **kwargs):
+    def update_plot(self, index=0, add_suptitle=False, savepath=None, clear_display=True, show=True, **kwargs):
         """ Draw plots anew. """
         plot_config = PlotConfig(kwargs)
 
@@ -433,7 +433,8 @@ class Notifier:
                 subplot_config = plot_config.maybe_index(subplot_index)
                 self.update_subplot(container=container, index=subplot_index, **subplot_config)
 
-        self.plotter.redraw()
+        if show:
+            self.plotter.redraw()
 
         savepath = savepath or (f'{self.savepath}_{self.bar.n}' if self.savepath is not None else None)
 
@@ -507,10 +508,10 @@ class Notifier:
         self.telegram_text.send(f'`{text[:idx]}`\n`{text[idx:]}`')
 
     # Manual usage of notifier instance
-    def plot(self, **kwargs):
+    def plot(self, show=True, savepath=None, **kwargs):
         """ Convenient alias for working with an instance. """
         self.plotter = self.make_plotter(**kwargs)
-        self.update_plot(clear_display=False, **kwargs)
+        self.update_plot(clear_display=False, show=show, savepath=savepath, **kwargs)
 
     visualize = plot
 

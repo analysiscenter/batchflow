@@ -147,7 +147,7 @@ class ResourceMonitor:
             'title': name,
             'label': stats,
             'smoothed_label': '',
-            'legend_loc': 0,
+            'legend_loc': 'best',
             'xlabel': 'Time, s',
             'ylabel': self.UNIT,
             'ylabel_rotation': 'horizontal',
