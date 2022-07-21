@@ -399,6 +399,12 @@ class Notifier:
             'ncols': ncols,
             'nrows': nrows,
             'figsize': figsize,
+            'xlabel_size': 15,
+            'ylabel_size': 15,
+            'tick_labelsize': 15,
+            'legend_size': 15,
+            'grid': 'major',
+            'window': 50,
             **kwargs
         }
 
@@ -418,8 +424,8 @@ class Notifier:
                 'ncols': 80,
                 'colour': None,
             }
-            suptitle = self.bar.format_meter(**fmt)
-            self.plotter.plot(suptitle=suptitle)
+            self.plotter.config['suptitle'] = self.bar.format_meter(**fmt)
+            self.plotter.annotate()
 
         for i, container in enumerate(self.data_containers):
             if i >= index:
@@ -447,31 +453,30 @@ class Notifier:
         name = container['name']
         plot_function = container.get('plot_function')
         plot_config = container.get('plot_config', {})
-        plot_config.update(kwargs)
-
         x = np.arange(len(data))[self.slice]
         y = np.array(data)[self.slice]
 
         if plot_function is not None:
-            plot_function(ax=subplot.ax, index=index, x=x, y=y, container=container, notifier=self)
+            plot_function(ax=subplot.ax, index=index, x=x, y=y, container=container, notifier=self, **kwargs)
         elif isinstance(source, ResourceMonitor):
+            plot_config = {**plot_config, **kwargs}
             source.plot(plotter=self.plotter, positions=index, **plot_config)
         else:
-            plot_config = {'title': name, **plot_config}
+            source_defaults = {'title': name}
             if isinstance(data, (tuple, list)) or (isinstance(data, np.ndarray) and data.ndim == 1):
-                plot_config = { 'xlabel': 'Iteration', 'grid': 'major', 'window': 50, **plot_config}
+                source_defaults['xlabel'] = 'Iteration'
 
                 if 'loss' in name.lower():
                     data = y
                     mode = 'loss'
-                    plot_config = {'label': 'loss', **plot_config}
+                    source_defaults['label'] = 'loss'
                 else:
                     data = (x, y)
                     mode = 'curve'
-                    plot_config = {'label': None, **plot_config}
+                    source_defaults['label'] = None
             elif isinstance(data, np.ndarray) and data.ndim in (2, 3):
                 mode = 'image'
-                plot_config = {'grid': None, 'label': None, 'xlabel': None, **plot_config}
+                source_defaults = {**source_defaults, 'grid': None, 'label': None, 'xlabel': None}
             else:
                 msg = "Expected data to be 1-dimensional tuple/list/array or 2- or 3-dimensional array."
                 if isinstance(data, np.ndarray):
@@ -480,6 +485,7 @@ class Notifier:
                     msg += f" Got {type(data)} instead."
                 raise ValueError(msg)
 
+            plot_config = {**self.plotter.config, **source_defaults, **plot_config, **kwargs}
             self.plotter.plot(data=data, mode=mode, positions=index, **plot_config)
 
     def update_log_file(self):

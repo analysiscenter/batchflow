@@ -139,9 +139,9 @@ class Layer:
                     xdata = range(len(data))
 
                 data = [xdata, data]
+
             smoothed = self.smooth(data[1].squeeze() if data[1].ndim > 1 else data[1])
-            if smoothed is not None:
-                data = [data[0], smoothed]
+            data = [*data, smoothed]
 
         if self.mode == 'loss':
             if isinstance(data, tuple):
@@ -254,11 +254,17 @@ class Layer:
 
     def curve(self, data):
         """ Display data as a polygonal chain. """
-        x, y = data
+        x, y, y_smoothed = data
 
         curve_keys = ['color', 'linestyle', 'alpha', 'label']
-        curve_config = self.config.filter(keys=curve_keys, prefix='curve_')
+        curve_config = self.config.filter(curve_keys, prefix='curve_')
+
         curves = self.ax.plot(x, y, **curve_config)
+
+        if y_smoothed is not None:
+            smoothed_color = scale_lightness(curve_config['color'], scale=.5)
+            smoothed_label = self.config.get('smoothed_label')
+            _ = self.ax.plot(x, y_smoothed, label=smoothed_label, color=smoothed_color, linestyle='--')
 
         return curves
 
@@ -322,6 +328,9 @@ class Subplot:
         if isinstance(key, int):
             return self.layers[key]
         raise ValueError(f"Only integer keys are supported for layers indexing, got {type(key)}.")
+
+    def __call__(self, data, mode='image', **kwargs):
+        return self.plot(data=data, mode=mode, **kwargs)
 
     # Properties
     @property
@@ -619,7 +628,7 @@ class Subplot:
 
         # grid
         grid = self.config.get('grid', None)
-        grid_keys = ['linestyle', 'freq']
+        grid_keys = ['freq']
 
         minor_config = self.config.filter(keys=grid_keys, prefix='minor_grid_')
         if grid in ('minor', 'both') and minor_config:

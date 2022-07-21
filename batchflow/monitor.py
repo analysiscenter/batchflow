@@ -124,7 +124,10 @@ class ResourceMonitor:
 
     def plot(self, plotter=None, positions=None, slice=None, **kwargs):
         """ Simple plots of collected data-points. """
-        x, y = np.array(self.ticks) - self.ticks[0], np.array(self.data).squeeze()
+        x, y = np.array(self.ticks) - self.ticks[0], np.array(self.data)
+        if y.ndim > 1:
+            y = y.squeeze()
+
         if slice is not None:
             x = x[slice]
             y = y[slice]
@@ -144,7 +147,7 @@ class ResourceMonitor:
             'title': name,
             'label': stats,
             'smoothed_label': '',
-            'legend_loc': 9,
+            'legend_loc': 0,
             'xlabel': 'Time, s',
             'ylabel': self.UNIT,
             'ylabel_rotation': 'horizontal',
@@ -156,6 +159,7 @@ class ResourceMonitor:
         if plotter is None:
             plotter = plot(mode='curve', combine='separate', ratio=1, scale=0.5)
 
+        plot_config = {**plotter.config, **plot_config}
         return plotter(data=data, mode='curve', positions=positions, **plot_config)
 
     deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
