@@ -33,7 +33,6 @@ class MultiOut:
     def __getattr__(self, attr):
         return getattr(self.handlers[0], attr)
 
-=======
 class Unpickler(dill.Unpickler):
     """ Unpickler which will load object as a string if it can't be found. Is necessary
     to deal with objects imported from modules and removed. """
