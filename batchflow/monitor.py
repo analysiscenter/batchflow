@@ -1,12 +1,10 @@
 """ Monitoring (memory usage, cpu/gpu utilization) tools. """
 import os
 import time
-from math import ceil
 from ast import literal_eval
 from multiprocessing import Process, Manager, Queue
 
 import numpy as np
-import matplotlib.pyplot as plt
 try:
     import psutil
 except ImportError:
@@ -16,6 +14,9 @@ try:
 except ImportError:
     # Use this value to raise ImportError later
     nvidia_smi = None
+
+from .plotter import plot
+from .decorators import deprecated
 
 
 
@@ -121,11 +122,13 @@ class ResourceMonitor:
         self.fetch()
         self.stop()
 
-
-    def visualize(self):
+    def plot(self, plotter=None, positions=None, slice=None, **kwargs):
         """ Simple plots of collected data-points. """
-        plt.figure(figsize=(8, 6))
-        plt.plot(np.array(self.ticks) - self.ticks[0], self.data)
+        x, y = np.array(self.ticks) - self.ticks[0], np.array(self.data).squeeze()
+        if slice is not None:
+            x = x[slice]
+            y = y[slice]
+        data = (x, y)
 
         name = self.__class__.__name__
         if 'GPU' in name:
@@ -135,14 +138,28 @@ class ResourceMonitor:
             else:
                 name = f'{name} on devices `{str(used_gpus)[1:-1]}`'
 
-        title = f'{name}\nMEAN: {np.mean(self.data):4.4}    STD: {np.std(self.data):4.4}'
-        plt.title(title)
-        plt.xlabel('Time, s', fontsize=12)
-        plt.ylabel(self.UNIT, fontsize=12, rotation='horizontal', labelpad=15)
-        plt.grid(True)
-        plt.show()
+        stats = f'MEAN: {np.mean(self.data):4.4} STD: {np.std(self.data):4.4}'
 
+        plot_config = {
+            'title': name,
+            'label': stats,
+            'smoothed_label': '',
+            'legend_loc': 9,
+            'xlabel': 'Time, s',
+            'ylabel': self.UNIT,
+            'ylabel_rotation': 'horizontal',
+            'ylabel_labelpad': 15,
+            'grid': 'major',
+            **kwargs
+        }
 
+        if plotter is None:
+            plotter = plot(mode='curve', combine='separate', ratio=1, scale=0.5)
+
+        return plotter(data=data, mode='curve', positions=positions, **plot_config)
+
+    deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
+    visualize = deprecated(deprecation_msg.format('ResourceMonitor.visualize', 'ResourceMonitor.plot'))(plot)
 
 class CPUMonitor(ResourceMonitor):
     """ Track CPU usage. """
@@ -307,53 +324,23 @@ class Monitor(list):
             monitor.fetch()
             monitor.stop()
 
+    def plot(self, plotter=None, positions=None, savepath=None, **kwargs):
+        """ Visualize multiple monitors in a single figure. """
+        plot_config = {
+            'ratio': 1 / len(self),
+            'scale': 0.5,
+            'ncols': None if 'nrows' in kwargs else len(self),
+            **kwargs
+        }
 
-    def visualize(self, layout=None, figsize=None, suptitle='', savepath=None, show=True):
-        """ Visualize multiple monitors in a single figure.
+        if plotter is None:
+            plotter = plot(data=[None] * len(self), mode='curve', combine='separate', **plot_config)
 
-        Parameters
-        ----------
-        layout : tuple of ints
-            Grid layout of plots.
-        figsize : tuple of numbers
-            Size of figure: width and height.
-        suptitle : str
-            Title for the figure.
-        """
-        if layout is None:
-            layout = ceil(len(self) / 3), 3 if len(self) > 2 else len(self)
-        figsize = figsize or (7 * layout[1], 8 * layout[0])
+        positions = range(len(self))
+        for position, monitor in zip(positions, self):
+            monitor.plot(plotter=plotter, positions=position, **kwargs)
 
-        fig, ax = plt.subplots(*layout, figsize=figsize)
-        ax = np.atleast_2d(ax)
+        if savepath is not None:
+            plotter.save(savepath=savepath)
 
-        for i, monitor in enumerate(self):
-            name = monitor.__class__.__name__
-            if 'GPU' in name:
-                used_gpus = monitor.kwargs.get('gpu_list', get_current_gpus())
-                if len(used_gpus) == 1:
-                    name = f'{name} on device `{used_gpus[0]}`'
-                else:
-                    name = f'{name} on devices `{str(used_gpus)[1:-1]}`'
-
-            title = f'{name}\nMEAN: {np.mean(monitor.data):4.4}    STD: {np.std(monitor.data):4.4}'
-
-            ax[i // layout[1], i % layout[1]].plot(np.array(monitor.ticks) - monitor.ticks[0], monitor.data)
-            ax[i // layout[1], i % layout[1]].set_title(title, fontsize=16)
-            ax[i // layout[1], i % layout[1]].set_xlabel('Time, s', fontsize=14)
-            ax[i // layout[1], i % layout[1]].set_ylabel(monitor.UNIT, fontsize=12, rotation='horizontal', labelpad=15)
-            ax[i // layout[1], i % layout[1]].grid(True)
-
-        for i in range(len(self), layout[0] * layout[1]):
-            ax[i // layout[1], i % layout[1]].set_axis_off()
-
-        if suptitle:
-            fig.suptitle(suptitle, fontsize=24)
-
-        if savepath:
-            plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
-
-        if show:
-            plt.show()
-        else:
-            plt.close()
+        return plotter

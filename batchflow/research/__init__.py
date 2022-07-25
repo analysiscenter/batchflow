@@ -8,4 +8,4 @@ from .named_expr import E, EC, O, EP, R, S
 from .research import Research
 from .results import ResearchResults
 from .experiment import Experiment, Executor
-from .utils import get_metrics, convert_research_results
+from .utils import get_metrics

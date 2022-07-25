@@ -11,7 +11,7 @@ with warnings.catch_warnings():
     from tqdm.autonotebook import tqdm as tqdm_auto
 
 import numpy as np
-import matplotlib.pyplot as plt
+
 try:
     from IPython import display
 except ImportError:
@@ -20,6 +20,9 @@ except ImportError:
 from .named_expr import NamedExpression, eval_expr
 from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .utils_telegram import TelegramMessage
+from .plotter import plot
+from .decorators import deprecated
+
 
 
 class DummyBar:
@@ -133,7 +136,7 @@ class Notifier:
     def __init__(self, bar='a', disable=False, frequency=1, monitors=None, graphs=None, log_file=None,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  telegram=False, token=None, chat_id=None, silent=True,
-                 window=None, layout='h', figsize=None, savepath=None, **kwargs):
+                 window=None, layout='h', figsize=None, savepath=None, plot_config=None, **kwargs):
         # Prepare data containers like monitors and pipeline variables
         if monitors:
             monitors = monitors if isinstance(monitors, (tuple, list)) else [monitors]
@@ -148,6 +151,13 @@ class Notifier:
         self.has_monitors = False
         self.has_graphs = len(graphs) > 0
         self.n_monitors = len(monitors)
+
+        if self.has_graphs:
+            if plot_config is None:
+                plot_config = {}
+            self.plotter = self.make_plotter(num_graphs=len(graphs), layout=layout, figsize=figsize, **plot_config)
+        else:
+            self.plotter = None
 
         self.data_containers = []
         for container in monitors + graphs:
@@ -232,7 +242,6 @@ class Notifier:
 
         self.bar = None
         self.bar_func = lambda total: bar_func(total=total, **kwargs)
-
 
         # Make bar with known / unknown total length
         self.compute_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
@@ -368,50 +377,43 @@ class Notifier:
         if postfix and not previous_postfix.startswith(postfix):
             self.bar.set_postfix_str(postfix)
 
+    def make_plotter(self, num_graphs=None, layout=None, figsize=None, **kwargs):
+        """ Make canvas for plotting graphs. """
+        if num_graphs is None:
+            num_graphs = len(self.data_containers)
+
+        plot_config = {
+            'adjust_figsize': True,
+            'legend_loc': 9,
+            'show': False,
+            **kwargs
+        }
+
+        if layout is not None:
+            if layout in ['h', 'horizontal']:
+                nrows, ncols = (1, num_graphs)
+                figsize = figsize or (6 * num_graphs, 6)
+            elif layout in ['v', 'vertical']:
+                nrows, ncols = (num_graphs, 1)
+                figsize = figsize or (6, 6 * num_graphs)
+            else:
+                raise ValueError(f"Valid `layout` is one of 'h', 'horizontal', 'v', 'vertical', got {layout} instead.")
+
+            plot_config = {
+                'nrows': nrows,
+                'ncols': ncols,
+                'figsize': figsize,
+                **plot_config
+            }
+        elif figsize is not None:
+            plot_config['figsize'] = figsize
+
+        return plot(**plot_config)
+
     def update_plots(self, index=0, add_suptitle=False, savepath=None, clear_display=True):
         """ Draw plots anew. """
-        #pylint: disable=protected-access
-        num_graphs = len(self.data_containers) - index
-        layout = (1, num_graphs) if self.layout.startswith('h') else (num_graphs, 1)
-        figsize = self.figsize or ((20, 6) if self.layout.startswith('h') else (20, 6*num_graphs))
-
         if clear_display:
             display.clear_output(wait=True)
-        fig, ax = plt.subplots(*layout, figsize=figsize)
-        ax = ax if isinstance(ax, np.ndarray) else [ax]
-
-        for i, container in enumerate(self.data_containers):
-            if i >= index:
-                source = container['source']
-                name = container['name']
-                plot_function = container.get('plot_function')
-
-                if isinstance(source, ResourceMonitor):
-                    data_x = np.array(source.ticks)[self.slice] - source.ticks[0]
-                    data_y = source.data[self.slice]
-                    x_label, y_label = 'Time, s', source.UNIT
-                    title = f'{name}\nMEAN: {np.mean(data_y):4.4}    STD: {np.std(data_y):4.4}'
-                else:
-                    data_y = container['data']
-                    data_x = list(range(len(data_y)))[self.slice]
-                    data_y = data_y[self.slice]
-                    x_label, y_label = 'Iteration', ''
-                    title = name
-
-                if plot_function is not None:
-                    plot_function(fig=fig, ax=ax[i - index], i=i,
-                                  data_x=data_x, data_y=data_y, container=container, notifier=self)
-
-                # Default plotting functionality
-                elif isinstance(data_y, (tuple, list)) or (isinstance(data_y, np.ndarray) and data_y.ndim == 1):
-                    ax[i - index].plot(data_x, data_y)
-                    ax[i - index].set_title(title, fontsize=12)
-                    ax[i - index].set_xlabel(x_label, fontsize=12)
-                    ax[i - index].set_ylabel(y_label, fontsize=12, rotation='horizontal', labelpad=15)
-                    ax[i - index].grid(True)
-                elif isinstance(data_y, np.ndarray) and data_y.ndim == 2:
-                    ax[i - index].imshow(data_y)
-                    ax[i - index].set_title(title, fontsize=12)
 
         if add_suptitle:
             fmt = {
@@ -421,18 +423,77 @@ class Notifier:
                 'colour': None,
             }
             suptitle = self.bar.format_meter(**fmt)
+            self.plotter.plot(suptitle=suptitle)
 
-            if fig._suptitle:
-                suptitle = '\n'.join([suptitle, fig._suptitle.get_text()])
-            fig.suptitle(suptitle, y=0.99, fontsize=14)
+        for i, container in enumerate(self.data_containers):
+            if i >= index:
+                subplot_index = i - index
+                self.update_plot(container=container, index=subplot_index)
+
+        self.plotter.redraw()
 
         savepath = savepath or (f'{self.savepath}_{self.bar.n}' if self.savepath is not None else None)
+
         if savepath:
-            plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
-        plt.show()
+            self.plotter.save(savepath=savepath)
 
         if self.telegram:
-            self.telegram_media.send(fig)
+            self.telegram_media.send(self.plotter.figure)
+
+    def update_plot(self, container, index):
+        """ Update subplot under given index by data from given container. """
+        subplot = self.plotter[index]
+        subplot.clear()
+
+        data = container['data']
+        source = container['source']
+        name = container['name']
+        plot_function = container.get('plot_function')
+        plot_config = container.get('plot_config', {})
+
+        x = np.arange(len(data))[self.slice]
+        y = np.array(data)[self.slice]
+
+        if plot_function is not None:
+            plot_function(ax=subplot.ax, index=index, x=x, y=y, container=container, notifier=self)
+        elif isinstance(source, ResourceMonitor):
+            source.plot(plotter=self.plotter, positions=index, **plot_config)
+        else:
+            plot_config['title'] = name
+            plot_config['label'] = None
+            if isinstance(data, (tuple, list)) or (isinstance(data, np.ndarray) and data.ndim == 1):
+                plot_config = {
+                    'xlabel': 'Iteration',
+                    'grid': 'major',
+                    **plot_config
+                }
+
+                if 'loss' in name.lower():
+                    data = y
+                    mode = 'loss'
+                    plot_config['label'] = 'loss'
+                else:
+                    data = (x, y)
+                    mode = 'curve'
+
+                plot_config = {'window': 50, **plot_config}
+            elif isinstance(data, np.ndarray) and data.ndim in (2, 3):
+                mode = 'image'
+                plot_config = {
+                    'grid': None,
+                    'label': None,
+                    'xlabel': None,
+                    **plot_config
+                }
+            else:
+                msg = "Expected data to be 1-dimensional tuple/list/array or 2- or 3-dimensional array."
+                if isinstance(data, np.ndarray):
+                    msg += f" Got {type(data)} instead of shape {data.shape}"
+                else:
+                    msg += f" Got {type(data)} instead."
+                raise ValueError(msg)
+
+            self.plotter.plot(data=data, mode=mode, positions=index, **plot_config)
 
     def update_log_file(self):
         """ Update log file on the fly. """
@@ -453,9 +514,15 @@ class Notifier:
         self.telegram_text.send(f'`{text[:idx]}`\n`{text[idx:]}`')
 
     # Manual usage of notifier instance
-    def visualize(self):
+    def plot(self, num_graphs=None, layout='horizontal', **kwargs):
         """ Convenient alias for working with an instance. """
+        if self.plotter is None:
+            self.plotter = self.make_plotter(num_graphs=num_graphs, layout=layout, **kwargs)
         self.update_plots(clear_display=False)
+
+    deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
+    visualize = deprecated(deprecation_msg.format('Notifier.visualize', 'Notifier.plot'))(plot)
+
 
     def to_file(self, file):
         """ Log all the iteration-wise info (timestamps, descriptions) into file."""

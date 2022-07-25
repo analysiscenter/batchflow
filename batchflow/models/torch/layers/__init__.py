@@ -7,6 +7,6 @@ from .conv import (Conv, ConvTranspose,
                    DepthwiseConv, DepthwiseConvTranspose, SeparableConv, SeparableConvTranspose,
                    MultiKernelConv, SharedKernelConv, AvgPoolConv, BilinearConvTranspose)
 from .pooling import MaxPool, AvgPool, GlobalMaxPool, GlobalAvgPool, ChannelPool
-from .resize import IncreaseDim, Reshape, Interpolate, PixelShuffle, Crop
+from .resize import IncreaseDim, Reshape, Crop, Interpolate
 from .combine import Combine
 from .wrapper_letters import Branch, AttentionWrapper

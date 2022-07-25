@@ -147,7 +147,7 @@ class LayerNorm(nn.Module):
         std = (normalized * normalized).mean(1, keepdim=True)
         std = torch.sqrt(std + self.eps)
         x = normalized / std
-        x = self.weight[:, None, None] * x + self.bias[:, None, None]
+        x = self.weight[None, :, None, None] * x + self.bias[None, :, None, None]
         return x
 
     def extra_repr(self):

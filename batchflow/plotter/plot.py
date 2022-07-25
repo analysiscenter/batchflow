@@ -14,9 +14,9 @@ from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator, AutoMinorLocator
 from mpl_toolkits import axes_grid1
 
-from .docs import GENERAL_DOC, IMAGE_DOC, HISTOGRAM_DOC, CURVE_DOC, LOSS_DOC, ANNOTATION_DOC, EXAMPLES_DOC
 from .utils import CycledList, ColorMappingHandler, PlotConfig
-from .utils import evaluate_str_comparison, is_binary, contains_numbers, make_cmap, scale_lightness
+from .utils import evaluate_str_comparison, is_binary, contains_numbers
+from .utils import make_cmap, scale_lightness, invert_color, wrap_by_delimiter
 from ..utils import to_list
 
 
@@ -39,7 +39,7 @@ class Layer:
                 self.config['vmax'] = 1
 
         preprocessed_data = self.preprocess(data)
-        self.object = getattr(self, mode)(preprocessed_data)
+        self.objects = getattr(self, mode)(preprocessed_data)
 
     # Aliases to attributes of parent subplot
     @property
@@ -49,6 +49,10 @@ class Layer:
     @property
     def twin_ax(self):
         return self.subplot.twin_ax
+
+    @property
+    def main_object(self):
+        return self.objects[0] if hasattr(self, 'objects') else None
 
     # Preprocessing methods
     def transpose(self, data):
@@ -71,11 +75,13 @@ class Layer:
         # pylint: disable=import-outside-toplevel
         import cv2
         dilation_config = self.config.get('dilate', False)
+
+        default_kernel = np.ones((3, 1), dtype=np.uint8)
         if dilation_config:
             if dilation_config is True:
-                dilation_config = {'kernel': np.ones((3, 1), dtype=np.uint8)}
+                dilation_config = {'kernel': default_kernel}
             elif isinstance(dilation_config, int):
-                dilation_config = {'iterations': dilation_config}
+                dilation_config = {'iterations': dilation_config, 'kernel': default_kernel}
             elif isinstance(dilation_config, tuple):
                 dilation_config = {'kernel': np.ones(dilation_config, dtype=np.uint8)}
 
@@ -99,6 +105,14 @@ class Layer:
             data = np.ma.array(data, mask=mask)
         return data
 
+    def smooth(self, data):
+        """ Calculate running average on given data with provided window. """
+        window = self.config.get('window')
+        if window is not None and window < len(data):
+            data = convolve(data, np.ones(window), mode='nearest') / window
+            return data
+        return None
+
     def preprocess(self, data):
         """ Look through layer config for requested data transformations and apply them. """
         if self.mode == 'image':
@@ -112,11 +126,15 @@ class Layer:
 
         if self.mode == 'curve':
             if isinstance(data, np.ndarray) or (isinstance(data, list) and contains_numbers(data)):
-                if hasattr(self, 'object'):
-                    xdata = self.object.get_xdata()
+                if hasattr(self, 'objects'):
+                    xdata = self.main_object.get_xdata()
                 else:
                     xdata = range(len(data))
+
                 data = [xdata, data]
+            smoothed = self.smooth(data[1].squeeze() if data[1].ndim > 1 else data[1])
+            if smoothed is not None:
+                data = [data[0], smoothed]
 
         if self.mode == 'loss':
             if isinstance(data, tuple):
@@ -124,11 +142,10 @@ class Layer:
             else:
                 loss, lr = data, None
 
-            window = self.config.get('window')
-            if window is None or loss is None:
+            if loss is None:
                 smoothed = None
             else:
-                smoothed = convolve(loss, np.ones(window), mode='nearest') / window
+                smoothed = self.smooth(loss)
 
             data = [loss, smoothed, lr]
 
@@ -143,18 +160,18 @@ class Layer:
         """ Preprocess given data and pass it to `set_data`. Does not work in 'histogram' and 'loss' mode. """
         if self.mode == 'image':
             data = self.preprocess(data)
-            self.object.set_data(data)
+            self.main_object.set_data(data)
 
             vmin = self.config.get('vmin', np.nanmin(data))
             vmax = self.config.get('vmax', np.nanmax(data))
-            self.object.set_clim([vmin, vmax])
+            self.main_object.set_clim([vmin, vmax])
 
         if self.mode == 'histogram':
             raise NotImplementedError("Updating layer data is not in supported in 'histogram' mode. ")
 
         if self.mode == 'curve':
             x_data, y_data = self.preprocess(data)
-            self.object.set_data(x_data, y_data)
+            self.main_object.set_data(x_data, y_data)
             self.update_lims()
 
         if self.mode == 'loss':
@@ -165,6 +182,7 @@ class Layer:
         """ Display data as an image. """
         # Assemble colormap from given parameters
         cmap = self.config.get('cmap', None)
+
         # If a single color provided, prepend 'white' color, so that a resulting tuple defines binary colormap
         if is_color_like(cmap):
             cmap = ('white', cmap)
@@ -178,11 +196,45 @@ class Layer:
         cmap.set_bad(color=mask_color)
 
         image_keys = ['alpha', 'vmin', 'vmax', 'extent']
-        image_config = self.config.filter(image_keys, prefix='image_')
+        image_config = self.config.filter(keys=image_keys, prefix='image_')
 
         image = self.ax.imshow(data, cmap=cmap, **image_config)
 
-        return image
+        return [image]
+
+    def matrix(self, data):
+        """ Display data as a matrix. """
+        matrix_keys = ['cmap', 'vmin', 'vmax']
+        matrix_config = self.config.filter(keys=matrix_keys, prefix='matrix_')
+
+        matrix = self.ax.matshow(data, **matrix_config)
+
+        label_keys = ['size', 'color', 'bbox', 'format']
+        label_config = self.config.filter(keys=label_keys, prefix='label_')
+        label_format = label_config.pop('format')
+        label_color = label_config.pop('color')
+
+        min_value, max_value = np.nanmin(data), np.nanmax(data)
+        for y, row in enumerate(data):
+            for x, value in enumerate(row):
+                normalized_value = (value - min_value) / (max_value - min_value)
+                cell_color = plt.get_cmap(matrix_config['cmap'])(normalized_value)
+                cell_brightness = np.mean(cell_color[:3])
+                color = label_color if cell_brightness < 0.5 else invert_color(label_color)
+
+                if isinstance(label_format, str):
+                    formatter = label_format
+                elif isinstance(label_format, dict):
+                    formatter = ''
+                    for dtype, dtype_formatter in label_format.items():
+                        if isinstance(value, dtype):
+                            formatter = dtype_formatter
+
+                text = format(value, formatter)
+
+                self.subplot.add_text(text=text, x=x, y=y, color=color, **label_config)
+
+        return [matrix]
 
     def histogram(self, data):
         """ Display data as 1-D histogram. """
@@ -191,18 +243,17 @@ class Layer:
 
         _, _, bar = self.ax.hist(data, **histogram_config)
 
-        return bar
+        return [bar]
 
     def curve(self, data):
         """ Display data as a polygonal chain. """
         x, y = data
 
         curve_keys = ['color', 'linestyle', 'alpha', 'label']
-        curve_config = self.config.filter(curve_keys, prefix='curve_')
+        curve_config = self.config.filter(keys=curve_keys, prefix='curve_')
+        curves = self.ax.plot(x, y, **curve_config)
 
-        line = self.ax.plot(x, y, **curve_config)[0]
-
-        return line
+        return curves
 
     def loss(self, data):
         """ Display a combination of loss curve, its smoothed version and learning rate with nice defaults. """
@@ -213,27 +264,31 @@ class Layer:
         curve_keys = ['color', 'linestyle', 'linewidth', 'alpha']
 
         if loss is not None:
-            label = self.config.get('label', f'loss #{self.index + 1}')
-            loss_label = label + f' ⟶ {loss[-1]:2.3f}'
+            loss_name = self.config.get('label', f"loss #{self.index + 1}")
+            loss_label = f'{loss_name} ⟶ {loss[-1]:2.3f}'
             final_window = self.config.get('final_window', None)
             if final_window is not None:
-                final = np.mean(loss[-final_window:]) #pylint: disable=invalid-unary-operand-type
+                final_window = min(final_window, len(loss))
+                final = np.mean(loss[-final_window:])
                 loss_label += f"\nmean over last {final_window} iterations={final:2.3f}"
 
-            loss_config = self.config.filter(curve_keys, prefix='curve_')
+            loss_config = self.config.filter(keys=curve_keys, prefix='curve_')
             loss_curve = self.ax.plot(loss, label=loss_label, **loss_config)
             curves.extend(loss_curve)
 
         if smoothed is not None:
             smoothed_color = scale_lightness(loss_config['color'], scale=.5)
-            smoothed_loss_label = label + ' running mean'
-            smooth_curve = self.ax.plot(smoothed, label=smoothed_loss_label, color=smoothed_color, linestyle='--')
-            curves.extend(smooth_curve)
+            smooth_window = self.config.get('window')
+            smoothed_label = self.config.get('smoothed_label', loss_name)
+            smoothed_label = smoothed_label + '\n' if smoothed_label else ''
+            smoothed_label += f'smoothed with window {smooth_window}'
+            smoothed_curve = self.ax.plot(smoothed, label=smoothed_label, color=smoothed_color, linestyle='--')
+            curves.extend(smoothed_curve)
 
         if lr is not None:
             lr_ax = self.ax if loss is None else self.twin_ax
             lr_label = f'learning rate №{self.index + 1} ⟶ {lr[-1]:.0e}'
-            lr_config = self.config.filter(curve_keys, prefix='lr_')
+            lr_config = self.config.filter(keys=curve_keys, prefix='lr_')
             lr_curve = lr_ax.plot(lr, label=lr_label, **lr_config)
             lr_ax.set_ylabel('Learning rate', fontsize=12)
             curves.extend(lr_curve)
@@ -277,10 +332,27 @@ class Subplot:
         """ Assume that if twin axis of subplot was never created, learning rate values were put on main axis. """
         return self.ax if self._twin_ax is None else self.twin_ax
 
+    @property
+    def main_object(self):
+        return self.layers[0].main_object if len(self.layers) > 0 else None
+
+    # Subplot default parameters
+    COMMON_DEFAULTS = {
+        # title
+        'title_size': 25,
+        # axis labels
+        'xlabel_size': '12',
+        'ylabel_size': '12',
+        # grid
+        'minor_grid_color': '#CCCCCC',
+        'minor_grid_linestyle': '--',
+        'major_grid_color': '#CCCCCC',
+    }
+
     # Modes default parameters
-    MASK_COLORS = ['firebrick', 'mediumseagreen', 'thistle', 'darkorange', 'navy', 'gold',
-                    'red', 'turquoise', 'darkorchid', 'darkkhaki', 'royalblue', 'yellow',
-                    'chocolate', 'forestgreen', 'lightpink', 'darkslategray', 'deepskyblue', 'wheat']
+    MASK_COLORS = ['mediumseagreen', 'thistle', 'darkorange', 'navy', 'gold', 'firebrick',
+                   'red', 'turquoise', 'darkorchid', 'darkkhaki', 'royalblue', 'yellow',
+                   'chocolate', 'forestgreen', 'lightpink', 'darkslategray', 'deepskyblue', 'wheat']
 
     IMAGE_DEFAULTS = {
         # image
@@ -288,14 +360,25 @@ class Subplot:
         # ticks
         'labeltop': False,
         'labelright': False,
-        # image axes order
-        'transpose': (0, 1, 2),
         # values masking
         'mask_color': (0, 0, 0, 0),
         # grid
+        'grid': False
+    }
+
+    MATRIX_DEFAULTS = {
+        # matrix
+        'cmap': 'magma',
+        'colorbar': True,
+        # image axes order
+        'transpose': (0, 1, 2),
+        # grid
         'grid': False,
-        'minor_grid_x_n': 2,
-        'minor_grid_y_n': 2,
+        # labels
+        'label_size': 12,
+        'label_format': {float: '.2f', int: ''},
+        'label_bbox': None,
+        'label_color': 'white'
     }
 
     HISTOGRAM_DEFAULTS = {
@@ -332,7 +415,7 @@ class Subplot:
     }
 
     LOSS_DEFAULTS = {
-        # main
+        # smoothing
         'window': 20,
         'final_window': 50,
         # curve
@@ -352,38 +435,24 @@ class Subplot:
         'legend': True,
     }
 
-    ANNOTATION_DEFAULTS = {
-        'facecolor': 'snow',
-        # text
-        'text_color': 'k',
-        # title
-        'title_size': 25,
-        # axis labels
-        'xlabel_size': '12', 'ylabel_size': '12',
-        # colorbar
-        'colorbar': False,
-        # grid
-        'minor_grid_color': '#CCCCCC',
-        'minor_grid_linestyle': '--',
-        'major_grid_color': '#CCCCCC',
-    }
-
     @classmethod
     def get_defaults(cls, mode):
         """ Get dictionary with default parameters corresponding to given mode. """
-        return getattr(cls, f"{mode.upper()}_DEFAULTS")
+        mode_defaults = getattr(cls, f"{mode.upper()}_DEFAULTS")
+        defaults = PlotConfig({**cls.COMMON_DEFAULTS, **mode_defaults})
+        return defaults
 
     # Plot delegator
     def plot(self, mode, data, config=None):
         """ Update subplot config with given parameters, for every data item create and delegate data plotting to it
         with parameters relevant to this subplot, annotate subplot (add title, labels, colorbar, grid etc.).
         """
-        self.config = PlotConfig({**self.get_defaults(mode), **self.ANNOTATION_DEFAULTS})
+        self.config = self.get_defaults(mode)
         if config is not None:
             self.config.update(config)
 
         for layer_index, layer_data in enumerate(data):
-            layer_config = self.config.filter(index=layer_index)
+            layer_config = self.config.maybe_index(layer_index)
             layer = Layer(self, mode=mode, index=layer_index, config=layer_config, data=layer_data)
             self.layers.append(layer)
 
@@ -396,38 +465,53 @@ class Subplot:
         # pylint: disable=too-many-branches
         annotations = {}
 
-        text_keys = ['size', 'family', 'color']
-        text_config = self.config.filter(text_keys, prefix='text_')
+        if not self.ax.axison:
+            self.enable()
+
+        text_keys = ['size', 'family']
+        text_config = self.config.filter(keys=text_keys, prefix='text_')
 
         # title
-        keys = ['title', 'y']
-        title_config = self.config.filter(keys, prefix='title_')
+        title_keys = ['title', 'y']
+        title_config = self.config.filter(keys=title_keys, prefix='title_')
+        title_config.update(text_config, skip_duplicates=True)
+
         label = None
         if 'label' in title_config:
             label = title_config.pop('label')
         if 'title' in title_config:
             label = title_config.pop('title')
+
+        title_wrap_config = title_config.filter(prefix='wrap_', retrieve='pop')
+        if title_wrap_config:
+            label = wrap_by_delimiter(label, **title_wrap_config)
         title_config['label'] = label
-        title_config = {**text_config, **title_config}
+
         if title_config:
             annotations['title'] = self.ax.set_title(**title_config)
 
         # xlabel
-        keys = ['xlabel']
-        xlabel_config = self.config.filter(keys, prefix='xlabel_')
-        xlabel_config = {**text_config, **xlabel_config}
-        if xlabel_config and 'xlabel' in xlabel_config:
-            annotations['xlabel'] = self.ax.set_xlabel(**xlabel_config)
+        xlabel = self.config.get('xlabel')
+        if xlabel is not None:
+            xlabel_config = self.config.filter(prefix='xlabel_')
+            xlabel_config.update(text_config, skip_duplicates=True)
+            xlabel_wrap_config = xlabel_config.filter(prefix='wrap_', retrieve='pop')
+            if xlabel_wrap_config:
+                xlabel = wrap_by_delimiter(xlabel, **xlabel_wrap_config)
+            annotations['xlabel'] = self.ax.set_xlabel(xlabel=xlabel, **xlabel_config)
 
         # ylabel
-        keys = ['ylabel']
-        ylabel_config = self.config.filter(keys, prefix='ylabel_')
-        ylabel_config = {**text_config, **ylabel_config}
-        if ylabel_config and 'ylabel' in ylabel_config:
-            annotations['ylabel'] = self.ax.set_ylabel(**ylabel_config)
+        ylabel = self.config.get('ylabel')
+        if ylabel is not None:
+            ylabel_config = self.config.filter(prefix='ylabel_')
+            ylabel_config.update(text_config, skip_duplicates=True)
+            ylabel_wrap_config = ylabel_config.filter(prefix='wrap_', retrieve='pop')
+            if ylabel_wrap_config:
+                ylabel = wrap_by_delimiter(ylabel, **ylabel_wrap_config)
+            annotations['ylabel'] = self.ax.set_ylabel(ylabel=ylabel, **ylabel_config)
 
         # xticks
-        xticks_config = self.config.filter([], prefix='xticks_')
+        xticks_config = self.config.filter(prefix='xticks_')
         ticks = self.config.get('ticks', None)
         xticks = self.config.get('xticks', None)
         xticks = ticks if ticks is not None else xticks
@@ -437,7 +521,7 @@ class Subplot:
             self.ax.set_xticks(**xticks_config)
 
         # yticks
-        yticks_config = self.config.filter([], prefix='yticks_')
+        yticks_config = self.config.filter(prefix='yticks_')
         ticks = self.config.get('ticks', None)
         yticks = self.config.get('yticks', None)
         yticks = ticks if ticks is not None else yticks
@@ -447,8 +531,8 @@ class Subplot:
             self.ax.set_yticks(**yticks_config)
 
         # ticks
-        keys = ['labeltop', 'labelright', 'labelcolor']
-        tick_config = self.config.filter(keys, prefix='tick_')
+        tick_keys = ['labeltop', 'labelright', 'labelcolor']
+        tick_config = self.config.filter(keys=tick_keys, prefix='tick_')
         if tick_config:
             self.ax.tick_params(**tick_config)
 
@@ -463,25 +547,25 @@ class Subplot:
             self.lr_ax.set_yscale('log')
 
         # xlim
-        xlim_config = self.config.filter(['xlim'], prefix='xlim_')
-        if 'xlim' in xlim_config:
-            xlim_config['left'] = xlim_config.get('left', xlim_config.pop('xlim'))
+        xlim_config = self.config.filter(prefix='xlim_')
+        xlim = self.config.get('xlim')
+        if (xlim is not None) and (xlim != (None, None)):
+            xlim_config['left'] = xlim_config.get('left', xlim)
         if xlim_config:
             self.ax.set_xlim(**xlim_config)
 
         # ylim
-        ylim_config = self.config.filter(['ylim'], prefix='ylim_')
-        if 'ylim' in ylim_config:
-            ylim_config['bottom'] = ylim_config.get('bottom', ylim_config.pop('ylim'))
+        ylim_config = self.config.filter(prefix='ylim_')
+        ylim = self.config.get('ylim')
+        if (ylim is not None) and (ylim != (None, None)):
+            ylim_config['bottom'] = ylim_config.get('bottom', ylim)
         if ylim_config:
             self.ax.set_ylim(**ylim_config)
 
         # colorbar
-        keys = ['colorbar', 'width', 'pad', 'fake', 'annotations']
-        colorbar_config = self.config.filter(keys, prefix='colorbar_')
-        if colorbar_config and mode == 'image':
-            colorbar_config['image'] = self.layers[0].object
-
+        colorbar_keys = ['colorbar', 'width', 'pad', 'fake', 'annotations']
+        colorbar_config = self.config.filter(keys=colorbar_keys, prefix='colorbar_')
+        if self.main_object is not None and colorbar_config and mode in ('image', 'matrix'):
             if 'pad' not in colorbar_config:
                 pad = 0.4
                 labelright = self.config.get('labelright', None)
@@ -493,11 +577,11 @@ class Subplot:
                     pad += (max_ytick_label_x1 - ax_x1) # account for width of yticklabels to the right of the subplot
                 colorbar_config['pad'] = pad
 
-            annotations['colorbar'] = self.add_colorbar(**colorbar_config)
+            annotations['colorbar'] = self.add_colorbar(image=self.main_object, **colorbar_config)
 
         # legend
         if mode in ('loss', 'curve'):
-            self.config['label'] = [layer.object for layer in self.layers]
+            self.config['label'] = [obj for layer in self.layers for obj in layer.objects]
 
         label = self.config.get('label')
         if label is not None:
@@ -511,13 +595,13 @@ class Subplot:
 
         # grid
         grid = self.config.get('grid', None)
-        grid_keys = ['color', 'linestyle', 'freq']
+        grid_keys = ['linestyle', 'freq']
 
-        minor_config = self.config.filter(grid_keys, prefix='minor_grid_')
+        minor_config = self.config.filter(keys=grid_keys, prefix='minor_grid_')
         if grid in ('minor', 'both') and minor_config:
             self.add_grid(grid_type='minor', **minor_config)
 
-        major_config = self.config.filter(grid_keys, prefix='major_grid_')
+        major_config = self.config.filter(keys=grid_keys, prefix='major_grid_')
         if grid in ('major', 'both') and minor_config:
             self.add_grid(grid_type='major', **major_config)
 
@@ -526,11 +610,6 @@ class Subplot:
             self.ax.set_facecolor(facecolor)
 
         self.ax.set_axisbelow(self.config.get('set_axisbelow', False))
-
-        if self.config.get('disable'):
-            self.disable()
-        elif not self.ax.axison:
-            self.enable()
 
         return annotations
 
@@ -551,7 +630,7 @@ class Subplot:
 
         return colorbar
 
-    def add_legend(self, mode='image', label=None, color='none', alpha=1, size=10, **kwargs):
+    def add_legend(self, mode='image', label=None, color='none', alpha=1, size=15, **kwargs):
         """ Add patches to subplot legend.
 
         Parameters
@@ -582,8 +661,8 @@ class Subplot:
         # make new handles
         new_handles = []
         labels = to_list(label)
-        colors = color if isinstance(color, list) else [color] * len(labels)
-        alphas = alpha if isinstance(alpha, list) else [alpha] * len(labels)
+        colors = [color] * len(labels) if isinstance(color, str) else color
+        alphas = [alpha] * len(labels) if isinstance(alpha, Number) else alpha
 
         for label_item, label_color, label_alpha in zip(labels, colors, alphas):
             if label_item is None:
@@ -660,14 +739,240 @@ class Subplot:
         """ Make subplot invisible. """
         self.ax.set_axis_off()
 
+    def clear(self):
+        """ Clear subplot axis. """
+        self.ax.clear()
+        for layer in self.layers:
+            for obj in layer.objects:
+                obj.remove()
+        self.layers = []
+        self.annotations = {}
+
 
 class Plot:
-    """ Multiple graphs plotter. """
-    # Documentation is assembled from `docs.py` right after class suite definition. Address it for details.
+    """ Multiple graphs plotter.
+
+    General idea is to display graphs and annotate them based on config of provided parameters for various
+    `matplotlib` functions (e.g. `figsize` goes to figure initialization, `title` goes to `plt.set_title`, etc.).
+
+    The logic behind the process is the following:
+    1. Parse data — put provided arrays into double nested list. Nestedness levels define subplot and layer data order
+       correspondingly. Also infer images combination mode — either overlay, separate or mixed.
+    2. Parse figure axes if provided, else create them.
+    3. Obtain default config for chosen plotting mode and update it with provided parameters.
+    4. For every data item choose corresponding subplot and delegate data plotting to it.
+    5. Annotate figure.
+    6. Save plot.
+
+    General parameters
+    ----------
+    data : np.ndarray, tuple or list
+        If array, its dimensionality must match plot `mode`:
+        - in 'image' mode 1d, 2d and 3d arrays are valid, thoug 3d image must be either 1- or 3- channeled;
+        - in 'histogram' mode arrays of any dimensionality are valid, since they are flattened anyway;
+        - in 'curve' and 'loss' modes 1d arrays are valid, defining polyline 'y' coordinates;
+        If tuple, must contain two 1d arrays:
+        - in 'curve' mode arrays define 'x' and 'y' polyline coordinates correspondingly;
+        - in 'loss' mode array define 'y' coordinates of loss and learning rates popylines correspondingly;
+        If list, must either contain arrays or tuples of format specified above. List might be either flat or nested.
+        If list if flat, plotter parses data based on `combine` parameter value (see details below).
+        If list is nested, outer level defines subplots order while inner one defines layers order.
+    mode : 'image', 'histogram', 'curve', 'loss'
+        If 'image' plot given arrays as images.
+        If 'histogram' plot 1d histogram.
+        If 'curve' plot given arrays as curve lines.
+        If 'loss' plot given arrays as loss curves.
+    combine : 'overlay', 'separate' or 'mixed'
+        Whether overlay images on a single subplot, show them on separate ones or use mixed approach.
+        Needs specifying only when `combine='separate'` required, since `combine='overlay'` is default and
+        `combine='mixed'` is infered automatically from data (if data list is nested, no need specifiying `combine`).
+    kwargs :
+        - For one of `image`, `histogram`, `curve`, `loss` methods of `Layer` (depending on chosen mode).
+            Parameters and data nestedness levels must match if they are lists meant for differents subplots/layers.
+            Every param with 'image_', 'histogram_', 'curve_', 'loss_' prefix is redirected to corresponding method.
+            See detailed parameters listings below.
+        - For `annotate`.
+            Every param with 'title_', 'suptitle_', 'xlabel_', 'ylabel_', 'xticks_', 'yticks_', 'xlim_', 'ylim_',
+            colorbar_', 'legend_' or 'grid_' prefix is redirected to corresponding matplotlib method.
+            Also 'facecolor', 'set_axisbelow', 'disable_axes' arguments are accepted.
+
+    Notes on advanced parameters managing
+    -------------------------------------
+    Keep in mind, that set of parameters that are parsed by plotter directly is limited to ones most frequently used.
+    However there is a way to provide any parameter to a specific plot method, using prefix corresponding to it.
+    One must prepend that prefix to a parameter name itself and provide parameter value in argument under such name.
+
+    This also allows one to pass arguments of the same name for different plotting steps.
+    E.g. `plt.set_title` and `plt.set_xlabel` both require `size` argument.
+    Providing `{'size': 30}` in kwargs will affect both title and x-axis labels.
+    To change parameter for title only, one can provide {'title_fontsize': 30}` instead.
+
+    See specific prefices examples in sections below.
+
+    Parameters for figure creation
+    ------------------------------
+    figsize : tuple
+        Size of displayed figure. If not provided, infered from data shapes.
+    facecolor : string or tuple of 3 or 4 numbers
+        Figure background color. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
+    dpi : float
+        The resolution of the figure in dots-per-inch.
+    ncols, nrows : int
+        Number of figure columns/rows.
+    tight_layout : bool
+        Whether adjust subplot parameters using `plt.tight_layout` with default padding or not. Defaults is True.
+    figure_{parameter} : misc
+        Any parameter valid for `plt.subplots`. For example, `figure_sharex=True`.
+
+    Parameters for 'image' mode
+    ---------------------------
+    transpose: tuple
+        Order of axes for displayed images.
+    dilate : bool, int, tuple of two ints or dict
+        Parameter for image dilation via `cv2.dilate`.
+        If bool, indicates whether image should be dilated once with default kernel (`np.ones((1,3))`).
+        If int, indcates how many times image should be dilate with default kernel.
+        If tuple of two ints, defines shape of kernel image should be dilate with.
+        If dict, must contain keyword arguments for `cv2.dilate`.
+    mask : number, str, callable or tuple of any of them
+        Parameter indicating which values should be masked.
+        If a number, mask this value in data.
+        If str, must consists of operator and a number (e.g. '<0.5', '==2', '>=1000').
+        If a callable, must return boolean mask with the same shape as original image that mark image pixels to mask.
+        If a tuple, contain any combination of items of types above.
+    cmap : str or matplotlib colormap object
+        Сolormap to display single-channel images with. Must be valid matplotlib colormap (e.g. 'ocean', 'tab20b').
+    mask_color : string or tuple of 3 or 4 numbers
+        Color to display masked values with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
+    alpha : number in (0, 1) range
+        Image opacity (0 means fully transparent, i.e. invisible, 1 - totally opaque). Useful when `combine='overlay'`.
+    vmin, vmax : number
+        Limits for normalizing image into (0, 1) range. Values beyond range are clipped (default matplotlib behaviour).
+    extent : tuple of 4 numbers
+        The bounding box in data coordinates that the image will fill.
+    image_{parameter} : misc
+        Any parameter valid for `Axes.imshow`. For example, `image_interpolate='bessel'`.
+
+    Parameters for 'histogram' mode
+    -------------------------------
+    flatten : bool
+        Whether convert input array to 1d before plot. Default is True.
+    mask : number, str, callable or tuple of any of them
+        Parameter indicating which values should be masked.
+        If a number, mask this value in data.
+        If str, must consists of operator and a number (e.g. '<0.5', '==2', '>=1000').
+        If a callable, must return boolean mask with the same shape as original image that mark image pixels to mask.
+        If a tuple, contain any combination of items of types above.
+    color : string or tuple of 3 or 4 numbers
+        Color to display histogram with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
+    alpha : number in (0, 1) range
+        Histogram opacity (0 means fully transparent, i.e. invisible, and 1 - totally opaque).
+        Useful when `combine='overlay'`.
+    bins : int
+        Number of bins for histogram.
+    histogram_{parameter} : misc
+        Any parameter valid for `Axes.hist`. For example, `histogram_density=True`.
+
+    Parameters for 'curve' mode
+    ---------------------------
+    color : string or tuple of 3 or 4 numbers
+        Color to display curve with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
+    linestyle : str
+        Style to display curve with. Must be valid matplotlib line style (e.g. 'dashed', ':').
+    alpha : number in (0, 1) range
+        Curve opacity (0 means fully transparent, i.e. invisible, 1 - totally opaque). Useful when `combine='overlay'`.
+    curve_{parameter} : misc
+        Any parameter valid for `Axes.plot`. For example, `curve_marker='h'`.
+
+    Parameters for 'loss' mode
+    ----------------------------
+    color : string or tuple of 3 or 4 numbers
+        Color to display loss curve with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
+    linestyle : str
+        Style to display loss curve with. Must be valid matplotlib line style (e.g. 'dashed', ':').
+    linewidth : number
+        Width of loss curve.
+    alpha : number in (0, 1) range
+        Curve opacity (0 means fully transparent, i.e. invisible, 1 - totally opaque). Useful when `combine='overlay'`.
+    window : None or int
+        Size of the window to use for moving average calculation of loss curve.
+    loss_{parameter}, lr_{parameter} : misc
+        Any parameter valid for `Axes.plot`. For example, `curve_fillstyle='bottom'`.
+
+    Parameters for axes annotation
+    ------------------------------
+    label : str
+        Text that should be put on legend against patches corresponding to layers objects.
+    suptitle, title, xlabel, ylabel or {text_object}_label: str
+        Text that should be put in corresponding annotation object.
+    {text_object}_color : str, matplotlib colormap object or tuple
+        Color of corresponding text object. Valid objects are 'suptitle', 'title', 'xlabel', 'ylabel', 'legend'.
+        If str, ust be valid matplotlib colormap.
+        Must be valid matplotlib color (e.g. 'roaylblue', '#120FA3', (0.3, 0.4, 0.5)).
+    {text_object}_size : number
+        Size of corresponding text object. Valid objects are 'suptitle', 'title', 'xlabel', 'ylabel', 'legend'.
+    colorbar : bool
+        Toggle for colorbar.
+    colorbar_width : number
+        The width of colorbar as a percentage of the subplot width.
+    colorbar_pad : number
+        The pad of colorbar as a percentage of the subplot width.
+    legend_loc : number
+        Codes legend position in matplotlib terms (must be from 0-9 range).
+    grid: bool
+        Grid toggle.
+    {object}_{parameter} : misc
+        Any parameter with prefix of desired object that is valid for corresponding method:
+        - 'text_' — for every text object (title, label etc.)
+        - 'title_' — for `Axes.set_title`
+        - 'xlabel_' — for `Axes.set_xlabel`
+        - 'ylabel_' — for `Axes.set_ylabel`
+        - 'xticks_' — for `Axes.set_xticks`
+        - 'yticks_' — for `Axes.set_yticks`
+        - 'tick_' — for `Axes.tick_params`
+        - 'xlim_' — for `Axes.set_xlim`
+        - 'ylim_' — for `Axes.set_ylim`
+        - 'colorbar_' — for `Axes.colorbar`
+        - 'legend_' — for `Axes.legend`
+        - 'minor_grid_', 'major_grid_' — `Axes.grid`
+
+    Data display scenarios
+    ----------------------
+    1. The simplest one if when one provide a single data array — in that case data is displayed on a single subplot:
+       >>> Plot(array)
+    2. A more advanced use case is when one provide a list of arrays — plot behaviour depends on `combine` parameter:
+       a. Images are put on same subplot and overlaid one over another if `combine='overlay'` (which is default):
+          >>> Plot([image_0, mask_0])
+       b. Images are put on separate subplots if `combine='separate'`.
+          >>> Plot([image_0, image_1], combine='separate')
+    3. The most complex scenario is displaying images in a 'mixed' manner (ones overlaid and others separated).
+       For example, to overlay first two images but to display the third one separately, use the following notation:
+       >>> Plot([[image_0, mask_0], image_1]); (`combine='mixed'` is set automatically if data is double-nested).
+
+    The order of arrays inside the double-nested structure basically declares, which of them belong to the same subplot
+    and therefore should be rendered one over another, and which must be displayed separately.
+
+    If a parameter is provided in a list, each subplot uses its item on position corresponding to its index and
+    every subplot layer in turn uses item from that sublist on positions that correspond to its index w.r.t. to subplot.
+    Therefore, such parameters must resemble data nestedness level, since that allows binding subplots and parameters.
+    However, it's possible for parameter to be a single item — in that case it's shared across all subplots and layers.
+
+    For example, to display two images separately with same colormap, the following code required:
+    >>> Plot([image_0, image_1], cmap='viridis')
+    If one wish to use different colormaps for every image, the code should be like this:
+    >>> Plot([image_0, image_1], cmap=['viridis', 'magma'])
+    Finally, if a more complex data provided, the parameter nestedness level must resemble the one in data:
+    >>> Plot([[image_0, mask_0], [image_1, mask_1]], cmap=[['viridis', 'red'], ['magma', 'green']])
+    """
+    MODES = ['image', 'matrix', 'histogram', 'curve', 'loss']
+
     def __init__(self, data=None, combine='overlay', mode='image', **kwargs):
+        if mode not in self.MODES:
+            raise ValueError(f"Unknown mode '{mode}'. Expected one of {self.MODES}.")
+
         self.figure = None
         self.subplots = None
-        self.config = PlotConfig(self.DEFAULT_CONFIG)
+        self.config = PlotConfig(self.get_defaults(mode))
 
         self.plot(data=data, combine=combine, mode=mode, **kwargs)
 
@@ -676,8 +981,8 @@ class Plot:
             return self.subplots[key]
         raise ValueError(f"Only integer keys are supported for subplots indexing, got {type(key)}.")
 
-    def __call__(self, mode, **kwargs):
-        self.plot(mode=mode, **kwargs)
+    def __call__(self, data, combine='overlay', mode='image', **kwargs):
+        return self.plot(data, combine=combine, mode=mode, **kwargs)
 
     def __repr__(self):
         return ''
@@ -799,7 +1104,7 @@ class Plot:
         """ Infer number of figure columns and rows from number of provided data items. """
         _ = kwargs
 
-        if mode in ('image', 'histogram'):
+        if mode in ('image', 'matrix', 'histogram'):
             default_ncols = 4
         elif mode in ('curve', 'loss'):
             default_ncols = 1
@@ -817,54 +1122,59 @@ class Plot:
         return ncols, nrows
 
     @staticmethod
-    def infer_figsize(mode, n_subplots, data, ncols, nrows, ratio, scale,
-                      max_fig_width, xlim, ylim, transpose, **kwargs):
+    def infer_figure_ratio(mode, n_subplots, data, ncols, nrows, xlim, ylim, transpose):
+        """ Infer default figure height/width ratio from shapes of provided data. """
+        if mode == 'image':
+            if not isinstance(xlim, list):
+                xlim = [xlim] * n_subplots
+            if not isinstance(ylim, list):
+                ylim = [ylim] * n_subplots
+
+            widths = []
+            heights = []
+
+            shapes = [subplot_data[0].shape if subplot_data is not None else None for subplot_data in data]
+            for idx, shape in enumerate(shapes):
+                if shape is None:
+                    continue
+
+                min_height = 0 if ylim[idx][0] is None else ylim[idx][0]
+                max_height = shape[transpose[0]] if ylim[idx][1] is None else ylim[idx][1]
+                subplot_height = abs(max_height - min_height)
+                heights.append(subplot_height)
+
+                min_width = shape[transpose[1]] if xlim[idx][0] is None else xlim[idx][0]
+                max_width = 0 if xlim[idx][1] is None else xlim[idx][1]
+                subplot_width = abs(max_width - min_width)
+                widths.append(subplot_width)
+
+            mean_height, mean_width = np.mean(heights), np.mean(widths)
+            if np.isnan(mean_height) or np.isnan(mean_width):
+                ratio = 1
+            else:
+                ratio = (mean_height * nrows) / (mean_width * ncols)
+
+        elif mode == 'matrix':
+            ratio = 1
+
+        elif mode == 'histogram':
+            ratio = 2 / 3 / ncols * nrows
+
+        elif mode in ('curve', 'loss'):
+            ratio = 1 / 3 / ncols * nrows
+
+        return ratio
+
+    @classmethod
+    def infer_figure_size(cls, mode, n_subplots, data, ncols, nrows, ratio, scale,
+                          max_fig_width, xlim, ylim, transpose, subplot_width, **kwargs):
         """ Infer default figure size from shapes of provided data. """
         _ = kwargs
 
-        if mode in ('image', 'histogram'):
-            fig_width = 8 * ncols * scale
-        elif mode in ('curve', 'loss'):
-            fig_width = 16 * ncols * scale
-
-        # Make figsize
         if ratio is None:
-            if mode == 'image':
-                if not isinstance(xlim, list):
-                    xlim = [xlim] * n_subplots
-                if not isinstance(ylim, list):
-                    ylim = [ylim] * n_subplots
+            ratio = cls.infer_figure_ratio(mode, n_subplots, data, ncols, nrows, xlim, ylim, transpose)
 
-                widths = []
-                heights = []
-
-                shapes = [subplot_data[0].shape if subplot_data is not None else None for subplot_data in data]
-                for idx, shape in enumerate(shapes):
-                    if shape is None:
-                        continue
-
-                    min_height = ylim[idx][0] or 0
-                    max_height = ylim[idx][1] or shape[transpose[0]]
-                    subplot_height = abs(max_height - min_height)
-                    heights.append(subplot_height)
-
-                    min_width = xlim[idx][0] or shape[transpose[1]]
-                    max_width = xlim[idx][1] or 0
-                    subplot_width = abs(max_width - min_width)
-                    widths.append(subplot_width)
-
-                mean_height, mean_width = np.mean(heights), np.mean(widths)
-                if np.isnan(mean_height) or np.isnan(mean_width):
-                    ratio = 1
-                else:
-                    ratio = (mean_height * 1.05 * nrows) / (mean_width * 1.05 * ncols)
-
-            elif mode == 'histogram':
-                ratio = 2 / 3 / ncols * nrows
-
-            elif mode in ('curve', 'loss'):
-                ratio = 1 / 3 / ncols * nrows
-
+        fig_width = subplot_width * ncols * scale
         fig_height = fig_width * ratio
 
         if fig_width > max_fig_width:
@@ -884,11 +1194,10 @@ class Plot:
                 self.config['ncols'], self.config['nrows'] = self.infer_ncols_nrows(mode, n_subplots, **self.config)
 
             if self.config['figsize'] is None:
-                self.config['figsize'] = self.infer_figsize(mode, n_subplots, data, **self.config)
+                self.config['figsize'] = self.infer_figure_size(mode, n_subplots, data, **self.config)
 
             figure_keys = ['figsize', 'ncols', 'nrows', 'facecolor', 'dpi', 'tight_layout']
-            figure_config = self.config.filter(figure_keys, prefix='figure_')
-
+            figure_config = self.config.filter(keys=figure_keys, prefix='figure_')
             figure, axes = plt.subplots(**figure_config)
             axes = to_list(axes)
         else:
@@ -984,30 +1293,57 @@ class Plot:
         self.figure.set_size_inches(new_figsize)
 
     # Figure rendering and saving defaults
-    DEFAULT_CONFIG = {
+    COMMON_DEFAULTS = {
         # general
+        'facecolor': 'white',
+        'text_color' : 'black',
+        # figure
         'tight_layout': True,
-        'facecolor': 'snow',
-        # figsize-related
         'ncols': None, 'nrows': None, # infer from data
         'figsize': None, 'ratio': None, # infer from data
-        'scale': 1,
+        'scale': 1, 'transpose': None,
         'max_fig_width': 25,
         'xlim': (None, None),
         'ylim': (None, None),
-        'transpose': (0, 1, 2), # for 'image' mode
         # suptitle
-        'text_color' : 'k',
-        'suptitle_size': 30,
+        'suptitle_size': 20,
         # save
         'bbox_inches': 'tight',
         'pad_inches': 0,
         'save_dpi': 100,
     }
 
+    IMAGE_DEFAULTS = {
+        'subplot_width': 8,
+        'transpose': (0, 1, 2)
+    }
+
+    MATRIX_DEFAULTS = {
+        'subplot_width': 8
+    }
+
+    HISTOGRAM_DEFAULTS = {
+        'subplot_width': 8
+    }
+
+    CURVE_DEFAULTS = {
+        'subplot_width': 16
+    }
+
+    LOSS_DEFAULTS = {
+        'subplot_width': 16
+    }
+
+    @classmethod
+    def get_defaults(cls, mode):
+        """ Get dictionary with default parameters corresponding to given mode. """
+        mode_defaults = getattr(cls, f"{mode.upper()}_DEFAULTS")
+        defaults = PlotConfig({**cls.COMMON_DEFAULTS, **mode_defaults})
+        return defaults
+
     # Plotting delegator
     def plot(self, data=None, combine='overlay', mode='image', axes=None, axis=None, ax=None,
-             adjust_figsize='image', show=True, save=False, positions=None, **kwargs):
+             adjust_figsize='image', show=True, force_show=False, save=False, positions=None, **kwargs):
         """ Plot data on subplots.
 
         If a first call (from `__init__`), parse axes from kwargs if they are provided, else create them.
@@ -1031,12 +1367,13 @@ class Plot:
             subplot_data = None if relative_index is None else data[relative_index]
 
             if subplot_data is None:
-                if subplot.empty:
+                if subplot.main_object is None:
                     subplot.disable()
                 continue
 
             subplot_index = None if combine == 'overlay' else relative_index
-            subplot_config = self.config.filter(index=subplot_index)
+            subplot_config = self.config.maybe_index(subplot_index)
+
             subplot.plot(mode, subplot_data, subplot_config)
 
         figure_objects = self.annotate()
@@ -1044,6 +1381,9 @@ class Plot:
 
         if adjust_figsize is True or adjust_figsize == mode:
             self.adjust_figsize()
+
+        if force_show:
+            self.force_show()
 
         if not show:
             self.close()
@@ -1057,36 +1397,62 @@ class Plot:
         """ Put suptitle with given parameters over figure and apply `tight_layout`. """
         annotations = {}
 
-        text_keys = ['size', 'family', 'color']
-        text_config = self.config.filter(text_keys, prefix='text_')
+        text_keys = ['size', 'family']
+        text_config = self.config.filter(keys=text_keys, prefix='text_')
 
         # suptitle
-        keys = ['suptitle', 't', 'y']
-        suptitle_config = self.config.filter(keys, prefix='suptitle_')
-        t = None
+        suptitle_keys = ['suptitle', 't', 'y']
+        suptitle_config = self.config.filter(keys=suptitle_keys, prefix='suptitle_')
+        suptitle_config.update(text_config, skip_duplicates=True)
+
+        label = None
         if 'label' in suptitle_config:
-            t = suptitle_config.pop('label')
+            label = suptitle_config.pop('label')
         if 'suptitle' in suptitle_config:
-            t = suptitle_config.pop('suptitle')
+            label = suptitle_config.pop('suptitle')
         if 't' in suptitle_config:
-            t = suptitle_config.pop('t')
-        suptitle_config['t'] = t
-        suptitle_config = {**text_config, **suptitle_config}
-        if suptitle_config:
-            annotations['suptitle'] = annotations['suptitle'] = self.figure.suptitle(**suptitle_config)
+            label = suptitle_config.pop('t')
+
+        if label is not None:
+            suptitle_wrap_config = suptitle_config.filter(prefix='wrap_')
+            if suptitle_wrap_config:
+                label = wrap_by_delimiter(label, **suptitle_wrap_config)
+
+            if suptitle_config:
+                annotations['suptitle'] = self.figure.suptitle(label, **suptitle_config)
 
         self.figure.tight_layout()
 
         return annotations
 
     # Result finalizing methods
-    def save(self):
-        """ Save plot. """
-        default_savepath = datetime.now().strftime('%Y-%m-%d_%H:%M:%S.png')
-        savepath = self.config.get('savepath', default_savepath)
+    @staticmethod
+    def force_show():
+        plt.show()
 
-        save_keys = ['bbox_inches', 'pad_inches', 'dpi']
-        save_config = self.config.filter(save_keys, prefix='save_')
+    def redraw(self):
+        """ Draw figure again by creating dummy figure and using its manager to display original figure. """
+        dummy_figure = plt.figure()
+        new_manager = dummy_figure.canvas.manager
+        new_manager.canvas.figure = self.figure
+        self.figure.set_canvas(new_manager.canvas)
+        plt.show(block=False)
+
+    def clear(self):
+        self.figure.clear()
+
+    def clear_subplots(self):
+        for subplot in self.subplots:
+            subplot.clear()
+
+    def save(self, **kwargs):
+        """ Save plot. """
+        save_keys = ['savepath', 'bbox_inches', 'pad_inches', 'dpi']
+        save_config = self.config.filter(keys=save_keys, prefix='save_')
+        save_config.update(kwargs)
+
+        default_savepath = datetime.now().strftime('%Y-%m-%d_%H:%M:%S.png')
+        savepath = save_config.pop('savepath', default_savepath)
 
         self.figure.savefig(fname=savepath, **save_config)
 
@@ -1094,30 +1460,4 @@ class Plot:
         """ Close figure. """
         plt.close(self.figure)
 
-Plot.__doc__ += '\n'.join([GENERAL_DOC, IMAGE_DOC, HISTOGRAM_DOC, CURVE_DOC, LOSS_DOC, ANNOTATION_DOC, EXAMPLES_DOC])
-
 plot = Plot # an alias
-
-def plot_image(data, **kwargs):
-    """ Shorthand for image plotting. """
-    return Plot(data, mode='image', **kwargs)
-
-plot_image.__doc__ += '\n'.join([GENERAL_DOC, IMAGE_DOC, ANNOTATION_DOC, EXAMPLES_DOC])
-
-def plot_histogram(data, **kwargs):
-    """ Shorthand for histogram plotting. """
-    return Plot(data, mode='histogram', **kwargs)
-
-plot_histogram.__doc__ += '\n'.join([GENERAL_DOC, HISTOGRAM_DOC, ANNOTATION_DOC, EXAMPLES_DOC])
-
-def plot_curve(data, **kwargs):
-    """ Shorthand for curve plotting. """
-    return Plot(data, mode='curve', **kwargs)
-
-plot_curve.__doc__ += '\n'.join([GENERAL_DOC, CURVE_DOC, ANNOTATION_DOC, EXAMPLES_DOC])
-
-def plot_loss(data, **kwargs):
-    """ Shorthand for loss plotting. """
-    return Plot(data, mode='loss', **kwargs)
-
-plot_loss.__doc__ += '\n'.join([GENERAL_DOC, LOSS_DOC, ANNOTATION_DOC, EXAMPLES_DOC])

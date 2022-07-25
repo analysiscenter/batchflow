@@ -17,7 +17,8 @@ import multiprocess as mp
 
 from .profiler import ExperimentProfiler, ResearchProfiler
 from .results import ResearchResults
-from .utils import to_list, create_logger, jsonify, create_output_stream
+from ..utils import to_list
+from .utils import create_logger, jsonify, create_output_stream
 
 class BaseExperimentStorage:
     """ Storage for experiment data.
@@ -307,7 +308,7 @@ class ClearMLExperimentStorage(BaseExperimentStorage):
         for var in variables_to_dump:
             values = self.results[var]
             for iteration, value in values.items():
-                self.logger.report_scalar('', variable, value, iteration)
+                self.logger.report_scalar(var, var, value, iteration)
             del self.results[var]
 
     def _update_research_profiler(self):

@@ -9,7 +9,7 @@ from .conv import (Conv, ConvTranspose,
                    DepthwiseConv, DepthwiseConvTranspose, SeparableConv, SeparableConvTranspose,
                    MultiKernelConv, SharedKernelConv, AvgPoolConv, BilinearConvTranspose)
 from .pooling import AvgPool, MaxPool, GlobalAvgPool, GlobalMaxPool
-from .resize import IncreaseDim, Reshape, Interpolate, PixelShuffle
+from .resize import IncreaseDim, Reshape, Interpolate
 from .activation import Activation
 from .combine import Combine
 from .wrapper_letters import Branch, AttentionWrapper
@@ -84,15 +84,17 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         'q': 'avg_pool_conv',
         'Q': 'bilinear_conv_transpose',
 
-        # Pool
+        # Downsample / upsample
         'v': 'avg_pool',
         'p': 'max_pool',
         'V': 'global_avg_pool',
         'P': 'global_max_pool',
+        'x': 'pixel_unshuffle',
 
-        # Resize
         'b': 'resize_bilinear',
         'X': 'pixel_shuffle',
+
+        # Shapes
         '>': 'increase_dim',
         'r': 'reshape',
 
@@ -132,9 +134,11 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         'max_pool': MaxPool,
         'global_avg_pool': GlobalAvgPool,
         'global_max_pool': GlobalMaxPool,
+        'pixel_unshuffle': nn.PixelUnshuffle,
 
+        'pixel_shuffle': nn.PixelShuffle,
         'resize_bilinear': Interpolate,
-        'pixel_shuffle': PixelShuffle,
+
         'increase_dim': IncreaseDim,
         'reshape': Reshape,
 

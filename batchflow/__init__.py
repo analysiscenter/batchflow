@@ -14,7 +14,7 @@ from .pipeline import Pipeline
 from .monitor import *
 from .notifier import Notifier, notifier
 from .named_expr import NamedExpression, B, L, C, F, V, M, D, R, W, P, PP, I, eval_expr
-from .plot import plot, plot_image, plot_histogram, plot_loss, plot_curve
+from .plotter import plot
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, parallel, any_action_failed, mjit, deprecated, apply_parallel
 from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
@@ -27,4 +27,4 @@ from .utils_notebook import in_notebook, get_notebook_path, get_notebook_name, p
 from .utils_telegram import TelegramMessage
 
 
-__version__ = '0.7.0'
+__version__ = '0.7.5'
