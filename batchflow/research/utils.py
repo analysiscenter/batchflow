@@ -2,8 +2,6 @@
 import os
 import logging
 import hashlib
-import json
-import itertools
 import io
 import contextlib
 import warnings
@@ -47,9 +45,6 @@ class Unpickler(dill.Unpickler):
 def deserialize(file, ignore=None, **kwargs):
     """ Unpickle an object from a file. Attributed that can't be loaded will be changed by str. """
     return Unpickler(file, ignore=ignore, **kwargs).load()
-
-def to_list(value):
-    return value if isinstance(value, list) else [value]
 
 def count_startswith(seq, name):
     return sum(1 for item in seq if item.startswith(name))
