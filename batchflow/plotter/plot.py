@@ -413,10 +413,10 @@ class Subplot:
         'xlabel': 'Values',
         'ylabel': 'Counts',
         # common
-        'set_axisbelow': True,
-        'colorbar': False,
+        'colorbar': None,
         # grid
         'grid': 'major',
+        'axisbelow': True
     }
 
     CURVE_COLORS = ['cornflowerblue', 'sandybrown', 'lightpink', 'mediumseagreen', 'thistle', 'firebrick',
@@ -446,14 +446,14 @@ class Subplot:
         # learning rate
         'lr_color': CycledList(CURVE_COLORS[1::2]),
         # title
-        'title_label': 'Loss values and learning rate',
+        'title': 'Loss values and learning rate',
         # axis labels
         'xlabel': 'Iterations', 'ylabel': 'Loss',
         # common
         'colorbar': False,
         # grid
         'grid': 'both',
-        'minor_grid_y_n': 4,
+        'minor_grid_frequency': (0, 4),
         # legend
         'legend': True,
     }
@@ -490,29 +490,23 @@ class Subplot:
         if not self.ax.axison:
             self.enable()
 
-        text_keys = ['size', 'family']
+        text_keys = ['fontsize', 'family']
         text_config = self.config.filter(keys=text_keys, prefix='text_')
 
         # title
-        title_keys = ['title', 'y']
-        title_config = self.config.filter(keys=title_keys, prefix='title_')
-        title_config.update(text_config, skip_duplicates=True)
+        title = self.config.get('title')
+        if title is not None:
+            if isinstance(title, list):
+                title = ', '.join(title)
 
-        label = None
-        if 'label' in title_config:
-            label = title_config.pop('label')
-        if 'title' in title_config:
-            label = title_config.pop('title')
-        if isinstance(label, list):
-            label = ', '.join(label)
+            title_config = self.config.filter(prefix='title_')
+            title_config.update(text_config, skip_duplicates=True)
 
-        title_wrap_config = title_config.filter(prefix='wrap_', retrieve='pop')
-        if title_wrap_config:
-            label = wrap_by_delimiter(label, **title_wrap_config)
-        title_config['label'] = label
+            title_wrap_config = title_config.filter(prefix='wrap_', retrieve='pop')
+            if title_wrap_config:
+                title = wrap_by_delimiter(title, **title_wrap_config)
 
-        if title_config:
-            annotations['title'] = self.ax.set_title(**title_config)
+            annotations['title'] = self.ax.set_title(title, **title_config)
 
         # xlabel
         xlabel = self.config.get('xlabel')
@@ -570,32 +564,24 @@ class Subplot:
         if self.config.get('log') or self.config.get('log_loss'):
             self.ax.set_yscale('log')
 
-        if self.config.get('log_twin'):
-            self._twin_ax.set_yscale('log')
-
         if self.config.get('log_lr'):
             self.lr_ax.set_yscale('log')
 
-        # xlim
-        xlim_config = self.config.filter(prefix='xlim_')
+        # Change x-axis limits
         xlim = self.config.get('xlim')
-        if (xlim is not None) and (xlim != (None, None)):
-            xlim_config['left'] = xlim_config.get('left', xlim)
-        if xlim_config:
-            self.ax.set_xlim(**xlim_config)
+        self.ax.set_xlim(xlim)
 
-        # ylim
-        ylim_config = self.config.filter(prefix='ylim_')
+        # Change y-axis limits
         ylim = self.config.get('ylim')
-        if (ylim is not None) and (ylim != (None, None)):
-            ylim_config['bottom'] = ylim_config.get('bottom', ylim)
-        if ylim_config:
-            self.ax.set_ylim(**ylim_config)
+        self.ax.set_ylim(ylim)
 
-        # colorbar
-        colorbar_keys = ['colorbar', 'width', 'pad', 'fake', 'annotations']
-        colorbar_config = self.config.filter(keys=colorbar_keys, prefix='colorbar_')
-        if self.main_object is not None and colorbar_config and mode in ('image', 'matrix'):
+        # Add image colorbar
+        colorbar = self.config.get('colorbar')
+        if colorbar is not None and self.main_object is not None:
+            colorbar_config = self.config.filter(prefix='colorbar_')
+
+            colorbar_config['fake'] = not colorbar
+
             if 'pad' not in colorbar_config:
                 pad = 0.4
                 labelright = self.config.get('labelright', None)
@@ -609,56 +595,60 @@ class Subplot:
 
             annotations['colorbar'] = self.add_colorbar(image=self.main_object, **colorbar_config)
 
-        # legend
+        # Add legend
         if mode in ('loss', 'curve'):
             self.config['label'] = [obj for layer in self.layers for obj in layer.objects]
 
         label = self.config.get('label')
         if label is not None:
-            if mode in ('image', 'matrix'):
-                color = [layer.config['cmap'] for layer in self]
-            else:
-                color = [layer.config['color'] for layer in self]
-            alpha = self.config['alpha']
+            if not isinstance(label, list):
+                label = [label]
 
-            legend_keys = ['size', 'loc', 'ha', 'va', 'handletextpad']
-            legend_config = self.config.filter(legend_keys, prefix='legend_')
+            legend_config = self.config.filter(prefix='legend_')
 
-            annotations['legend'] = self.add_legend(mode=mode, label=label, color=color, alpha=alpha, **legend_config)
+            if 'color' not in legend_config:
+                color_key = 'cmap' if mode in ('image', 'matrix') else 'color'
+                legend_config['color'] = [layer.config[color_key] for layer in self]
 
-        # grid
+            if 'alpha' not in legend_config:
+                legend_config['alpha'] = [layer.config['alpha'] for layer in self]
+
+            annotations['legend'] = self.add_legend(mode=mode, label=label, **legend_config)
+
+        # Add grid
         grid = self.config.get('grid', None)
-        grid_keys = ['freq']
+        grid_config = self.config.filter(prefix='grid_')
 
-        minor_config = self.config.filter(keys=grid_keys, prefix='minor_grid_')
-        if grid in ('minor', 'both') and minor_config:
-            self.add_grid(grid_type='minor', **minor_config)
+        if grid in ('minor', 'both'):
+            minor_grid_config = self.config.filter(prefix='minor_grid_')
+            minor_grid_config = minor_grid_config.update(grid_config, skip_duplicates=True)
+            self.add_grid(grid_type='minor', **minor_grid_config)
 
-        major_config = self.config.filter(keys=grid_keys, prefix='major_grid_')
-        if grid in ('major', 'both') and minor_config:
-            self.add_grid(grid_type='major', **major_config)
+        if grid in ('major', 'both'):
+            major_grid_config = self.config.filter(prefix='major_grid_')
+            major_grid_config = major_grid_config.update(grid_config, skip_duplicates=True)
+            self.add_grid(grid_type='major', **major_grid_config)
 
+        # Set whether axis ticks and gridlines are above or below most artists.
+        self.ax.set_axisbelow(self.config.get('axisbelow', False))
+
+        # Change facecolor
         facecolor = self.config.get('facecolor', None)
         if facecolor is not None:
             self.ax.set_facecolor(facecolor)
 
-        self.ax.set_axisbelow(self.config.get('set_axisbelow', False))
-
         return annotations
 
-    def add_colorbar(self, image, width=.2, pad=None, color='black', colorbar=False, position='right'):
+    def add_colorbar(self, image, width=0.2, pad=None, color='black', position='right', fake=False, **kwargs):
         """ Append colorbar to the subplot on the right. """
-        if colorbar is None:
-            return None
-
         divider = axes_grid1.make_axes_locatable(image.axes)
         cax = divider.append_axes(position=position, size=width, pad=pad)
 
-        if colorbar is False:
+        if fake:
             cax.set_axis_off()
             return None
 
-        colorbar = image.axes.figure.colorbar(image, cax=cax)
+        colorbar = image.axes.figure.colorbar(image, cax=cax, **kwargs)
         colorbar.ax.yaxis.set_tick_params(color=color, labelcolor=color)
 
         return colorbar
@@ -672,12 +662,11 @@ class Subplot:
             Mode to match legend hadles patches to.
             If from ('image', 'histogram'), use rectangular legend patches.
             If from ('curve', 'loss'), use line legend patches.
-        labels : str, Artist or list
+        label : list of str and Artist
             If str, a text to show next to the legend patch/line.
             If Artist, must be valid handle for `plt.legend` (line, patch etc.)
-            If a list, can contain objects of types described above.
-        color : str, matplotlib colormap object or tuple
-            Color to use for patches creation if those are not provided explicitly.
+        color : list of str, matplotlib colormap object or tuples of str
+            Colors to use for patches creation if those are not provided explicitly.
             Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
         alpha : number or list of numbers from 0 to 1
             Legend handles opacity.
@@ -693,11 +682,8 @@ class Subplot:
 
         # make new handles
         new_handles = []
-        labels = to_list(label)
-        colors = [color] * len(labels) if isinstance(color, str) else color
-        alphas = [alpha] * len(labels) if isinstance(alpha, Number) else alpha
 
-        for label_item, label_color, label_alpha in zip(labels, colors, alphas):
+        for label_item, label_color, label_alpha in zip(label, color, alpha):
             if label_item is None:
                 continue
             if isinstance(label_item, str):
@@ -747,20 +733,25 @@ class Subplot:
 
         return self.ax.text(x=x, y=y, s=text, size=size, ha=ha, va=va, bbox=bbox, **kwargs)
 
-    def add_grid(self, grid_type, x_n=None, y_n=None, zorder=0, **kwargs):
+    def add_grid(self, grid_type, frequency=None, zorder=0, **kwargs):
         """ Set parameters for subplot axis grid. """
         if grid_type == 'minor':
             locator = AutoMinorLocator
         elif grid_type == 'major':
             locator = MaxNLocator
 
-        if x_n is not None:
-            set_locator = getattr(self.ax.xaxis, f'set_{grid_type}_locator')
-            set_locator(locator(x_n))
+        if isinstance(frequency, tuple):
+            x_frequency, y_frequency = frequency
+        else:
+            x_frequency, y_frequency = (frequency, frequency)
 
-        if y_n is not None:
+        if x_frequency:
+            set_locator = getattr(self.ax.xaxis, f'set_{grid_type}_locator')
+            set_locator(locator(x_frequency))
+
+        if y_frequency:
             set_locator = getattr(self.ax.yaxis, f'set_{grid_type}_locator')
-            set_locator(locator(y_n))
+            set_locator(locator(y_frequency))
 
         self.ax.grid(which=grid_type, zorder=zorder, **kwargs)
 
@@ -797,8 +788,57 @@ class Plot:
     5. Annotate figure.
     6. Save plot.
 
-    General parameters
+    Notes
+    -----
+    • Data items combination.
+
+    1. The simplest scenario if when a single data array provided — in that case data is displayed on a single subplot:
+       >>> plot(array)
+    2. A more advanced use case is when one provide a list of arrays — plot behaviour depends on `combine` parameter:
+       a. Images are put on same subplot and overlaid one over another if `combine='overlay'` (which is default):
+          >>> plot([image_0, mask_0])
+       b. Images are put on separate subplots if `combine='separate'`.
+          >>> plot([image_0, image_1], combine='separate')
+    3. The most complex scenario is displaying images in a 'mixed' manner (ones overlaid and others separated).
+       For example, to overlay first two images but to display the third one separately, use the following notation:
+       >>> plot([[image_0, mask_0], image_1]); (`combine='mixed'` is set automatically if data is double-nested).
+
+    The order of arrays inside the double-nested structure basically declares, which of them belong to the same subplot
+    and therefore should be rendered one over another, and which must be displayed separately.
+
+
+    • Parameters nestedness.
+
+    If a parameter is provided in a list, each subplot uses its item on position corresponding to its index and
+    every subplot layer in turn uses item from that sublist on positions that correspond to its index w.r.t. to subplot.
+    Therefore, such parameters must resemble data nestedness level, since that allows binding subplots and parameters.
+    However, it's possible for parameter to be a single item — in that case it's shared across all subplots and layers.
+
+    For example, to display two images separately with same colormap, the following code required:
+    >>> plot([image_0, image_1], combine='separate', cmap='viridis')
+    If one wish to use different colormaps for every image, the code should be like this:
+    >>> plot([image_0, image_1], combine='separate', cmap=['viridis', 'magma'])
+    Finally, if a more complex data provided, the parameter nestedness level must resemble the one in data:
+    >>> plot([[image_0, mask_0], [image_1, mask_1]], cmap=[['viridis', 'red'], ['magma', 'green']])
+
+
+    • Advanced parameters managing.
+
+    Keep in mind, that set of parameters that are parsed by plotter directly is limited to ones most frequently used.
+    However there is a way to provide any parameter to a specific plot method, using prefix corresponding to it.
+    One must prepend that prefix to a parameter name itself and provide parameter value in argument under such name.
+
+    This also allows one to pass arguments of the same name for different plotting steps.
+    E.g. `plt.set_title` and `plt.set_xlabel` both require `size` argument.
+    Providing `{'size': 30}` in kwargs will affect both title and x-axis labels.
+    To change parameter for title only, one can provide {'title_fontsize': 30}` instead.
+
+    See specific prefices examples in sections below.
+
+    Parameters
     ----------
+    • General:
+
     data : np.ndarray, tuple or list
         If array, its dimensionality must match plot `mode`:
         - in 'image' mode 1d, 2d and 3d arrays are valid, thoug 3d image must be either 1- or 3- channeled;
@@ -829,21 +869,9 @@ class Plot:
             colorbar_', 'legend_' or 'grid_' prefix is redirected to corresponding matplotlib method.
             Also 'facecolor', 'set_axisbelow', 'disable_axes' arguments are accepted.
 
-    Notes on advanced parameters managing
-    -------------------------------------
-    Keep in mind, that set of parameters that are parsed by plotter directly is limited to ones most frequently used.
-    However there is a way to provide any parameter to a specific plot method, using prefix corresponding to it.
-    One must prepend that prefix to a parameter name itself and provide parameter value in argument under such name.
 
-    This also allows one to pass arguments of the same name for different plotting steps.
-    E.g. `plt.set_title` and `plt.set_xlabel` both require `size` argument.
-    Providing `{'size': 30}` in kwargs will affect both title and x-axis labels.
-    To change parameter for title only, one can provide {'title_fontsize': 30}` instead.
+    • Figure:
 
-    See specific prefices examples in sections below.
-
-    Parameters for figure creation
-    ------------------------------
     figsize : tuple
         Size of displayed figure. If not provided, infered from data shapes.
     facecolor : string or tuple of 3 or 4 numbers
@@ -859,8 +887,9 @@ class Plot:
     figure_{parameter} : misc
         Any parameter valid for `plt.subplots`. For example, `figure_gridspec_kw=True`.
 
-    Parameters for 'image' mode
-    ---------------------------
+
+    • Image:
+
     transpose: tuple
         Order of axes for displayed images.
     dilate : bool, int, tuple of two ints or dict
@@ -888,8 +917,9 @@ class Plot:
     image_{parameter} : misc
         Any parameter valid for `Axes.imshow`. For example, `image_interpolate='bessel'`.
 
-    Parameters for 'histogram' mode
-    -------------------------------
+
+    • Histogram:
+
     flatten : bool
         Whether convert input array to 1d before plot. Default is True.
     mask : number, str, callable or tuple of any of them
@@ -908,8 +938,9 @@ class Plot:
     histogram_{parameter} : misc
         Any parameter valid for `Axes.hist`. For example, `histogram_density=True`.
 
-    Parameters for 'curve' mode
-    ---------------------------
+
+    • Curve:
+
     color : string or tuple of 3 or 4 numbers
         Color to display curve with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
     linestyle : str
@@ -919,8 +950,9 @@ class Plot:
     curve_{parameter} : misc
         Any parameter valid for `Axes.plot`. For example, `curve_marker='h'`.
 
-    Parameters for 'loss' mode
-    ----------------------------
+
+    • Loss:
+
     color : string or tuple of 3 or 4 numbers
         Color to display loss curve with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
     linestyle : str
@@ -934,70 +966,120 @@ class Plot:
     loss_{parameter}, lr_{parameter} : misc
         Any parameter valid for `Axes.plot`. For example, `curve_fillstyle='bottom'`.
 
-    Parameters for axes annotation
-    ------------------------------
-    label : str
-        Text that should be put on legend against patches corresponding to layers objects.
-    suptitle, title, xlabel, ylabel or {text_object}_label: str
-        Text that should be put in corresponding annotation object.
+
+    • Text:
+
     {text_object}_color : str, matplotlib colormap object or tuple
         Color of corresponding text object. Valid objects are 'suptitle', 'title', 'xlabel', 'ylabel', 'legend'.
-        If str, ust be valid matplotlib colormap.
+        If str, must be valid matplotlib colormap.
         Must be valid matplotlib color (e.g. 'roaylblue', '#120FA3', (0.3, 0.4, 0.5)).
     {text_object}_size : number
         Size of corresponding text object. Valid objects are 'suptitle', 'title', 'xlabel', 'ylabel', 'legend'.
-    colorbar : bool
-        Toggle for colorbar.
+
+
+    • Suptitle:
+
+    suptitle : str
+        Text of suptitle label.
+    suptitle_{parameter} : misc
+        Any parameter valid for `Figure.suptitle`. For example, `suptitle_y=1.05`.
+
+
+    • Title:
+
+    title : str or list of str
+        Text of title label. If a list of string, items are joined in a single string with words separated by commas.
+    title_{parameter} : misc
+        Any parameter valid for `Axes.set_title`. For example, `title_loc='left'`.
+
+
+    • Axes labels:
+
+    xlabel : str
+        Text of x-axis label.
+    xlabel_{parameter} : misc
+        Any parameter valid for `Axes.set_xlabel`. For example `xlabel_labelpad=0.1`.
+    ylabel : str
+        Text of y-axis label.
+    ylabel_{parameter} : misc
+        Any parameter valid for `Axes.set_ylabel`. For example `ylabel_labelpad=0.1`.
+
+
+    • Axes ticks:
+
+    xtick_locations : list of numbers
+        Positions of x-axis ticks.
+    xtick_{parameter} : misc
+        Any parameter valid for `Axes.set_xticklabels`. For example `xtick_labels=['Background', 'Class 0', 'Class 1']`.
+    ytick_locations : list of numbers
+        Positions of y-axis ticks.
+    ytick_{parameter} : misc
+        Any parameter valid for `Axes.set_yticklabels`. For example `ytick_labels=['Background', 'Class 0', 'Class 1']`.
+    tick_{parameter} : misc
+        Any parameter valid for `Axes.tick_params`. For example `tick_labelbottom=False`.
+
+
+    • Axes scaling:
+
+    log : bool
+        If True, set scale of y-axis to logarithmic.
+    log_loss, log_lr : bool
+        If True, set scale of y-axis corresponding to loss/learning rate to logarithmic.
+
+
+    • Axes limits:
+
+    xlim : number or tuple of two numbers
+        If a single number, defines left limit of x-axis. If a tuple, defines both left and right x-axis limits.
+    ylim : number or tuple of two numbers
+        If a single number, defines left limit of y-axis. If a tuple, defines both left and right y-axis limits.
+
+
+    • Colorbar:
+
+    colorbar : None or bool
+        If None no colorbar added and subplot axis left unchanged.
+        If False the place for colorbar is reserved on subplot axis to right to the main object but left empty.
+        If True the place for colorbar is reserved on subplot axis to right to the main object and colorbar is added.
     colorbar_width : number
-        The width of colorbar as a percentage of the subplot width.
-    colorbar_pad : number
-        The pad of colorbar as a percentage of the subplot width.
-    legend_loc : number
-        Codes legend position in matplotlib terms (must be from 0-9 range).
-    grid: bool
-        Grid toggle.
-    {object}_{parameter} : misc
-        Any parameter with prefix of desired object that is valid for corresponding method:
-        - 'text_' — for every text object (title, label etc.)
-        - 'title_' — for `Axes.set_title`
-        - 'xlabel_' — for `Axes.set_xlabel`
-        - 'ylabel_' — for `Axes.set_ylabel`
-        - 'xticks_' — for `Axes.set_xticks`
-        - 'yticks_' — for `Axes.set_yticks`
-        - 'tick_' — for `Axes.tick_params`
-        - 'xlim_' — for `Axes.set_xlim`
-        - 'ylim_' — for `Axes.set_ylim`
-        - 'colorbar_' — for `Axes.colorbar`
-        - 'legend_' — for `Axes.legend`
-        - 'minor_grid_', 'major_grid_' — `Axes.grid`
+        Thickness of colorbar object.
+    colorbar_pad : None or number
+        Distance between colorbar object and main axis object. If None, calculated automatically.
+    colorbar_{parameter} : misc
+        Any parameter valid for `Figure.colorbar`. For example `colorbar_label='Values range'`.
 
-    Data display scenarios
-    ----------------------
-    1. The simplest one if when one provide a single data array — in that case data is displayed on a single subplot:
-       >>> Plot(array)
-    2. A more advanced use case is when one provide a list of arrays — plot behaviour depends on `combine` parameter:
-       a. Images are put on same subplot and overlaid one over another if `combine='overlay'` (which is default):
-          >>> Plot([image_0, mask_0])
-       b. Images are put on separate subplots if `combine='separate'`.
-          >>> Plot([image_0, image_1], combine='separate')
-    3. The most complex scenario is displaying images in a 'mixed' manner (ones overlaid and others separated).
-       For example, to overlay first two images but to display the third one separately, use the following notation:
-       >>> Plot([[image_0, mask_0], image_1]); (`combine='mixed'` is set automatically if data is double-nested).
 
-    The order of arrays inside the double-nested structure basically declares, which of them belong to the same subplot
-    and therefore should be rendered one over another, and which must be displayed separately.
+    • Legend:
 
-    If a parameter is provided in a list, each subplot uses its item on position corresponding to its index and
-    every subplot layer in turn uses item from that sublist on positions that correspond to its index w.r.t. to subplot.
-    Therefore, such parameters must resemble data nestedness level, since that allows binding subplots and parameters.
-    However, it's possible for parameter to be a single item — in that case it's shared across all subplots and layers.
+    label : None, str or `matplotlib.Artist`
+        If str, a text to show next to the legend patches/lines corresponding to layers main objects.
+        If Artist, must be valid handle for `plt.legend` (patch, line etc.)
+    legend_color : None, str or matplotlib colormap object
+        Color of legend handles. If None, color of corresponding main subplot object is used.
+        If str, must be valid matplotlib colormap or color (e.g. 'ocean', 'roaylblue', '#120FA3', (0.3, 0.4, 0.5)).
+    legend_alpha : None or number
+        Opacity of legend handles, must be from [0, 1] range. If None, opacity of main subplot object is used.
+    legend_size : number
+        Size of legend handles.
+    legend_{parameter} : misc
+        Any parameter valid for `plt.legend`. For example `legend_loc='center'`.
 
-    For example, to display two images separately with same colormap, the following code required:
-    >>> Plot([image_0, image_1], cmap='viridis')
-    If one wish to use different colormaps for every image, the code should be like this:
-    >>> Plot([image_0, image_1], cmap=['viridis', 'magma'])
-    Finally, if a more complex data provided, the parameter nestedness level must resemble the one in data:
-    >>> Plot([[image_0, mask_0], [image_1, mask_1]], cmap=[['viridis', 'red'], ['magma', 'green']])
+
+    • Grid:
+
+    grid: 'minor', 'major' or 'both'
+        Grid type to show.
+    grid_frequency : number or tuple of two numbers
+        If a single number, defines grid frequency for both subplot axes.
+        If a tuple of two numbers, they define grid frequencies for x-axis and y-axis correspondingly.
+    grid_{parameter} : misc
+        Any parameter valid for `Axes.grid`. For example `grid_color='tan'`.
+    minor_grid_{parameter} : misc
+        Same as above, but applied to minor grid only.
+    major_grid_{parameter} : misc
+        Same as above, but applied to major grid only.
+    axisbelow : bool
+        Set whether axis ticks and gridlines are above or below most artists.
     """
     MODES = ['image', 'matrix', 'histogram', 'curve', 'loss']
 
@@ -1435,29 +1517,20 @@ class Plot:
         """ Put suptitle with given parameters over figure and apply `tight_layout`. """
         annotations = {}
 
-        text_keys = ['size', 'family']
+        text_keys = ['fontsize', 'family']
         text_config = self.config.filter(keys=text_keys, prefix='text_')
 
         # suptitle
-        suptitle_keys = ['suptitle', 't', 'y']
-        suptitle_config = self.config.filter(keys=suptitle_keys, prefix='suptitle_')
-        suptitle_config.update(text_config, skip_duplicates=True)
+        suptitle = self.config.get('suptitle')
+        if suptitle is not None:
+            suptitle_config = self.config.filter(prefix='suptitle_')
+            suptitle_config.update(text_config, skip_duplicates=True)
 
-        label = None
-        if 'label' in suptitle_config:
-            label = suptitle_config.pop('label')
-        if 'suptitle' in suptitle_config:
-            label = suptitle_config.pop('suptitle')
-        if 't' in suptitle_config:
-            label = suptitle_config.pop('t')
-
-        if label is not None:
             suptitle_wrap_config = suptitle_config.filter(prefix='wrap_')
             if suptitle_wrap_config:
-                label = wrap_by_delimiter(label, **suptitle_wrap_config)
+                suptitle = wrap_by_delimiter(suptitle, **suptitle_wrap_config)
 
-            if suptitle_config:
-                annotations['suptitle'] = self.figure.suptitle(label, **suptitle_config)
+            annotations['suptitle'] = self.figure.suptitle(suptitle, **suptitle_config)
 
         self.figure.tight_layout()
 

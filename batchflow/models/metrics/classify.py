@@ -180,9 +180,9 @@ class ClassificationMetrics(Metrics):
         plot_config = {
             'title': 'Normalized confusion matrix' if normalize else 'Confusion matrix',
             'xlabel': 'Actual class',
-            'xticks': np.arange(confusion_matrix.shape[0]),
+            'xtick_locations': np.arange(confusion_matrix.shape[0]),
             'ylabel': 'Predicted class',
-            'yticks': np.arange(confusion_matrix.shape[1]),
+            'ytick_locations': np.arange(confusion_matrix.shape[1]),
             **kwargs
         }
 

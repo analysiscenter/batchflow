@@ -136,7 +136,7 @@ class Notifier:
     def __init__(self, bar='a', disable=False, frequency=1, monitors=None, graphs=None, log_file=None,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  telegram=False, token=None, chat_id=None, silent=True,
-                 window=None, layout='h', figsize=None, savepath=None, plot_config=None, **kwargs):
+                 window=None, savepath=None, plot_config=None, **kwargs):
         # Prepare data containers like monitors and pipeline variables
         if monitors:
             monitors = monitors if isinstance(monitors, (tuple, list)) else [monitors]
@@ -155,7 +155,7 @@ class Notifier:
         if self.has_graphs:
             if plot_config is None:
                 plot_config = {}
-            self.plotter = self.make_plotter(num_graphs=len(graphs), layout=layout, figsize=figsize, **plot_config)
+            self.plotter = self.make_plotter(num_graphs=len(graphs), **plot_config)
         else:
             self.plotter = None
 
@@ -251,7 +251,7 @@ class Notifier:
         # Prepare plot params
         #pylint: disable=invalid-unary-operand-type
         self.slice = slice(-window, None, None) if isinstance(window, int) else slice(None)
-        self.layout, self.figsize, self.savepath = layout, figsize, savepath
+        self.savepath = savepath
 
         # Prepare Telegram notifications
         self.telegram = telegram
