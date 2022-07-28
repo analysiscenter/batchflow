@@ -403,12 +403,11 @@ class Notifier:
             'ylabel_size': 15,
             'tick_labelsize': 15,
             'legend_size': 15,
-            'grid': 'major',
             'window': 50,
             **kwargs
         }
 
-        return plot(show=False, **plot_config)
+        return plot(show=False, fix_config=True, **plot_config)
 
     def update_plot(self, index=0, add_suptitle=False, savepath=None, clear_display=True, show=True, **kwargs):
         """ Draw plots anew. """
@@ -477,7 +476,6 @@ class Notifier:
                     source_defaults['label'] = None
             elif isinstance(data, np.ndarray) and data.ndim in (2, 3):
                 mode = 'image'
-                source_defaults = {**source_defaults, 'grid': None, 'label': None, 'xlabel': None}
             else:
                 msg = "Expected data to be 1-dimensional tuple/list/array or 2- or 3-dimensional array."
                 if isinstance(data, np.ndarray):
@@ -486,7 +484,7 @@ class Notifier:
                     msg += f" Got {type(data)} instead."
                 raise ValueError(msg)
 
-            plot_config = {**self.plotter.config, **source_defaults, **plot_config, **kwargs}
+            plot_config = {**source_defaults, **plot_config, **kwargs}
             self.plotter.plot(data=data, mode=mode, positions=index, **plot_config)
 
     def update_log_file(self):

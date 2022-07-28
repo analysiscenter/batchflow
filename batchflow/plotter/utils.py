@@ -99,10 +99,11 @@ class PlotConfig(dict):
         ValueError
             If parameter is a list but the index is greater than its length.
         """
-        if index is None:
-            return self
-
         result = type(self)()
+
+        if index is None:
+            result.update(self)
+            return result
 
         for key, value in self.items():
             if isinstance(value, list):

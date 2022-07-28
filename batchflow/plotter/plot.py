@@ -765,12 +765,17 @@ class Subplot:
 
     def clear(self):
         """ Clear subplot axis. """
+        colorbar = self.annotations.get('colorbar')
+        if colorbar is not None:
+            colorbar.remove()
+
+        self.annotations = {}
+
         self.ax.clear()
         for layer in self.layers:
             for obj in layer.objects:
                 obj.remove()
         self.layers = []
-        self.annotations = {}
 
 
 class Plot:
@@ -859,6 +864,9 @@ class Plot:
         Whether overlay images on a single subplot, show them on separate ones or use mixed approach.
         Needs specifying only when `combine='separate'` required, since `combine='overlay'` is default and
         `combine='mixed'` is infered automatically from data (if data list is nested, no need specifiying `combine`).
+    fix_config : bool
+        If False, every time `plot` is called update config with provided keyword arguments, replacing older parameters.
+        If True, fix plotter config as provided on initialization. Usefull, if one want to reuse this config on updates.
     kwargs :
         - For one of `image`, `histogram`, `curve`, `loss` methods of `Layer` (depending on chosen mode).
             Parameters and data nestedness levels must match if they are lists meant for differents subplots/layers.
@@ -1083,12 +1091,16 @@ class Plot:
     """
     MODES = ['image', 'matrix', 'histogram', 'curve', 'loss']
 
-    def __init__(self, data=None, mode='image', combine='overlay', **kwargs):
+    def __init__(self, data=None, mode='image', combine='overlay', fix_config=False, **kwargs):
         self.figure = None
         self.subplots = None
-        self.config = None
+        self.config = self.get_defaults(mode)
         self.figure_config = None
+        self.fix_config = fix_config
+
+        self.fresh = True
         self.plot(data=data, combine=combine, mode=mode, **kwargs)
+        self.fresh = False
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -1195,7 +1207,7 @@ class Plot:
                     msg = f"Valid data items are None, tuple, array or list of those, got {type(item)}."
                     raise ValueError(msg)
 
-                if combine in ('overlay',):
+                if combine == 'overlay':
                     data_list.extend(data_item)
                 elif combine in ('separate', 'mixed'):
                     data_list.append(data_item)
@@ -1466,20 +1478,21 @@ class Plot:
         if mode not in self.MODES:
             raise ValueError(f"Unknown mode '{mode}'. Expected one of {self.MODES}.")
 
-        self.config = self.get_defaults(mode)
-        self.config.update(**kwargs)
-
         data, combine = self.parse_data(data=data, combine=combine, mode=mode)
 
         if n_subplots is None:
             n_subplots = 1 if combine == 'overlay' else len(data)
 
-        if self.subplots is None:
+        if self.fresh:
+            self.config.update(kwargs)
             figure, subplots, figure_config = self.make_subplots(mode=mode, n_subplots=n_subplots, data=data, axes=axes)
             self.figure, self.subplots, self.figure_config = figure, subplots, figure_config
         else:
+            if not self.fix_config:
+                self.config = PlotConfig()
+            outer_config = PlotConfig(kwargs)
             if axes is not None:
-                msg = "Subplots already created and new axes cannot be specified."
+                msg = "Subplots already created and new axes cannot bespecified."
                 raise ValueError(msg)
 
         positions = list(range(len(data))) if positions is None else to_list(positions)
@@ -1494,6 +1507,10 @@ class Plot:
 
             subplot_index = None if combine == 'overlay' else relative_index
             subplot_config = self.config.maybe_index(subplot_index)
+
+            if not self.fresh:
+                outer_subplot_config = outer_config.maybe_index(subplot_index)
+                subplot_config.update(outer_subplot_config)
 
             subplot.plot(data=subplot_data, mode=mode, **subplot_config)
 
