@@ -420,7 +420,7 @@ class Notifier:
             fmt = {
                 **self.bar.format_dict,
                 'n': self.bar.n + 1,
-                'ncols': 80,
+                'ncols': 160,
                 'colour': None,
             }
             self.plotter.config['suptitle'] = self.bar.format_meter(**fmt)
@@ -435,7 +435,7 @@ class Notifier:
         if show:
             self.plotter.redraw()
 
-        savepath = savepath or (f'{self.savepath}_{self.bar.n}' if self.savepath is not None else None)
+        savepath = savepath or (f'{self.savepath}_{self.bar.n + 1}' if self.savepath is not None else None)
 
         if savepath:
             self.plotter.save(savepath=savepath)
@@ -522,6 +522,9 @@ class Notifier:
                 print(self.create_message(i, description), file=f)
 
     def __call__(self, iterable):
+        if isinstance(iterable, int):
+            iterable = range(iterable)
+
         if self.bar is not None:
             if self.bar.total is None and hasattr(iterable, '__len__'):
                 self.compute_total(None, None, None, None, None, total=len(iterable))
@@ -593,8 +596,8 @@ class Notifier:
                 desc = f'{name}={value:,}'
             else:
                 continue
-
-            description.append(desc)
+            if desc:
+                description.append(desc)
         return ';   '.join(description)
 
     def create_message(self, iteration, description):
