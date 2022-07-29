@@ -1419,7 +1419,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     def __call__(self, inputs, targets=None, outputs='predictions', lock=True, microbatch_size=False,
-                no_grad=False, transfer_from_device=True):
+                no_grad=False, transfer_from_device=False):
         """ Evaluate model on provided data, while tracking gradients.
         Essentially, the same as `:meth:.predict` with overriden defaults.
         """
@@ -1469,9 +1469,14 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         for i, _ in enumerate(outputs):
             # All tensors for current `output_name`
             chunked_output = [chunk_outputs[i] for chunk_outputs in chunked_outputs]
-
             if chunked_output[0].size != 1:
-                result.append(np.concatenate(chunked_output, axis=0))
+                if len(chunked_output) == 1:
+                    output_ = chunked_output[0]
+                elif isinstance(chunked_output[0], np.ndarray):
+                    output_ = np.concatenate(chunked_output, axis=0)
+                else:
+                    output_ = torch.cat(chunked_output, dim=0)
+                result.append(output_)
             else:
                 result.append(np.mean(chunked_output))
         if single_output:
