@@ -682,8 +682,11 @@ class Subplot:
 
         # make new handles
         new_handles = []
+        labels = to_list(label)
+        colors = [color] * len(labels) if isinstance(color, str) else color
+        alphas = [alpha] * len(labels) if isinstance(alpha, Number) else alpha
 
-        for label_item, label_color, label_alpha in zip(label, color, alpha):
+        for label_item, label_color, label_alpha in zip(labels, colors, alphas):
             if label_item is None:
                 continue
             if isinstance(label_item, str):
