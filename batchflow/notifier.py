@@ -518,7 +518,7 @@ class Notifier:
         """ Log all the iteration-wise info (timestamps, descriptions) into file."""
         with open(file, 'w') as f:
             for i in range(self.bar.n):
-                description = self.create_description(iteration=i)
+                description = self.create_description(iteration=i).replace('\n', '  ')
                 print(self.create_message(i, description), file=f)
 
     def __call__(self, iterable):

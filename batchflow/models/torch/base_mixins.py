@@ -207,14 +207,12 @@ class VisualizationMixin:
             kwargs['xtick_labels'] = locations + start_iteration
         if 'final_window' in kwargs:
             kwargs['final_window'] = min(kwargs['final_window'], self.iteration)
+
         return plot(data=data, mode='loss', **kwargs)
 
     # Deprecated aliases
-
     deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
-
     show_lr = deprecated(deprecation_msg.format('TorchModel.show_lr', 'TorchModel.plot_lr'))(plot_lr)
-
     show_loss = deprecated(deprecation_msg.format('TorchModel.show_loss', 'TorchModel.plot_loss'))(plot_loss)
 
 

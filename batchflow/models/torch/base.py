@@ -1662,7 +1662,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     # Debug and profile the performance
     def set_requires_grad(self, requires_grad):
-        """ !!. """
+        """ Set `requires_grad` flag for the underlying Pytorch model.
+        Helpful when training multiple chained models.
+        """
         for p in self.model.parameters():
             p.requires_grad = requires_grad
 
