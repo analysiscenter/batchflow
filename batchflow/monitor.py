@@ -124,6 +124,7 @@ class ResourceMonitor:
 
     def plot(self, plotter=None, positions=None, slice=None, **kwargs):
         """ Simple plots of collected data-points. """
+        #pylint: disable=invalid-name
         x = np.array(self.ticks) - self.ticks[0]
         x = x if slice is None else x[slice]
 
