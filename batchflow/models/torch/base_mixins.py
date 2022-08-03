@@ -152,13 +152,17 @@ class VisualizationMixin:
 
         return plot(data=data, mode='loss', **params)
 
-    def plot_loss(self, overlay_lr=True, **kwargs):
+    def plot_loss(self, overlay_lr=True, start_iteration=0, frequency=50, **kwargs):
         """ Plot loss and learning rate over the same figure.
 
         Parameters
         ----------
         overlay_lr : bool
             Whether show learning rate on the same plot with loss or not.
+        start_iteration : int
+            Starting iteration for display.
+        frequency : int
+            Tick frequency. Used only if `start_iteration` is not zero.
         kwargs : misc
             For `plot` in `mode='loss'`:
 
@@ -188,23 +192,27 @@ class VisualizationMixin:
             save_kwargs : dict or None
                 If dict, then additional parameters for figure saving.
         """
+        slc = slice(start_iteration, None)
+        locations = np.arange(0, self.iteration - start_iteration, frequency)
+
         if overlay_lr:
-            data = (self.loss_list, [l[0] for l in self.lr_list])
+            data = (self.loss_list[slc],
+                    [l[0] for l in self.lr_list][slc])
         else:
-            data = (self.loss_list, None)
+            data = (self.loss_list[slc], None)
 
         kwargs['title'] = 'Loss values and learning rate' if overlay_lr else 'Loss values'
+        if start_iteration:
+            kwargs['xtick_locations'] = locations
+            kwargs['xtick_labels'] = locations + start_iteration
         if 'final_window' in kwargs:
             kwargs['final_window'] = min(kwargs['final_window'], self.iteration)
 
         return plot(data=data, mode='loss', **kwargs)
 
     # Deprecated aliases
-
     deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
-
     show_lr = deprecated(deprecation_msg.format('TorchModel.show_lr', 'TorchModel.plot_lr'))(plot_lr)
-
     show_loss = deprecated(deprecation_msg.format('TorchModel.show_loss', 'TorchModel.plot_loss'))(plot_loss)
 
 

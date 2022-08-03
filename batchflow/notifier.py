@@ -135,8 +135,8 @@ class Notifier:
 
     def __init__(self, bar='a', disable=False, frequency=1, monitors=None, graphs=None, log_file=None,
                  total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
-                 telegram=False, token=None, chat_id=None, silent=True,
-                 window=None, layout='h', figsize=None, savepath=None, plot_config=None, **kwargs):
+                 telegram=False, initialize_telegram=False, token=None, chat_id=None, silent=True,
+                 window=None, savepath=None, plot_config=None, **kwargs):
         # Prepare data containers like monitors and pipeline variables
         if monitors:
             monitors = monitors if isinstance(monitors, (tuple, list)) else [monitors]
@@ -152,10 +152,10 @@ class Notifier:
         self.has_graphs = len(graphs) > 0
         self.n_monitors = len(monitors)
 
+        plot_config = plot_config or {}
+        self.plot_config = plot_config
         if self.has_graphs:
-            if plot_config is None:
-                plot_config = {}
-            self.plotter = self.make_plotter(num_graphs=len(graphs), layout=layout, figsize=figsize, **plot_config)
+            self.plotter = self.make_plotter(num_graphs=len(graphs), **plot_config)
         else:
             self.plotter = None
 
@@ -251,11 +251,11 @@ class Notifier:
         # Prepare plot params
         #pylint: disable=invalid-unary-operand-type
         self.slice = slice(-window, None, None) if isinstance(window, int) else slice(None)
-        self.layout, self.figsize, self.savepath = layout, figsize, savepath
+        self.savepath = savepath
 
         # Prepare Telegram notifications
         self.telegram = telegram
-        if self.telegram:
+        if self.telegram or initialize_telegram:
             self.telegram_text = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
             self.telegram_media = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
 
@@ -403,14 +403,14 @@ class Notifier:
             'ylabel_size': 15,
             'tick_labelsize': 15,
             'legend_size': 15,
-            'grid': 'major',
             'window': 50,
             **kwargs
         }
 
-        return plot(show=False, **plot_config)
+        return plot(show=False, fix_config=True, **plot_config)
 
-    def update_plot(self, index=0, add_suptitle=False, savepath=None, clear_display=True, show=True, **kwargs):
+    def update_plot(self, index=0, add_suptitle=False, savepath=None, clear_display=True, show=True,
+                    telegram=None, **kwargs):
         """ Draw plots anew. """
         plot_config = PlotConfig(kwargs)
 
@@ -421,7 +421,7 @@ class Notifier:
             fmt = {
                 **self.bar.format_dict,
                 'n': self.bar.n + 1,
-                'ncols': 80,
+                'ncols': self.plot_config.get('bar_width', 80),
                 'colour': None,
             }
             self.plotter.config['suptitle'] = self.bar.format_meter(**fmt)
@@ -436,13 +436,15 @@ class Notifier:
         if show:
             self.plotter.redraw()
 
-        savepath = savepath or (f'{self.savepath}_{self.bar.n}' if self.savepath is not None else None)
+        savepath = savepath or (f'{self.savepath}_{self.bar.n + 1}' if self.savepath is not None else None)
 
         if savepath:
             self.plotter.save(savepath=savepath)
 
-        if self.telegram:
-            self.telegram_media.send(self.plotter.figure)
+        telegram = telegram if telegram is not None else self.telegram
+        if telegram:
+            self.plotter.figure.canvas.flush_events()
+            self.telegram_media.send(self.plotter.figure, force_update=True)
 
     def update_subplot(self, container, index, **kwargs):
         """ Update subplot under given index by data from given container. """
@@ -477,7 +479,6 @@ class Notifier:
                     source_defaults['label'] = None
             elif isinstance(data, np.ndarray) and data.ndim in (2, 3):
                 mode = 'image'
-                source_defaults = {**source_defaults, 'grid': None, 'label': None, 'xlabel': None}
             else:
                 msg = "Expected data to be 1-dimensional tuple/list/array or 2- or 3-dimensional array."
                 if isinstance(data, np.ndarray):
@@ -486,7 +487,7 @@ class Notifier:
                     msg += f" Got {type(data)} instead."
                 raise ValueError(msg)
 
-            plot_config = {**self.plotter.config, **source_defaults, **plot_config, **kwargs}
+            plot_config = {**source_defaults, **plot_config, **kwargs}
             self.plotter.plot(data=data, mode=mode, positions=index, **plot_config)
 
     def update_log_file(self):
@@ -520,10 +521,13 @@ class Notifier:
         """ Log all the iteration-wise info (timestamps, descriptions) into file."""
         with open(file, 'w') as f:
             for i in range(self.bar.n):
-                description = self.create_description(iteration=i)
+                description = self.create_description(iteration=i).replace('\n', '  ')
                 print(self.create_message(i, description), file=f)
 
     def __call__(self, iterable):
+        if isinstance(iterable, int):
+            iterable = range(iterable)
+
         if self.bar is not None:
             if self.bar.total is None and hasattr(iterable, '__len__'):
                 self.compute_total(None, None, None, None, None, total=len(iterable))
@@ -595,8 +599,8 @@ class Notifier:
                 desc = f'{name}={value:,}'
             else:
                 continue
-
-            description.append(desc)
+            if desc:
+                description.append(desc)
         return ';   '.join(description)
 
     def create_message(self, iteration, description):
