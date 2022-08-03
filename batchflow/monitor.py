@@ -124,14 +124,17 @@ class ResourceMonitor:
 
     def plot(self, plotter=None, positions=None, slice=None, **kwargs):
         """ Simple plots of collected data-points. """
-        x, y = np.array(self.ticks) - self.ticks[0], np.array(self.data)
-        if y.ndim > 1:
-            y = y.squeeze()
+        #pylint: disable=invalid-name
+        x = np.array(self.ticks) - self.ticks[0]
+        x = x if slice is None else x[slice]
 
-        if slice is not None:
-            x = x[slice]
-            y = y[slice]
-        data = (x, y)
+        data, stats = [], []
+        y = np.array(self.data).reshape(len(x), -1)
+        for s in range(y.shape[1]):
+            y_ = y[:, s]
+            y_ = y_ if slice is None else y_[slice]
+            data.append((x, y_))
+            stats.append(f'MEAN: {np.mean(y_):4.4} STD: {np.std(y_):4.4}')
 
         name = self.__class__.__name__
         if 'GPU' in name:
@@ -140,8 +143,6 @@ class ResourceMonitor:
                 name = f'{name} on device `{used_gpus[0]}`'
             else:
                 name = f'{name} on devices `{str(used_gpus)[1:-1]}`'
-
-        stats = f'MEAN: {np.mean(self.data):4.4} STD: {np.std(self.data):4.4}'
 
         plot_config = {
             'title': name,

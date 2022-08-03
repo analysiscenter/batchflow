@@ -81,20 +81,20 @@ class TelegramMessage:
         return self.connection.request('POST', url, fields=fields, headers=headers)
 
 
-    def send(self, content):
+    def send(self, content, force_update=False):
         """ Send content to a message in a separate thread. """
         if self.deleted:
             raise TypeError('Sending contents to a deleted message is not allowed!')
 
-        self.submit(function=self._send, content=content)
+        self.submit(function=self._send, content=content, force_update=force_update)
 
         # Wait for the first message
         if self.message_id is None:
             self.queue[0].result()
 
-    def _send(self, content):
+    def _send(self, content, force_update):
         # No need to re-send the same content
-        if hash(content) == self.message_content_hash:
+        if not force_update and hash(content) == self.message_content_hash:
             return None
 
         # Assert the same type of contents to send, as in initialization
