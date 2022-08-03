@@ -76,6 +76,7 @@ class ResBlock(Block):
     def __init__(self, inputs=None, layout='cnacn', channels='same', kernel_size=3, stride=1,
                  downsample=False, bottleneck=False, attention=None, groups=1, op='+a', branch=None,
                  n_reps=1, **kwargs):
+        width_mid_channels = 2 if groups > 1 else 1
         num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
         channels = [channels] * num_convs if isinstance(channels, (int, str)) else channels
@@ -110,7 +111,8 @@ class ResBlock(Block):
             stride = [1] + stride + [1]
             stride_downsample = [1] + stride_downsample + [1]
             groups = [1] + groups + [1]
-            channels = [channels[0] * bottleneck] + channels + [channels[0]]
+            channels = [channels[0] * width_mid_channels] + [channels[i] * width_mid_channels
+                                                             for i in range(len(channels))] + [channels[0] * bottleneck]
 
         if attention:
             # Attention: add self-attention to the main flow
