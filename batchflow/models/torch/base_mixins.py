@@ -176,12 +176,9 @@ class VisualizationMixin:
             final_window : int or None
                 If int, then we additionally display the mean value of the last `final_window` iterations in the legend.
                 If None, no additional info is displayed.
-            minor_grix_x_n : int or None
-                If int, then number of minor ticks on xaxis between major ticks.
-                If None, no minor ticks are added.
-            minor_grix_y_n : int or None
-                If int, then number of minor ticks on yaxis between major ticks.
-                If None, no minor ticks are added.
+            minor_grid_frequency : number or tuple of two numbers
+                If a single number, defines grid frequency for both subplot axes.
+                If a tuple of two numbers, they define grid frequencies for x-axis and y-axis correspondingly.
             log_loss, log_lr : bool
                 Whether to take the log of respective graph values.
             return figure : bool

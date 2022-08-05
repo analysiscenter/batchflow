@@ -1184,7 +1184,7 @@ class Plot:
 
                 if item is None:
                     if combine == 'overlay':
-                        msg = "`None` is a placeholder future subplots. It makes not sense when `combine='overlay'`."
+                        msg = "`None` is a placeholder for future subplots. It makes not sense when `combine='overlay'`."
                         raise ValueError(msg)
                     data_item = None
                 elif isinstance(item, tuple):
@@ -1195,7 +1195,7 @@ class Plot:
                     data_item = [np.array(item)]
                 elif isinstance(item, list):
                     if combine == 'separate':
-                        raise ValueError("Data list items cant be lists themselves when `combine='separate'`")
+                        raise ValueError("Data list items can't be lists themselves when `combine='separate'`")
                     data_item = []
                     for subitem in item:
                         if isinstance(subitem, tuple):
@@ -1205,7 +1205,8 @@ class Plot:
                         elif isinstance(subitem, list) and contains_numbers(subitem):
                             data_item += [np.array(subitem)]
                         elif isinstance(subitem, list):
-                            raise ValueError("!!.")
+                            msg = f"Valid data items are None, tuple, array or list of those, got {type(item)}."
+                            raise ValueError(msg)
                 else:
                     msg = f"Valid data items are None, tuple, array or list of those, got {type(item)}."
                     raise ValueError(msg)
