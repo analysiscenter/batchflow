@@ -1184,7 +1184,7 @@ class Plot:
 
                 if item is None:
                     if combine == 'overlay':
-                        msg = "`None` is a placeholder for future subplots. It makes not sense when `combine='overlay'`."
+                        msg = "`None` is a future subplots placeholder. It makes not sense when `combine='overlay'`."
                         raise ValueError(msg)
                     data_item = None
                 elif isinstance(item, tuple):
