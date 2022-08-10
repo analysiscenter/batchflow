@@ -59,6 +59,8 @@ DECAYS = {
     'step': torch.optim.lr_scheduler.StepLR,
     'multistep': torch.optim.lr_scheduler.MultiStepLR,
     'cos': torch.optim.lr_scheduler.CosineAnnealingLR,
+    'cosw': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
+    'cyclic': torch.optim.lr_scheduler.CyclicLR,
 }
 
 DECAYS_DEFAULTS = {
