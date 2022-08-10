@@ -104,19 +104,22 @@ def get_module_performance(module, inputs, track_backward=True, n_repeats=300, w
     """
     memory_unit_constant = MEMORY_UNIT_CONSTANTS[memory_unit]
 
+    # Prepare inputs
+    torch.cuda.empty_cache()
+    inputs = make_initialization_inputs(inputs=inputs, device=device)
+    module.to(device)
+
+    if channels_last:
+        inputs.to(memory_format=torch.channels_last)
+        module.to(memory_format=torch.channels_last)
+
+    # One container for all results
+    result = {}
+    parameters = sum(p.numel() for p in module.parameters())
+    result['parameters'] = parameters
+
     with TimeTracker() as total_timer:
-        result = {}
-        forward_timings = []
-        backward_timings = []
-
-        torch.cuda.empty_cache()
-
-        inputs = make_initialization_inputs(inputs=inputs, device=device)
-        module.to(device)
-
-        if channels_last:
-            inputs.to(memory_format=torch.channels_last)
-            module.to(memory_format=torch.channels_last)
+        forward_timings, backward_timings = [], []
 
         for i in range(n_repeats + warmup):
             with torch.cuda.amp.autocast(enabled=amp):
@@ -128,7 +131,7 @@ def get_module_performance(module, inputs, track_backward=True, n_repeats=300, w
                     forward_time = forward_timer.value
                     forward_timings.append(forward_time)
 
-            if track_backward:
+            if track_backward and parameters > 0:
                 # Calculate backward operation time
                 with TimeTracker() as backward_timer:
                     outputs.backward(outputs)
@@ -147,7 +150,7 @@ def get_module_performance(module, inputs, track_backward=True, n_repeats=300, w
         forward_memory = memory.value
         result[f'forward memory, {memory_unit}'] = forward_memory / memory_unit_constant
 
-        if track_backward:
+        if track_backward and parameters > 0:
             result['backward time mean, ms'] = np.mean(backward_timings)
             result['backward time std, ms'] = np.std(backward_timings)
 
@@ -162,7 +165,6 @@ def get_module_performance(module, inputs, track_backward=True, n_repeats=300, w
             macs, _ = ptflops.get_model_complexity_info(module, tuple(inputs.shape[1:]),
                                                         as_strings=False, print_per_layer_stat=False)
             result['macs'] = macs
-        result['parameters'] = sum(p.numel() for p in module.parameters())
 
     result['time total, ms'] = total_timer.value
     return result

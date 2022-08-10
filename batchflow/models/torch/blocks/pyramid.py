@@ -3,7 +3,7 @@ import numpy as np
 from torch import nn
 
 from .core import Block
-from ..layers import Conv, BatchNorm, Combine
+from ..layers import Conv, Normalization, Combine
 from ..utils import get_shape, get_num_dims, get_num_channels
 
 
@@ -162,7 +162,7 @@ class KSAC(nn.Module):
         tensor = self.layer(inputs)
         tensors.append(tensor)
 
-        self.batch_norm = BatchNorm(inputs=tensor).to(inputs.device)
+        self.batch_norm = Normalization(inputs=tensor).to(inputs.device)
 
         for level in self.rates:
             tensor = self.conv(inputs, self.layer.layer.weight, padding=level, dilation=level)

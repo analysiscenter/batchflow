@@ -4,7 +4,8 @@ import inspect
 import torch
 from torch import nn
 
-from .core import Dense, DenseAlongAxis, BatchNorm, LayerNorm, Dropout, AlphaDropout
+from .core import Dense, DenseAlongAxis, Dropout, AlphaDropout
+from .normalization import Normalization
 from .conv import (Conv, ConvTranspose,
                    DepthwiseConv, DepthwiseConvTranspose, SeparableConv, SeparableConvTranspose,
                    MultiKernelConv, SharedKernelConv, AvgPoolConv, BilinearConvTranspose)
@@ -68,7 +69,7 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         'a': 'activation_layer',
         'f': 'dense',
         'F': 'dense_along_axis',
-        'n': 'batch_norm',
+        'n': 'normalization',
         'l': 'layer_norm',
         'd': 'dropout',
         'D': 'alpha_dropout',
@@ -115,8 +116,7 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         'activation_layer': Activation,
         'dense': Dense,
         'dense_along_axis': DenseAlongAxis,
-        'batch_norm': BatchNorm,
-        'layer_norm': LayerNorm,
+        'normalization': Normalization,
         'dropout': Dropout,
         'alpha_dropout': AlphaDropout,
 
