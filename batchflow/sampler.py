@@ -40,11 +40,11 @@ def _get_method_by_alias(alias, module, tf_distributions=None):
     # fetch fullname
     fullname = ALIASES.get(alias, {module: alias for module in ['np', 'tf', 'ss']}).get(module, None)
     if fullname is None:
-        raise ValueError("Distribution %s has no implementaion in module %s" % (alias, module))
+        raise ValueError(f"Distribution {alias} has no implementaion in module {module}")
 
     # check that the randomizer is implemented in corresponding module
     if not hasattr(rnd_submodules[module], fullname):
-        raise ValueError("Distribution %s has no implementaion in module %s" % (fullname, module))
+        raise ValueError(f"Distribution {fullname} has no implementaion in module {module}")
 
     return fullname
 
@@ -84,9 +84,10 @@ class Sampler():
     weight : float
         weight of Sampler self in mixtures.
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, seed=None, **kwargs):
         self.__array_priority__ = 100
         self.weight = 1.0
+        self.rng = make_rng(seed)
 
         # if dim is supplied, redefine sampling method
         if 'dim' in kwargs:
@@ -230,13 +231,13 @@ class OrSampler(Sampler):
         defined by weights (`self.weight`-attr) from two samplers invoked (`self.bases`-attr) and
         mixes them in one sample of needed size.
         """
-        up_size = np.random.binomial(size, self.normed[0])
+        up_size = self.rng.binomial(size, self.normed[0])
         low_size = size - up_size
 
         up_sample = self.bases[0].sample(size=up_size)
         low_sample  = self.bases[1].sample(size=low_size)
         sample_points = np.concatenate([up_sample, low_sample])
-        sample_points = sample_points[np.random.permutation(size)]
+        sample_points = sample_points[self.rng.permutation(size)]
 
         return sample_points
 
@@ -326,12 +327,11 @@ class TruncateSampler(Sampler):
             # check if we reached max_iters-number of iterations
             if ctr > self.max_iters:
                 if self.sample_anyways:
-                    warnings.warn("Already took {} number of iteration to make a sample. Yet, `sample_anyways`"
-                                  "is set to true, so going on. Kill the process manually if needed."
-                                  .format(self.max_iters))
+                    warnings.warn(f"Already took {self.max_iters} number of iteration to make a sample. Yet, "
+                                   "`sample_anyways` is set to true, so going on. Kill the process manually if needed.")
                 else:
-                    raise ValueError("The number of iterations needed to obtain the sample exceeds {}."
-                                     "Stopping the process.".format(self.max_iters))
+                    raise ValueError(f"The number of iterations needed to obtain the sample exceeds {self.max_iters}."
+                                      "Stopping the process.")
 
             # get points from region of interest
             samples.append(sample[cond])
@@ -447,7 +447,7 @@ class NumpySampler(Sampler):
     name : str
         a distribution name (a method from `numpy random`) or its alias.
     seed : int
-        random seed for setting up sampler's state (see :func:`~.make_rng`).
+        random seed for setting up sampler's random numbers generator (see :func:`~.make_rng`).
     **kwargs
         additional keyword-arguments defining properties of specific
         distribution (e.g. ``loc`` for 'normal').
@@ -456,7 +456,7 @@ class NumpySampler(Sampler):
     ----------
     name : str
         a distribution name (a method from `numpy random`).
-    state : numpy.random.Generator
+    rng : numpy.random.Generator
         a random number generator
     _params : dict
         dict of args for Sampler's distribution.
@@ -466,7 +466,6 @@ class NumpySampler(Sampler):
         name = _get_method_by_alias(name, 'np')
         self.name = name
         self._params = copy(kwargs)
-        self.state = make_rng(seed)
 
 
     def sample(self, size):
@@ -482,7 +481,7 @@ class NumpySampler(Sampler):
         np.ndarray
             array of shape (size, Sampler's dimension).
         """
-        sampler = getattr(self.state, self.name)
+        sampler = getattr(self.rng, self.name)
         sample = sampler(size=size, **self._params)
         if len(sample.shape) == 1:
             sample = sample.reshape(-1, 1)
@@ -497,7 +496,7 @@ class ScipySampler(Sampler):
     name : str
         a distribution name, a class from `scipy.stats`, or its alias.
     seed : int
-        random seed for setting up sampler's state (see :func:`~.make_rng`).
+        random seed for setting up sampler's random number generator (see :func:`~.make_rng`).
     **kwargs
         additional parameters for specification of the distribution.
         For instance, `scale` for name='gamma'.
@@ -506,7 +505,7 @@ class ScipySampler(Sampler):
     ----------
     name : str
         a distribution name (a class from `scipy.stats`).
-    state : numpy.random.Generator
+    rng : numpy.random.Generator
         a random number generator
     distr
         a distribution class
@@ -515,7 +514,6 @@ class ScipySampler(Sampler):
         super().__init__(name, seed, **kwargs)
         name = _get_method_by_alias(name, 'ss')
         self.name = name
-        self.state = make_rng(seed)
         self.distr = getattr(ss, self.name)(**kwargs)
 
     def sample(self, size):
@@ -533,7 +531,7 @@ class ScipySampler(Sampler):
             array of shape (size, Sampler's dimension).
         """
         sampler = self.distr.rvs
-        sample = sampler(size=size, random_state=self.state)
+        sample = sampler(size=size, random_state=self.rng)
         if len(sample.shape) == 1:
             sample = sample.reshape(-1, 1)
         return sample
@@ -550,7 +548,7 @@ class HistoSampler(Sampler):
     edges : list
         list of len=histo_dimension, contains edges of bins along axes.
     seed : int
-        random seed for setting up sampler's state (see :func:`~.make_rng`).
+        random seed for setting up sampler's random numbers generator (see :func:`~.make_rng`).
 
     Attributes
     ----------
@@ -584,8 +582,7 @@ class HistoSampler(Sampler):
         self.nonzero_probs_idx = np.asarray(self.probs != 0.0).nonzero()[0]
         self.nonzero_probs = self.probs[self.nonzero_probs_idx]
 
-        self.state = make_rng(seed)
-        self.state_sampler = self.state.uniform
+        self.rng_sampler = self.rng.uniform
 
     def sample(self, size):
         """ Sampling method of ``HistoSampler``.
@@ -603,11 +600,11 @@ class HistoSampler(Sampler):
             array of shape (size, histo dimension).
         """
         # Choose bins to use according to non-zero probabilities
-        bin_nums = self.state.choice(self.nonzero_probs_idx, p=self.nonzero_probs, size=size)
+        bin_nums = self.rng.choice(self.nonzero_probs_idx, p=self.nonzero_probs, size=size)
 
         # uniformly generate samples from selected boxes
         low, high = self.l_all[bin_nums], self.h_all[bin_nums]
-        return self.state_sampler(low=low, high=high)
+        return self.rng_sampler(low=low, high=high)
 
     def update(self, points):
         """ Update bins of sampler's histogram by throwing in additional points.
