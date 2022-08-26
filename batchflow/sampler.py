@@ -87,6 +87,8 @@ class Sampler():
     def __init__(self, *args, seed=None, **kwargs):
         self.__array_priority__ = 100
         self.weight = 1.0
+
+        self.seed = seed
         self.rng = make_rng(seed)
 
         # if dim is supplied, redefine sampling method
@@ -218,7 +220,8 @@ class OrSampler(Sampler):
     """ Class for implementing `|` (mixture) operation on `Sampler`-instances.
     """
     def __init__(self, left, right, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        seed = (left.seed or 0) + (right.seed or 0)
+        super().__init__(*args, seed=seed, **kwargs)
         self.bases = [left, right]
 
         # calculate probs of samplers in mixture
@@ -245,7 +248,8 @@ class AndSampler(Sampler):
     """ Class for implementing `&` (coordinates stacking) operation on `Sampler`-instances.
     """
     def __init__(self, left, right, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        seed = (left.seed or 0) + (right.seed or 0)
+        super().__init__(*args, seed=seed, **kwargs)
         self.bases = [left, right]
 
     def sample(self, size):
@@ -260,7 +264,7 @@ class ApplySampler(Sampler):
     """ Class for implementing `apply` (adding transform) operation on `Sampler`-instances.
     """
     def __init__(self, sampler, transform, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, seed=sampler.seed, **kwargs)
         self.bases = [sampler]
         self.transform = transform
 
@@ -279,7 +283,7 @@ class TruncateSampler(Sampler):
 
     def __init__(self, sampler, high=None, low=None, expr=None, prob=0.5, max_iters=None,
                  sample_anyways=False, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, seed=sampler.seed, **kwargs)
         self.bases = [sampler]
         self.high = high
         self.low = low
@@ -346,7 +350,8 @@ class BaseOperationSampler(Sampler):
     """
     operation = None
     def __init__(self, left, right, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        seed = (left.seed or 0) + (right.seed or 0)
+        super().__init__(*args, seed=seed, **kwargs)
         self.bases = [left, right]
 
     def sample(self, size):
@@ -462,7 +467,7 @@ class NumpySampler(Sampler):
         dict of args for Sampler's distribution.
     """
     def __init__(self, name, seed=None, **kwargs):
-        super().__init__(name, seed, **kwargs)
+        super().__init__(name, seed=seed, **kwargs)
         name = _get_method_by_alias(name, 'np')
         self.name = name
         self._params = copy(kwargs)
@@ -511,7 +516,7 @@ class ScipySampler(Sampler):
         a distribution class
     """
     def __init__(self, name, seed=None, **kwargs):
-        super().__init__(name, seed, **kwargs)
+        super().__init__(name, seed=seed, **kwargs)
         name = _get_method_by_alias(name, 'ss')
         self.name = name
         self.distr = getattr(ss, self.name)(**kwargs)
@@ -564,7 +569,7 @@ class HistoSampler(Sampler):
         Otherwise, edges should be supplied. In this case all bins are empty.
     """
     def __init__(self, histo=None, edges=None, seed=None, **kwargs):
-        super().__init__(histo, edges, seed, **kwargs)
+        super().__init__(histo, edges, seed=seed, **kwargs)
         if histo is not None:
             self.bins = histo[0]
             self.edges = histo[1]
