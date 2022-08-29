@@ -102,6 +102,20 @@ class Sampler():
             # redefine sample of self
             self.sample = stacked.sample
 
+    @staticmethod
+    def combine_seeds(left, right):
+        """ Returns a single number if two numbers are given, returns None if both arguments are None else raises error.
+
+        Defines a mapping from R^2 to R^1 such as its image uniformly covers the range of values of arguments data type.
+        Never causes data type overflow on chain call (contrary to addition, multiplication, cantor or szudzik pairing).
+        Approximately 4 times faster than addition followed by modular division by number of bits of argument data type.
+        """
+        if left is None and right is None:
+            return None
+        elif left is not None and right is not None:
+            return left ^ right
+        raise ValueError(f"Seeds can be combined only if both of them are either numbers or None, got {left, right}.")
+
     def sample(self, size):
         """ Sampling method of a sampler.
 
@@ -220,7 +234,7 @@ class OrSampler(Sampler):
     """ Class for implementing `|` (mixture) operation on `Sampler`-instances.
     """
     def __init__(self, left, right, *args, **kwargs):
-        seed = (left.seed or 0) + (right.seed or 0)
+        seed = self.combine_seeds(left.seed, right.seed)
         super().__init__(*args, seed=seed, **kwargs)
         self.bases = [left, right]
 
@@ -248,7 +262,7 @@ class AndSampler(Sampler):
     """ Class for implementing `&` (coordinates stacking) operation on `Sampler`-instances.
     """
     def __init__(self, left, right, *args, **kwargs):
-        seed = (left.seed or 0) + (right.seed or 0)
+        seed = self.combine_seeds(left.seed, right.seed)
         super().__init__(*args, seed=seed, **kwargs)
         self.bases = [left, right]
 
@@ -350,7 +364,7 @@ class BaseOperationSampler(Sampler):
     """
     operation = None
     def __init__(self, left, right, *args, **kwargs):
-        seed = (left.seed or 0) + (right.seed or 0)
+        seed = self.combine_seeds(left.seed, right.seed)
         super().__init__(*args, seed=seed, **kwargs)
         self.bases = [left, right]
 
@@ -425,6 +439,7 @@ class ConstantSampler(Sampler):
     """
     def __init__(self, constant, **kwargs):
         self.constant = np.array(constant).reshape(1, -1)
+        kwargs['seed'] = 0 # initialize with fake seed to allow binary operations with other fixed-seed samplers
         super().__init__(constant, **kwargs)
 
     def sample(self, size):
