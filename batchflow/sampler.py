@@ -439,7 +439,6 @@ class ConstantSampler(Sampler):
     """
     def __init__(self, constant, **kwargs):
         self.constant = np.array(constant).reshape(1, -1)
-        kwargs['seed'] = 0 # initialize with fake seed to allow binary operations with other fixed-seed samplers
         super().__init__(constant, **kwargs)
 
     def sample(self, size):
