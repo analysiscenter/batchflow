@@ -607,7 +607,7 @@ class FilesIndex(DatasetIndex):
             paths = path
 
         if len(paths) == 0:
-            raise ValueError(f"`path` must contain at least one entry.")
+            raise ValueError("`path` must contain at least one entry.")
 
         _all_index = []
         _all_paths = dict()
