@@ -32,7 +32,7 @@ class PyramidPooling(nn.Module):
         super().__init__()
 
         spatial_shape = np.array(get_shape(inputs)[2:])
-        channels = channels if channels else 'same // {}'.format(len(pyramid))
+        channels = channels if channels else f'same // {len(pyramid)}'
 
         modules = nn.ModuleList()
         for level in pyramid:

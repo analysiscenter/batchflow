@@ -606,7 +606,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.device = torch.device('cpu')
         else:
             devices = devices if isinstance(devices, list) else [devices]
-            available_devices = ['cuda:{}'.format(i) for i in range(torch.cuda.device_count())] + ['cpu']
+            available_devices = [f'cuda:{i}' for i in range(torch.cuda.device_count())] + ['cpu']
             for dev in devices:
                 if isinstance(dev, torch.device):
                     self.devices.append(dev)
@@ -619,7 +619,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                                if re.search(dev_, device.lower()) is not None]
                     self.devices.extend(devices)
                 else:
-                    raise TypeError('Wrong device type: {}'.format(type(dev)))
+                    raise TypeError(f'Wrong device type: {type(dev)}')
             self.devices = [device for i, device in enumerate(self.devices)
                             if device not in self.devices[:i]]
             self.device = self.devices[0]

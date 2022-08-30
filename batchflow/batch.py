@@ -51,7 +51,7 @@ class MethodsTransformingMeta(type):
             if transform_kwargs is not None:
                 namespace_[object_name] = cls.use_apply_parallel(object_, **transform_kwargs)
 
-                disclaimer = "This is an untransformed version of `{}`.\n\n".format(object_.__qualname__)
+                disclaimer = f"This is an untransformed version of `{object_.__qualname__}`.\n\n"
                 object_.__doc__ = disclaimer + (object_.__doc__ or '')
                 object_.__name__ = '_' + object_name + '_'
                 object_.__qualname__ = '.'.join(object_.__qualname__.split('.')[:-1] + [object_.__name__])
@@ -282,7 +282,7 @@ class Batch(metaclass=MethodsTransformingMeta):
             if np.all(none_components_in_batches):
                 continue
             if np.any(none_components_in_batches):
-                raise ValueError('Component {} is None in some batches'.format(comp))
+                raise ValueError(f'Component {comp} is None in some batches')
 
             if batch_size is None:
                 new_comp = [b.get(component=comp) for b in batches]
@@ -380,9 +380,9 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         for comp, value in zip(components, init):
             if hasattr(self, comp):
-                raise ValueError("An attribute '%s' already exists" % comp)
+                raise ValueError(f"An attribute '{comp}' already exists")
             if self.components is not None and comp in self.components:
-                raise ValueError("A components '%s' already exists" % comp)
+                raise ValueError(f"A components '{comp}' already exists")
 
             if self.components is None:
                 self.components = tuple([comp])
@@ -397,7 +397,7 @@ class Batch(metaclass=MethodsTransformingMeta):
     def __getattr__(self, name):
         if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
             return getattr(self.data, name, None)
-        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+        raise AttributeError(f"{name} not found in class {self.__class__.__name__}")
 
     def __setattr__(self, name, value):
         if self.components is not None:
@@ -665,7 +665,7 @@ class Batch(metaclass=MethodsTransformingMeta):
             try:
                 file_name = src.get_fullpath(ix)
             except KeyError as e:
-                raise KeyError("File {} is not indexed in the received index".format(ix)) from e
+                raise KeyError(f"File {ix} is not indexed in the received index") from e
 
         elif src is None:
             file_name = self.index.get_fullpath(ix)
@@ -827,7 +827,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         elif fmt == 'csv':
             _data.to_csv(filename, *args, **kwargs)   # pylint:disable=no-member
         else:
-            raise ValueError('Unknown format %s' % fmt)
+            raise ValueError(f'Unknown format {fmt}')
 
         return self
 

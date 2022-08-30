@@ -432,7 +432,7 @@ class B(NamedExpression):
         name, batch, _ = self._get_params(**kwargs)
 
         if isinstance(batch, _DummyBatch):
-            raise ValueError("Batch expressions are not allowed in static models: B('%s')" % name)
+            raise ValueError(f"Batch expressions are not allowed in static models: B('{name}')")
         if name is None:
             return batch.copy() if self.copy else batch
         return getattr(batch, name)
@@ -565,7 +565,7 @@ class C(PipelineNamedExpression):
             else:
                 value = config[name]
         except KeyError:
-            raise KeyError("Name is not found in the config: %s" % name) from None
+            raise KeyError(f"Name is not found in the config: {name}") from None
         return value
 
     def assign(self, value, **kwargs):
@@ -684,7 +684,7 @@ class I(PipelineNamedExpression):
             ratio = current_iter / total
             return ratio
 
-        raise ValueError('Unknown key for named expresssion I: %s' % name)
+        raise ValueError(f'Unknown key for named expresssion I: {name}')
 
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """
@@ -896,7 +896,7 @@ class W(NamedExpression):
     def get(self, **kwargs):
         """ Return a wrapped named expression """
         if not isinstance(self.name, NamedExpression):
-            raise ValueError("Named expressions is expected, but given %s" % self.name)
+            raise ValueError(f"Named expressions is expected, but given {self.name}")
         self.name.set_params(**kwargs)
         return self.name
 
@@ -971,8 +971,8 @@ class P(W):
             values = name
 
         if len(values) != len(batch):
-            raise ValueError('%s returns a value (len=%d) which does not fit the batch size (len=%d)'
-                                % (self, len(values), len(batch)))
+            msg = f"{self} returned a value (len={len(values)}) which does not fit the batch size (len={len(batch)})"
+            raise ValueError(msg)
 
         # return P-expr to be recognized by the decorator
         return P(values)
