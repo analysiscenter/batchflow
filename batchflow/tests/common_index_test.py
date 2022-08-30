@@ -22,7 +22,7 @@ def files_setup(request):
     for folder in folders:
         os.mkdir(folder)
         for i in range(5):
-            open(os.path.join(folder, 'file_{}.txt'.format(i)), 'w').close()
+            open(os.path.join(folder, f'file_{i}.txt'), 'w').close()
 
     def fin():
         shutil.rmtree(path)

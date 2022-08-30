@@ -331,15 +331,13 @@ class ImagesBatch(BaseImagesBatch):
                 origin = (np.random.randint(background_shape[0]-image_shape[0]+1),
                           np.random.randint(background_shape[1]-image_shape[1]+1))
             else:
-                raise ValueError("If string, origin should be one of ['center', 'top_left', 'top_right', "
-                                 "'bottom_left', 'bottom_right', 'random']. Got '{}'.".format(origin))
+                raise ValueError(f"If string, origin should be one of ['center', 'top_left', 'top_right', 'bottom_left', 'bottom_right', 'random']. Got '{origin}'.")
         elif all(0 <= elem < 1 for elem in origin):
             region = ((background_shape[0]-image_shape[0]+1),
                       (background_shape[1]-image_shape[1]+1))
             origin = np.asarray(origin) * region
         elif not all(isinstance(elem, int) for elem in origin):
-            raise ValueError('If not a string, origin should be either a sequence of ints or sequence of '
-                             'floats in [0, 1) interval. Got {}'.format(origin))
+            raise ValueError(f'If not a string, origin should be either a sequence of ints or sequence of floats in [0, 1) interval. Got {origin}')
 
         return np.asarray(origin, dtype=np.int)
 

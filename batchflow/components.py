@@ -109,7 +109,7 @@ class BaseComponents:
             return self._indices.index(item)
         if isinstance(self._indices, np.ndarray):
             return np.where(self._indices == item)[0][0]
-        raise TypeError("Unknown index type: %s" % type(self._indices))
+        raise TypeError(f"Unknown index type: {type(self._indices)}")
 
     def get_pos(self, component, indices):
         """ Return positions of given indices """

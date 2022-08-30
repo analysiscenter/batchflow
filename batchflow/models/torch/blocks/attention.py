@@ -110,8 +110,8 @@ class SimpleSelfAttention(nn.Module):
         self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
 
         args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size)}
-        self.top_branch = Block(**args, channels='same//{}'.format(ratio))
-        self.mid_branch = Block(**args, channels='same//{}'.format(ratio))
+        self.top_branch = Block(**args, channels=f'same//{ratio}')
+        self.mid_branch = Block(**args, channels=f'same//{ratio}')
         self.bot_branch = Block(**args, channels='same')
 
         self.desc_kwargs = {
@@ -163,7 +163,7 @@ class BAM(nn.Module):
 
         self.bam_attention = Block(
             inputs=inputs, layout='R' + 'cna'*3  + 'c' + '+ a',
-            channels=['same//{}'.format(ratio), 'same', 'same', 1], kernel_size=[1, 3, 3, 1],
+            channels=[f'same//{ratio}', 'same', 'same', 1], kernel_size=[1, 3, 3, 1],
             dilation=[1, dilation, dilation, 1], activation=['relu']*3+['sigmoid'], bias=True,
             branch={'layout': 'Vfnaf >',
                     'features': [in_channels//ratio, in_channels],
@@ -417,7 +417,7 @@ class SelectiveKernelConv(nn.Module):
         self.combine = Combine(op='sum')
         tensor = self.combine(tensors)
         self.fuse = Block(inputs=tensor, layout='Vfna>',
-                          features='max(same // {}, {})'.format(ratio, min_features),
+                          features=f'max(same // {ratio}, {min_features})',
                           dim=num_dims, bias=bias)
 
         fused_tensor = self.fuse(tensor)

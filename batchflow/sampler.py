@@ -40,11 +40,11 @@ def _get_method_by_alias(alias, module, tf_distributions=None):
     # fetch fullname
     fullname = ALIASES.get(alias, {module: alias for module in ['np', 'tf', 'ss']}).get(module, None)
     if fullname is None:
-        raise ValueError("Distribution %s has no implementaion in module %s" % (alias, module))
+        raise ValueError(f"Distribution {alias} has no implementaion in module {module}")
 
     # check that the randomizer is implemented in corresponding module
     if not hasattr(rnd_submodules[module], fullname):
-        raise ValueError("Distribution %s has no implementaion in module %s" % (fullname, module))
+        raise ValueError(f"Distribution {fullname} has no implementaion in module {module}")
 
     return fullname
 
@@ -326,12 +326,9 @@ class TruncateSampler(Sampler):
             # check if we reached max_iters-number of iterations
             if ctr > self.max_iters:
                 if self.sample_anyways:
-                    warnings.warn("Already took {} number of iteration to make a sample. Yet, `sample_anyways`"
-                                  "is set to true, so going on. Kill the process manually if needed."
-                                  .format(self.max_iters))
+                    warnings.warn(f"Already took {self.max_iters} number of iteration to make a sample. Yet, `sample_anyways`is set to true, so going on. Kill the process manually if needed.")
                 else:
-                    raise ValueError("The number of iterations needed to obtain the sample exceeds {}."
-                                     "Stopping the process.".format(self.max_iters))
+                    raise ValueError(f"The number of iterations needed to obtain the sample exceeds {self.max_iters}.Stopping the process.")
 
             # get points from region of interest
             samples.append(sample[cond])
