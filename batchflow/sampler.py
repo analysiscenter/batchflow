@@ -293,8 +293,9 @@ class ApplySampler(Sampler):
     """ Class for implementing `apply` (adding transform) operation on `Sampler`-instances.
     """
     def __init__(self, sampler, transform, *args, **kwargs):
-        super().__init__(*args, seed=sampler.seed, **kwargs)
         self.bases = [sampler]
+        super().__init__(*args, **kwargs)
+
         self.transform = transform
 
     def sample(self, size):
@@ -312,8 +313,9 @@ class TruncateSampler(Sampler):
 
     def __init__(self, sampler, high=None, low=None, expr=None, prob=0.5, max_iters=None,
                  sample_anyways=False, *args, **kwargs):
-        super().__init__(*args, seed=sampler.seed, **kwargs)
         self.bases = [sampler]
+        super().__init__(*args, **kwargs)
+
         self.high = high
         self.low = low
         self.expr = expr
