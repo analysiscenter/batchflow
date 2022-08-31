@@ -88,6 +88,18 @@ class Sampler():
         self.__array_priority__ = 100
         self.weight = 1.0
 
+        if seed is None:
+            bases = getattr(self, 'bases', None)
+            if bases is not None:
+                if len(bases) == 1:
+                    seed = bases[0].seed
+                elif len(bases) == 2:
+                    seed = self.combine_samplers_seeds(*bases)
+                else:
+                    msg = "Can only combine base samplers seeds when there are one or two of them, "\
+                          f"got {len(bases)} bases."
+                    raise NotImplementedError(msg)
+
         self.seed = seed
         self.rng = make_rng(seed)
 
@@ -102,19 +114,24 @@ class Sampler():
             # redefine sample of self
             self.sample = stacked.sample
 
-    @staticmethod
-    def combine_seeds(left, right):
-        """ Returns a single number if two numbers are given, returns None if both arguments are None else raises error.
+    def combine_samplers_seeds(self, left, right):
+        """ Combine seeds of provided samplers with minimal possible collisions.
 
-        Defines a mapping from R^2 to R^1 such as its image uniformly covers the range of values of arguments data type.
+        Returns samplers seeds' xor if both of them are fixed numbers, returns None if both are None else raises error.
+
+        Defines a mapping from R^2 to R^1 such as its image uniformly covers the whole values range of seeds data type.
         Never causes data type overflow on chain call (contrary to addition, multiplication, cantor or szudzik pairing).
         Approximately 4 times faster than addition followed by modular division by number of bits of argument data type.
         """
-        if left is None and right is None:
+        if left.seed is None and right.seed is None:
             return None
-        elif left is not None and right is not None:
-            return left ^ right
-        raise ValueError(f"Seeds can be combined only if both of them are either numbers or None, got {left, right}.")
+        if left.seed is not None and right.seed is not None:
+            return left.seed ^ right.seed
+
+        msg = "Samplers seeds can be combined only if both of them are either numbers or None. "\
+              f"Left sampler {left} has seed {left.seed} and right {right} has seed {right.seed}. "\
+              "Either fix both seeds or none at all."
+        raise ValueError(msg)
 
     def sample(self, size):
         """ Sampling method of a sampler.
@@ -234,9 +251,8 @@ class OrSampler(Sampler):
     """ Class for implementing `|` (mixture) operation on `Sampler`-instances.
     """
     def __init__(self, left, right, *args, **kwargs):
-        seed = self.combine_seeds(left.seed, right.seed)
-        super().__init__(*args, seed=seed, **kwargs)
         self.bases = [left, right]
+        super().__init__(*args, **kwargs)
 
         # calculate probs of samplers in mixture
         weights = np.array([self.bases[0].weight, self.bases[1].weight])
@@ -262,9 +278,8 @@ class AndSampler(Sampler):
     """ Class for implementing `&` (coordinates stacking) operation on `Sampler`-instances.
     """
     def __init__(self, left, right, *args, **kwargs):
-        seed = self.combine_seeds(left.seed, right.seed)
-        super().__init__(*args, seed=seed, **kwargs)
         self.bases = [left, right]
+        super().__init__(*args, **kwargs)
 
     def sample(self, size):
         """ Sampling procedure of a product of two samplers. Check out the docstring of
@@ -364,9 +379,8 @@ class BaseOperationSampler(Sampler):
     """
     operation = None
     def __init__(self, left, right, *args, **kwargs):
-        seed = self.combine_seeds(left.seed, right.seed)
-        super().__init__(*args, seed=seed, **kwargs)
         self.bases = [left, right]
+        super().__init__(*args, **kwargs)
 
     def sample(self, size):
         if isinstance(self.bases[1], Sampler):
