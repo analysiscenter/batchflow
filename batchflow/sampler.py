@@ -84,21 +84,19 @@ class Sampler():
     weight : float
         weight of Sampler self in mixtures.
     """
-    def __init__(self, *args, seed=None, **kwargs):
+    def __init__(self, *args, seed=None, bases=None, **kwargs):
         self.__array_priority__ = 100
         self.weight = 1.0
+        self.bases = bases
 
-        if seed is None:
-            bases = getattr(self, 'bases', None)
-            if bases is not None:
-                if len(bases) == 1:
-                    seed = bases[0].seed
-                elif len(bases) == 2:
-                    seed = self.combine_samplers_seeds(*bases)
-                else:
-                    msg = "Can only combine base samplers seeds when there are one or two of them, "\
-                          f"got {len(bases)} bases."
-                    raise NotImplementedError(msg)
+        if seed is None and bases is not None:
+            if len(bases) == 1:
+                seed = bases[0].seed
+            elif len(bases) == 2:
+                seed = self.combine_samplers_seeds(*bases)
+            else:
+                msg = f"Can only combine base samplers seeds when there are one or two of them, got {len(bases)} bases."
+                raise NotImplementedError(msg)
 
         self.seed = seed
         self.rng = make_rng(seed)
@@ -251,8 +249,7 @@ class OrSampler(Sampler):
     """ Class for implementing `|` (mixture) operation on `Sampler`-instances.
     """
     def __init__(self, left, right, *args, **kwargs):
-        self.bases = [left, right]
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, bases=[left, right], **kwargs)
 
         # calculate probs of samplers in mixture
         weights = np.array([self.bases[0].weight, self.bases[1].weight])
@@ -278,8 +275,7 @@ class AndSampler(Sampler):
     """ Class for implementing `&` (coordinates stacking) operation on `Sampler`-instances.
     """
     def __init__(self, left, right, *args, **kwargs):
-        self.bases = [left, right]
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, bases=[left, right], **kwargs)
 
     def sample(self, size):
         """ Sampling procedure of a product of two samplers. Check out the docstring of
@@ -293,8 +289,7 @@ class ApplySampler(Sampler):
     """ Class for implementing `apply` (adding transform) operation on `Sampler`-instances.
     """
     def __init__(self, sampler, transform, *args, **kwargs):
-        self.bases = [sampler]
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, bases=[sampler], **kwargs)
 
         self.transform = transform
 
@@ -313,8 +308,7 @@ class TruncateSampler(Sampler):
 
     def __init__(self, sampler, high=None, low=None, expr=None, prob=0.5, max_iters=None,
                  sample_anyways=False, *args, **kwargs):
-        self.bases = [sampler]
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, bases=[sampler], **kwargs)
 
         self.high = high
         self.low = low
@@ -383,8 +377,7 @@ class BaseOperationSampler(Sampler):
     """
     operation = None
     def __init__(self, left, right, *args, **kwargs):
-        self.bases = [left, right]
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, bases=[left, right], **kwargs)
 
     def sample(self, size):
         if isinstance(self.bases[1], Sampler):
