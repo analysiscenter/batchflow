@@ -55,7 +55,7 @@ class OncePipeline:
     def __getattr__(self, name):
         if self.pipeline.is_method_from_ns(name):
             return partial(self._add_action, name)
-        raise AttributeError("Unknown name: %s" % name)
+        raise AttributeError(f"Unknown name: {name}")
 
     def add_namespace(self, *namespaces):
         self.pipeline.add_namespace(*namespaces)
@@ -71,7 +71,7 @@ class OncePipeline:
         else:
             method = self.pipeline.get_method(action['name'])
             if method is None:
-                raise ValueError("Unknown method: %s" % action['name'])
+                raise ValueError(f"Unknown method: {action['name']}")
 
             res = method(*args_value, **kwargs_value)
 

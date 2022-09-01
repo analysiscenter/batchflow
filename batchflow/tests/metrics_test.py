@@ -390,7 +390,7 @@ class TestResult:
         for metric_name, exp in exp_dict.items():
             res = metric.evaluate(metrics=metric_name, agg=batch_agg, multiclass=multi_agg)
             res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
-            assert np.allclose(res, exp, atol=1e-02, rtol=0), 'failed on metric {}'.format(metric_name)
+            assert np.allclose(res, exp, atol=1e-02, rtol=0), f'failed on metric {metric_name}'
 
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     @pytest.mark.parametrize('batch_agg, exp', [(None, np.array([0.50, 0.75, 0.50, 0.75])), ('mean', np.array([0.62]))])
@@ -418,7 +418,7 @@ class TestResult:
         metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
         res = metric.evaluate(metrics='accuracy', agg=batch_agg)
         res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
-        assert np.allclose(res, exp, atol=1e-02, rtol=0), 'failed on metric {}'.format('accuracy')
+        assert np.allclose(res, exp, atol=1e-02, rtol=0), "failed on metric accuracy"
 
 class TestSubsampling:
     """Check the correctness of confusion matrix subsampling functions result

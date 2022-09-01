@@ -12,7 +12,7 @@ class Config:
             if isinstance(other, dict):
                 self.update(other)
             else:
-                raise TypeError("unsupported operand type(s) for +=: 'IAddDict' and '{}'".format(type(other)))
+                raise TypeError(f"unsupported operand type(s) for +=: 'IAddDict' and '{type(other)}'")
             return self
 
     def __init__(self, config=None, **kwargs):
@@ -36,7 +36,7 @@ class Config:
         elif isinstance(config, Config):
             self.config = config.config
         else:
-            raise TypeError('config must be dict, Config or list but {} was given'.format(type(config)))
+            raise TypeError(f'config must be dict, Config or list but {type(config)} was given')
 
         for key, value in kwargs.items():
             self.put(key, value)
@@ -127,7 +127,7 @@ class Config:
                 if has_default:
                     val = default
                 else:
-                    raise KeyError("Key '%s' not found" % variable)
+                    raise KeyError(f"Key '{variable}' not found")
 
             ret_vars.append(val)
 
@@ -203,13 +203,13 @@ class Config:
                 raise ValueError('tuples in list should represent pairs key-value'
                                  ', and therefore must be always the length of 2')
         else:
-            raise TypeError('config must be dict, Config or list but {} was given'.format(type(config)))
+            raise TypeError(f'config must be dict, Config or list but {type(config)} was given')
         new_config = Config.IAddDict()
         for key, value in items:
             if isinstance(value, dict):
                 value = self.parse(value)
             if not isinstance(key, str):
-                raise TypeError('only str keys are supported, "{}" is of {} type'.format(str(key), type(key)))
+                raise TypeError(f'only str keys are supported, "{str(key)}" is of {type(key)} type')
             key = '/'.join(filter(None, key.split('/'))) #merge multiple consecutive slashes '/' to one
             self.put(key, value, new_config)
         return new_config
@@ -372,5 +372,5 @@ class Config:
         return iter(self.config)
 
     def __repr__(self):
-        lines = [4 * ' ' + line for line in pformat(self.config).split('\n')]
-        return "Config(\n{}\n)".format('\n'.join(lines), indent=4)
+        lines = ['\n' + 4 * ' ' + line for line in pformat(self.config).split('\n')]
+        return f"Config({''.join(lines)})"

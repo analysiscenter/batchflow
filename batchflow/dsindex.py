@@ -607,7 +607,7 @@ class FilesIndex(DatasetIndex):
             paths = path
 
         if len(paths) == 0:
-            raise ValueError("`path` cannot be empty. Got '{}'.".format(path))
+            raise ValueError("`path` must contain at least one entry.")
 
         _all_index = []
         _all_paths = dict()
@@ -628,7 +628,7 @@ class FilesIndex(DatasetIndex):
     def build_from_one_path(self, path, dirs=False, no_ext=False):
         """ Build index from a path/glob. """
         if not isinstance(path, str):
-            raise TypeError('Each path must be a string, instead got {}'.format(path))
+            raise TypeError(f'Each path must be a string, instead got {path}')
 
         check_fn = os.path.isdir if dirs else os.path.isfile
         pathlist = glob.iglob(path, recursive=True)
@@ -637,7 +637,7 @@ class FilesIndex(DatasetIndex):
             _index = _full_index[:, 0]
             _paths = _full_index[:, 1]
         else:
-            warnings.warn("No items to index in %s" % path)
+            warnings.warn(f"No items to index in {path}")
             _index, _paths = np.empty(0), np.empty(0)
         _paths = dict(zip(_index, _paths))
         return _index, _paths

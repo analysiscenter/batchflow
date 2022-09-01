@@ -362,11 +362,13 @@ class TruncateSampler(Sampler):
             # check if we reached max_iters-number of iterations
             if ctr > self.max_iters:
                 if self.sample_anyways:
-                    warnings.warn(f"Already took {self.max_iters} number of iteration to make a sample. Yet, "
-                                   "`sample_anyways` is set to true, so going on. Kill the process manually if needed.")
+                    msg = f"Already took {self.max_iters} number of iteration to make a sample. "\
+                          "Yet, `sample_anyways` is set to true, so going on. Kill the process manually if needed."
+                    warnings.warn(msg)
                 else:
-                    raise ValueError(f"The number of iterations needed to obtain the sample exceeds {self.max_iters}."
-                                      "Stopping the process.")
+                    msg = f"The number of iterations needed to obtain the sample exceeds {self.max_iters}. "\
+                          "Stopping the process."
+                    raise ValueError(msg)
 
             # get points from region of interest
             samples.append(sample[cond])

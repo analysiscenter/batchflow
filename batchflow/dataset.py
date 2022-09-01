@@ -112,7 +112,7 @@ class Dataset(Baseset):
         if 'batch_class' in dir(self) and \
            self.batch_class.components is not None and name in self.batch_class.components:
             return getattr(self.data, name)
-        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+        raise AttributeError(f"{name} not found in class {self.__class__.__name__}")
 
     @classmethod
     def from_dataset(cls, dataset, index, batch_class=None, copy=False, **kwargs):
@@ -273,13 +273,13 @@ class Dataset(Baseset):
                 If the type of other is not a Pipeline
         """
         if not isinstance(other, Pipeline):
-            raise TypeError("Pipeline is expected, but got %s. Use as dataset >> pipeline" % type(other))
+            raise TypeError(f"Pipeline is expected, but got {type(other)}. Use as dataset >> pipeline")
         return other << self
 
     def cv(self, n):
         """ Return a dataset which corresponds to n-th CV split """
         if n > self.n_splits - 1:
-            raise ValueError("The dataset has been split into fewer splits than %d" % n)
+            raise ValueError(f"The dataset has been split into fewer splits than {n}")
         return  getattr(self, 'cv' + str(n))
 
     def CV(self, expr):
