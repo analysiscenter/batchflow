@@ -168,7 +168,7 @@ def apply_parallel(*args, **kwargs):
     if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
         return mark(args[0])
     if len(args) != 0:
-        raise ValueError("This decorator accepts only named arguments")
+        raise ValueError(f"This decorator accepts only named arguments, got {args}!")
 
     return mark
 

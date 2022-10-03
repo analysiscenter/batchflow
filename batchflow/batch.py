@@ -513,6 +513,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         ----------
         func : callable
             A function to apply to each item from the source.
+            Should accept `src` and `dst` parameters, or be written in a way that accepts variable args.
         target : str
             Parallelization engine:
                 - 'f', 'for' for executing each worker sequentially, like in a for-loop.
@@ -586,6 +587,8 @@ class Batch(metaclass=MethodsTransformingMeta):
             apply_parallel(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
             apply_parallel(MyBatch.some_static_method, p=.5)
             apply_parallel(B.some_method, src='features', p=.5)
+
+        TODO: move logic of applying `post` function from `inbatch_parallel` here, as well as remove `use_self` arg.
         """
         #pylint: disable=keyword-arg-before-vararg
         # Parse parameters: fill with class-wide defaults
@@ -804,7 +807,7 @@ class Batch(metaclass=MethodsTransformingMeta):
             self._assemble_component(result, component=component, **kwargs)
         return self
 
-    @inbatch_parallel('indices', post='_assemble', target='f', dst_default='components')
+    @apply_parallel_(init='indices', post='_assemble', target='f', dst_default='components')
     def _load_blosc(self, ix, src=None, dst=None):
         """ Load data from a blosc packed file """
         file_name = self._get_file_name(ix, src)
@@ -817,8 +820,8 @@ class Batch(metaclass=MethodsTransformingMeta):
                 raise KeyError('Cannot find components in corresponfig file', file_name) from e
         return item
 
-    @inbatch_parallel('indices', target='f')
-    def _dump_blosc(self, ix, dst, components=None):
+    @apply_parallel_(init='indices', target='f')
+    def _dump_blosc(self, ix, dst=None, components=None):
         """ Save blosc packed data to file """
         file_name = self._get_file_name(ix, dst)
         with open(file_name, 'w+b') as f:
@@ -1013,7 +1016,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         return self.dump(*args, **kwargs)
 
     @apply_parallel_
-    def to_array(self, comp, dtype=np.float32, channels='last'):
+    def to_array(self, comp, dtype=np.float32, channels='last', **kwargs):
         """ Converts batch components to np.ndarray format
 
         Parameters
@@ -1027,6 +1030,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         channels : None, 'first' or 'last'
             the dimension for channels axis
         """
+        _ = kwargs
         comp = np.array(comp)
 
         if len(comp.shape) == 2:

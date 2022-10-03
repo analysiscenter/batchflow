@@ -11,7 +11,8 @@ import warnings
 from collections import OrderedDict
 import time
 
-from .. import Config, Pipeline, parallel, spawn_seed_sequence, make_rng, make_seed_sequence
+from .. import Config, Pipeline, spawn_seed_sequence, make_rng, make_seed_sequence
+from ..decorators import parallel
 from ..named_expr import eval_expr
 from ..utils import to_list
 
