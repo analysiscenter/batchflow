@@ -784,9 +784,9 @@ class Batch(metaclass=MethodsTransformingMeta):
         _ = args
         if any_action_failed(all_results):
             all_errors = self.get_errors(all_results)
-            print(all_errors)
+            print(all_errors[0])
             traceback.print_tb(all_errors[0].__traceback__)
-            raise RuntimeError("Could not assemble the batch")
+            raise RuntimeError("Could not assemble the batch") from all_errors[0]
 
         if dst is None:
             dst_default = kwargs.get('dst_default', 'src')
