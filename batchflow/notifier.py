@@ -347,7 +347,6 @@ class Notifier:
         for container in self.data_containers:
             source = container['source']
             if isinstance(source, ResourceMonitor):
-                source.fetch()
                 container['data'] = source.data
 
             elif isinstance(source, str):

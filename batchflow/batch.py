@@ -616,12 +616,12 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         # Actual computation
         if init is None or init is False or init == 'data':
-        if isinstance(src, str):
-            init = self.get(component=src)
-        elif isinstance(src, (tuple, list)):
-            init = list((x,) for x in zip(*[self.get(component=s) for s in src]))
-        else:
-            init = src
+            if isinstance(src, str):
+                init = self.get(component=src)
+            elif isinstance(src, (tuple, list)):
+                init = list((x,) for x in zip(*[self.get(component=s) for s in src]))
+            else:
+                init = src
         elif isinstance(init, str):
             # No hasattr check: if it is False, then an error would (and should) be raised
             init = getattr(self, init)
