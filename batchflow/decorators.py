@@ -14,7 +14,7 @@ except ImportError:
     jit = None
 
 from .named_expr import P
-from .utils_random import make_seed_sequence, spawn_seed_sequence
+
 
 
 def make_function(method, is_global=False):
@@ -177,12 +177,7 @@ def any_action_failed(results):
     """ Return `True` if some parallelized invocations threw exceptions """
     return any(isinstance(res, Exception) for res in results)
 
-def call_method(method, use_self, args, kwargs, seed=None):
-    """ Call a method with given args """
-    if use_self and hasattr(args[0], 'random_seed') and seed is not None:
-        # set batch.random_seed to create RNG
-        args[0].random_seed = seed
-    return method(*args, **kwargs)
+
 
 def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=False, **dec_kwargs):
     """ Decorator for parallel methods in :class:`~.Batch` classes
@@ -217,7 +212,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
         """ Return a decorator which run a method in parallel """
         use_self = '.' in method.__qualname__ if _use_self is None else _use_self
         mpc_method = method
-        if use_self:
+        if target in {'mpc', 'm'} and use_self:
             try:
                 mpc_method = make_function(method, is_global=True)
             except Exception:  # pylint:disable=broad-except
@@ -336,10 +331,6 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
 
             return margs, mkwargs
 
-        def make_random_seed(self):
-            if getattr(self, 'random_state', None) is None:
-                return make_seed_sequence()
-            return self.random_state
 
         def wrap_with_threads(self, args, kwargs):
             """ Run a method in parallel threads """
@@ -352,8 +343,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
                 full_kwargs = {**dec_kwargs, **kwargs}
                 for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                     margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                    seed = None if getattr(self, 'random_state', None) is None else spawn_seed_sequence(self)
-                    one_ft = executor.submit(call_method, method, use_self, margs, mkwargs, seed=seed)
+                    one_ft = executor.submit(method, *margs, **mkwargs)
                     futures.append(one_ft)
 
                 timeout = kwargs.get('timeout', None)
@@ -372,8 +362,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
                 full_kwargs = {**dec_kwargs, **kwargs}
                 for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                     margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                    seed = None if getattr(self, 'random_state', None) is None else spawn_seed_sequence(self)
-                    one_ft = executor.submit(call_method, mpc_method, use_self, margs, mkwargs, seed=seed)
+                    one_ft = executor.submit(mpc_method, *margs, **mkwargs)
                     futures.append(one_ft)
 
                 timeout = kwargs.pop('timeout', None)
@@ -401,12 +390,10 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
             futures = []
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
-            # save an initial seed to generate child seeds from
-            random_seed = make_random_seed(self)
+
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                seed = spawn_seed_sequence(random_seed)
-                futures.append(loop.create_task(call_method(method, use_self, margs, mkwargs, seed=seed)))
+                futures.append(loop.create_task(method(*margs, **mkwargs)))
 
             loop.run_until_complete(asyncio.gather(*futures, loop=loop, return_exceptions=True))
 
@@ -419,17 +406,15 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
             futures = []
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
-            # save an initial seed to generate child seeds from
-            random_seed = make_random_seed(self)
+
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
 
-                seed = spawn_seed_sequence(random_seed)
                 if debug:
-                    one_ft = call_method(method, use_self, margs, mkwargs, seed=seed)
+                    one_ft = method(*margs, **mkwargs)
                 else:
                     try:
-                        one_ft = call_method(method, use_self, margs, mkwargs, seed=seed)
+                        one_ft = method(*margs, **mkwargs)
                     except Exception as e:   # pylint: disable=broad-except
                         one_ft = e
                 futures.append(one_ft)
