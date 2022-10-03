@@ -8,7 +8,7 @@ import pandas as pd
 
 sys.path.append('..')
 from batchflow import (B, L, C, D, F, V, R, P, PP, I, Dataset, Pipeline, Batch,
-                       apply_parallel, action)
+                       apply_parallel)
 
 
 #--------------------
@@ -51,6 +51,7 @@ class MyBatch(Batch):
 
     @apply_parallel
     def ap_test(self, item, param, **kwargs):
+        _ = kwargs
         if isinstance(item, tuple):
             return item[0] * param, item[1] * param
         return item * param
