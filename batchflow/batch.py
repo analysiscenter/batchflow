@@ -483,23 +483,58 @@ class Batch(metaclass=MethodsTransformingMeta):
         _ = args, kwargs
         return self
 
+
     @action
-    def apply_parallel(self, func, *args, p=None, **kwargs):
-        """ Apply a function to each item in the batch.
+    def apply_parallel(self, func, init=None, post=None, src=None, dst=None, *args,
+                       p=None, target='for', requires_rng=False, rng_seeds=None, **kwargs):
+        """ Apply a function to each item in the container, returned by `init`, and assemble results by `post`.
+        Depending on the `target` parameter, different parallelization engines may be used: for, threads, MPC, async.
+
+        Roughly, under the hood we perform the following:
+            - compute parameters, individual for each worker. Currently, these are:
+                - `p` to indicate whether the function should be applied
+                - worker id and a seed for random generator, if required
+            - call `init` function, which outputs a container of items, passed directly to the `func`.
+            The simplest example is the `init` funciton that returns batch indices, and the function works off of each.
+            - wrap the `func` call into parallelization engine of choice.
+            - compute results of `func` calls for each item, returned by `init`
+            - assemble results by `post` function, e.g. stack the obtained numpy arrays.
+
+        In the simplest possible case of `init=None`, `src=images`, `dst=images_transformed`, `post=None`,
+        this function is almost equivalent to:
+            container = [func(item, *args, **kwargs) for item in self.images]
+            self.images_transformed = container
+
+        If `src` is a list and `dst` is a list, then this function is applied recursively to each pair of src, dst.
+        If `src` is a tuple, then this tuple is used as a whole.
+        This allows to make functions that work on multiple components.
 
         Parameters
         ----------
         func : callable
-            a function to apply to each item from the source
-
+            A function to apply to each item from the source.
+            Should accept `src` and `dst` parameters, or be written in a way that accepts variable args.
         target : str
-            See :func:`~batchflow.inbatch_parallel` for details.
+            Parallelization engine:
+                - 'f', 'for' for executing each worker sequentially, like in a for-loop.
+                - 't', 'threads' for using threads.
+                - 'm', 'mpc' for using processes. Note the bigger overhead for process initialization.
+                - 'a', 'async' for asynchronous execution.
+        init : str, callable or container
+            Function to init data for individual workers: must return a container of items.
+
+            If 'data', then use `src` components as the init.
+            If other str, then must be a name of the attribute of the batch to use as the init.
+            If callable or any previous returned a callable, then result of this callable is used as the init.
+            Note that in the last case callable should accept `src` and `dst` parameters, and `kwargs` are also passed.
+            If not any of the above, then the object is used directly, for example, np.ndarray.
 
         post : str or callable
-            See :func:`~batchflow.inbatch_parallel` for details.
+            Function to apply to the results of function evaluation on each item.
+            Must accept `src` and `dst` parameters, as well as `kwargs`.
 
         src : str, sequence, list of str
-            the source to get data from, can be:
+            The source to get data from:
             - None
             - str - a component name, e.g. 'images' or 'masks'
             - tuple or list of str - several component names
@@ -510,12 +545,17 @@ class Batch(metaclass=MethodsTransformingMeta):
             - None - in this case dst is set to be same as src
             - str - a component name, e.g. 'images' or 'masks'
             - tuple or list of str, e.g. ['images', 'masks']
+            If not provided, uses `src`.
 
         p : float or None
-            probability of applying func to an element in the batch
+            Probability of applying func to an element in the batch.
+
+        requires_rng : bool
+            Whether the `func` requires RNG. Should be used for correctly initialized seeds for reproducibility.
+            If True, then a pre-initialized RNG will be passed to the function call as `rng` keyword parameter.
 
         args, kwargs
-            other parameters passed to ``func``
+            Other parameters passed to ``func``.
 
         Notes
         -----
@@ -547,61 +587,85 @@ class Batch(metaclass=MethodsTransformingMeta):
             apply_parallel(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
             apply_parallel(MyBatch.some_static_method, p=.5)
             apply_parallel(B.some_method, src='features', p=.5)
+
+        TODO: move logic of applying `post` function from `inbatch_parallel` here, as well as remove `use_self` arg.
         """
-        kwargs = {**self.apply_defaults, **kwargs}
+        #pylint: disable=keyword-arg-before-vararg
+        # Parse parameters: fill with class-wide defaults
+        init = init or self.apply_defaults.get('init', None)
+        post = post or self.apply_defaults.get('post', None)
+        target = target or self.apply_defaults.get('target', None)
 
+        # Prepare parameters, individual for each worker: probability of applying, RNG seed, id
         if isinstance(p, float):
-            # calculate probabilities for each item
-            p = P(R('binomial', 1, p)).get(batch=self)
+            p = P(R('binomial', 1, p, seed=self.random)).get(batch=self)
 
-        src = kwargs.pop('src', None)
-        dst = kwargs.pop('dst', None)
+        if requires_rng and rng_seeds is None:
+            rng_seeds = P(R('integers', 0, 9223372036854775807, seed=self.random)).get(batch=self)
 
+        worker_ids = P(np.arange(len(self), dtype=np.int32))
+
+        # Case of list `src`: recursively call for each pair of src/dst
         if isinstance(src, list) and not (dst is None or isinstance(dst, list) and len(src) == len(dst)):
             raise ValueError("src and dst must have equal length")
         if isinstance(src, list) and (dst is None or isinstance(dst, list) and len(src) == len(dst)):
             if dst is None:
                 dst = src
 
-            for ones, oned in zip(src, dst):
-                kwargs['src'] = ones
-                kwargs['dst'] = oned
-                self.apply_parallel(func, *args, p=p, **kwargs)
+            for src_, dst_ in zip(src, dst):
+                self.apply_parallel(func=func, init=init, post=post, src=src_, dst=dst_,
+                                    *args, p=p, target=target, rng_seeds=rng_seeds, **kwargs)
             return self
 
-        if isinstance(src, str):
-            init = self.get(component=src)
-        elif isinstance(src, (tuple, list)):
-            init = list((x,) for x in zip(*[self.get(component=s) for s in src]))
-        else:
-            init = src
+        # Actual computation
+        if init is None or init is False or init == 'data':
+            if isinstance(src, str):
+                init = self.get(component=src)
+            elif isinstance(src, (tuple, list)):
+                init = list((x,) for x in zip(*[self.get(component=s) for s in src]))
+            else:
+                init = src
+        elif isinstance(init, str):
+            # No hasattr check: if it is False, then an error would (and should) be raised
+            init = getattr(self, init)
+            if callable(init):
+                init = init(src=src, dst=dst, p=p, target=target, **kwargs)
 
-        post = kwargs.pop('post', None)
-        target = kwargs.pop('target', None)
-
+        # Compute result. Unbind the method to pass self explicitly
         parallel = inbatch_parallel(init=init, post=post, target=target, src=src, dst=dst)
-        # unbind the method to pass self explicitly
         transform = parallel(type(self)._apply_once)
-        return transform(self, *args, func=func, p=p, **kwargs)
+        result = transform(self, *args, func=func, p=p, src=src, dst=dst,
+                           apply_parallel_id=worker_ids, apply_parallel_seeds=rng_seeds, **kwargs)
+        return result
 
-    def _apply_once(self, item, *args, func=None, p=None, **kwargs):
+    def _apply_once(self, item, *args, func=None, p=None, apply_parallel_id=None, apply_parallel_seeds=None, **kwargs):
         """ Apply a function to each item in the batch.
 
         Parameters
         ----------
         item
-            an item of component data (in accordance with init function)
-
+            An item from `init` function.
         func : callable
-            a function to apply to each item from the source
-
-        p : None or int
-            whether to apply func to an element in the batch (yes if None or 1)
-
+            A function to apply to each item.
+        p : None or {0, 1}
+            Whether to apply func to an element in the batch. If not specified, counts as 1.
+            Created and distributed to individual items by :meth:``.apply_parallel`.
+        apply_parallel_id : None, int
+            Index of the current item in the overall `init`.
+            Created and distributed to individual items by :meth:``.apply_parallel`.
+        apply_parallel_seeds : None, int
+            If provided, then the seed to create RNG for this given worker.
+            If provided, then supplied to a function call as `rng` keyword parameter.
+            Created and distributed to individual items by :meth:``.apply_parallel`.
         args, kwargs
-            other parameters passed to ``func``
+            Other parameters passed to ``func``.
         """
+        _ = apply_parallel_id
+
         if p is None or p == 1:
+            if apply_parallel_seeds is not None:
+                rng = np.random.default_rng(np.random.SFC64(apply_parallel_seeds))
+                kwargs['rng'] = rng
             return func(item, *args, **kwargs)
         return item
 
@@ -720,9 +784,9 @@ class Batch(metaclass=MethodsTransformingMeta):
         _ = args
         if any_action_failed(all_results):
             all_errors = self.get_errors(all_results)
-            print(all_errors)
+            print(all_errors[0])
             traceback.print_tb(all_errors[0].__traceback__)
-            raise RuntimeError("Could not assemble the batch")
+            raise RuntimeError("Could not assemble the batch") from all_errors[0]
 
         if dst is None:
             dst_default = kwargs.get('dst_default', 'src')
@@ -743,7 +807,7 @@ class Batch(metaclass=MethodsTransformingMeta):
             self._assemble_component(result, component=component, **kwargs)
         return self
 
-    @inbatch_parallel('indices', post='_assemble', target='f', dst_default='components')
+    @apply_parallel_(init='indices', post='_assemble', target='f', dst_default='components')
     def _load_blosc(self, ix, src=None, dst=None):
         """ Load data from a blosc packed file """
         file_name = self._get_file_name(ix, src)
@@ -756,8 +820,8 @@ class Batch(metaclass=MethodsTransformingMeta):
                 raise KeyError('Cannot find components in corresponfig file', file_name) from e
         return item
 
-    @inbatch_parallel('indices', target='f')
-    def _dump_blosc(self, ix, dst, components=None):
+    @apply_parallel_(init='indices', target='f')
+    def _dump_blosc(self, ix, dst=None, components=None):
         """ Save blosc packed data to file """
         file_name = self._get_file_name(ix, dst)
         with open(file_name, 'w+b') as f:
@@ -952,7 +1016,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         return self.dump(*args, **kwargs)
 
     @apply_parallel_
-    def to_array(self, comp, dtype=np.float32, channels='last'):
+    def to_array(self, comp, dtype=np.float32, channels='last', **kwargs):
         """ Converts batch components to np.ndarray format
 
         Parameters
@@ -966,6 +1030,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         channels : None, 'first' or 'last'
             the dimension for channels axis
         """
+        _ = kwargs
         comp = np.array(comp)
 
         if len(comp.shape) == 2:

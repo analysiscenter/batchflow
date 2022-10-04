@@ -11,7 +11,7 @@ import numpy as np
 
 
 from . import ImagesOpenset
-from .. import parallel, any_action_failed
+from ..decorators import parallel, any_action_failed
 
 
 logger = logging.getLogger('mnist')

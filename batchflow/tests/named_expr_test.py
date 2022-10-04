@@ -8,7 +8,7 @@ import pandas as pd
 
 sys.path.append('..')
 from batchflow import (B, L, C, D, F, V, R, P, PP, I, Dataset, Pipeline, Batch,
-                       apply_parallel, inbatch_parallel, action)
+                       apply_parallel)
 
 
 #--------------------
@@ -50,15 +50,12 @@ class MyBatch(Batch):
     components = 'images', 'masks'
 
     @apply_parallel
-    def ap_test(self, item, param):
+    def ap_test(self, item, param, **kwargs):
+        _ = kwargs
         if isinstance(item, tuple):
             return item[0] * param, item[1] * param
         return item * param
 
-    @action
-    @inbatch_parallel('images')
-    def ip_test(self, item, param):
-        return item * param
 
 
 ARRAY_INIT = np.arange(BATCH_SIZE).reshape((-1, 1))
@@ -101,22 +98,6 @@ def test_apply_parallel_p(p_type, named_expr, src):
     else:
         assert (b.images == b.masks).all()
 
-@pytest.mark.parametrize('p_type', P_OPTIONS)
-@pytest.mark.parametrize('named_expr', P_NAMED_EXPRS)
-def test_inbatch_parallel_p(p_type, named_expr):
-    """ Check if P() is evalauted properly """
-    pipeline = (Dataset(10, MyBatch).pipeline(dict(mean=0., std=1., option=ARRAY_INIT))
-        .add_namespace(np)
-        .init_variable('var', ARRAY_INIT)
-        .update(B.images, ARRAY_INIT)
-        .update(B.masks, ARRAY_INIT)
-        .ip_test(param=p_type(named_expr))
-        .run(BATCH_SIZE, lazy=True)
-    )
-
-    _ = pipeline.next_batch()
-
-    assert True
 
 #--------------------
 #         I
