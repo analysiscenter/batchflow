@@ -495,7 +495,7 @@ class Batch(metaclass=MethodsTransformingMeta):
                 - `p` to indicate whether the function should be applied
                 - worker id and a seed for random generator, if required
             - call `init` function, which outputs a container of items, passed directly to the `func`.
-            A simplest example is the `init` funciton that returns batch indices, and the function works off of each.
+            The simplest example is the `init` funciton that returns batch indices, and the function works off of each.
             - wrap the `func` call into parallelization engine of choice.
             - compute results of `func` calls for each item, returned by `init`
             - assemble results by `post` function, e.g. stack the obtained numpy arrays.
