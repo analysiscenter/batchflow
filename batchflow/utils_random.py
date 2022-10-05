@@ -34,7 +34,7 @@ def make_rng(seed=None):
         rng = np.random.default_rng(np.random.SFC64())
     elif isinstance(seed, np.random.SeedSequence):
         rng = np.random.default_rng(np.random.SFC64(seed))
-    elif isinstance(seed, int):
+    elif isinstance(seed, (int, np.integer)):
         rng = np.random.default_rng(np.random.SFC64(seed))
     elif isinstance(seed, np.random.Generator):
         rng = seed
