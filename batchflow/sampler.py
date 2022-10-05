@@ -39,14 +39,15 @@ def _get_method_by_alias(name, module, tf_distributions=None):
                    'ss': ss}
 
     if isinstance(module, str):
-        if name in ALIASES:
+        if name in ALIASES: # pylint: disable=consider-using-get
             aliases = ALIASES[name]
 
-        if module in aliases:
-            name = aliases[module]
-        else:
-            msg = f"The mapping of distribution alias '{name}' to its full name for module '{module}' is not defined."
-            raise ValueError(msg)
+            if module in aliases:
+                name = aliases[module]
+            else:
+                msg = f"The mapping of distribution alias '{name}' to its full name "\
+                      f"for module '{module}' is not defined."
+                raise ValueError(msg)
 
         module = rnd_modules[module]
 
