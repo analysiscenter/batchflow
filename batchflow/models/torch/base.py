@@ -1281,7 +1281,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     def predict(self, inputs, targets=None, outputs=None, lock=True, microbatch_size=False,
-                amp=None, no_grad=True, transfer_from_device=True):
+                amp=None, eval_mode=True, no_grad=True, transfer_from_device=True):
         """ Get predictions on the data provided.
 
         Parameters
@@ -1362,7 +1362,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                                            'targets_shapes': targets_shapes})
 
             # Evaluate each microbatch separately
-            self.model.eval()
+            if eval_mode:
+                self.model.eval()
 
             chunked_outputs = []
             for chunk_inputs, chunk_targets in zip(chunked_inputs, chunked_targets):

@@ -408,3 +408,49 @@ class ConvNeXtBlock(Block):
             **kwargs
         }
         super().__init__(inputs=inputs, layout=layout, **kwargs)
+
+
+class MSCANBlock(Block):
+    """ MultiScaleConv block: modern Inception-like block with some adaptation from Transformers.
+    Meng-Hao Guo et al. "`SegNeXt: Rethinking convolutional attention design for Semantic Segmentation
+    <https://arxiv.org/abs/2209.08575v1>`_"
+
+    In the default case, resulting layout is:
+        Rnca Rc Rm+ c* c+ Rnccac+
+        │    │  └0┘  │  │ └──3──┘
+        │    └───1───┘  │
+        └───────2───────┘
+        - `0` is multi scale conv: multiple factorized kernels, combined into one tensor.
+        - `1` uses multi-scale conv as re-weighting for input tensor.
+        - `2` adds normalization and activation layers.
+        - `3` stacks an MLP block, inspired by recent transformers.
+
+    Parameters
+    ----------
+    msca_kernel_size : sequence of ints
+        Kernel sizes in multi-scale convolution.
+    mlp_layout : str or None
+        If provided, then layout of an additional MLP block stacked on top.
+    """
+    def __init__(self, inputs=None, layout='Rnca (Rc Rm! c*) c!', msca_kernel_size=(7, 11, 15),
+                 mlp_layout='Rnccac+', drop_path=0.0, layer_scale=1e-6, **kwargs):
+        channels = get_num_channels(inputs)
+        kernel_size = [1, 5, list(msca_kernel_size), 1, 1]
+        groups = [1, channels, channels, 1, 1]
+
+        if mlp_layout:
+            layout = layout + mlp_layout
+            kernel_size.extend([1, 3, 1])
+            groups.extend([1, channels, 1])
+
+        kwargs = {
+            'channels': channels,
+            'stride': 1,
+            'bias': True,
+            'kernel_size': kernel_size,
+            'groups': groups,
+            'activation': 'GELU',
+            'branch_end': {'drop_path': drop_path, 'layer_scale': layer_scale},
+            **kwargs
+        }
+        super().__init__(inputs=inputs, layout=layout, **kwargs)
