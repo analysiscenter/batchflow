@@ -28,6 +28,7 @@ class Hamburger(nn.Module):
     rand_init : bool
         Whether to init matrix decomposition from scratches at each iteration.
     """
+    #pylint: disable=invalid-name
     def __init__(self, inputs=None, S=1, R=64, n_train_steps=6, n_eval_steps=7, inv_t=1, spatial=True, rand_init=True):
         super().__init__()
 
@@ -75,9 +76,6 @@ class Hamburger(nn.Module):
             x = x.view(B, C, H, W)
         else:
             x = x.transpose(1, 2).view(B, C, H, W)
-
-        # (B * H, D, R) -> (B, H, N, D)
-        bases = bases.view(B, self.S, D, self.R)
         return x
 
     def build_bases(self, B, S, D, R):
