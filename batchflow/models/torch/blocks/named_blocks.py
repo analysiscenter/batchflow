@@ -433,13 +433,13 @@ class MSCANBlock(Block):
         If provided, then layout of an additional MLP block stacked on top.
     """
     def __init__(self, inputs=None, layout='Rnca (Rc Rm! c*) c!', msca_kernel_size=(7, 11, 15),
-                 mlp_layout='Rnccac+', drop_path=0.0, layer_scale=1e-6, **kwargs):
+                 add_mlp=True, drop_path=0.0, layer_scale=1e-6, **kwargs):
         channels = get_num_channels(inputs)
         kernel_size = [1, 5, list(msca_kernel_size), 1, 1]
         groups = [1, channels, channels, 1, 1]
 
-        if mlp_layout:
-            layout = layout + mlp_layout
+        if add_mlp:
+            layout = layout + 'Rnccac+'
             kernel_size.extend([1, 3, 1])
             groups.extend([1, channels, 1])
 

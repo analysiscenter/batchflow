@@ -9,8 +9,12 @@ import torch.nn.functional as F
 
 class Hamburger(nn.Module):
     """ Hamburger layer: attention by matrix decomposition.
+    Zhengyang Geng et al. "`Is attention better than matrix decomposition? <https://arxiv.org/abs/2109.04553>`_"
+
     The main idea is to use classic matrix decomposition algorithms inside the layer during both train and inference.
-    Adopted code from original implementation
+    Here we implement only the Non-Negative Matrix Factorization algorithm.
+
+    Adopted code from authors implementation
     <https://github.com/Visual-Attention-Network/SegNeXt/blob/main/mmseg/models/decode_heads/ham_head.py>
 
     Parameters
@@ -63,13 +67,13 @@ class Hamburger(nn.Module):
                 self.register_buffer('bases', bases)
             bases = self.bases.repeat(B, 1, 1)
 
-        bases, coef = self.local_inference(x, bases)
+        bases, coeff = self.local_inference(x, bases)
 
         # (B * S, N, R)
-        coef = self.compute_coef(x, bases, coef)
+        coeff = self.compute_coeff(x, bases, coeff)
 
         # (B * S, D, R) @ (B * S, N, R)^T -> (B * S, D, N)
-        x = torch.bmm(bases, coef.transpose(1, 2))
+        x = torch.bmm(bases, coeff.transpose(1, 2))
 
         # (B * S, D, N) -> (B, C, H, W)
         if self.spatial:
@@ -87,39 +91,39 @@ class Hamburger(nn.Module):
     def local_inference(self, x, bases):
         """ Multiple updates of `bases` and `coeff` to better match `x`. """
         # (B * S, D, N)^T @ (B * S, D, R) -> (B * S, N, R)
-        coef = torch.bmm(x.transpose(1, 2), bases)
-        coef = F.softmax(self.inv_t * coef, dim=-1)
+        coeff = torch.bmm(x.transpose(1, 2), bases)
+        coeff = F.softmax(self.inv_t * coeff, dim=-1)
 
         steps = self.n_train_steps if self.training else self.n_eval_steps
         for _ in range(steps):
-            bases, coef = self.local_step(x, bases, coef)
-        return bases, coef
+            bases, coeff = self.local_step(x, bases, coeff)
+        return bases, coeff
 
 
-    def local_step(self, x, bases, coef):
+    def local_step(self, x, bases, coeff):
         """ Update `bases` and `coeff` to better match `x`. """
         # (B * S, D, N)^T @ (B * S, D, R) -> (B * S, N, R)
         numerator = torch.bmm(x.transpose(1, 2), bases)
         # (B * S, N, R) @ [(B * S, D, R)^T @ (B * S, D, R)] -> (B * S, N, R)
-        denominator = coef.bmm(bases.transpose(1, 2).bmm(bases))
+        denominator = coeff.bmm(bases.transpose(1, 2).bmm(bases))
         # Multiplicative Update
-        coef = coef * numerator / (denominator + 1e-6)
+        coeff = coeff * numerator / (denominator + 1e-6)
 
         # (B * S, D, N) @ (B * S, N, R) -> (B * S, D, R)
-        numerator = torch.bmm(x, coef)
+        numerator = torch.bmm(x, coeff)
         # (B * S, D, R) @ [(B * S, N, R)^T @ (B * S, N, R)] -> (B * S, D, R)
-        denominator = bases.bmm(coef.transpose(1, 2).bmm(coef))
+        denominator = bases.bmm(coeff.transpose(1, 2).bmm(coeff))
         # Multiplicative Update
         bases = bases * numerator / (denominator + 1e-6)
 
-        return bases, coef
+        return bases, coeff
 
-    def compute_coef(self, x, bases, coef):
+    def compute_coeff(self, x, bases, coeff):
         """ Update `coeff` to better match `x` with given `bases`. """
         # (B * S, D, N)^T @ (B * S, D, R) -> (B * S, N, R)
         numerator = torch.bmm(x.transpose(1, 2), bases)
         # (B * S, N, R) @ (B * S, D, R)^T @ (B * S, D, R) -> (B * S, N, R)
-        denominator = coef.bmm(bases.transpose(1, 2).bmm(bases))
+        denominator = coeff.bmm(bases.transpose(1, 2).bmm(bases))
         # multiplication update
-        coef = coef * numerator / (denominator + 1e-6)
-        return coef
+        coeff = coeff * numerator / (denominator + 1e-6)
+        return coeff
