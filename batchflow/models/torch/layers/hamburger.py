@@ -14,7 +14,7 @@ class Hamburger(nn.Module):
     The main idea is to use classic matrix decomposition algorithms inside the layer during both train and inference.
     Here we implement only the Non-Negative Matrix Factorization algorithm.
 
-    Adopted code from authors implementation
+    Code is adopted from authors original implementation
     <https://github.com/Visual-Attention-Network/SegNeXt/blob/main/mmseg/models/decode_heads/ham_head.py>
 
     Parameters

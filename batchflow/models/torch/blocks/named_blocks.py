@@ -415,7 +415,7 @@ class MSCANBlock(Block):
     Meng-Hao Guo et al. "`SegNeXt: Rethinking convolutional attention design for Semantic Segmentation
     <https://arxiv.org/abs/2209.08575v1>`_"
 
-    In the default case, resulting layout is:
+    In the default case, the layout is:
         Rnca Rc Rm+ c* c+ Rnccac+
         │    │  └0┘  │  │ └──3──┘
         │    └───1───┘  │
@@ -429,8 +429,8 @@ class MSCANBlock(Block):
     ----------
     msca_kernel_size : sequence of ints
         Kernel sizes in multi-scale convolution.
-    mlp_layout : str or None
-        If provided, then layout of an additional MLP block stacked on top.
+    add_mlp : bool
+        Whether to stack an additional MLP block on top.
     """
     def __init__(self, inputs=None, layout='Rnca (Rc Rm! c*) c!', msca_kernel_size=(7, 11, 15),
                  add_mlp=True, drop_path=0.0, layer_scale=1e-6, **kwargs):
