@@ -1710,8 +1710,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         if 'onnx' in checkpoint:
             try:
                 from onnx2torch import convert #pylint: disable=import-outside-toplevel
-            except ImportError:
-                raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.')
+            except ImportError as e:
+                raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
 
             model = convert(checkpoint['path_onnx']).eval()
             self.model = model
