@@ -2,7 +2,7 @@
 from .core import Block, DefaultBlock, Downsample, Upsample
 from .named_blocks import (VGGBlock, ResBlock, ResNeStBlock, DenseBlock, MBConvBlock, InvResBlock,
                            ConvNeXtBlock, MSCANBlock)
-from .transformer_blocks import SegFormerBlock
+from .transformer_blocks import SegFormerBlock, MOATBlock
 from .attention import (SEBlock, SCSEBlock, SimpleSelfAttention, EfficientMultiHeadAttention,
                         BAM, CBAM, FPA, SelectiveKernelConv, SplitAttentionConv)
 from .pyramid import PyramidPooling, ASPP, KSAC
