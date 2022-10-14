@@ -3,6 +3,8 @@ import numpy as np
 import torch
 from torch import nn
 
+from einops import rearrange
+
 from .core import Block
 from ..layers import Activation, Conv, ChannelPool, RadixSoftmax, Combine
 from ..utils import get_shape, get_num_dims, get_num_channels, safe_eval
@@ -140,6 +142,44 @@ class SimpleSelfAttention(nn.Module):
                       .format(**self.desc_kwargs))
         return layer_desc
 
+
+class EfficientMultiHeadAttention(nn.Module):
+    """ Attention layer, popularized by transformer architectures.
+    Efficient in a sense of reducing the number of sequence elements `ratio^2` times.
+    Reduction is implemented as a convolution, and attention is implemented by a native `PyTorch` layer.
+
+    Parameters
+    ----------
+    ratio : int
+        Spatial reduction ratio. As this is applied across both spatial dimensions,
+        the actual reduction in number of sequence elements is `ratio` squared.
+    num_heads : int
+        Number of parallel attention heads. Must be a divisor of `input` number of channels.
+    """
+    def __init__(self, inputs=None, ratio=4, num_heads=8):
+        super().__init__()
+        channels = get_num_channels(inputs)
+        self.num_heads = num_heads
+
+        self.reducer = nn.Conv2d(channels, channels, kernel_size=ratio, stride=ratio)
+        self.attention = nn.MultiheadAttention(embed_dim=channels, num_heads=num_heads, batch_first=True)
+
+    def forward(self, x):
+        # Store input shape for later, apply spatial reduction
+        _, _, h, w = x.shape
+        reduced_x = self.reducer(x)
+
+        # Attention accepts tensor of shape (batch, sequence_length, channels)
+        x = rearrange(x, 'b c h w -> b (h w) c')
+        reduced_x = rearrange(reduced_x, 'b c h w -> b (h w) c')
+
+        # Apply attention, reshape to the input shape
+        out = self.attention(x, reduced_x, reduced_x)[0]
+        out = rearrange(out, 'b (h w) c -> b c h w', h=h, w=w)
+        return out
+
+    def extra_repr(self):
+        return f'num_heads={self.num_heads}'
 
 
 class BAM(nn.Module):

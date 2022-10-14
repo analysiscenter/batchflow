@@ -101,7 +101,7 @@ jobs:
     - name: Install batchflow with pipenv
       run: |
         pip install --user -U pip
-        pip install wheel pipenv==2022.4.8
+        pip install wheel pipenv
         pipenv --python ${{ matrix.python-version }}
         pipenv install git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}#egg=batchflow
 

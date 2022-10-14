@@ -394,7 +394,7 @@ class ConvNeXtBlock(Block):
         - AdamW, EMA
     """
     def __init__(self, inputs=None, layout='Rwncac!', channels='same', expand_ratio=4, kernel_size=7, stride=1,
-                 drop_path=0.0, layer_scale=1e-6, **kwargs):
+                 drop_path=0.0, layer_scale=1, **kwargs):
         channels = safe_eval(channels, get_num_channels(inputs))
 
         kwargs = {
@@ -431,17 +431,22 @@ class MSCANBlock(Block):
         Kernel sizes in multi-scale convolution.
     add_mlp : bool
         Whether to stack an additional MLP block on top.
+    mlp_expansion : int
+        Expansion ratio for channels in MLP block.
     """
     def __init__(self, inputs=None, layout='Rnca (Rc Rm! c*) c!', msca_kernel_size=(7, 11, 15),
-                 add_mlp=True, drop_path=0.0, layer_scale=1e-6, **kwargs):
-        channels = get_num_channels(inputs)
+                 add_mlp=True, mlp_expansion=4, drop_path=0.0, layer_scale=1, **kwargs):
+        in_channels = get_num_channels(inputs)
+
+        channels = [in_channels] * 5
         kernel_size = [1, 5, list(msca_kernel_size), 1, 1]
-        groups = [1, channels, channels, 1, 1]
+        groups = [1, in_channels, in_channels, 1, 1]
 
         if add_mlp:
-            layout = layout + 'Rnccac+'
+            layout = layout + 'Rnccac!'
+            channels.extend([in_channels, in_channels*mlp_expansion, in_channels])
             kernel_size.extend([1, 3, 1])
-            groups.extend([1, channels, 1])
+            groups.extend([1, in_channels, 1])
 
         kwargs = {
             'channels': channels,

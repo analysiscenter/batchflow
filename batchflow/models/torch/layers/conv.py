@@ -124,5 +124,5 @@ class SeparableConv(BaseSeparableConv):
 
 
 class SeparableConvTranspose(BaseSeparableConv):
-    """ Multi-dimensional separable depthwise convolutional layer. """
+    """ Multi-dimensional separable transposed convolutional layer. """
     LAYER = DepthwiseConvTranspose
