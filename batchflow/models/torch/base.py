@@ -1708,7 +1708,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         # Load model from onnx, if needed
         if 'onnx' in checkpoint:
-            from onnx2torch import convert #pylint: disable=import-outside-toplevel
+            try:
+                from onnx2torch import convert #pylint: disable=import-outside-toplevel
+            except ImportError:
+                raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.')
+
             model = convert(checkpoint['path_onnx']).eval()
             self.model = model
             self.microbatch_size = checkpoint['onnx_batch_size']
