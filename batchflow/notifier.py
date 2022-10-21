@@ -195,7 +195,7 @@ class Notifier:
         # Prepare file log
         self.log_file = log_file
         if self.log_file:
-            with open(self.log_file, 'w'):
+            with open(self.log_file, 'w', encoding='utf-8'):
                 pass
 
         # Parse string bar identifier to constructor
@@ -244,6 +244,7 @@ class Notifier:
         self.bar_func = lambda total: bar_func(total=total, **kwargs)
 
         # Make bar with known / unknown total length
+        self.total = None
         self.compute_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                            drop_last=drop_last, length=length)
         self.make_bar()
@@ -491,7 +492,7 @@ class Notifier:
 
     def update_log_file(self):
         """ Update log file on the fly. """
-        with open(self.log_file, 'a+') as f:
+        with open(self.log_file, 'a+', encoding='utf-8') as f:
             print(self.create_message(self.bar.n, self.bar.postfix or ''), file=f)
 
     def update_telegram(self):
@@ -518,7 +519,7 @@ class Notifier:
 
     def to_file(self, file):
         """ Log all the iteration-wise info (timestamps, descriptions) into file."""
-        with open(file, 'w') as f:
+        with open(file, 'w', encoding='utf-8') as f:
             for i in range(self.bar.n):
                 description = self.create_description(iteration=i).replace('\n', '  ')
                 print(self.create_message(i, description), file=f)
@@ -529,7 +530,7 @@ class Notifier:
 
         if self.bar is not None:
             if self.bar.total is None and hasattr(iterable, '__len__'):
-                self.compute_total(None, None, None, None, None, total=len(iterable))
+                self.total = len(iterable)
             self.make_bar()
 
         try:

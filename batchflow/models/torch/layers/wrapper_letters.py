@@ -106,6 +106,12 @@ class AttentionWrapper(nn.Module):
         return SimpleSelfAttention(inputs=inputs, ratio=ratio, **kwargs)
 
     @staticmethod
+    def emha(inputs, ratio=4, num_heads=8, **kwargs):
+        """ Efficient Multi Head Attention. """
+        from ..blocks import EfficientMultiHeadAttention
+        return EfficientMultiHeadAttention(inputs=inputs, ratio=ratio, num_heads=num_heads, **kwargs)
+
+    @staticmethod
     def bam(inputs, ratio=16, **kwargs):
         """ Bottleneck Attention Module. """
         from ..blocks import BAM
@@ -133,6 +139,7 @@ class AttentionWrapper(nn.Module):
         squeeze_and_excitation: ['se', 'squeeze_and_excitation', 'SE', True],
         scse: ['scse', 'SCSE'],
         ssa: ['ssa', 'SSA'],
+        emha: ['emha', 'EMHA', 'transformer'],
         bam: ['bam', 'BAM'],
         cbam: ['cbam', 'CBAM'],
         fpa: ['fpa', 'FPA'],

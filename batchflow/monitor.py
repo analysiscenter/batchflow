@@ -85,7 +85,6 @@ class ResourceMonitor:
 
     def __del__(self):
         self.stop()
-        super().__del__()
 
     def plot(self, plotter=None, positions=None, slice=None, **kwargs):
         """ Simple plots of collected data-points. """

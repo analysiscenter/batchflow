@@ -39,6 +39,12 @@ setup(
         'scikit-image>=0.13.1',
         'matplotlib>=3.0',
     ],
+    extras_require={
+        'nn': [
+            'torch>=1.7',
+            'einops>=0.3'
+        ],
+    },
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
