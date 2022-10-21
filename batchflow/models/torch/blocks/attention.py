@@ -161,7 +161,7 @@ class EfficientMultiHeadAttention(nn.Module):
         channels = get_num_channels(inputs)
         self.num_heads = num_heads
 
-        self.reducer = nn.Conv2d(channels, channels, kernel_size=ratio, stride=ratio)
+        self.reducer = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=ratio, stride=ratio)
         self.attention = nn.MultiheadAttention(embed_dim=channels, num_heads=num_heads, batch_first=True)
 
     def forward(self, x):

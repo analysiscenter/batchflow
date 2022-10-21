@@ -5,4 +5,7 @@ from .utils import extend_cmap
 
 
 BATCHFLOW_CMAP = extend_cmap('magma', 'white')
-register_cmap('batchflow', BATCHFLOW_CMAP)
+try:
+    register_cmap('batchflow', BATCHFLOW_CMAP)
+except ValueError:
+    pass

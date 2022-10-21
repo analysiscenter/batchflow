@@ -88,6 +88,7 @@ class Hamburger(nn.Module):
         bases = F.normalize(bases, dim=1)
         return bases
 
+    @torch.no_grad()
     def local_inference(self, x, bases):
         """ Multiple updates of `bases` and `coeff` to better match `x`. """
         # (B * S, D, N)^T @ (B * S, D, R) -> (B * S, N, R)
@@ -99,7 +100,7 @@ class Hamburger(nn.Module):
             bases, coeff = self.local_step(x, bases, coeff)
         return bases, coeff
 
-
+    @torch.no_grad()
     def local_step(self, x, bases, coeff):
         """ Update `bases` and `coeff` to better match `x`. """
         # (B * S, D, N)^T @ (B * S, D, R) -> (B * S, N, R)

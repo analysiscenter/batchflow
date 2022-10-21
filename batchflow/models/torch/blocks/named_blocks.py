@@ -429,20 +429,20 @@ class MSCANBlock(Block):
     ----------
     msca_kernel_size : sequence of ints
         Kernel sizes in multi-scale convolution.
-    add_mlp : bool
+    mlp : bool
         Whether to stack an additional MLP block on top.
     mlp_expansion : int
         Expansion ratio for channels in MLP block.
     """
     def __init__(self, inputs=None, layout='Rnca (Rc Rm! c*) c!', msca_kernel_size=(7, 11, 15),
-                 add_mlp=True, mlp_expansion=4, drop_path=0.0, layer_scale=1, **kwargs):
+                 mlp=True, mlp_expansion=4, drop_path=0.0, layer_scale=1, **kwargs):
         in_channels = get_num_channels(inputs)
 
         channels = [in_channels] * 5
         kernel_size = [1, 5, list(msca_kernel_size), 1, 1]
         groups = [1, in_channels, in_channels, 1, 1]
 
-        if add_mlp:
+        if mlp:
             layout = layout + 'Rnccac!'
             channels.extend([in_channels, in_channels*mlp_expansion, in_channels])
             kernel_size.extend([1, 3, 1])
