@@ -3,6 +3,8 @@ import numpy as np
 import torch
 from torch import nn
 
+from einops import rearrange
+
 from .core import Block
 from ..layers import Activation, Conv, ChannelPool, RadixSoftmax, Combine
 from ..utils import get_shape, get_num_dims, get_num_channels, safe_eval
@@ -110,8 +112,8 @@ class SimpleSelfAttention(nn.Module):
         self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
 
         args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size)}
-        self.top_branch = Block(**args, channels='same//{}'.format(ratio))
-        self.mid_branch = Block(**args, channels='same//{}'.format(ratio))
+        self.top_branch = Block(**args, channels=f'same//{ratio}')
+        self.mid_branch = Block(**args, channels=f'same//{ratio}')
         self.bot_branch = Block(**args, channels='same')
 
         self.desc_kwargs = {
@@ -141,6 +143,44 @@ class SimpleSelfAttention(nn.Module):
         return layer_desc
 
 
+class EfficientMultiHeadAttention(nn.Module):
+    """ Attention layer, popularized by transformer architectures.
+    Efficient in a sense of reducing the number of sequence elements `ratio^2` times.
+    Reduction is implemented as a convolution, and attention is implemented by a native `PyTorch` layer.
+
+    Parameters
+    ----------
+    ratio : int
+        Spatial reduction ratio. As this is applied across both spatial dimensions,
+        the actual reduction in number of sequence elements is `ratio` squared.
+    num_heads : int
+        Number of parallel attention heads. Must be a divisor of `input` number of channels.
+    """
+    def __init__(self, inputs=None, ratio=4, num_heads=8):
+        super().__init__()
+        channels = get_num_channels(inputs)
+        self.num_heads = num_heads
+
+        self.reducer = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=ratio, stride=ratio)
+        self.attention = nn.MultiheadAttention(embed_dim=channels, num_heads=num_heads, batch_first=True)
+
+    def forward(self, x):
+        # Store input shape for later, apply spatial reduction
+        _, _, h, w = x.shape
+        reduced_x = self.reducer(x)
+
+        # Attention accepts tensor of shape (batch, sequence_length, channels)
+        x = rearrange(x, 'b c h w -> b (h w) c')
+        reduced_x = rearrange(reduced_x, 'b c h w -> b (h w) c')
+
+        # Apply attention, reshape to the input shape
+        out = self.attention(x, reduced_x, reduced_x)[0]
+        out = rearrange(out, 'b (h w) c -> b c h w', h=h, w=w)
+        return out
+
+    def extra_repr(self):
+        return f'num_heads={self.num_heads}'
+
 
 class BAM(nn.Module):
     """ Bottleneck Attention Module.
@@ -163,7 +203,7 @@ class BAM(nn.Module):
 
         self.bam_attention = Block(
             inputs=inputs, layout='R' + 'cna'*3  + 'c' + '+ a',
-            channels=['same//{}'.format(ratio), 'same', 'same', 1], kernel_size=[1, 3, 3, 1],
+            channels=[f'same//{ratio}', 'same', 'same', 1], kernel_size=[1, 3, 3, 1],
             dilation=[1, dilation, dilation, 1], activation=['relu']*3+['sigmoid'], bias=True,
             branch={'layout': 'Vfnaf >',
                     'features': [in_channels//ratio, in_channels],
@@ -417,7 +457,7 @@ class SelectiveKernelConv(nn.Module):
         self.combine = Combine(op='sum')
         tensor = self.combine(tensors)
         self.fuse = Block(inputs=tensor, layout='Vfna>',
-                          features='max(same // {}, {})'.format(ratio, min_features),
+                          features=f'max(same // {ratio}, {min_features})',
                           dim=num_dims, bias=bias)
 
         fused_tensor = self.fuse(tensor)

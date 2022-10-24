@@ -4,11 +4,12 @@ import os
 import functools
 from collections import OrderedDict
 import glob
-import dill
 import multiprocess as mp
 import pandas as pd
 import numpy as np
-from .utils import to_list
+
+from ..utils import to_list
+from .utils import deserialize
 
 class ResearchResults:
     """ Class to collect, load and process research results.
@@ -55,7 +56,7 @@ class ResearchResults:
             path = os.path.normpath(path)
             _experiment_id = path.split(os.sep)[-2]
             with open(path, 'rb') as f:
-                self.configs[_experiment_id] = dill.load(f)
+                self.configs[_experiment_id] = deserialize(f)
 
     def load_results(self, experiment_id=None, name=None, iterations=None,
                      config=None, alias=None, domain=None, **kwargs):
@@ -248,7 +249,7 @@ class ResearchResults:
         results = OrderedDict()
         for filename in files_to_load.values():
             with open(filename, 'rb') as f:
-                values = dill.load(f)
+                values = deserialize(f)
                 for iteration in values:
                     if iterations is None or iteration in iterations:
                         results[iteration] = values[iteration]

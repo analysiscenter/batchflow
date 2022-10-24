@@ -11,7 +11,7 @@ import numpy as np
 
 
 from . import ImagesOpenset
-from .. import parallel, any_action_failed
+from ..decorators import parallel, any_action_failed
 
 
 logger = logging.getLogger('mnist')
@@ -111,7 +111,7 @@ class MNIST(ImagesOpenset):
         with gzip.GzipFile(fileobj=f) as bytestream:
             magic = self._read32(bytestream)
             if magic != 2051:
-                raise ValueError('Invalid magic number %d in MNIST image file: %s' % (magic, f.name))
+                raise ValueError(f"Invalid magic number {magic} in MNIST image file: {f.name} (expected 2051")
             num_images = self._read32(bytestream)
             rows = self._read32(bytestream)
             cols = self._read32(bytestream)
@@ -133,7 +133,7 @@ class MNIST(ImagesOpenset):
         with gzip.GzipFile(fileobj=f) as bytestream:
             magic = self._read32(bytestream)
             if magic != 2049:
-                raise ValueError('Invalid magic number %d in MNIST label file: %s' % (magic, f.name))
+                raise ValueError(f"Invalid magic number {magic} in MNIST label file: {f.name} (expected 2049)")
             num_items = self._read32(bytestream)
             buf = bytestream.read(num_items)
             labels = np.frombuffer(buf, dtype=np.uint8)

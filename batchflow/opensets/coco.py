@@ -13,7 +13,8 @@ import requests
 from PIL import Image
 
 from . import ImagesOpenset
-from .. import FilesIndex, any_action_failed, parallel
+from .. import FilesIndex, any_action_failed
+from ..decorators import parallel
 
 logger = logging.getLogger('COCO')
 

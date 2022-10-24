@@ -15,6 +15,13 @@ max-statements=200
 max-nested-blocks=10
 docstring-min-length=3
 
+variable-rgx=(.*[a-z][a-z0-9_]{1,30}|[a-zA-Z_])$ # snake_case + single letters
+argument-rgx=(.*[a-z][a-z0-9_]{1,30}|[a-zA-Z_])$ # snake_case + single letters
+attr-rgx=(.*[a-z][a-z0-9_]{1,30}|[a-zA-Z_])$ # snake_case + single letters
+method-rgx=(.*[a-z][a-z0-9_]{1,30}|[a-zA-Z_])$ # snake_case + single letters
+function-rgx=(.*[a-z][a-z0-9_]{1,30}|[a-zA-Z_])$ # snake_case + single letters
+class-rgx=[A-Z_][a-zA-Z0-9_]+|[A-Z]$ # CamelCase + single capital letters
+
 [TYPECHECK]
 ignored-modules=numpy,cv2
 
@@ -23,8 +30,7 @@ no-docstring-rgx=^(_|forward)
 disable=no-member, no-value-for-parameter, no-self-use, too-many-branches, unsubscriptable-object, redefined-variable-type, too-many-star-expressions, duplicate-code, not-context-manager, too-many-lines, global-statement, locally-disabled, wrong-import-position, invalid-sequence-index, redundant-keyword-arg, bad-super-call, no-self-argument, redefined-builtin, arguments-differ, len-as-condition, keyword-arg-before-vararg, assignment-from-none, useless-return, useless-import-alias, unnecessary-pass, cyclic-import, assignment-from-no-return, comparison-with-callable, unnecessary-lambda, import-outside-toplevel, import-error, abstract-method, too-many-ancestors
 
 [BASIC]
-class-rgx=[A-Z_][a-zA-Z0-9_]+$
-good-names=a,b,c,d,f,g,i,j,k,l,m,n,o,p,q,r,s,t,v,w,x,y,z,e,ex,_,ix,fn,op,cv,CV,B,C,V,M,D,E,F,L,R,O,W,P,I,logger,bar,lr,ax,df,plot,im,ha,va
+good-names=logger,bar,lr,ax,df,plot,im,ha,va,__,___,CV
 
 [MISCELLANEOUS]
 notes=

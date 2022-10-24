@@ -2,14 +2,13 @@
 import sys
 from ast import literal_eval
 from pprint import pformat as _pformat
-import matplotlib.pyplot as plt
 
 import numpy as np
 import torch
 
 from ...monitor import GPUMemoryMonitor
 from ...notifier import Notifier
-from ...plot import plot_loss
+from ...plotter import plot
 from ...decorators import deprecated
 
 # Also imports `tensorboard`, if necessary
@@ -151,15 +150,19 @@ class VisualizationMixin:
 
         data = [(None, lr) for lr in np.array(self.lr_list).T]
 
-        return plot_loss(data=data, **params)
+        return plot(data=data, mode='loss', **params)
 
-    def plot_loss(self, overlay_lr=True, **kwargs):
+    def plot_loss(self, overlay_lr=True, start_iteration=0, frequency=50, **kwargs):
         """ Plot loss and learning rate over the same figure.
 
         Parameters
         ----------
         overlay_lr : bool
             Whether show learning rate on the same plot with loss or not.
+        start_iteration : int
+            Starting iteration for display.
+        frequency : int
+            Tick frequency. Used only if `start_iteration` is not zero.
         kwargs : misc
             For `plot` in `mode='loss'`:
 
@@ -173,12 +176,9 @@ class VisualizationMixin:
             final_window : int or None
                 If int, then we additionally display the mean value of the last `final_window` iterations in the legend.
                 If None, no additional info is displayed.
-            minor_grix_x_n : int or None
-                If int, then number of minor ticks on xaxis between major ticks.
-                If None, no minor ticks are added.
-            minor_grix_y_n : int or None
-                If int, then number of minor ticks on yaxis between major ticks.
-                If None, no minor ticks are added.
+            minor_grid_frequency : number or tuple of two numbers
+                If a single number, defines grid frequency for both subplot axes.
+                If a tuple of two numbers, they define grid frequencies for x-axis and y-axis correspondingly.
             log_loss, log_lr : bool
                 Whether to take the log of respective graph values.
             return figure : bool
@@ -189,24 +189,28 @@ class VisualizationMixin:
             save_kwargs : dict or None
                 If dict, then additional parameters for figure saving.
         """
+        slc = slice(start_iteration, None)
+        locations = np.arange(0, self.iteration - start_iteration, frequency)
+
         if overlay_lr:
-            data = (self.loss_list, [l[0] for l in self.lr_list])
+            data = (self.loss_list[slc],
+                    [l[0] for l in self.lr_list][slc])
         else:
-            data = (self.loss_list, None)
+            data = (self.loss_list[slc], None)
 
         kwargs['title'] = 'Loss values and learning rate' if overlay_lr else 'Loss values'
+        if start_iteration:
+            kwargs['xtick_locations'] = locations
+            kwargs['xtick_labels'] = locations + start_iteration
         if 'final_window' in kwargs:
             kwargs['final_window'] = min(kwargs['final_window'], self.iteration)
 
-        return plot_loss(data=data, **kwargs)
+        return plot(data=data, mode='loss', **kwargs)
 
     # Deprecated aliases
-
-    deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead"
-
-    show_lr = deprecated(deprecation_msg.format('show_lr', 'plot_lr'))(plot_lr)
-
-    show_loss = deprecated(deprecation_msg.format('show_loss', 'plot_loss'))(plot_loss)
+    deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
+    show_lr = deprecated(deprecation_msg.format('TorchModel.show_lr', 'TorchModel.plot_lr'))(plot_lr)
+    show_loss = deprecated(deprecation_msg.format('TorchModel.show_loss', 'TorchModel.plot_loss'))(plot_loss)
 
 
 class OptimalBatchSizeMixin:
@@ -438,7 +442,7 @@ class ExtractionMixin:
             Whether to return the loss values of optimization procedure.
         """
         # Create starting image: random uniform noise
-        input_shape = input_shape or self.input_shapes[0][1:]
+        input_shape = input_shape or self.inputs_shapes[0][1:]
         image = np.random.uniform(*ranges, input_shape)[None]
         image_var = torch.from_numpy(image.astype(np.float32)).to(self.device)
         image_var.requires_grad = True
@@ -548,7 +552,7 @@ class ExtractionMixin:
         model = model or self.model
 
         if input_tensor is None:
-            input_shape = self.input_shapes[-1]
+            input_shape = self.inputs_shapes[-1]
             input_tensor = torch.randn(input_shape, device=self.device)
 
         statistics = {
@@ -578,9 +582,11 @@ class ExtractionMixin:
 
             statistics['Average Channel Squared Mean'].append(avg_ch_squared_mean)
             statistics['Average Channel Variance'].append(avg_ch_var)
+
         return statistics
 
-    def get_signal_propagation_plot(self, model=None, input_tensor=None, statistics=None):
+    def plot_signal_propagation(self, model=None, input_tensor=None,
+                                statistics=('Average Channel Squared Mean', 'Average Channel Variance'), **kwargs):
         """ Visualize signal propagation plot.
 
         Parameters
@@ -589,17 +595,25 @@ class ExtractionMixin:
             Model to base visualizations on.
         input_tensor : Tensor
             Input tensor for signal propagation.
-        statistics : dict
-            Dict with signal propagation statistics.
+        statistics : list or dict
+            If list, must contain keys for dict returned by `ExtractionMixin.get_signal_propagation`.
+            If dict, must map signal propagation statistics names to 1d arrays.
+        kwargs : misc
+            For `batchflow.plot`
         """
-        if statistics is None:
+        if isinstance(statistics, tuple):
+            names = list(statistics)
             statistics = self.get_signal_propagation(model=model, input_tensor=input_tensor)
+            data = [statistics[name] for name in names]
+        elif isinstance(statistics, dict):
+            data = list(statistics.values())
+            names = list(statistics.keys())
 
-        fig, axes = plt.subplots(1, len(statistics)-1, figsize=(15, 5))
-        for (ax, (title, data)) in zip(axes, statistics.items()):
-            ax.plot(data)
-            ax.set_title(title + " over network units", fontsize=14)
-            ax.set_xlabel("Network depth", fontsize=12)
-            ax.set_ylabel(title, fontsize=12)
-            ax.grid(True)
-        fig.show()
+        plot_params = {
+            'title': [f"{text} over network units" for text in names],
+            'xlabel': 'Network depth',
+            'ylabel': names,
+            **kwargs
+        }
+
+        plot(data=data, mode='curve', combine='separate', **plot_params)

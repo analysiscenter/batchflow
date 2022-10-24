@@ -4,8 +4,11 @@ from colorsys import rgb_to_hls, hls_to_rgb
 from numbers import Number
 import operator
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 from matplotlib.collections import PatchCollection
-from matplotlib.colors import ColorConverter, ListedColormap
+from matplotlib.colors import ColorConverter, ListedColormap, to_rgba
 from matplotlib.patches import Rectangle
 from matplotlib.legend_handler import HandlerBase
 
@@ -73,24 +76,22 @@ class ColorMappingHandler(HandlerBase):
             segments.append(segment)
 
         label = orig_handle.get_label()
-        patch = PatchCollection(segments, match_original=True, edgecolor=None, cmap=cmap.name, label=label)
+        patch = PatchCollection(segments, match_original=True, edgecolor=None, cmap=cmap, label=label)
 
         return [patch]
 
 
 class PlotConfig(dict):
-    """ Dictionary with additional filtering capabilities. """
+    """ Dictionary with additional slicing and filtering capabilities. """
 
-    def maybe_index(self, key, index):
-        """ Get i-th element of parameter if index is provided and parameter value is a list else return it unchanged.
+    def maybe_index(self, index=None):
+        """ Produce a new config with same keys, but values of list type indexed.
 
         Parameters
         ----------
-        key : str
-            Parameter name.
         index : int or None
-            Index to retrieve from value stored under provided key.
-            If none provided, get argument value as it is.
+            Index to retrieve from list config values.
+            If none provided, get value as it is.
             If value is not a list, do not index it (even if it's an iterable!).
 
         Raises
@@ -98,18 +99,25 @@ class PlotConfig(dict):
         ValueError
             If parameter is a list but the index is greater than its length.
         """
-        value = self[key]
+        result = type(self)()
 
-        if index is not None and isinstance(value, list):
-            try:
-                return value[index]
-            except IndexError as e:
-                msg = f"Tried to obtain element #{index} from `{key}={value}`. Either provide parameter value "\
-                        f"as a single item (to use the same `{key}` several times) or add more elements to it."
-                raise ValueError(msg) from e
-        return value
+        if index is None:
+            result.update(self)
+            return result
 
-    def filter(self, keys=None, prefix='', index=None):
+        for key, value in self.items():
+            if isinstance(value, list):
+                try:
+                    value = value[index]
+                except IndexError as e:
+                    msg = f"Tried to obtain element #{index} from `{key}={value}`. Either provide parameter value "\
+                            f"as a single item (to use the same `{key}` several times) or add more elements to it."
+                    raise ValueError(msg) from e
+            result[key] = value
+
+        return result
+
+    def filter(self, keys=None, prefix=None, retrieve='get'):
         """ Make a subconfig of parameters with required keys.
 
         Parameter are retrieved if:
@@ -126,26 +134,53 @@ class PlotConfig(dict):
         prefix : str, optional
             Arguments with keys starting with given prefix will also be retrieved.
             Defaults to `''`, i.e. no prefix used.
-        index : int or None
-            Index to retrieve from value stored under provided key.
-            If none provided, get argument value as it is.
-            If value is not a list, do not index it (even if it's an iterable!).
+        retrieve : 'get' or 'pop'
+            Determines a way desired values are retrieved from config.
         """
+        retrieve = getattr(self, retrieve)
+
+        if keys is None and prefix is None:
+            raise ValueError("At least `keys` or `prefix` must be specified.")
+
         if keys is None:
-            keys = list(self.keys())
-        elif prefix:
-            keys += [key.split(prefix)[1] for key in self if key.startswith(prefix)]
+            keys = []
 
         result = type(self)()
 
-        for key in keys:
-            if prefix + key in self:
-                result[key] = self.maybe_index(prefix + key, index)
-            elif key in self:
-                result[key] = self.maybe_index(key, index)
+        all_keys = list(self.keys())
+        for key in all_keys:
+            result_key = None
+            if key in keys:
+                result_key = key
+            elif prefix is not None and key.startswith(prefix):
+                result_key = key.split(prefix)[1]
+
+            if result_key is not None:
+                result[result_key] = retrieve(key)
 
         return result
 
+    def update(self, other=None, skip_duplicates=False, **kwargs):
+        """ Update config, skipping already present keys if needed. """
+        if other is None:
+            other = {}
+
+        if skip_duplicates:
+            if hasattr(other, 'keys'):
+                for key in other.keys():
+                    if key not in self:
+                        self[key] = other[key]
+            else:
+                for key, value in other:
+                    if key not in self:
+                        self[key] = value
+
+            for key, value in kwargs.items():
+                if key not in self:
+                    self[key] = value
+
+            return type(self)({**other, **kwargs, **self})
+        return super().update(other, **kwargs)
 
 STR_TO_OPERATION = {
     '<': operator.lt,
@@ -167,9 +202,8 @@ def evaluate_str_comparison(arg0, string):
     >>> evaluate_str_comparison(np.arange(5), '<3')
     array([ True,  True,  True, False, False])
     """
-    for key in STR_TO_OPERATION:
+    for key, operation in STR_TO_OPERATION.items():
         if key in string:
-            operation = STR_TO_OPERATION[key]
             arg1 = literal_eval(string.split(key)[-1])
             return operation(arg0, arg1)
     msg = f"Given string '{string}' does not contain any of supported operators: {list(STR_TO_OPERATION.keys())}"
@@ -177,7 +211,7 @@ def evaluate_str_comparison(arg0, string):
 
 
 @njit()
-def is_binary(array):
+def is_binary_mask(array):
     """ Fast check that array consists of 0 and 1 only. """
     for item in array:
         if item not in (0., 1.):
@@ -197,6 +231,51 @@ def make_cmap(colors):
     return cmap
 
 
+def extend_cmap(cmap, color, share=0.1, n_points=256, mode='append'):
+    """ Make new colormap, adding a new color to existing one.
+
+    Parameters
+    ----------
+    cmap : valid matplotlib colormap
+        Base colormap to extend.
+    color : valid matplotlib color
+        Color to use for colormap extension.
+    share : number from 0 to 1
+        New color's share in extended colormap.
+    n_points : interger
+        Number of points to use for colormap creation.
+    mode : 'prepend' or 'append'
+        How to extend colormap — from the beginning or from the end.
+    """
+    if mode == 'append':
+        order = slice(None, None, 1)
+    elif mode == 'prepend':
+        order = slice(None, None, -1)
+    else:
+        raise ValueError(f"Valid modes are either 'prepend' or 'append', got {mode} instead.")
+
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
+
+    main_points = int(n_points * (1 - share))
+    extra_points = n_points - main_points
+
+    if isinstance(color, str):
+        color = to_rgba(color)
+    elif len(color) == 3:
+        color = list(color) + [1]
+    color = np.array(color)
+
+    main_colors = cmap(np.linspace(0, 1, main_points))[order]
+    step = (color - main_colors[-1]) / extra_points
+    steps = np.tile(step, extra_points).reshape(extra_points, 4)
+    extra_colors = main_colors[-1] + np.cumsum(steps, axis=0)
+    colors = main_colors.tolist() + extra_colors.tolist()
+    extended_cmap = make_cmap(colors[order])
+
+    return extended_cmap
+
+
 def scale_lightness(color, scale):
     """ Make new color with modified lightness from existing. """
     if isinstance(color, str):
@@ -204,3 +283,39 @@ def scale_lightness(color, scale):
     hue, light, saturation = rgb_to_hls(*color)
     new_color = hls_to_rgb(h=hue, l=min(1, light * scale), s=saturation)
     return new_color
+
+
+def invert_color(color):
+    """ Invert color. """
+    return tuple(1 - x for x in to_rgba(color)[:3])
+
+
+def wrap_by_delimiter(string, width, delimiter=' ', newline='\n'):
+    """ Wraps the single paragraph in given `string` allowing breaks at `delimiter` positions only so that every line
+        is at most `width` characters long (except for longer indivisible w.r.t. to `delimiter` string items).
+    """
+    result = ''
+
+    line_len = 0
+    line_items = []
+
+    items = string.split(delimiter)
+    for item in items:
+        item_len = len(item)
+        if line_len > 0 and line_len + item_len > width:
+            line = delimiter.join(line_items)
+            result += line + delimiter + newline
+            line_items = []
+            line_len = 0
+        line_items.append(item)
+        line_len += item_len + len(delimiter)
+
+    if line_len > 0:
+        line = delimiter.join(line_items)
+        result += line
+
+    return result
+
+def ceil_div(a, b):
+    """ Return the smallest integer greater than or equal to result of parameters division. """
+    return -(-a // b)

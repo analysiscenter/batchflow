@@ -90,7 +90,3 @@ class Interpolate(nn.Module):
             info = f'size={self.shape}'
         info += f', mode={self.mode}, align_corners={self.align_corners}'
         return info
-
-
-class PixelShuffle(nn.PixelShuffle):
-    """ Resize input tensor with depth to space operation. """

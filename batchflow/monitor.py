@@ -1,12 +1,11 @@
 """ Monitoring (memory usage, cpu/gpu utilization) tools. """
 import os
 import time
-from math import ceil
 from ast import literal_eval
-from multiprocessing import Process, Manager, Queue
+# from multiprocessing import Process, Manager, Queue
+from threading import Thread
 
 import numpy as np
-import matplotlib.pyplot as plt
 try:
     import psutil
 except ImportError:
@@ -17,12 +16,13 @@ except ImportError:
     # Use this value to raise ImportError later
     nvidia_smi = None
 
+from .plotter import plot
+from .decorators import deprecated
+
 
 
 class ResourceMonitor:
-    """ Periodically runs supplied function in a separate process and stores its outputs.
-
-    The created process runs infinitely until it is killed by SIGKILL signal.
+    """ Periodically runs supplied function in a separate thread and stores its outputs.
 
     Parameters
     ----------
@@ -32,6 +32,7 @@ class ResourceMonitor:
         Periodicity of function calls in seconds.
     **kwargs
         Passed directly to `function` calls.
+        Update `self.kwargs` dictionary in subclasses to pass arguments to their `get_usage` methods.
 
     Attributes
     ----------
@@ -45,105 +46,94 @@ class ResourceMonitor:
         self.frequency = frequency
         self.kwargs = kwargs
 
-        self.pid = os.getpid()
         self.running = False
+        self.thread = None
 
-        self.manager = None
-
-        self.stop_queue = None
-        self.shared_list = None
-        self.process = None
-
-        self.start_time, self.prev_time, self.end_time = None, None, None
         self.ticks, self.data = [], []
 
-
-    @staticmethod
-    def endless_repeat(shared_list, stop_queue, function, frequency, **kwargs):
-        """ Repeat `function` and storing results, until `stop` signal is recieved. """
-        while stop_queue.empty():
-            # As this process is killed ungracefully, it can be shut down in the middle of data appending.
-            # We let Python handle it by ignoring the exception.
-            try:
-                shared_list.append(function(**kwargs))
-            except (BrokenPipeError, ConnectionResetError):
-                pass
-            time.sleep(frequency)
+    def endless_repeat(self):
+        """ Call `function` and record timestamp, until the monitor is stopped. """
+        while self.running:
+            self.data.append(self.function(**self.kwargs))
+            self.ticks.append(time.time())
+            time.sleep(self.frequency)
 
     def start(self):
-        """ Start a separate process with function calls every `frequency` seconds. """
-        self.running = True
-        self.manager = Manager()
-        self.shared_list = self.manager.list()
-        self.stop_queue = Queue()
-
-        self.start_time = time.time()
-        self.prev_time = self.start_time
-
-        args = self.shared_list, self.stop_queue, self.function, self.frequency
-        self.process = Process(target=self.endless_repeat, args=args, kwargs={'pid': self.pid, **self.kwargs})
-        self.process.start()
-
-    def fetch(self):
-        """ Append collected data to the instance attributes. """
-        n = len(self.data)
-        # We copy data so additional points don't appear during this function execution
-        self.data = self.shared_list[:]
-        self.end_time = time.time()
-
-        # Compute one more entry
-        point = self.function(pid=self.pid, **self.kwargs)
-        tick = time.time()
-
-        # Update timestamps, append additional entries everywhere
-        # If data was appended to `shared_list` during the execution of this function, the order might be wrong;
-        # But, as it would mean that the time between calls to `self.function` is very small, it is negligeable.
-        self.ticks.extend(np.linspace(self.prev_time, self.end_time, num=len(self.data) - n).tolist())
-        self.data.append(point)
-        self.shared_list.append(point)
-        self.ticks.append(tick)
-
-        self.prev_time = time.time()
+        """ Start a separate thread with `function` calls every `frequency` seconds. """
+        if not self.running:
+            self.running = True
+            self.thread = Thread(target=self.endless_repeat)
+            self.thread.start()
 
     def stop(self):
-        """ Stop separate process. """
+        """ Stop separate thread.
+        Add another data point and timestamp to the containers, so that monitor has at least two measurements.
+        """
         if self.running:
-            self.stop_queue.put(True)
-            self.process.join()
             self.running = False
-            self.manager.shutdown()
+            self.thread.join()
+
+            self.data.append(self.function(**self.kwargs))
+            self.ticks.append(time.time())
 
     def __enter__(self):
         self.start()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self.fetch()
         self.stop()
 
+    def __del__(self):
+        self.stop()
 
-    def visualize(self):
+    def plot(self, plotter=None, positions=None, slice=None, **kwargs):
         """ Simple plots of collected data-points. """
-        plt.figure(figsize=(8, 6))
-        plt.plot(np.array(self.ticks) - self.ticks[0], self.data)
+        #pylint: disable=invalid-name
+        x = np.array(self.ticks) - self.ticks[0]
+        y = np.array(self.data)[:len(x)].reshape(len(x), -1)
+
+        x = x if slice is None else x[slice]
+
+        data, stats = [], []
+        for s in range(y.shape[1]):
+            y_ = y[:, s]
+            y_ = y_ if slice is None else y_[slice]
+            data.append((x, y_))
+            stats.append(f'MEAN: {np.mean(y_):4.4} STD: {np.std(y_):4.4}')
 
         name = self.__class__.__name__
         if 'GPU' in name:
-            used_gpus = self.kwargs.get('gpu_list', get_current_gpus())
+            used_gpus = self.kwargs.get('gpu_list')
             if len(used_gpus) == 1:
                 name = f'{name} on device `{used_gpus[0]}`'
             else:
                 name = f'{name} on devices `{str(used_gpus)[1:-1]}`'
 
-        title = f'{name}\nMEAN: {np.mean(self.data):4.4}    STD: {np.std(self.data):4.4}'
-        plt.title(title)
-        plt.xlabel('Time, s', fontsize=12)
-        plt.ylabel(self.UNIT, fontsize=12, rotation='horizontal', labelpad=15)
-        plt.grid(True)
-        plt.show()
+        plot_config = {
+            'title': name,
+            'label': stats,
+            'smoothed_label': '',
+            'legend_loc': 'best',
+            'xlabel': 'Time, s',
+            'ylabel': self.UNIT,
+            'ylabel_rotation': 'horizontal',
+            'ylabel_labelpad': 15,
+            'grid': 'major',
+            **kwargs
+        }
+
+        if plotter is None:
+            plotter = plot([None], mode='curve', combine='separate', ratio=1, scale=0.5)
+
+        plot_config = {**plotter.config, **plot_config}
+        return plotter(data=data, mode='curve', positions=positions, **plot_config)
+
+    deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
+    visualize = deprecated(deprecation_msg.format('ResourceMonitor.visualize', 'ResourceMonitor.plot'))(plot)
 
 
 
+# General system resource monitors: don't need any extra info
 class CPUMonitor(ResourceMonitor):
     """ Track CPU usage. """
     UNIT = '%'
@@ -153,7 +143,6 @@ class CPUMonitor(ResourceMonitor):
         """ Track CPU usage. """
         _ = kwargs
         return psutil.cpu_percent()
-
 
 class MemoryMonitor(ResourceMonitor):
     """ Track total virtual memory usage. """
@@ -166,108 +155,96 @@ class MemoryMonitor(ResourceMonitor):
         return psutil.virtual_memory().used / (1024 **3)
 
 
-class RSSMonitor(ResourceMonitor):
+# Process resource monitors: pre-initialize instance of `psutil.Process`
+class ProcessResourceMonitor(ResourceMonitor):
+    """ Pre-init `psutil` process.
+    Even though `psutil` keeps cached table of processes, it is still faster to have it in the instance itself.
+    """
+    def __init__(self, function=None, frequency=0.1, **kwargs):
+        super().__init__(function=function, frequency=frequency, **kwargs)
+        self.kwargs['process'] = psutil.Process(os.getpid())
+
+class RSSMonitor(ProcessResourceMonitor):
     """ Track non-swapped physical memory usage. """
     UNIT = 'Gb'
 
     @staticmethod
-    def get_usage(pid=None, **kwargs):
+    def get_usage(process=None, **kwargs):
         """ Track non-swapped physical memory usage. """
         _ = kwargs
-        process = psutil.Process(pid)
         return process.memory_info().rss / (1024 ** 3) # gbytes
 
-
-class VMSMonitor(ResourceMonitor):
+class VMSMonitor(ProcessResourceMonitor):
     """ Track current process virtual memory usage. """
     UNIT = 'Gb'
 
     @staticmethod
-    def get_usage(pid=None, **kwargs):
+    def get_usage(process=None, **kwargs):
         """ Track current process virtual memory usage. """
         _ = kwargs
-        process = psutil.Process(pid)
         return process.memory_info().vms / (1024 ** 3) # gbytes
 
-
-class USSMonitor(ResourceMonitor):
+class USSMonitor(ProcessResourceMonitor):
     """ Track current process unique virtual memory usage. """
     UNIT = 'Gb'
 
     @staticmethod
-    def get_usage(pid=None, **kwargs):
+    def get_usage(process=None, **kwargs):
         """ Track current process unique virtual memory usage. """
         _ = kwargs
-        process = psutil.Process(pid)
         return process.memory_full_info().uss / (1024 ** 3) # gbytes
 
 
-def get_current_gpus():
+# GPU monitors: require list of devices, default to `CUDA_VISIBLE_DEVICES` env variable
+class GPUResourceMonitor(ResourceMonitor):
     """ If the `CUDA_VISIBLE_DEVICES` is set, check it and return device numbers. Otherwise, return [0]. """
-    env_variable = os.environ.get('CUDA_VISIBLE_DEVICES', '0')
-    env_variable = literal_eval(env_variable)
-    return list(env_variable) if isinstance(env_variable, tuple) else [env_variable]
+    def __init__(self, function=None, frequency=0.1, gpu_list=None, **kwargs):
+        if nvidia_smi is None:
+            raise ImportError('Install Python interface for nvidia_smi')
+        super().__init__(function=function, frequency=frequency, **kwargs)
 
-class GPUMonitor(ResourceMonitor):
+        # Fallback to env variable
+        if gpu_list is None:
+            env_variable = os.environ.get('CUDA_VISIBLE_DEVICES', '0')
+            env_variable = literal_eval(env_variable)
+            gpu_list = list(env_variable) if isinstance(env_variable, tuple) else [env_variable]
+
+        nvidia_smi.nvmlInit()
+        gpu_handles = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
+        self.kwargs.update({'gpu_list': gpu_list, 'gpu_handles': gpu_handles})
+
+
+class GPUMonitor(GPUResourceMonitor):
     """ Track GPU usage. """
     UNIT = '%'
 
-    def __init__(self, *args, **kwargs):
-        if nvidia_smi is None:
-            raise ImportError('Install Python interface for nvidia_smi')
-        super().__init__(*args, **kwargs)
-
     @staticmethod
-    def get_usage(gpu_list=None, **kwargs):
+    def get_usage(gpu_handles=None, **kwargs):
         """ Track GPU usage. """
         _ = kwargs
-        gpu_list = gpu_list or get_current_gpus()
-        nvidia_smi.nvmlInit()
-        handle = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
-        res = [nvidia_smi.nvmlDeviceGetUtilizationRates(item) for item in handle]
-        return [item.gpu for item in res]
+        return [nvidia_smi.nvmlDeviceGetUtilizationRates(item).gpu for item in gpu_handles]
 
-
-class GPUMemoryUtilizationMonitor(ResourceMonitor):
+class GPUMemoryUtilizationMonitor(GPUResourceMonitor):
     """ Track GPU memory utilization. """
     UNIT = '%'
 
-    def __init__(self, *args, **kwargs):
-        if nvidia_smi is None:
-            raise ImportError('Install Python interface for nvidia_smi')
-        super().__init__(*args, **kwargs)
-
     @staticmethod
-    def get_usage(gpu_list=None, **kwargs):
+    def get_usage(gpu_handles=None, **kwargs):
         """ Track GPU memory utilization. """
         _ = kwargs
-        gpu_list = gpu_list or get_current_gpus()
-        nvidia_smi.nvmlInit()
-        handle = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
-        res = [nvidia_smi.nvmlDeviceGetUtilizationRates(item) for item in handle]
-        return [item.memory for item in res]
+        return [nvidia_smi.nvmlDeviceGetUtilizationRates(item).memory for item in gpu_handles]
 
-
-class GPUMemoryMonitor(ResourceMonitor):
+class GPUMemoryMonitor(GPUResourceMonitor):
     """ Track GPU memory usage. """
     UNIT = '%'
 
-    def __init__(self, *args, **kwargs):
-        if nvidia_smi is None:
-            raise ImportError('Install Python interface for nvidia_smi')
-        super().__init__(*args, **kwargs)
-
     @staticmethod
-    def get_usage(gpu_list=None, **kwargs):
+    def get_usage(gpu_handles=None, **kwargs):
         """ Track GPU memory usage. """
         _ = kwargs
-        gpu_list = gpu_list or get_current_gpus()
-        nvidia_smi.nvmlInit()
-        handle = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
-        res = [nvidia_smi.nvmlDeviceGetMemoryInfo(item) for item in handle]
-        res = [100 * item.used / item.total for item in res]
-        nvidia_smi.nvmlShutdown()
-        return res
+        result = [nvidia_smi.nvmlDeviceGetMemoryInfo(item) for item in gpu_handles]
+        result = [100 * item.used / item.total for item in result]
+        return result
 
 
 
@@ -300,60 +277,29 @@ class Monitor(list):
     def __enter__(self):
         for monitor in self:
             monitor.start()
-        return self[0] if len(self) == 0 else self
+        return self[0] if len(self) == 1 else self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         for monitor in self:
-            monitor.fetch()
             monitor.stop()
 
+    def plot(self, plotter=None, positions=None, savepath=None, **kwargs):
+        """ Visualize multiple monitors in a single figure. """
+        plot_config = {
+            'ratio': 1 / len(self),
+            'scale': 0.5,
+            'ncols': None if 'nrows' in kwargs else len(self),
+            **kwargs
+        }
 
-    def visualize(self, layout=None, figsize=None, suptitle='', savepath=None, show=True):
-        """ Visualize multiple monitors in a single figure.
+        if plotter is None:
+            plotter = plot(data=[None] * len(self), mode='curve', combine='separate', **plot_config)
 
-        Parameters
-        ----------
-        layout : tuple of ints
-            Grid layout of plots.
-        figsize : tuple of numbers
-            Size of figure: width and height.
-        suptitle : str
-            Title for the figure.
-        """
-        if layout is None:
-            layout = ceil(len(self) / 3), 3 if len(self) > 2 else len(self)
-        figsize = figsize or (7 * layout[1], 8 * layout[0])
+        positions = range(len(self))
+        for position, monitor in zip(positions, self):
+            monitor.plot(plotter=plotter, positions=position, **kwargs)
 
-        fig, ax = plt.subplots(*layout, figsize=figsize)
-        ax = np.atleast_2d(ax)
+        if savepath is not None:
+            plotter.save(savepath=savepath)
 
-        for i, monitor in enumerate(self):
-            name = monitor.__class__.__name__
-            if 'GPU' in name:
-                used_gpus = monitor.kwargs.get('gpu_list', get_current_gpus())
-                if len(used_gpus) == 1:
-                    name = f'{name} on device `{used_gpus[0]}`'
-                else:
-                    name = f'{name} on devices `{str(used_gpus)[1:-1]}`'
-
-            title = f'{name}\nMEAN: {np.mean(monitor.data):4.4}    STD: {np.std(monitor.data):4.4}'
-
-            ax[i // layout[1], i % layout[1]].plot(np.array(monitor.ticks) - monitor.ticks[0], monitor.data)
-            ax[i // layout[1], i % layout[1]].set_title(title, fontsize=16)
-            ax[i // layout[1], i % layout[1]].set_xlabel('Time, s', fontsize=14)
-            ax[i // layout[1], i % layout[1]].set_ylabel(monitor.UNIT, fontsize=12, rotation='horizontal', labelpad=15)
-            ax[i // layout[1], i % layout[1]].grid(True)
-
-        for i in range(len(self), layout[0] * layout[1]):
-            ax[i // layout[1], i % layout[1]].set_axis_off()
-
-        if suptitle:
-            fig.suptitle(suptitle, fontsize=24)
-
-        if savepath:
-            plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
-
-        if show:
-            plt.show()
-        else:
-            plt.close()
+        return plotter

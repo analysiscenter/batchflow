@@ -43,14 +43,14 @@ class StochasticResNet(ResNet50):
         with tf.variable_scope(name):
             x = inputs
             for i, n_blocks in enumerate(kwargs['num_blocks']):
-                with tf.variable_scope('block-%d' % i):
+                with tf.variable_scope(f'block-{i}'):
                     for block in range(n_blocks):
                         strides = 2 if i > 0 and block == 0 else 1
                         off = tf.cond(kwargs['is_training'], \
                                       lambda: tf.where(tf.random_uniform([1], 0, 1) > (1 - prob[global_block]),
                                                        tf.ones([1]), tf.zeros([1])),
                                       lambda: tf.ones([1]) * prob[global_block])[0]
-                        x = cls.block(x, filters=filters[i], name='layer-%d' % block, off=off,
+                        x = cls.block(x, filters=filters[i], name=f'layer-{block}', off=off,
                                       strides=strides, **block_args)
                         global_block += 1
         return x

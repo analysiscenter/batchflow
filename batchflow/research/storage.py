@@ -17,7 +17,8 @@ import multiprocess as mp
 
 from .profiler import ExperimentProfiler, ResearchProfiler
 from .results import ResearchResults
-from .utils import to_list, create_logger, jsonify, create_output_stream
+from ..utils import to_list
+from .utils import create_logger, jsonify, create_output_stream
 
 class BaseExperimentStorage:
     """ Storage for experiment data.

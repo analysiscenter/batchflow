@@ -7,15 +7,18 @@ from copy import copy, deepcopy
 import itertools
 import traceback
 import contextlib
+import warnings
 from collections import OrderedDict
 import time
 
-from .. import Config, Pipeline, parallel, spawn_seed_sequence, make_rng, make_seed_sequence
+from .. import Config, Pipeline, spawn_seed_sequence, make_rng, make_seed_sequence
+from ..decorators import parallel
 from ..named_expr import eval_expr
+from ..utils import to_list
 
 from .domain import ConfigAlias
 from .named_expr import E, O, EC
-from .utils import generate_id, must_execute, to_list, parse_name, MultiOut
+from .utils import generate_id, must_execute, parse_name, MultiOut
 from .profiler import ExecutorProfiler
 from .storage import BaseResearchStorage
 
@@ -165,10 +168,10 @@ class ExecutableUnit:
     args, kwargs : optional
         args and kwargs for unit call, by default None.
     save_to : str, list or None, optional
-        names to save output from unit. Can't be not None with `save_output_dict` which is True.
+        names to save output from unit. Must be None if `save_output_dict` is True. By default None.
     save_output_dict : bool, optional
         if the output is a dict, use its keys as names of variables to store in results.
-        Can't be True with not None `save_to`
+        If True, `save_to` must be None. By default False.
     """
     def __init__(self, name, func=None, generator=None, root=False, when=1,
                  args=None, kwargs=None, save_to=None, save_output_dict=False, **other_kwargs):
@@ -577,7 +580,8 @@ class Experiment:
     def __getattr__(self, name):
         method = self.get_method(name)
         if method is None:
-            raise ValueError(f'Method {name} was not found in any namespace.')
+            warnings.warn(f'Method {name} was not found in any namespace.')
+            return None
         return _explicit_call(method, name, self)
 
     def save(self, src, dst, when=1, save_output_dict=False, copy=False): #pylint:disable=redefined-outer-name

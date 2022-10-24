@@ -25,7 +25,7 @@ def files_setup(request):
     for folder in folders:
         os.mkdir(folder)
         for i in range(3):
-            open(os.path.join(folder, 'file_{}.txt'.format(i)), 'w').close()
+            open(os.path.join(folder, f'file_{i}.txt'), 'w').close()
 
     def fin():
         shutil.rmtree(path)
@@ -73,7 +73,7 @@ def test_same_name_in_differen_folders(files_setup):
 
 def test_build_from_index(files_setup):
     path, _, _ = files_setup
-    files = ['file_{}.txt'.format(i) for i in range(3)]
+    files = [f'file_{i}.txt' for i in range(3)]
     paths = dict(zip(files, [os.path.join(path, f) for f in files]))
     dsindex = DatasetIndex(files)
     findex = FilesIndex(index=dsindex, paths=paths, dirs=False)

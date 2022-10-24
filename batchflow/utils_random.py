@@ -34,7 +34,7 @@ def make_rng(seed=None):
         rng = np.random.default_rng(np.random.SFC64())
     elif isinstance(seed, np.random.SeedSequence):
         rng = np.random.default_rng(np.random.SFC64(seed))
-    elif isinstance(seed, int):
+    elif isinstance(seed, (int, np.integer)):
         rng = np.random.default_rng(np.random.SFC64(seed))
     elif isinstance(seed, np.random.Generator):
         rng = seed
@@ -43,7 +43,7 @@ def make_rng(seed=None):
     elif isinstance(seed, np.random.RandomState):
         rng = seed
     else:
-        warnings.warn("Unknown seed type: %s" %  seed)
+        warnings.warn(f"Unknown seed type: {type(seed)}.")
         rng = None
 
     return rng
@@ -96,6 +96,6 @@ def spawn_seed_sequence(source):
     elif isinstance(getattr(source, 'random_seed', None), np.random.SeedSequence):
         source = source.random_seed
     else:
-        raise ValueError('source should be SeedSequence, Batch or Pipeline, but given %s' % type(source))
+        raise ValueError(f'source should be SeedSequence, Batch or Pipeline, but given {type(source)}')
 
     return source.spawn(1)[0]

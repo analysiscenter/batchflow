@@ -1,8 +1,10 @@
 """ Eager version of TorchModel. """
 import os
 import re
+from math import ceil
 from threading import Lock
 from functools import partial
+from contextlib import nullcontext
 
 import dill
 import numpy as np
@@ -58,6 +60,8 @@ DECAYS = {
     'step': torch.optim.lr_scheduler.StepLR,
     'multistep': torch.optim.lr_scheduler.MultiStepLR,
     'cos': torch.optim.lr_scheduler.CosineAnnealingLR,
+    'cosw': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
+    'cyclic': torch.optim.lr_scheduler.CyclicLR,
 }
 
 DECAYS_DEFAULTS = {
@@ -132,7 +136,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         - additional parameters:
             - `sam` and `sam_rho` enable sharpness-aware minimization: a technique for improving model generatlization.
             - `weights_averaging` enables model weights averaging.
-
+            - `gradient_clipping` enables backward hooks for gradient clipping.
 
 
     We recommend looking at :class:`~.torch.layers.Block` to learn about parameters for model building blocks,
@@ -347,6 +351,12 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             {'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
                        {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'start_iter': 901}]
 
+    gradient_clipping : number or callable
+        Enables gradient clipping as a backward hook.
+        If number, then acts as a clipping threshold for clamp.
+        If callable, then directly applied to each gradient during backprop.
+        Note that this is different from the usual `PyTorch` way to modify gradients in-place after the entire backprop.
+
 
     Examples
     --------
@@ -405,12 +415,14 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         # Pytorch model
         self.model = None
         self._model_cpu_backup = None
+        self._loaded_from_onnx = None
 
         # Leading device and list of all devices to use
         self.device = None
         self.devices = []
 
         # Train procedure and infrastructure
+        self.disable_training = False
         self.loss = None
         self.optimizer = None
         self.decay = None
@@ -421,6 +433,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         self.operations = {}
         self.callbacks = []
+        self._hooks = []
 
         # Memory amortization: accumulate gradients to update weights later
         self.sync_frequency = 1
@@ -528,6 +541,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             'loss': None,
             'optimizer': 'Adam',
             'decay': None,
+            'gradient_clipping': None,
+            'weights_averaging': None,
 
             # SAM: sharpness-aware minimization
             'sam_rho': 0.0,
@@ -596,7 +611,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.device = torch.device('cpu')
         else:
             devices = devices if isinstance(devices, list) else [devices]
-            available_devices = ['cuda:{}'.format(i) for i in range(torch.cuda.device_count())] + ['cpu']
+            available_devices = [f'cuda:{i}' for i in range(torch.cuda.device_count())] + ['cpu']
             for dev in devices:
                 if isinstance(dev, torch.device):
                     self.devices.append(dev)
@@ -609,7 +624,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                                if re.search(dev_, device.lower()) is not None]
                     self.devices.extend(devices)
                 else:
-                    raise TypeError('Wrong device type: {}'.format(type(dev)))
+                    raise TypeError(f'Wrong device type: {type(dev)}')
             self.devices = [device for i, device in enumerate(self.devices)
                             if device not in self.devices[:i]]
             self.device = self.devices[0]
@@ -673,6 +688,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.make_decay()
         self.scaler = torch.cuda.amp.GradScaler()
 
+        self.setup_gradient_clipping()
         self.setup_weights_averaging()
 
     def unpack(self, value):
@@ -786,6 +802,19 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self.decay.append(decay_)
             self.decay_step.append(step_params)
 
+    def setup_gradient_clipping(self):
+        """ Clip gradients to avoid explosion. """
+        gradient_clipping = self.config.get('gradient_clipping')
+        if gradient_clipping:
+            if isinstance(gradient_clipping, (int, float)):
+                function = lambda grad: torch.clamp(grad, -gradient_clipping, gradient_clipping)
+            elif callable(gradient_clipping):
+                function = gradient_clipping
+
+            for p in self.model.parameters():
+                hook = p.register_hook(function)
+                self._hooks.append(hook)
+
     def setup_weights_averaging(self):
         """ Prepare WA-model: check all required keys and store copy on CPU. """
         wa_config = self.config.get('weights_averaging') or self.config.get('wa') or self.config.get('swa')
@@ -862,13 +891,14 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.tta_wrapped = True
 
     def wrap_trt(self, batch_size, use_onnx=True, fp16_mode=True, **kwargs):
-        """ !!. """
+        """ Convert PyTorch model to TensorRT engine. """
         from torch2trt import torch2trt
         inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
 
         self.model = torch2trt(self.model.eval(), inputs=inputs, max_batch_size=batch_size,
                                fp16_mode=fp16_mode, use_onnx=use_onnx, **kwargs)
         self.trt_wrapped = True
+        self.disable_training = True
 
 
     def initialize_weights(self):
@@ -951,8 +981,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     # Apply model to train/predict on given data
     def train(self, inputs, targets, outputs=None, lock=True, profile=False,
-              sync_frequency=True, microbatch_size=None, microbatch_drop_last=True,
-              sam_rho=None, sam_individual_norm=None):
+              sync_frequency=True, microbatch_size=None, microbatch_drop_last=True, microbatch_pad_last=False,
+              sam_rho=None, sam_individual_norm=None, transfer_from_device=True):
         """ Train the model with the data provided
 
         Parameters
@@ -982,6 +1012,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             If False, then microbatching is not used.
         microbatch_drop_last : bool
             Whether to drop microbatches, that are smaller than the microbatch size. Default is True.
+        microbatch_pad_last : bool
+            Whether to pad microbatches, that are smaller than the microbatch size. Default is False.
         sam_rho : float
             Foret P. et al. "`Sharpness-Aware Minimization for Efficiently Improving Generalization
             <https://arxiv.org/abs/2010.01412>`_".
@@ -993,6 +1025,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         profile : bool
             Whether to collect stats of model training timings.
             If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
+        transfer_from_device : bool
+            Whether to transfer requested `outputs` from device to CPU.
 
         Returns
         -------
@@ -1004,6 +1038,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             model.train(B('images'), B('labels'), fetches='loss')
         """
+        if self.disable_training:
+            raise RuntimeError('Training model after ONNX conversion is not allowed!')
+
         # Lock the entire method; release in any case
         try:
             if lock:
@@ -1031,9 +1068,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 sam_individual_norm = self.sam_individual_norm
 
             # Split the data into `microbatch_size` size chunks
-            (chunked_inputs, chunked_targets,
-             batch_size, microbatch_size) = self.split_into_microbatches(inputs, targets,
-                                                                         microbatch_size, microbatch_drop_last)
+            split_result = self.split_into_microbatches(inputs, targets, microbatch_size,
+                                                        drop_last=microbatch_drop_last, pad_last=microbatch_pad_last)
+            (chunked_inputs, chunked_targets, chunk_sizes, batch_size, microbatch_size) = split_result
 
             steps = len(chunked_inputs)
             inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
@@ -1069,7 +1106,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 # Compute forward and backward passes of the model, apply gradients, evaluate requested outputs
                 chunk_outputs = self._train(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs[:],
                                             sync_frequency=sync_frequency*steps,
-                                            sam_rho=sam_rho, sam_individual_norm=sam_individual_norm)
+                                            sam_rho=sam_rho, sam_individual_norm=sam_individual_norm,
+                                            transfer_from_device=transfer_from_device)
                 chunked_outputs.append(chunk_outputs)
 
             # Exit the profiling
@@ -1097,7 +1135,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                         self.wa_decay.step()
 
             # Aggregate the outputs from microbatches
-            result = self.aggregate_microbatches(outputs, chunked_outputs, single_output)
+            result = self.aggregate_microbatches(outputs, chunked_outputs, chunk_sizes, single_output)
 
             # Store the average value of loss over microbatches
             self.loss_list.append(np.mean(self._loss_list[-steps:]))
@@ -1119,7 +1157,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.model_lock.release()
         return result
 
-    def _train(self, inputs, targets, outputs, sync_frequency, sam_rho, sam_individual_norm):
+    def _train(self, inputs, targets, outputs, sync_frequency, sam_rho, sam_individual_norm, transfer_from_device):
         # Parse inputs
         inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
         targets = targets[0] if len(targets) == 1 and isinstance(targets, list) else targets
@@ -1141,6 +1179,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         with torch.cuda.amp.autocast(enabled=self.amp):
             loss = self.loss(predictions, targets)
             loss_ = loss / sync_frequency
+
+        # nan_in_loss = torch.isnan(loss).max().item()
+        # if not nan_in_loss:
         (self.scaler.scale(loss_) if self.amp else loss_).backward()
         self._loss_list.append(self.transfer_from_device(loss))
 
@@ -1199,7 +1240,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         requested_outputs = self.extract_outputs(outputs, output_container)
 
         # Transfer only the requested outputs to CPU
-        return self.transfer_from_device(requested_outputs)
+        if transfer_from_device:
+            requested_outputs = self.transfer_from_device(requested_outputs)
+        return requested_outputs
 
     def _train_sam_store_gradients(self):
         """ Store gradients from previous microbatches. """
@@ -1246,7 +1289,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 p.grad.add_(previous_grad)
 
 
-    def predict(self, inputs, targets=None, outputs=None, lock=True, microbatch_size=False):
+    def predict(self, inputs, targets=None, outputs=None, lock=True, microbatch_size=False, microbatch_pad_last=False,
+                amp=None, eval_mode=True, no_grad=True, transfer_from_device=True):
         """ Get predictions on the data provided.
 
         Parameters
@@ -1268,6 +1312,15 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             If int, then size of chunks to split every batch into. Allows to process given data sequentially.
             If None, then value from config is used (default value is not to use microbatching).
             If False, then microbatching is not used.
+        microbatch_pad_last : bool
+            Whether to pad microbatches, that are smaller than the microbatch size. Default is False.
+        amp : None or bool
+            If None, then use amp setting from config.
+            If bool, then overrides the amp setting for prediction.
+        no_grad : bool
+            Whether to disable gradient computation during model evaluation.
+        transfer_from_device : bool
+            Whether to transfer requested `outputs` from device to CPU.
 
         Returns
         -------
@@ -1284,6 +1337,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         >>> batchflow_model.predict(inputs=B.images, outputs='model.body.encoder["block-0"]')
         """
+        if self._loaded_from_onnx:
+            microbatch_size = self.microbatch_size
+            microbatch_pad_last = True
+
         # Acquire lock; release in any case
         try:
             if lock:
@@ -1301,14 +1358,17 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             single_output = isinstance(outputs, str)
             outputs = [outputs] if single_output else (outputs or [])
 
+            # Parse other parameters
+            amp = amp if amp is not None else self.amp
+
             # Raise error early
-            if 'loss' in outputs and not targets:
-                raise TypeError('`targets` should be provided to fetch `loss`!')
+            if 'loss' in outputs and targets is None:
+                raise TypeError('`targets` should be explicitly provided to compute `loss`!')
 
             # Split the data into `microbatch` size chunks
-            (chunked_inputs, chunked_targets,
-             batch_size, microbatch_size) = self.split_into_microbatches(inputs, targets,
-                                                                         microbatch_size, drop_last=False)
+            split_result = self.split_into_microbatches(inputs, targets, microbatch_size,
+                                                        drop_last=False, pad_last=microbatch_pad_last)
+            (chunked_inputs, chunked_targets, chunk_sizes, batch_size, microbatch_size) = split_result
 
             steps = len(chunked_inputs)
             inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
@@ -1317,20 +1377,22 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                                            'targets_shapes': targets_shapes})
 
             # Evaluate each microbatch separately
-            self.model.eval()
+            if eval_mode:
+                self.model.eval()
 
             chunked_outputs = []
             for chunk_inputs, chunk_targets in zip(chunked_inputs, chunked_targets):
                 # Evaluate requested outputs
-                chunk_outputs = self._predict(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs[:])
+                chunk_outputs = self._predict(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs[:],
+                                              amp=amp, no_grad=no_grad, transfer_from_device=transfer_from_device)
                 chunked_outputs.append(chunk_outputs)
 
             # Aggregate the outputs from microbatches
-            result = self.aggregate_microbatches(outputs, chunked_outputs, single_output)
+            result = self.aggregate_microbatches(outputs, chunked_outputs, chunk_sizes, single_output)
 
             # Store info about current predict iteration
             self.last_predict_info.update({
-                'amp': self.amp,
+                'amp': amp,
                 'batch_size': batch_size,
                 'microbatch_size': microbatch_size,
                 'steps': steps,
@@ -1342,7 +1404,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.model_lock.release()
         return result
 
-    def _predict(self, inputs, targets, outputs):
+    def _predict(self, inputs, targets, outputs, amp, no_grad, transfer_from_device):
         # Parse inputs
         inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
         targets = targets[0] if len(targets) == 1 and isinstance(targets, list) else targets
@@ -1351,7 +1413,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         outputs = self.prepare_outputs(outputs)
 
         output_container = {}
-        with torch.no_grad(), torch.cuda.amp.autocast(enabled=self.amp):
+        with (torch.no_grad() if no_grad else nullcontext()), torch.cuda.amp.autocast(enabled=amp):
             inputs = self.transfer_to_device(inputs)
             predictions = self.model(inputs)
 
@@ -1375,11 +1437,24 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         requested_outputs = self.extract_outputs(outputs, output_container)
 
         # Transfer only the requested outputs to CPU
-        return self.transfer_from_device(requested_outputs)
+        if transfer_from_device:
+            requested_outputs = self.transfer_from_device(requested_outputs)
+        return requested_outputs
+
+
+    def __call__(self, inputs, targets=None, outputs='predictions', lock=True,
+                 microbatch_size=False, microbatch_pad_last=False,
+                 amp=False, no_grad=False, transfer_from_device=False):
+        """ Evaluate model on provided data, while tracking gradients.
+        Essentially, the same as `:meth:.predict` with overriden defaults.
+        """
+        return self.predict(inputs=inputs, targets=targets, outputs=outputs,
+                            microbatch_size=microbatch_size, microbatch_pad_last=microbatch_pad_last,
+                            lock=lock, amp=amp, no_grad=no_grad, transfer_from_device=transfer_from_device)
 
 
     # Common utilities for train and predict
-    def split_into_microbatches(self, inputs, targets, microbatch_size, drop_last):
+    def split_into_microbatches(self, inputs, targets, microbatch_size, drop_last, pad_last):
         """ Split inputs and targets into microbatch-sized chunks. """
         # Parse microbatch size
         if microbatch_size is None:
@@ -1402,32 +1477,54 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                                 for i in range(0, batch_size, microbatch_size)]
             chunked_targets = [[item[i:i + microbatch_size] for item in targets]
                                 for i in range(0, batch_size, microbatch_size)]
+            chunk_sizes = [len(item[0]) for item in chunked_inputs]
 
-            if drop_last and batch_size % microbatch_size != 0:
-                chunked_inputs = chunked_inputs[:-1]
-                chunked_targets = chunked_targets[:-1]
+            if batch_size % microbatch_size != 0:
+                if pad_last:
+                    chunked_inputs[-1] = [self._tile(item, microbatch_size) for item in chunked_inputs[-1]]
+                    chunked_targets[-1] = [self._tile(item, microbatch_size) for item in chunked_targets[-1]]
+                elif drop_last:
+                    chunked_inputs = chunked_inputs[:-1]
+                    chunked_targets = chunked_targets[:-1]
         else:
             chunked_inputs = [inputs]
             chunked_targets = [targets]
+            chunk_sizes = [len(inputs[0])]
 
-        return chunked_inputs, chunked_targets, batch_size, microbatch_size
+        return chunked_inputs, chunked_targets, chunk_sizes, batch_size, microbatch_size
 
-    def aggregate_microbatches(self, outputs, chunked_outputs, single_output):
+    def _tile(self, array, microbatch_size):
+        """ Tile `array` to make its length equal to `microbatch_size`. """
+        n_repeats = ceil(microbatch_size / len(array))
+        if isinstance(array, (np.ndarray, torch.Tensor)):
+            repeats = [1] * array.ndim
+            repeats[0] = n_repeats
+            array = np.tile(array, repeats) if isinstance(array, np.ndarray) else array.tile(*repeats)
+            array = array[:microbatch_size]
+        return array
+
+    def aggregate_microbatches(self, outputs, chunked_outputs, chunk_sizes, single_output):
         """ Aggregate outputs from microbatches into outputs for the whole batch.
         Scalar values are aggregated by `mean`, array values are concatenated along the first (batch) axis.
         """
         result = []
         for i, _ in enumerate(outputs):
             # All tensors for current `output_name`
-            chunked_output = [chunk_outputs[i] for chunk_outputs in chunked_outputs]
-
+            chunked_output = [chunk_outputs[i][:chunk_size]
+                              for chunk_outputs, chunk_size in zip(chunked_outputs, chunk_sizes)]
             if chunked_output[0].size != 1:
-                result.append(np.concatenate(chunked_output, axis=0))
+                if len(chunked_output) == 1:
+                    output_ = chunked_output[0]
+                elif isinstance(chunked_output[0], np.ndarray):
+                    output_ = np.concatenate(chunked_output, axis=0)
+                else:
+                    output_ = torch.cat(chunked_output, dim=0)
+                result.append(output_)
             else:
                 result.append(np.mean(chunked_output))
+
         if single_output:
             result = result[0]
-
         return result
 
 
@@ -1454,6 +1551,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             # For each operation, add multiple aliases
             if output_operations:
+                if not isinstance(output_operations, (tuple, list)):
+                    output_operations = [output_operations]
+
                 for j, operation in enumerate(output_operations):
                     output_tensor, operation_name = self.apply_output_operation(tensor, operation)
                     if operation_name:
@@ -1518,92 +1618,123 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Store model
-    def save(self, path, *args, **kwargs):
-        """ Save torch model.
+    def save(self, path, use_onnx=False, path_onnx=None, batch_size=None, opset_version=13,
+             pickle_module=dill, **kwargs):
+        """ Save underlying PyTorch model along with meta parameters (config, device spec, etc).
+
+        If `use_onnx` is set to True, then the model is converted to ONNX format and stored in a separate file.
+        At loading time, this ONNX module is converted to PyTorch back: the benefit of this process is removing
+        the reliance on code files. The drawback is the need to fix `batch_size`, allowed for such a model at inference.
+        Moreover, reloaded ONNX module can't be trained or modified in any other way.
 
         Parameters
         ----------
         path : str
             Path to a file where the model data will be stored.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            torch_model = ResNet34()
-
-        Now save the model
-
-        .. code-block:: python
-
-            torch_model.save('/path/to/models/resnet34')
-
-        The model will be saved to /path/to/models/resnet34.
+        use_onnx: bool
+            Whether to store model in ONNX format.
+        path_onnx : str, optional
+            Used only if `use_onnx` is True.
+            If provided, then path to store the ONNX model; default `path_onnx` is `path` with added '_onnx' postfix.
+        batch_size : int, optional
+            Used only if `use_onnx` is True.
+            Fixed batch size of the ONNX module. This is the only viable batch size for this model after loading.
+        opset_version : int
+            Used only if `use_onnx` is True.
+            Version of export standard to use.
+        pickle_module : module
+            Module to use for pickling.
+        kwargs : dict
+            Other keyword arguments, passed directly to :func:`torch.save`.
         """
-        _ = args
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
 
-        if kwargs.get('pickle_module') is None:
-            kwargs['pickle_module'] = dill
-
+        # Unwrap DDP model
         if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
             self.model = self.model.module
 
-        torch.save({item: getattr(self, item) for item in self.PRESERVE}, path, **kwargs)
+        if use_onnx:
+            if batch_size is None:
+                raise ValueError('Specify valid `batch_size`, used for model inference!')
 
-    def load(self, path, *args, eval=False, **kwargs):
-        """ Load a torch model from files.
+            inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
+            path_onnx = path_onnx or (path + '_onnx')
+            torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
+
+            # Save the rest of parameters
+            preserved = set(self.PRESERVE) - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
+            preserved_dict = {item: getattr(self, item) for item in preserved}
+            torch.save({'onnx': True, 'path_onnx': path_onnx, 'onnx_batch_size': batch_size, **preserved_dict},
+                       path, pickle_module=pickle_module, **kwargs)
+        else:
+            torch.save({item: getattr(self, item) for item in self.PRESERVE},
+                       path, pickle_module=pickle_module, **kwargs)
+
+    def load(self, path, make_infrastructure=False, eval_mode=False, pickle_module=dill, **kwargs):
+        """ Load a torch model from path.
+
+        If the model was saved in ONNX format (refer to :meth:`.save` for more info), we fix the microbatch size
+        to the batch size of ONNX conversion. Moreover, we disable model ability to train.
 
         Parameters
         ----------
         path : str
             File path where a model is stored.
-
-        eval : bool
+        eval_mode : bool
             Whether to switch the model to eval mode.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
-
-            torch_model.load(path='/path/to/models/resnet34')
-
-            TorchModel(config={'device': 'gpu:2', 'load/path': '/path/to/models/resnet34'})
-
-        **How to move the model to device**
-
-        The model will be moved to device specified in the model config by key `device`.
+        make_infrastructure : bool
+            Whether to re-create model loss, optimizer, scaler and decay.
+        pickle_module : module
+            Module to use for pickling.
+        kwargs : dict
+            Other keyword arguments, passed directly to :func:`torch.save`.
         """
-        _ = args
         self._parse_devices()
-
-        if kwargs.get('pickle_module') is None:
-            kwargs['pickle_module'] = dill
-
         if self.device:
-            checkpoint = torch.load(path, map_location=self.device, **kwargs)
-        else:
-            checkpoint = torch.load(path, **kwargs)
+            kwargs['map_location'] = self.device
+
+        # Load items from disk storage and set them as insance attributes
+        checkpoint = torch.load(path, pickle_module=pickle_module, **kwargs)
 
         # `load_config` is a reference to `self.external_config` used to update `config`
-        # It is required since `self.external_config` is overwritten in the cycle below
+        # It is required since `self.external_config` may be overwritten in the cycle below
         load_config = self.external_config
 
-        for item in self.PRESERVE:
-            setattr(self, item, checkpoint.get(item))
+        for key, value in checkpoint.items():
+            setattr(self, key, value)
         self.config = self.config + load_config
 
-        self.model_to_device()
+        # Load model from onnx, if needed
+        if 'onnx' in checkpoint:
+            try:
+                from onnx2torch import convert #pylint: disable=import-outside-toplevel
+            except ImportError as e:
+                raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
 
-        if eval:
+            model = convert(checkpoint['path_onnx']).eval()
+            self.model = model
+            self.microbatch_size = checkpoint['onnx_batch_size']
+            self._loaded_from_onnx = True
+            self.disable_training = True
+
+        self.model_to_device()
+        if make_infrastructure:
+            self.make_infrastructure()
+
+        if eval_mode:
             self.model.eval()
 
 
     # Debug and profile the performance
+    def set_requires_grad(self, requires_grad):
+        """ Set `requires_grad` flag for the underlying Pytorch model.
+        Helpful when training multiple chained models.
+        """
+        for p in self.model.parameters():
+            p.requires_grad = requires_grad
+
     def set_debug_mode(self, mode=True):
         """ Changes representation of model to a more or less detailed.
         By default, model representation reduces the description of the most complex modules.

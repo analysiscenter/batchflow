@@ -242,7 +242,7 @@ class Pipeline:
         else:
             name = action['name']
         idx = self._actions.index(action)
-        return name if add_index is False else '{} #{}'.format(name, idx)
+        return name if add_index is False else f'{name} #{idx}'
 
     def add_namespace(self, *namespaces):
         """ Add namespace to call pipeline actions from
@@ -297,12 +297,12 @@ class Pipeline:
         """ Check if an unknown attr is an action from some batch class """
         if name[:2] == '__' and name[-2:] == '__':
             # if a magic method is not defined, throw an error
-            raise AttributeError('Unknown magic method: %s' % name)
+            raise AttributeError(f'Unknown magic method: {name}')
         if self._is_batch_method(name):
             return partial(self._add_action, name)
         if self.is_method_from_ns(name):
             return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
-        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+        raise AttributeError(f"{name} not found in class {self.__class__.__name__}")
 
     @property
     def num_actions(self):
@@ -795,7 +795,7 @@ class Pipeline:
         if callable(fn):
             output = fn(*action['args'], **action['kwargs'])
         else:
-            raise TypeError("Callable is expected, but got {}".format(type(fn)))
+            raise TypeError(f"Callable is expected, but got {type(fn)}")
         if action['save_to'] is not None:
             self._save_output(batch, None, output, action['save_to'])
 
@@ -822,11 +822,11 @@ class Pipeline:
                 if hasattr(action_attr, 'action'):
                     action_spec = getattr(action_attr, 'action')
                 else:
-                    raise ValueError("Method %s is not marked with @action decorator" % name)
+                    raise ValueError(f"Method {name} is not marked with @action decorator")
             else:
-                raise TypeError("%s is not a method" % name)
+                raise TypeError(f"{name} is not a method")
         else:
-            raise AttributeError("Method '%s' has not been found in the %s class" % (name, type(batch).__name__))
+            raise AttributeError(f"Method '{name}' has not been found in the {type(batch).__name__} class")
         return action_method, action_spec
 
     def _exec_one_action(self, batch, action, iteration=None):

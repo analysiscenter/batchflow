@@ -6,7 +6,8 @@ from copy import copy, deepcopy
 from pprint import pformat
 import numpy as np
 
-from .utils import must_execute, to_list
+from .utils import must_execute
+from ..utils import to_list
 from .. import Config, Sampler, make_rng
 from ..named_expr import eval_expr
 
@@ -276,7 +277,7 @@ class Domain:
             elif isinstance(values, Sampler):
                 pass
             else:
-                raise TypeError('`values` must be array-like object or Sampler but {} were given'.format(type(values)))
+                raise TypeError(f'`values` must be array-like object or Sampler but {type(values)} were given')
             aliases_options += [(parameter, values)]
         return aliases_options
 
@@ -586,7 +587,7 @@ class Domain:
         list of `ConfigAlias` objects.
         """
         if not isinstance(values, (list, tuple, np.ndarray)):
-            raise TypeError('`values` must be array-like object but {} were given'.format(type(values)))
+            raise TypeError(f'`values` must be array-like object but {type(values)} were given')
         res = []
         for value in values:
             if self.create_id_prefix:
@@ -615,7 +616,7 @@ class Domain:
         """
 
         if not isinstance(values, Sampler):
-            raise TypeError('`values` must be Sampler but {} was given'.format(type(values)))
+            raise TypeError(f'`values` must be Sampler but {type(values)} was given')
         res = []
         for _ in range(size or 1):
             if self.create_id_prefix:
@@ -669,7 +670,7 @@ class Domain:
         if isinstance(values, (list, tuple, np.ndarray)):
             values = [item.alias if not isinstance(item.value, str) else f"'{item.value}'" for item in values]
             values = f'[{", ".join(values)}]'
-        return '{0}: {1}'.format(alias, values)
+        return f'{alias}: {values}'
 
 class Option(Domain):
     """ Alias for Domain({name: values}). """

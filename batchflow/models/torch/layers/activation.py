@@ -73,7 +73,9 @@ class Activation(nn.Module):
         Additional named arguments passed to either class initializer or callable.
     """
     FUNCTIONS = {f.lower(): f for f in dir(nn)}
-    FUNCTIONS['rsoftmax'] = RadixSoftmax
+    FUNCTIONS.update({
+        'rsoftmax': RadixSoftmax,
+    })
 
     def __init__(self, activation='relu', *args, **kwargs):
         super().__init__()
