@@ -1508,25 +1508,21 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         Scalar values are aggregated by `mean`, array values are concatenated along the first (batch) axis.
         """
         result = []
-        for i, _ in enumerate(outputs):
-            # All tensors for current `output_name`
-            chunked_output = [chunk_outputs[i][:chunk_size]
-                              for chunk_outputs, chunk_size in zip(chunked_outputs, chunk_sizes)]
+        for i, output_name in enumerate(outputs):
+            chunked_output = [chunk_outputs[i] for chunk_outputs in chunked_outputs]
             if chunked_output[0].size != 1:
                 if len(chunked_output) == 1:
                     output_ = chunked_output[0]
                 elif isinstance(chunked_output[0], np.ndarray):
-                    output_ = np.concatenate(chunked_output, axis=0)
+                    output_ = np.concatenate([chunk_output[:chunk_size] for chunk_output, chunk_size in zip(chunked_output, chunk_sizes)], axis=0)
                 else:
-                    output_ = torch.cat(chunked_output, dim=0)
+                    output_ = torch.cat([chunk_output[:chunk_size] for chunk_output, chunk_size in zip(chunked_output, chunk_sizes)], dim=0)
                 result.append(output_)
             else:
                 result.append(np.mean(chunked_output))
-
         if single_output:
             result = result[0]
         return result
-
 
     def compute_outputs(self, predictions):
         """ Produce additional outputs, defined in the config, from `predictions`.
