@@ -204,7 +204,6 @@ class Layer:
 
         image_keys = ['alpha', 'vmin', 'vmax', 'extent']
         image_config = self.config.filter(keys=image_keys, prefix='image_')
-
         image = self.ax.imshow(data, cmap=cmap, **image_config)
 
         return [image]
@@ -653,7 +652,8 @@ class Subplot:
 
         return colorbar
 
-    def add_legend(self, mode='image', label=None, color='none', alpha=1, size=15, **kwargs):
+    def add_legend(self, mode='image', label=None, color='none', alpha=1,
+                   size=15, family='sans-serif', properties=None, **kwargs):
         """ Add patches to subplot legend.
 
         Parameters
@@ -671,10 +671,18 @@ class Subplot:
         alpha : number or list of numbers from 0 to 1
             Legend handles opacity.
         size : int
-            Legend size.
+            Legend text font size.
+        family : str
+            Legent text font family.
+        properties : dict
+            Legend font parameters, must be valid for `matplotlib.font_manager.FontProperties`.
         kwargs : misc
             For `matplotlib.legend`.
         """
+        if properties is None:
+            properties = {}
+        properties = {'size': size, 'family': family, **properties}
+
         # get legend that already exists
         legend = self.ax.get_legend()
         old_handles = getattr(legend, 'legendHandles', [])
@@ -689,6 +697,7 @@ class Subplot:
         for label_item, label_color, label_alpha in zip(labels, colors, alphas):
             if label_item is None:
                 continue
+
             if isinstance(label_item, str):
                 if mode in ('image', 'histogram'):
                     if is_color_like(label_color):
@@ -705,7 +714,7 @@ class Subplot:
         if len(new_handles) > 0:
             # extend existing handles and labels with new ones
             handles = old_handles + new_handles
-            legend = self.ax.legend(prop={'size': size}, handles=handles,  handler_map=handler_map, **kwargs)
+            legend = self.ax.legend(prop=properties, handles=handles,  handler_map=handler_map, **kwargs)
 
         return legend
 
