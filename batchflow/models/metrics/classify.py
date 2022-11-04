@@ -181,8 +181,14 @@ class ClassificationMetrics(Metrics):
             'title': 'Normalized confusion matrix' if normalize else 'Confusion matrix',
             'xlabel': 'Actual class',
             'xtick_locations': np.arange(confusion_matrix.shape[0]),
+            'xtick_labels': classes,
+            'xtick_rotation': 90,
+            'xtick_ha': 'center',
             'ylabel': 'Predicted class',
             'ytick_locations': np.arange(confusion_matrix.shape[1]),
+            'ytick_labels': classes,
+            'ytick_rotation': 0,
+            'ytick_va': 'center',
             **kwargs
         }
 
