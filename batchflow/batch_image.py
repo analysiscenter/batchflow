@@ -439,6 +439,8 @@ class ImagesBatch(BaseImagesBatch):
         element, as origin will be sampled independently for each `src` element.
         To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.
         """
+        _ = src, dst
+
         origin = self._calc_origin(shape, origin, image.size)
         right_bottom = origin + shape
 
@@ -585,6 +587,8 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
+        _ = src, dst
+
         if size[0] is None and size[1] is None:
             raise ValueError('At least one component of the parameter "size" must be a number.')
         if size[0] is None:
@@ -612,6 +616,8 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
+        _ = src, dst
+
         if mode == 'const':
             image = image.transform(size=image.size,
                                     method=PIL.Image.AFFINE,
@@ -685,6 +691,8 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
+        _ = src, dst
+
         if mode == 'lr':
             return PIL.ImageOps.mirror(image)
         return PIL.ImageOps.flip(image)
@@ -843,6 +851,8 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
+        _ = src, dst
+
         multiplier = np.float32(multiplier)
         if isinstance(image, PIL.Image.Image):
             if preserve_type is False:
