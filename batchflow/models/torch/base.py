@@ -1509,6 +1509,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         """
         result = []
         for i, _ in enumerate(outputs):
+            # All tensors for current `output_name`
             chunked_output = [chunk_outputs[i] for chunk_outputs in chunked_outputs]
             if chunked_output[0].size != 1:
                 if len(chunked_output) == 1:
@@ -1522,9 +1523,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 result.append(output_)
             else:
                 result.append(np.mean(chunked_output))
+
         if single_output:
             result = result[0]
         return result
+
 
     def compute_outputs(self, predictions):
         """ Produce additional outputs, defined in the config, from `predictions`.
