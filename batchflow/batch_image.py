@@ -49,8 +49,9 @@ class BaseImagesBatch(Batch):
         path : str
             Full path to an element.
         """
-
-        if isinstance(src, FilesIndex):
+        if src is None:
+            path = str(ix)
+        elif isinstance(src, FilesIndex):
             path = src.get_fullpath(ix)
         elif isinstance(self.index, FilesIndex):
             path = self.index.get_fullpath(ix)

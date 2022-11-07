@@ -90,7 +90,7 @@ class Batch(metaclass=MethodsTransformingMeta):
 
     def __init__(self, index, dataset=None, pipeline=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
-        if  self.components is not None and not isinstance(self.components, tuple):
+        if self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
         self.index = index
         self._preloaded_lock = threading.Lock()
