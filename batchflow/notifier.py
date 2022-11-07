@@ -456,13 +456,13 @@ class Notifier:
         name = container['name']
         plot_function = container.get('plot_function')
         plot_config = container.get('plot_config', {})
+        plot_config = {**plot_config, **kwargs}
         x = np.arange(len(data))[self.slice]
         y = np.array(data)[self.slice]
 
         if plot_function is not None:
-            plot_function(ax=subplot.ax, index=index, x=x, y=y, container=container, notifier=self, **kwargs)
+            plot_function(ax=subplot.ax, index=index, x=x, y=y, container=container, notifier=self, **plot_config)
         elif isinstance(source, ResourceMonitor):
-            plot_config = {**plot_config, **kwargs}
             source.plot(plotter=self.plotter, positions=index, **plot_config)
         else:
             source_defaults = {'title': name}
@@ -487,7 +487,7 @@ class Notifier:
                     msg += f" Got {type(data)} instead."
                 raise ValueError(msg)
 
-            plot_config = {**source_defaults, **plot_config, **kwargs}
+            plot_config = {**source_defaults, **plot_config}
             self.plotter.plot(data=data, mode=mode, positions=index, **plot_config)
 
     def update_log_file(self):
