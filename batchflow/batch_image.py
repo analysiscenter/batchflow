@@ -413,7 +413,7 @@ class ImagesBatch(BaseImagesBatch):
         return rescaled_image
 
     @apply_parallel
-    def crop(self, image, origin, shape, crop_boundaries=False, **kwargs):
+    def crop(self, image, origin, shape, crop_boundaries=False, src=None, dst=None):
         """ Crop an image.
 
         Extract image data from the window of the size given by `shape` and placed at `origin`.
@@ -568,7 +568,7 @@ class ImagesBatch(BaseImagesBatch):
         return image.transform(*args, size=size, **kwargs)
 
     @apply_parallel
-    def resize(self, image, size, *args, **kwargs):
+    def resize(self, image, size, src=None, dst=None, *args, **kwargs):
         """ Calls ``image.resize(*args, **kwargs)``.
 
         For more details see `<https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.resize>_`.
@@ -594,13 +594,10 @@ class ImagesBatch(BaseImagesBatch):
         else:
             new_size = size
 
-        _ = kwargs.pop('src')
-        _ = kwargs.pop('dst')
-
         return image.resize(new_size, *args, **kwargs)
 
     @apply_parallel
-    def shift(self, image, offset, mode='const', **kwargs):
+    def shift(self, image, offset, mode='const', src=None, dst=None):
         """ Shifts an image.
 
         Parameters
@@ -672,7 +669,7 @@ class ImagesBatch(BaseImagesBatch):
         return image.rotate(*args, **kwargs)
 
     @apply_parallel
-    def flip(self, image, mode='lr', **kwargs):
+    def flip(self, image, mode='lr', src=None, dst=None):
         """ Flips image.
 
         Parameters
@@ -828,7 +825,7 @@ class ImagesBatch(BaseImagesBatch):
         return image
 
     @apply_parallel
-    def multiply(self, image, multiplier=1., clip=False, preserve_type=False, **kwargs):
+    def multiply(self, image, multiplier=1., clip=False, preserve_type=False, src=None, dst=None):
         """ Multiply each pixel by the given multiplier.
 
         Parameters
