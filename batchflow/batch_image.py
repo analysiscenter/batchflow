@@ -413,7 +413,7 @@ class ImagesBatch(BaseImagesBatch):
         return rescaled_image
 
     @apply_parallel
-    def crop(self, image, origin, shape, crop_boundaries=False):
+    def crop(self, image, origin, shape, crop_boundaries=False, src=None, dst=None):
         """ Crop an image.
 
         Extract image data from the window of the size given by `shape` and placed at `origin`.
@@ -439,6 +439,8 @@ class ImagesBatch(BaseImagesBatch):
         element, as origin will be sampled independently for each `src` element.
         To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.
         """
+        _ = src, dst
+
         origin = self._calc_origin(shape, origin, image.size)
         right_bottom = origin + shape
 
@@ -568,7 +570,7 @@ class ImagesBatch(BaseImagesBatch):
         return image.transform(*args, size=size, **kwargs)
 
     @apply_parallel
-    def resize(self, image, size, *args, **kwargs):
+    def resize(self, image, size, src=None, dst=None, *args, **kwargs):
         """ Calls ``image.resize(*args, **kwargs)``.
 
         For more details see `<https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.resize>_`.
@@ -585,6 +587,8 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
+        _ = src, dst
+
         if size[0] is None and size[1] is None:
             raise ValueError('At least one component of the parameter "size" must be a number.')
         if size[0] is None:
@@ -597,7 +601,7 @@ class ImagesBatch(BaseImagesBatch):
         return image.resize(new_size, *args, **kwargs)
 
     @apply_parallel
-    def shift(self, image, offset, mode='const'):
+    def shift(self, image, offset, mode='const', src=None, dst=None):
         """ Shifts an image.
 
         Parameters
@@ -612,6 +616,8 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
+        _ = src, dst
+
         if mode == 'const':
             image = image.transform(size=image.size,
                                     method=PIL.Image.AFFINE,
@@ -669,7 +675,7 @@ class ImagesBatch(BaseImagesBatch):
         return image.rotate(*args, **kwargs)
 
     @apply_parallel
-    def flip(self, image, mode='lr'):
+    def flip(self, image, mode='lr', src=None, dst=None):
         """ Flips image.
 
         Parameters
@@ -685,6 +691,8 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
+        _ = src, dst
+
         if mode == 'lr':
             return PIL.ImageOps.mirror(image)
         return PIL.ImageOps.flip(image)
@@ -825,7 +833,7 @@ class ImagesBatch(BaseImagesBatch):
         return image
 
     @apply_parallel
-    def multiply(self, image, multiplier=1., clip=False, preserve_type=False):
+    def multiply(self, image, multiplier=1., clip=False, preserve_type=False, src=None, dst=None):
         """ Multiply each pixel by the given multiplier.
 
         Parameters
@@ -843,6 +851,8 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
+        _ = src, dst
+
         multiplier = np.float32(multiplier)
         if isinstance(image, PIL.Image.Image):
             if preserve_type is False:
