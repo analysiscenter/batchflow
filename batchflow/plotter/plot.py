@@ -619,7 +619,7 @@ class Subplot:
         grid_config = self.config.filter(prefix='grid_')
 
         if grid in (None, False):
-            self.ax.grid()
+            self.ax.grid(False)
 
         if grid in ('minor', 'both'):
             minor_grid_config = self.config.filter(prefix='minor_grid_')
