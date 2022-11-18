@@ -169,9 +169,9 @@ class BottleneckBlock(ResBlock):
                    for item in channels]
         if expand_channels:
             channels = [item * bottleneck for item in channels[:-1]] + [channels[-1]]
-        else: 
+        else:
             channels[0] *= bottleneck
-            
+
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         groups = [groups] * num_convs if isinstance(groups, int) else groups
         if not expand_groups:
