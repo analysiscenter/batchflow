@@ -30,7 +30,7 @@ class VGGBlock(Block):
 
 class ResBlock(Block):
     """ ResNet Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is a
-    configurable residual layer, potentially including downsampling, bottleneck, squeeze-and-excitation and groups.
+    configurable residual layer, potentially including downsampling, squeeze-and-excitation and groups.
 
     Parameters
     ----------
@@ -51,15 +51,15 @@ class ResBlock(Block):
         If int, the first repetition of block will use downsampling with that factor.
         If True, the first repetition of block will use downsampling with a factor of 2.
         If False, then no downsampling. Default is False.
-    bottleneck : bool, int
-        If True, then add a canonical bottleneck (1x1 conv-batchnorm-activation) with that factor of channels increase.
-        If False, then bottleneck is not used. Default is False.
+    downsample_idx : int or None
+        Index of convolution layer in the layout at which downsampling is applied if `downsample` is not False.
+        If None, takes index of first convolution with maximum `kernel_size`. Default is None.
     attention : None, bool or str
         If None or False, then nothing is added. Default is False.
         If True, then add a squeeze-and-excitation block.
         If str, then any of allowed self-attentions. For more info about possible operations,
         check :class:`~.layers.SelfAttention`.
-    groups : int
+    groups : int, list of int
         Use `groups` convolution side by side, each  seeing 1 / `groups` the input channels,
         and producing 1 / `groups` the output channels, and both subsequently concatenated.
         Number of `inputs` channels must be divisible by `groups`. Default is 1.
@@ -74,7 +74,7 @@ class ResBlock(Block):
         Other named arguments for the :class:`~.layers.Block`
     """
     def __init__(self, inputs=None, layout='cnacn', channels='same', kernel_size=3, stride=1,
-                 downsample=False, bottleneck=False, attention=None, groups=1, op='+a', branch=None,
+                 downsample=False, downsample_idx=0, attention=None, groups=1, op='+a', branch=None,
                  n_reps=1, **kwargs):
         num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
@@ -84,11 +84,11 @@ class ResBlock(Block):
 
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         stride = [stride] * num_convs if isinstance(stride, int) else stride
-        groups = [groups] * num_convs
-        if branch is None:
-            branch = {}
-        branch_stride = branch.get('stride', np.prod(stride))
+        groups = [groups] * num_convs if isinstance(groups, int) else groups
+
+        branch = {} if branch is None else branch
         branch_layout = branch.get('layout', 'cn')
+        branch_stride = branch.get('stride', np.prod(stride))
 
         # Used in the first repetition of the block.
         # Different from stride and branch_stride in other blocks if `downsample` is not ``False``.
@@ -99,18 +99,9 @@ class ResBlock(Block):
         if downsample:
             # The first repetition of the block optionally downsamples inputs
             downsample = 2 if downsample is True else downsample
-            stride_downsample[0] *= downsample
+            downsample_idx = kernel_size.index(max(kernel_size)) if downsample_idx is None else downsample_idx
+            stride_downsample[downsample_idx] *= downsample
             branch_stride_downsample *= downsample
-
-        if bottleneck:
-            # Bottleneck: apply 1x1 conv before and after main flow computations to change number of channels
-            bottleneck = 4 if bottleneck is True else bottleneck
-            layout = 'cna' + layout + 'acn'
-            kernel_size = [1] + kernel_size + [1]
-            stride = [1] + stride + [1]
-            stride_downsample = [1] + stride_downsample + [1]
-            groups = [1] + groups + [1]
-            channels = [channels[0] * bottleneck] + channels + [channels[0]]
 
         if attention:
             # Attention: add self-attention to the main flow
@@ -122,18 +113,71 @@ class ResBlock(Block):
             branch_params = {'layout': branch_layout, 'channels': channels[-1],
                              'kernel_size': 1, 'stride': branch_stride_downsample}
         else:
-            branch_params = {}
+            branch_params = {'stride': branch_stride_downsample}
         layout = 'R' + layout + op
 
         # Pass optional downsample parameters both to the main flow and to the side branch:
         # Only the first repetition is to be changed
         layer_params = [{'stride': stride_downsample,
-                         'branch': branch_params,
-                         'branch/stride': branch_stride_downsample}]
+                         'branch': branch_params}]
         layer_params += [{}]*(n_reps-1)
 
         super().__init__(*layer_params, inputs=inputs, layout=layout, channels=channels,
                          kernel_size=kernel_size, stride=stride, groups=groups, attention=attention,
+                         **kwargs)
+
+
+class BottleneckBlock(ResBlock):
+    """ ResBlock with a canonical bottleneck (1x1 conv-batchnorm-activation) architecture.
+
+    Parameters
+    ----------
+    inputs : torch.Tensor
+        Example of input tensor to this layer.
+    layout : str
+        A sequence of letters, each letter meaning individual operation.
+        See more in :class:`~.layers.conv_block.BaseBlock` documentation. Default is 'cna cna'.
+    channels : int, str, list of int, list of str
+        If `str`, then number of channels is calculated by its evaluation. ``'S'`` and ``'same'`` stand for the
+        number of channels in the previous tensor. Note the `eval` usage under the hood.
+        If int, then number of channels in the output tensor. Default value is 'same'.
+    kernel_size : int, list of int
+        Convolution kernel size. Default is [1, 3, 1].
+    bottleneck : int
+        Factor of channels increase.
+    expand_channels : bool
+        If False, channels are increased in the first convolution layer only. Default is False.
+        If True, channels are increased in all but the last convolution layers.
+    groups : int, list of int
+        Use `groups` convolution side by side, each  seeing 1 / `groups` the input channels,
+        and producing 1 / `groups` the output channels, and both subsequently concatenated.
+        Number of `inputs` channels must be divisible by `groups`. Default is 1.
+    expand_groups : bool
+        If True and `groups` is int, `groups` is propagated to all convolution layers.
+        If True and `groups` is list of int, nothing is changed.
+        If False, `groups` is set to 1 in the first and the last convolution layers. Default is False.
+    kwargs : dict
+        Other named arguments for the :class:`~.layers.ResBlock`
+    """
+    def __init__(self, inputs=None, layout='cna cna cn', channels='same', kernel_size=[1, 3, 1],
+                 bottleneck=4, expand_channels=False, expand_groups=False, groups=1, **kwargs):
+        num_convs = sum(letter in CONV_LETTERS for letter in layout)
+
+        channels = [channels] * num_convs if isinstance(channels, (int, str)) else channels
+        channels = [safe_eval(item, get_num_channels(inputs)) if isinstance(item, str) else item
+                   for item in channels]
+        if expand_channels:
+            channels = [item * bottleneck for item in channels[:-1]] + [channels[-1]]
+        else: 
+            channels[0] *= bottleneck
+            
+        kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
+        groups = [groups] * num_convs if isinstance(groups, int) else groups
+        if not expand_groups:
+            groups[0], groups[-1] = 1, 1
+
+        super().__init__(inputs=inputs, layout=layout, channels=channels,
+                         kernel_size=kernel_size, groups=groups,
                          **kwargs)
 
 
