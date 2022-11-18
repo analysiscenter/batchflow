@@ -89,6 +89,7 @@ class ResBlock(Block):
         branch = {} if branch is None else branch
         branch_layout = branch.get('layout', 'cn')
         branch_stride = branch.get('stride', np.prod(stride))
+        branch_groups = branch.get('groups', max(groups))
 
         # Used in the first repetition of the block.
         # Different from stride and branch_stride in other blocks if `downsample` is not ``False``.
@@ -111,9 +112,9 @@ class ResBlock(Block):
             # If main flow changes the number of channels, so must do the side branch.
             # No activation, because it will be applied after summation with the main flow
             branch_params = {'layout': branch_layout, 'channels': channels[-1],
-                             'kernel_size': 1, 'stride': branch_stride_downsample}
+                             'kernel_size': 1, 'stride': branch_stride_downsample, 'groups': branch_groups}
         else:
-            branch_params = {'stride': branch_stride_downsample}
+            branch_params = {'stride': branch_stride_downsample, 'groups': branch_groups}
         layout = 'R' + layout + op
 
         # Pass optional downsample parameters both to the main flow and to the side branch:
@@ -155,7 +156,7 @@ class BottleneckBlock(ResBlock):
     expand_groups : bool
         If True and `groups` is int, `groups` is propagated to all convolution layers.
         If True and `groups` is list of int, nothing is changed.
-        If False, `groups` is set to 1 in the first and the last convolution layers. Default is False.
+        If False, `groups` is set to 1 in the first and the last 1x1 convolution layers. Default is False.
     kwargs : dict
         Other named arguments for the :class:`~.layers.ResBlock`
     """
@@ -174,7 +175,8 @@ class BottleneckBlock(ResBlock):
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         groups = [groups] * num_convs if isinstance(groups, int) else groups
         if not expand_groups:
-            groups[0], groups[-1] = 1, 1
+            idx_first, idx_last = kernel_size.index(1), num_convs - kernel_size[::-1].index(1) - 1
+            groups[idx_first], groups[idx_last] = 1, 1
 
         super().__init__(inputs=inputs, layout=layout, channels=channels,
                          kernel_size=kernel_size, groups=groups,
