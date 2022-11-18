@@ -115,8 +115,15 @@ class Combine(nn.Module):
             shape = get_shape(item)
             dim = get_num_dims(item)
             spatial_shape = shape[-dim:]
-            if dim > 0 and spatial_shape != tuple([1]*dim) and spatial_shape != spatial_shape_:
-                item = center_crop(item, get_shape(inputs[0])[2:])
+            if dim > 0 and spatial_shape != tuple([1] * dim) and spatial_shape != spatial_shape_:
+                # Handle dim >= 2
+                target_shape = get_shape(inputs[0])[-2:]
+                # Handle dim = 1
+                if dim == 1:
+                    item = item.unsqueeze(-1)
+                    target_shape = (target_shape[-1], 1)
+                item = center_crop(item, target_shape)
+                item = item.squeeze(-1) if dim == 1 else item
             resized.append(item)
         return resized
 
