@@ -137,7 +137,7 @@ class BottleneckBlock(ResBlock):
         Example of input tensor to this layer.
     layout : str
         A sequence of letters, each letter meaning individual operation.
-        See more in :class:`~.layers.conv_block.BaseBlock` documentation. Default is 'cna cna'.
+        See more in :class:`~.layers.conv_block.BaseBlock` documentation. Default is 'cna cna cn'.
     channels : int, str, list of int, list of str
         If `str`, then number of channels is calculated by its evaluation. ``'S'`` and ``'same'`` stand for the
         number of channels in the previous tensor. Note the `eval` usage under the hood.
@@ -145,7 +145,7 @@ class BottleneckBlock(ResBlock):
     kernel_size : int, list of int
         Convolution kernel size. Default is [1, 3, 1].
     bottleneck : int
-        Factor of channels increase.
+        Factor of channels increase. Default is 4.
     expand_channels : bool
         If False, channels are increased in the first convolution layer only. Default is False.
         If True, channels are increased in all but the last convolution layers.
