@@ -143,14 +143,14 @@ class BottleneckBlock(ResBlock):
         number of channels in the previous tensor. Note the `eval` usage under the hood.
         If int, then number of channels in the output tensor. Default value is 'same'.
     kernel_size : int, list of int
-        Convolution kernel size. Default is [1, 3, 1].
+        Convolution kernel size. Default is (1, 3, 1).
     bottleneck : int
         Factor of channels increase. Default is 4.
     expand_channels : bool
         If False, channels are increased in the first convolution layer only. Default is False.
         If True, channels are increased in all but the last convolution layers.
     groups : int, list of int
-        Use `groups` convolution side by side, each  seeing 1 / `groups` the input channels,
+        Use `groups` convolution side by side, each seeing 1 / `groups` the input channels,
         and producing 1 / `groups` the output channels, and both subsequently concatenated.
         Number of `inputs` channels must be divisible by `groups`. Default is 1.
     expand_groups : bool
