@@ -3,6 +3,9 @@ from math import ceil, sqrt, prod
 
 import torch
 from torch import nn
+import torch.nn.functional as F
+import torchvision.ops
+from torch.nn.modules.utils import _pair
 
 from .conv import Conv
 from .combine import Combine
@@ -338,3 +341,85 @@ class MultiScaleConv(nn.ModuleList):
 
     def forward(self, x):
         return Combine(op=self.combine)([layer(x) for layer in self])
+
+    
+
+class DeformableConv2d(nn.Module):
+    """ Deformable convolution: apply convolution with learnable grid sampling locations and feature amplitudes modulation.
+    Grid offsets and modulation scalars are learned with separate convolution layers.
+    Wang, Wenhai, et al. "`InternImage: Exploring Large-Scale Vision Foundation Models with Deformable Convolutions
+    <https://arxiv.org/abs/2211.05778>`_"
+
+    Parameters
+    ----------
+    offset_groups : int
+        `groups` for offset and modulation convolution layers. Default is 1.
+    """
+    LAYER = nn.Conv2d
+
+    def __init__(self, inputs=None, channels=None, kernel_size=3, stride=1, padding='same',
+                 offset_groups=1, groups=1, dilation=1, bias=False):
+        super().__init__()
+        dims = get_num_dims(inputs)
+        if dims != 2:
+            raise NotImplementedError("DeformableConv2d supports only 2d inputs.")
+
+        if isinstance(channels, str):
+            channels = safe_eval(channels, get_num_channels(inputs))
+        in_channels = get_num_channels(inputs)
+        kernel_size = _pair(kernel_size)
+        stride = _pair(stride)
+        dilation = _pair(dilation)
+
+        # 3x3 part of depthwise-separable
+        self.args = {
+            'in_channels': in_channels, 
+            'out_channels': in_channels,
+            'groups': in_channels,
+            'kernel_size': kernel_size,
+            'stride': stride,
+            'dilation': dilation,
+            'bias': bias,
+        }
+
+        
+        self.args.update(compute_padding(padding=padding, shape=inputs.shape[-dims:], kernel_size=kernel_size,
+                                    dilation=dilation, transposed=False, stride=stride))
+        # Depthwise separable conv
+        self.depthwise_layer = self.LAYER(**self.args)
+        self.pointwise_layer = self.LAYER(in_channels=in_channels, out_channels=channels, kernel_size=(1, 1),
+                                           groups=groups, padding=(0, 0), stride=(1, 1), dilation=(1, 1))
+
+
+        # Offset
+        self.args.update({'out_channels': offset_groups * 2 * kernel_size[0] * kernel_size[1],
+                          'groups': offset_groups})
+        self.offset_layer = self.LAYER(**self.args)
+
+        nn.init.constant_(self.offset_layer.weight, 0.)
+        if bias:
+            nn.init.constant_(self.offset_layer.bias, 0.)
+
+        # Modulation
+        self.args.update({'out_channels': offset_groups * kernel_size[0] * kernel_size[1]})
+        self.modulator_layer = self.LAYER(**self.args)
+
+        nn.init.constant_(self.modulator_layer.weight, 0.)
+        if bias:
+            nn.init.constant_(self.modulator_layer.bias, 0.)
+
+    def forward(self, x):
+        offset = self.offset_layer(x)
+        modulator = self.modulator_layer(x)
+        modulator = F.softmax(modulator.flatten(start_dim=2), dim=2).view(*modulator.shape)
+        x = torchvision.ops.deform_conv2d(x,
+                                          offset=offset,
+                                          weight=self.depthwise_layer.weight,
+                                          bias=self.depthwise_layer.bias,
+                                          stride=self.args['stride'],
+                                          padding=self.args['padding'],
+                                          dilation=self.args['dilation'],
+                                          mask=modulator
+                                         )
+        x = self.pointwise_layer(x)
+        return x
