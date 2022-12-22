@@ -130,7 +130,7 @@ class ResBlock(Block):
 
 
 class BottleneckBlock(ResBlock):
-    """ ResBlock with a canonical bottleneck (1x1 conv-batchnorm-activation) architecture.
+    """ ResBlock with a canonical bottleneck (1x1-3x3-1x1 conv-batchnorm-activation) architecture.
 
     Parameters
     ----------
