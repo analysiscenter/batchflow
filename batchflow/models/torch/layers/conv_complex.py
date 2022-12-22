@@ -2,9 +2,9 @@
 from math import ceil, sqrt, prod
 
 import torch
-from torch import nn
-import torch.nn.functional as F
 import torchvision.ops
+import torch.nn.functional as F
+from torch import nn
 from torch.nn.modules.utils import _pair
 
 from .conv import Conv
@@ -342,11 +342,11 @@ class MultiScaleConv(nn.ModuleList):
     def forward(self, x):
         return Combine(op=self.combine)([layer(x) for layer in self])
 
-    
+
 
 class DeformableConv2d(nn.Module):
-    """ Deformable convolution: apply convolution with learnable grid sampling locations and feature amplitudes modulation.
-    Grid offsets and modulation scalars are learned with separate convolution layers.
+    """ Deformable convolution: apply convolution with learnable grid sampling locations and
+    feature amplitudes modulation. Grid offsets and modulation scalars are learned with separate convolution layers.
     Wang, Wenhai, et al. "`InternImage: Exploring Large-Scale Vision Foundation Models with Deformable Convolutions
     <https://arxiv.org/abs/2211.05778>`_"
 
@@ -373,7 +373,7 @@ class DeformableConv2d(nn.Module):
 
         # 3x3 part of depthwise-separable
         self.args = {
-            'in_channels': in_channels, 
+            'in_channels': in_channels,
             'out_channels': in_channels,
             'groups': in_channels,
             'kernel_size': kernel_size,
@@ -382,14 +382,12 @@ class DeformableConv2d(nn.Module):
             'bias': bias,
         }
 
-        
         self.args.update(compute_padding(padding=padding, shape=inputs.shape[-dims:], kernel_size=kernel_size,
                                     dilation=dilation, transposed=False, stride=stride))
         # Depthwise separable conv
         self.depthwise_layer = self.LAYER(**self.args)
         self.pointwise_layer = self.LAYER(in_channels=in_channels, out_channels=channels, kernel_size=(1, 1),
                                            groups=groups, padding=(0, 0), stride=(1, 1), dilation=(1, 1))
-
 
         # Offset
         self.args.update({'out_channels': offset_groups * 2 * kernel_size[0] * kernel_size[1],

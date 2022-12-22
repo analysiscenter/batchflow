@@ -8,7 +8,8 @@ from .core import Dense, DenseAlongAxis, Dropout, AlphaDropout
 from .normalization import Normalization
 from .conv import (Conv, ConvTranspose,
                    DepthwiseConv, DepthwiseConvTranspose, SeparableConv, SeparableConvTranspose)
-from .conv_complex import MultiKernelConv, SharedKernelConv, AvgPoolConv, BilinearConvTranspose, MultiScaleConv, DeformableConv2d
+from .conv_complex import (MultiKernelConv, SharedKernelConv, AvgPoolConv, BilinearConvTranspose,
+                           MultiScaleConv, DeformableConv2d)
 from .pooling import AvgPool, MaxPool, GlobalAvgPool, GlobalMaxPool
 from .resize import IncreaseDim, Reshape, Interpolate
 from .activation import Activation

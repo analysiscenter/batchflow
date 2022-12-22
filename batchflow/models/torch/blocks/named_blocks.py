@@ -160,7 +160,7 @@ class BottleneckBlock(ResBlock):
     kwargs : dict
         Other named arguments for the :class:`~.layers.ResBlock`
     """
-    def __init__(self, inputs=None, layout='cna cna cn', channels='same', kernel_size=[1, 3, 1],
+    def __init__(self, inputs=None, layout='cna cna cn', channels='same', kernel_size=(1, 3, 1),
                  bottleneck=4, expand_channels=False, expand_groups=False, groups=1, **kwargs):
         num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
@@ -172,7 +172,7 @@ class BottleneckBlock(ResBlock):
         else:
             channels[0] *= bottleneck
 
-        kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
+        kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else list(kernel_size)
         groups = [groups] * num_convs if isinstance(groups, int) else groups
         if not expand_groups:
             idx_first, idx_last = kernel_size.index(1), num_convs - kernel_size[::-1].index(1) - 1
