@@ -111,8 +111,9 @@ class ResBlock(Block):
         if get_num_channels(inputs) != channels[-1] or np.prod(stride_downsample) != 1:
             # If main flow changes the number of channels, so must do the side branch.
             # No activation, because it will be applied after summation with the main flow
+            stride_type = 'pool_stride' if 'v' in branch_layout else 'stride'
             branch_params = {'layout': branch_layout, 'channels': channels[-1],
-                             'kernel_size': 1, 'stride': branch_stride_downsample, 'groups': branch_groups}
+                             'kernel_size': 1, stride_type: branch_stride_downsample, 'groups': branch_groups}
         else:
             branch_params = {'stride': branch_stride_downsample, 'groups': branch_groups}
         layout = 'R' + layout + op
