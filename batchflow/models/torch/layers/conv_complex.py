@@ -364,9 +364,8 @@ class DeformableConv2d(nn.Module):
         if dims != 2:
             raise NotImplementedError("DeformableConv2d supports only 2d inputs.")
 
-        if isinstance(channels, str):
-            channels = safe_eval(channels, get_num_channels(inputs))
         in_channels = get_num_channels(inputs)
+        channels = safe_eval(channels, in_channels) if isinstance(channels, str) else channels
         kernel_size = _pair(kernel_size)
         stride = _pair(stride)
         dilation = _pair(dilation)
