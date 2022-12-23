@@ -87,7 +87,6 @@ class ResBlock(Block):
         groups = [groups] * num_convs if isinstance(groups, int) else groups
 
         branch = {} if branch is None else branch
-        branch_layout = branch.get('layout', 'cn')
         branch_stride = branch.get('stride', np.prod(stride))
         branch_groups = branch.get('groups', max(groups))
 
@@ -111,13 +110,16 @@ class ResBlock(Block):
         if get_num_channels(inputs) != channels[-1] or np.prod(stride_downsample) != 1:
             # If main flow changes the number of channels, so must do the side branch.
             # No activation, because it will be applied after summation with the main flow
-            stride_type = 'pool_stride' if 'v' in branch_layout else 'stride'
-            branch_params = {'layout': branch_layout, 'channels': channels[-1],
-                             'kernel_size': 1, stride_type: branch_stride_downsample, 'groups': branch_groups}
+            branch_layout = branch.get('layout', 'vcn')
+            branch_stride_type = 'pool_stride' if 'v' in branch_layout else 'stride'
         else:
-            branch_params = {'stride': branch_stride_downsample, 'groups': branch_groups}
-        layout = 'R' + layout + op
+            branch_layout = branch.get('layout', None)
+            branch_stride_type = 'stride'
 
+        branch_params = {'layout': branch_layout, 'channels': channels[-1],
+                         'kernel_size': 1, branch_stride_type: branch_stride_downsample, 'groups': branch_groups}
+
+        layout = 'R' + layout + op
         # Pass optional downsample parameters both to the main flow and to the side branch:
         # Only the first repetition is to be changed
         layer_params = [{'stride': stride_downsample,
