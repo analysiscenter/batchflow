@@ -2,10 +2,9 @@
 from math import ceil, sqrt, prod
 
 import torch
+from torch import nn
 import torchvision.ops
 import torch.nn.functional as F
-from torch import nn
-from torch.nn.modules.utils import _pair
 
 from .conv import Conv
 from .combine import Combine
@@ -347,59 +346,74 @@ class MultiScaleConv(nn.ModuleList):
 class DeformableConv2d(nn.Module):
     """ Deformable convolution: apply convolution with learnable grid sampling locations and
     feature amplitudes modulation. Grid offsets and modulation scalars are learned with separate convolution layers.
-    Wang, Wenhai, et al. "`InternImage: Exploring Large-Scale Vision Foundation Models with Deformable Convolutions
+    This module combines second and third versions from corresponding papers.
+    Third version also applies depthwise-separable convolution as main conv layer,
+    grouped convolution as offset and modulation layers, and softmax activation instead of sigmoid for modulation.
+    v2: Zhu, Xizhou, et al. "`Deformable convnets v2: More deformable, better results.
+    <https://arxiv.org/abs/1811.11168>`_"
+    v3: Wang, Wenhai, et al. "`InternImage: Exploring Large-Scale Vision Foundation Models with Deformable Convolutions.
     <https://arxiv.org/abs/2211.05778>`_"
 
     Parameters
     ----------
-    offset_groups : int
-        `groups` for offset and modulation convolution layers. Default is 1.
+    version : int, either `2` or `3`
+        Which version of the module to apply. Default is 2.
+    offset_groups : int, None
+        `groups` for offset and modulation convolution layers. If None, uses the default value:
+        default is 1 for the secong version and changes dynamically in third, see `offset_groups_factor`.
+    offset_groups_factor : int
+        Factor for dynamic calculaton of `offset_groups`. If `version` is 3 and `offset_groups` are not provided,
+        `offset_groups` are calculated as `in_channels` // `offset_groups_factor`. Default is 16.
     """
-    LAYER = nn.Conv2d
-
-    def __init__(self, inputs=None, channels=None, kernel_size=3, stride=1, padding='same',
-                 offset_groups=1, groups=1, dilation=1, bias=False):
+    def __init__(self, inputs=None, channels=None, version=2, offset_groups=None, offset_groups_factor=16,
+                 kernel_size=3, stride=1, padding='same', groups=1, dilation=1, bias=False):
         super().__init__()
-        dims = get_num_dims(inputs)
-        if dims != 2:
+        if get_num_dims(inputs) != 2:
             raise NotImplementedError("DeformableConv2d supports only 2d inputs.")
+        if version not in (2, 3):
+            raise KeyError(f"DeformableConv2d expects version to be one of (2, 3) but {version} was specified.")
 
         in_channels = get_num_channels(inputs)
         channels = safe_eval(channels, in_channels) if isinstance(channels, str) else channels
-        kernel_size = _pair(kernel_size)
-        stride = _pair(stride)
-        dilation = _pair(dilation)
+        kernel_size = to_n_tuple(kernel_size, 2)
+        stride = to_n_tuple(stride, 2)
+        dilation = to_n_tuple(dilation, 2)
 
-        # 3x3 part of depthwise-separable
-        self.args = {
+        args = {
             'in_channels': in_channels,
-            'out_channels': in_channels,
-            'groups': in_channels,
+            'out_channels': channels if version == 2 else in_channels,
+            'groups': groups if version == 2 else in_channels,
             'kernel_size': kernel_size,
             'stride': stride,
             'dilation': dilation,
             'bias': bias,
         }
 
-        self.args.update(compute_padding(padding=padding, shape=inputs.shape[-dims:], kernel_size=kernel_size,
+        args.update(compute_padding(padding=padding, shape=inputs.shape[2:], kernel_size=kernel_size,
                                     dilation=dilation, transposed=False, stride=stride))
         # Depthwise separable conv
-        self.depthwise_layer = self.LAYER(**self.args)
-        self.pointwise_layer = self.LAYER(in_channels=in_channels, out_channels=channels, kernel_size=(1, 1),
-                                           groups=groups, padding=(0, 0), stride=(1, 1), dilation=(1, 1))
+        self.depthwise_layer = nn.Conv2d(**args)
+        self.pointwise_layer = nn.Identity() if version == 2 else nn.Conv2d(in_channels=in_channels,
+                                                                            out_channels=channels,
+                                                                            kernel_size=1,
+                                                                            groups=groups)
 
         # Offset
-        self.args.update({'out_channels': offset_groups * 2 * kernel_size[0] * kernel_size[1],
-                          'groups': offset_groups})
-        self.offset_layer = self.LAYER(**self.args)
+        offset_groups = 1 if (offset_groups is None and version == 2) else offset_groups
+        if version == 3 and offset_groups is None:
+            offset_groups = in_channels // offset_groups_factor if (in_channels % offset_groups_factor == 0) else 1
+            
+        args.update({'out_channels': offset_groups * 2 * kernel_size[0] * kernel_size[1], 'groups': offset_groups})
+        self.offset_layer = nn.Conv2d(**args)
 
         nn.init.constant_(self.offset_layer.weight, 0.)
         if bias:
             nn.init.constant_(self.offset_layer.bias, 0.)
 
         # Modulation
-        self.args.update({'out_channels': offset_groups * kernel_size[0] * kernel_size[1]})
-        self.modulator_layer = self.LAYER(**self.args)
+        args.update({'out_channels': offset_groups * kernel_size[0] * kernel_size[1]})
+        self.modulator_layer = nn.Conv2d(**args)
+        self.modulator_activation = nn.Sigmoid() if version == 2 else nn.Softmax(dim=2)
 
         nn.init.constant_(self.modulator_layer.weight, 0.)
         if bias:
@@ -408,14 +422,14 @@ class DeformableConv2d(nn.Module):
     def forward(self, x):
         offset = self.offset_layer(x)
         modulator = self.modulator_layer(x)
-        modulator = F.softmax(modulator.flatten(start_dim=2), dim=2).view(*modulator.shape)
+        modulator = self.modulator_activation(modulator.flatten(start_dim=2)).view(*modulator.shape)
         x = torchvision.ops.deform_conv2d(x,
                                           offset=offset,
                                           weight=self.depthwise_layer.weight,
                                           bias=self.depthwise_layer.bias,
-                                          stride=self.args['stride'],
-                                          padding=self.args['padding'],
-                                          dilation=self.args['dilation'],
+                                          stride=self.depthwise_layer.stride,
+                                          padding=self.depthwise_layer.padding,
+                                          dilation=self.depthwise_layer.dilation,
                                           mask=modulator
                                          )
         x = self.pointwise_layer(x)
