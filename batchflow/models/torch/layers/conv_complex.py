@@ -4,7 +4,6 @@ from math import ceil, sqrt, prod
 import torch
 from torch import nn
 import torchvision.ops
-import torch.nn.functional as F
 
 from .conv import Conv
 from .combine import Combine
@@ -402,7 +401,7 @@ class DeformableConv2d(nn.Module):
         offset_groups = 1 if (offset_groups is None and version == 2) else offset_groups
         if version == 3 and offset_groups is None:
             offset_groups = in_channels // offset_groups_factor if (in_channels % offset_groups_factor == 0) else 1
-            
+
         args.update({'out_channels': offset_groups * 2 * kernel_size[0] * kernel_size[1], 'groups': offset_groups})
         self.offset_layer = nn.Conv2d(**args)
 
