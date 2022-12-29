@@ -505,3 +505,46 @@ class MSCANBlock(Block):
             **kwargs
         }
         super().__init__(inputs=inputs, layout=layout, **kwargs)
+
+
+class InternImageBlock(Block):
+    """InternImage block: block with effective utilization of deformable convolution v3: `~.layers.DeformableConv2d`.
+    Allows dynamic calculation of `groups` for offset and modulation parts in deformable conv.
+    Wang, Wenhai, et al. "`InternImage: Exploring Large-Scale Vision Foundation Models with Deformable Convolutions.
+    <https://arxiv.org/abs/2211.05778>`_"
+
+    Parameters
+    ----------
+    kernel_size : int
+        Kernel size for deformable convolution layer. Default is 3.
+    offset_groups : int, str
+        `offset_groups` for deformable convolution.
+        If str, should be `dynamic`. Then offset groups are calculated as `in_channels` // `offset_groups_factor`.
+    """
+    def __init__(self, inputs=None, layout='R yn+a R cn+a', channels='same', kernel_size=3, offset_groups_factor=16,
+                 offset_groups='dynamic', **kwargs):
+        kernel_size = [kernel_size, 1]
+
+        in_channels = get_num_channels(inputs)
+        if isinstance(offset_groups, str):
+            if offset_groups == 'dynamic':
+                offset_groups = in_channels // offset_groups_factor if (in_channels % offset_groups_factor == 0) else 1
+            else:
+                raise KeyError("`offset groups` should be int or 'dynamic'.")
+
+        kwargs = {
+            'kernel_size': kernel_size,
+            'activalion': 'GELU',
+            'version': 3,
+            'channels': channels,
+            'offset_groups': offset_groups,
+            'normalization_type': 'layer',
+            'branch': {
+                'layout': ['cn', ''],
+                'kernel_size': 1,
+                'channels': channels,
+                'normalization_type': 'layer',
+            },
+            **kwargs
+        }
+        super().__init__(inputs=inputs, layout=layout, **kwargs)

@@ -158,7 +158,7 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
     DEFAULT_LETTERS = LETTERS_LAYERS.keys()
     LETTERS_GROUPS = dict(zip(DEFAULT_LETTERS, DEFAULT_LETTERS))
     LETTERS_GROUPS.update({
-        'C': 'c', 't': 'c', 'T': 'c', 'w': 'c', 'W': 'c',
+        'C': 'c', 't': 'c', 'T': 'c', 'w': 'c', 'W': 'c', 'y': 'c',
         'k': 'c', 'K': 'c', 'q': 'c', 'Q': 'c', 'm': 'c',
         'v': 'p',
         'V': 'P',
