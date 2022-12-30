@@ -8,7 +8,8 @@ from .core import Dense, DenseAlongAxis, Dropout, AlphaDropout
 from .normalization import Normalization
 from .conv import (Conv, ConvTranspose,
                    DepthwiseConv, DepthwiseConvTranspose, SeparableConv, SeparableConvTranspose)
-from .conv_complex import MultiKernelConv, SharedKernelConv, AvgPoolConv, BilinearConvTranspose, MultiScaleConv
+from .conv_complex import (MultiKernelConv, SharedKernelConv, AvgPoolConv, BilinearConvTranspose,
+                           MultiScaleConv, DeformableConv2d)
 from .pooling import AvgPool, MaxPool, GlobalAvgPool, GlobalMaxPool
 from .resize import IncreaseDim, Reshape, Interpolate
 from .activation import Activation
@@ -87,7 +88,7 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         'q': 'avg_pool_conv',
         'Q': 'bilinear_conv_transpose',
         'm': 'multi_scale_conv',
-
+        'y': 'deformable_conv2d',
         # Downsample / upsample
         'v': 'avg_pool',
         'p': 'max_pool',
@@ -134,6 +135,7 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
         'avg_pool_conv': AvgPoolConv,
         'bilinear_conv_transpose': BilinearConvTranspose,
         'multi_scale_conv': MultiScaleConv,
+        'deformable_conv2d': DeformableConv2d,
 
         'avg_pool': AvgPool,
         'max_pool': MaxPool,
@@ -156,7 +158,7 @@ class MultiLayer(ModuleDictReprMixin, nn.ModuleDict):
     DEFAULT_LETTERS = LETTERS_LAYERS.keys()
     LETTERS_GROUPS = dict(zip(DEFAULT_LETTERS, DEFAULT_LETTERS))
     LETTERS_GROUPS.update({
-        'C': 'c', 't': 'c', 'T': 'c', 'w': 'c', 'W': 'c',
+        'C': 'c', 't': 'c', 'T': 'c', 'w': 'c', 'W': 'c', 'y': 'c',
         'k': 'c', 'K': 'c', 'q': 'c', 'Q': 'c', 'm': 'c',
         'v': 'p',
         'V': 'P',
