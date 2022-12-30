@@ -27,4 +27,4 @@ from .utils_notebook import in_notebook, get_notebook_path, get_notebook_name, p
 from .utils_telegram import TelegramMessage
 
 
-__version__ = '0.7.7'
+__version__ = '0.8.0'
