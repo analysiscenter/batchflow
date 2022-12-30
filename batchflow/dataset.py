@@ -348,8 +348,7 @@ class Dataset(Baseset):
 
         for i in range(n_splits):
             test_indices = splits[i]
-            train_splits = list(set(range(n_splits)) - {i})
-            train_indices = np.concatenate(np.asarray(splits)[train_splits])
+            train_indices = np.concatenate([split for j, split in enumerate(splits) if i != j])
 
             setattr(self, 'cv'+str(i), self.copy())
             cv_dataset = getattr(self, 'cv'+str(i))
