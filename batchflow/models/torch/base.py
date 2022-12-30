@@ -1,6 +1,7 @@
 """ Eager version of TorchModel. """
 import os
 import re
+import inspect
 from math import ceil
 from threading import Lock
 from functools import partial
@@ -980,7 +981,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Apply model to train/predict on given data
-    def train(self, inputs, targets, outputs=None, lock=True, profile=False,
+    def train(self, inputs, targets, outputs=None, mode='train', lock=True, profile=False,
               sync_frequency=True, microbatch_size=None, microbatch_drop_last=True, microbatch_pad_last=False,
               sam_rho=None, sam_individual_norm=None, transfer_from_device=True):
         """ Train the model with the data provided
@@ -1092,7 +1093,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 build_inputs = [item[:2] for item in chunked_inputs[0]]
                 self.build_model(build_inputs)
 
-            self.model.train()
+            self.set_model_mode(mode)
 
             # Set up the profiling, if needed
             profile = profile or self.profile
@@ -1290,7 +1291,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     def predict(self, inputs, targets=None, outputs=None, lock=True, microbatch_size=False, microbatch_pad_last=False,
-                amp=None, eval_mode=True, no_grad=True, transfer_from_device=True):
+                amp=None, mode='eval', no_grad=True, transfer_from_device=True):
         """ Get predictions on the data provided.
 
         Parameters
@@ -1377,8 +1378,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                                            'targets_shapes': targets_shapes})
 
             # Evaluate each microbatch separately
-            if eval_mode:
-                self.model.eval()
+            self.set_model_mode(mode)
 
             chunked_outputs = []
             for chunk_inputs, chunk_targets in zip(chunked_inputs, chunked_targets):
@@ -1454,6 +1454,15 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Common utilities for train and predict
+    def set_model_mode(self, mode):
+        """ Set model mode to either train or eval. """
+        if mode in {'train', 'training'}:
+            self.model.train()
+        elif mode in {'eval', 'predict', 'inference'}:
+            self.model.eval()
+        else:
+            raise ValueError(f'Unknown model mode={mode}')
+
     def split_into_microbatches(self, inputs, targets, microbatch_size, drop_last, pad_last):
         """ Split inputs and targets into microbatch-sized chunks. """
         # Parse microbatch size
@@ -1513,7 +1522,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             chunked_output = [chunk_outputs[i] for chunk_outputs in chunked_outputs]
             if chunked_output[0].size != 1:
                 if len(chunked_output) == 1:
-                    output_ = chunked_output[0]
+                    output_ = chunked_output[0][:chunk_sizes[0]]
                 elif isinstance(chunked_output[0], np.ndarray):
                     output_ = np.concatenate([chunk_output[:chunk_size]
                                               for chunk_output, chunk_size in zip(chunked_output, chunk_sizes)], axis=0)
@@ -1673,7 +1682,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             torch.save({item: getattr(self, item) for item in self.PRESERVE},
                        path, pickle_module=pickle_module, **kwargs)
 
-    def load(self, path, make_infrastructure=False, eval_mode=False, pickle_module=dill, **kwargs):
+    def load(self, path, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
         """ Load a torch model from path.
 
         If the model was saved in ONNX format (refer to :meth:`.save` for more info), we fix the microbatch size
@@ -1724,8 +1733,28 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         if make_infrastructure:
             self.make_infrastructure()
 
-        if eval_mode:
-            self.model.eval()
+        self.set_model_mode(mode)
+
+
+    # Utilities to use when working with TorchModel
+    @staticmethod
+    def get_model_reference(obj=None):
+        """ Get the instance of a `TorchModel`, if called inside :meth:`.train` or :meth:`.predict` contexts.
+        A possible example of usage is to call inside loss module forward to get the reference of the model.
+        """
+        if hasattr(obj, 'model_reference') and obj.model_reference is not None:
+            return obj.model_reference
+
+        for frame in inspect.stack():
+            if frame.function not in {'_train', '_predict'}:
+                continue
+            if 'self' not in frame.frame.f_locals:
+                continue
+
+            model_reference = frame.frame.f_locals['self']
+            if isinstance(model_reference, TorchModel):
+                return model_reference
+        return None
 
 
     # Debug and profile the performance

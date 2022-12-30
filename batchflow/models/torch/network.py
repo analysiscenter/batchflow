@@ -104,14 +104,18 @@ class Network(ModuleDictReprMixin, nn.ModuleDict):
     def make_module(self, inputs, module_params):
         """ Parse the type of one module and make it. """
         if module_params:
-            module_type = module_params.pop('type', 'default').lower()
+            module_type = module_params.pop('type', 'default')
+            if isinstance(module_type, str):
+                module_type = module_type.lower()
 
-            if module_type in self.TYPE_TO_MODULE:
+            if callable(module_type):
+                module = module_type(inputs=inputs, **module_params)
+            elif module_type in self.TYPE_TO_MODULE:
                 module = self.TYPE_TO_MODULE[module_type](inputs=inputs, **module_params)
             else:
                 raise ValueError(f'Unknown type of module "{module_type}"!')
 
-            # Set `batchflow_module_type` attribute for every children, so that every submodule its place
+            # Set `batchflow_module_type` attribute for every children, so that every submodule knows its type
             module.apply(lambda submodule: setattr(submodule, 'batchflow_module_type', module_type))
         else:
             module = None

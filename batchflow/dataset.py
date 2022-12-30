@@ -348,8 +348,7 @@ class Dataset(Baseset):
 
         for i in range(n_splits):
             test_indices = splits[i]
-            train_splits = list(set(range(n_splits)) - {i})
-            train_indices = np.concatenate(np.asarray(splits)[train_splits])
+            train_indices = np.concatenate([split for j, split in enumerate(splits) if i != j])
 
             setattr(self, 'cv'+str(i), self.copy())
             cv_dataset = getattr(self, 'cv'+str(i))
@@ -359,7 +358,7 @@ class Dataset(Baseset):
             setattr(self.test, 'cv'+str(i), cv_dataset.test)
 
     def _split_kfold(self, n_splits, order):
-        split_sizes = np.full(n_splits, len(order) // n_splits, dtype=np.int)
+        split_sizes = np.full(n_splits, len(order) // n_splits, dtype=np.int64)
         split_sizes[:len(order) % n_splits] += 1
         current = 0
         splits = []
