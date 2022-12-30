@@ -2,7 +2,7 @@
 import numpy as np
 import torch
 from torch import nn
-
+import torch.nn.functional as F
 
 
 def to_n_tuple(value, n):
@@ -98,3 +98,23 @@ def make_shallow_dict(module):
             store_key = f'{key}/{subkey}' if subkey is not None else key
             result[store_key] = subvalue
     return result
+
+def pad(inputs, spatial_shape, target_shape):
+    """ Pad spatial dimensions of a tensor to a target shape. """
+    pad_values = [0] * len(spatial_shape) * 2
+    pad_dims = np.nonzero(np.array(spatial_shape) < np.array(target_shape))[0]
+    for dim in pad_dims:
+        pad_values[dim * 2] = (target_shape[dim] - spatial_shape[dim]) // 2
+        pad_values[dim * 2 + 1] = (target_shape[dim] - spatial_shape[dim] + 1) // 2
+    padded_inputs = F.pad(inputs, pad_values[::-1])
+    return padded_inputs
+
+def center_crop(inputs, target_shape, dims):
+    """ Crop last dims of a tensor at the center. """
+    inputs_shape = np.array(get_shape(inputs))
+    to_crop_shape = inputs_shape[-dims:]
+    no_crop_shape = inputs_shape[:-dims]
+    crop_lefts = (to_crop_shape - target_shape) // 2
+    crops_ = [slice(crop_lefts[i], crop_lefts[i] + target_shape[i]) for i in range(dims)]
+    crops = [slice(dim) for dim in no_crop_shape] + crops_
+    return inputs[crops]

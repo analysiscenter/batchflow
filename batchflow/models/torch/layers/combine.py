@@ -1,9 +1,9 @@
 """ Layer to combine multiple inputs into one tensor. """
+import numpy as np
 import torch
 from torch import nn
-from torchvision.transforms.functional import center_crop
 
-from ..utils import get_shape, get_num_channels, get_num_dims
+from ..utils import get_shape, get_num_channels, get_num_dims, pad, center_crop
 
 
 
@@ -103,20 +103,24 @@ class Combine(nn.Module):
                 res += f',\nafter_ids={self.after_ids}'
         return res
 
-
     def spatial_resize(self, inputs):
         """ Force the same shapes of the inputs, if needed. """
         shape_ = get_shape(inputs[0])
         dim_ = get_num_dims(inputs[0])
-        spatial_shape_ = shape_[-dim_:]
+        target_shape = shape_[-dim_:]
 
         resized = [inputs[0]]
         for item in inputs[1:]:
             shape = get_shape(item)
             dim = get_num_dims(item)
             spatial_shape = shape[-dim:]
-            if dim > 0 and spatial_shape != tuple([1]*dim) and spatial_shape != spatial_shape_:
-                item = center_crop(item, get_shape(inputs[0])[2:])
+            if dim > 0 and spatial_shape != tuple([1] * dim) and spatial_shape != target_shape:
+                if any(np.array(spatial_shape) < np.array(target_shape)):
+                    item = pad(item, spatial_shape, target_shape)
+                    if get_shape(item)[-dim:] == target_shape:
+                        resized.append(item)
+                        continue
+                item = center_crop(item, target_shape, dim)
             resized.append(item)
         return resized
 
