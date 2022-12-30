@@ -1,6 +1,7 @@
 """ Eager version of TorchModel. """
 import os
 import re
+import inspect
 from math import ceil
 from threading import Lock
 from functools import partial
@@ -1513,7 +1514,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             chunked_output = [chunk_outputs[i] for chunk_outputs in chunked_outputs]
             if chunked_output[0].size != 1:
                 if len(chunked_output) == 1:
-                    output_ = chunked_output[0]
+                    output_ = chunked_output[0][:chunk_sizes[0]]
                 elif isinstance(chunked_output[0], np.ndarray):
                     output_ = np.concatenate([chunk_output[:chunk_size]
                                               for chunk_output, chunk_size in zip(chunked_output, chunk_sizes)], axis=0)
@@ -1726,6 +1727,27 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         if eval_mode:
             self.model.eval()
+
+
+    # Utilities to use when working with TorchModel
+    @staticmethod
+    def get_model_reference(obj=None):
+        """ Get the instance of a `TorchModel`, if called inside :meth:`.train` or :meth:`.predict` contexts.
+        A possible example of usage is to call inside loss module forward to get the reference of the model.
+        """
+        if hasattr(obj, 'model_reference') and obj.model_reference is not None:
+            return obj.model_reference
+
+        for frame in inspect.stack():
+            if frame.function not in {'_train', '_predict'}:
+                continue
+            if 'self' not in frame.frame.f_locals:
+                continue
+
+            model_reference = frame.frame.f_locals['self']
+            if isinstance(model_reference, TorchModel):
+                return model_reference
+        return None
 
 
     # Debug and profile the performance
