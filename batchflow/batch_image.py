@@ -343,7 +343,7 @@ class ImagesBatch(BaseImagesBatch):
                   f"sequence of floats in [0, 1) interval. Got {origin}"
             raise ValueError(msg)
 
-        return np.asarray(origin, dtype=np.int)
+        return np.asarray(origin, dtype=np.int64)
 
     @apply_parallel
     def scale(self, image, factor, preserve_shape=False, origin='center', resample=0):

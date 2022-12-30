@@ -359,7 +359,7 @@ class Dataset(Baseset):
             setattr(self.test, 'cv'+str(i), cv_dataset.test)
 
     def _split_kfold(self, n_splits, order):
-        split_sizes = np.full(n_splits, len(order) // n_splits, dtype=np.int)
+        split_sizes = np.full(n_splits, len(order) // n_splits, dtype=np.int64)
         split_sizes[:len(order) % n_splits] += 1
         current = 0
         splits = []
