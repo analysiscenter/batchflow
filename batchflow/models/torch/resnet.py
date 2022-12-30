@@ -16,7 +16,7 @@ Jie Hu. et al. "`Squeeze-and-Excitation Networks
 """
 #pylint: disable=too-many-ancestors
 from .base import TorchModel
-from .blocks import ResBlock
+from .blocks import ResBlock, BottleneckBlock
 
 
 
@@ -55,9 +55,6 @@ class ResNet(TorchModel):
                 If `int`, in first repetition of block downsampling with a factor ``downsample``.
                 If ``True``, in first repetition of block downsampling with a factor 2.
                 If ``False``, without downsampling.
-            bottleneck : bool, int, list of bool, list of int
-                If ``True``, then construct a canonical bottleneck block from the given layout.
-                If ``False``, then bottleneck is not used.
             se : bool, list of bool
                 If ``True``, then construct a SE-ResNet block from the given layout.
                 If ``False``, then squeeze and excitation is not used.
@@ -94,7 +91,6 @@ class ResNet(TorchModel):
                     'channels': [64, 128, 256, 512],
                     'n_reps': [1, 1, 1, 1],
                     'downsample': [False, True, True, True],
-                    'bottleneck': False,
                     'attention': False,
                 }
             },
@@ -130,8 +126,8 @@ class ResNet50(ResNet34):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/blocks/layout'] = 'cn'
-        config['body/blocks/bottleneck'] = True
+        config['body/blocks/base_block'] = BottleneckBlock
+        config['body/blocks/layout'] = 'cna cna cn'
         return config
 
 class ResNet101(ResNet50):

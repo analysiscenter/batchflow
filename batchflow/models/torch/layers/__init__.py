@@ -6,7 +6,8 @@ from .activation import Activation, RadixSoftmax
 from .normalization import Normalization, LayerNorm
 from .conv import (Conv, ConvTranspose,
                    DepthwiseConv, DepthwiseConvTranspose, SeparableConv, SeparableConvTranspose)
-from .conv_complex import MultiKernelConv, SharedKernelConv, AvgPoolConv, BilinearConvTranspose, MultiScaleConv
+from .conv_complex import (MultiKernelConv, SharedKernelConv, AvgPoolConv, BilinearConvTranspose,
+                           MultiScaleConv, DeformableConv2d)
 from .pooling import MaxPool, AvgPool, GlobalMaxPool, GlobalAvgPool, ChannelPool
 from .resize import IncreaseDim, Reshape, Crop, Interpolate
 from .combine import Combine
