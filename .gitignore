@@ -1,10 +1,13 @@
-*.pyc
 .ipynb_checkpoints
 .pytest_cache
+
 .DS_Store
 .vscode
 .idea
+
+*.pyc
+.coverage
+
 build/
 dist/
 *.egg-info/
-.coverage
