@@ -107,8 +107,8 @@ class ResBlock(Block):
             # Attention: add self-attention to the main flow
             layout += 'S'
 
-        if get_num_channels(inputs) != channels[-1] and np.prod(stride_downsample) != 1:
-            # If main flow changes the number of channels and resolution, then side branch applies stride in pooling.
+        if np.prod(stride_downsample) != 1:
+            # If main flow changes resolution, then side branch applies stride in pooling.
             # No activation, because it will be applied after summation with the main flow
             branch_layout = branch.get('layout', 'vcn')
             branch_stride_type = 'pool_stride' if 'v' in branch_layout else 'stride'
