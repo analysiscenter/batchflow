@@ -6,9 +6,13 @@ import io
 import contextlib
 import warnings
 from copy import deepcopy
+
 import dill
 import numpy as np
-import pandas as pd
+try:
+    import pandas as pd
+except:
+    pass
 
 from ..plotter import plot
 from ..plotter.plot import Subplot

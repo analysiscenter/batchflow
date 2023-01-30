@@ -6,7 +6,11 @@ from uuid import uuid4
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 
-from urllib3 import PoolManager
+try:
+    from urllib3 import PoolManager
+except ImportError:
+    import warnings
+    warnings.warn("urllib3 is missing. Install batchflow[telegram]")
 
 
 
