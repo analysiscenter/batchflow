@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "batchflow"
 version = "0.8.0"
-description = "BatchFlow helps you conveniently work with random or sequential batches of your data and define data processing and machine learning workflows even for datasets that do not fit into memory."
+description = "ML pipelines, model configuration and batch management"
 authors = ["Roman Kh <rhudor@gmail.com>"]
 license = "Apache License 2.0"
 readme = "README.md"
@@ -25,32 +25,34 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 
-urllib3 = ">=1.25"
 numpy = ">=1.10"
 dill = ">=0.2.7"
 multiprocess = ">=0.70.11"
 tqdm = ">=4.19.7"
 scipy = ">=0.19.1"
-scikit-image = ">=0.13.1"
 
-[tool.poetry.group.nn]
-optional = true
+
 [tool.poetry.group.nn.dependencies]
-torch = { version = ">=1.7" }
-einops = { version = ">=0.3" }
+torch = { version = ">=1.7", optional = true }
+torchvision = { version = "^0.10", optional = true }
+einops = { version = ">=0.3", optional = true }
 
-[tool.poetry.group.dev]
-optional = true
 [tool.poetry.group.dev.dependencies]
-pandas = { version = ">=0.24" }
-pytest = { version = ">=6.0" }
-matplotlib = { version = ">=3.0" }
+pandas = { version = "^0.24", optional = true }
+pytest = { version = "^6.0", optional = true }
+pylint = { version = "^2.8", optional = true }
+
+[tool.poetry.group.other.dependencies]
+matplotlib = { version = "^3.0", optional = true }
+urllib3 = { version = "^1.25", optional = true }
 
 [tool.poetry.extras]
 nn = ["torch", "einops"]
-dev = ["matplotlib", "pytest", "pandas"]
+dev = ["pandas", "pytest", "pylint", "matplotlib"]
+telegram = ["urllib3"]
+visual = ["matplotlib"]
 
 [build-system]
 requires = ["poetry-core"]

@@ -9,7 +9,10 @@ from contextlib import nullcontext
 
 import dill
 import numpy as np
-import pandas as pd
+try:
+    import pandas as pd
+except:
+    pass
 
 import torch
 from torch import nn

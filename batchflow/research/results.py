@@ -4,8 +4,12 @@ import os
 import functools
 from collections import OrderedDict
 import glob
+
 import multiprocess as mp
-import pandas as pd
+try:
+    import pandas as pd
+except:
+    pass
 import numpy as np
 
 from ..utils import to_list
