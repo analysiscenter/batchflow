@@ -102,15 +102,11 @@ jobs:
         pip install --user -U pip
         pip install wheel poetry
 
-        echo '[project]
+        echo '[tool.poetry]
         name = "test_project"
         description = "test"
         version = "0.0.1"
-        authors = [
-            { name = "Test", email = "test@test.test" }
-        ]
-
-        [tool.poetry]
+        authors = ["Test <test@test.test>"]
 
         [build-system]
         requires = ["poetry-core"]
