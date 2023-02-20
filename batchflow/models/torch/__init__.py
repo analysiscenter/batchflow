@@ -6,6 +6,7 @@
 from .base import TorchModel
 from .network import Network
 from .modules import *
+from .blocks import *
 from .layers import *
 
 # Named networks
