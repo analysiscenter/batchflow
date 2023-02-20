@@ -31,13 +31,14 @@ jobs:
     - name: Install batchflow requirements
       run: |
         pip install --user -U pip poetry
-        poetry install -E dev
+        pip install -e .
 
     - name: Run 'import batchflow'
-      run: poetry run python -c 'import batchflow'
+      run: python -c 'import batchflow'
 
     - name: Run basic tests
       run: |
+        pip install pytest
         cd batchflow/tests
         poetry run pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
 
@@ -64,7 +65,7 @@ jobs:
     - name: Install batchflow with pip
       run: |
         pip install --user -U pip wheel
-        pip install --user "git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}#egg=batchflow[dev]"
+        pip install --user "git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}[dev]"
 
     - name: Run 'import batchflow'
       run: python -c 'import batchflow'
