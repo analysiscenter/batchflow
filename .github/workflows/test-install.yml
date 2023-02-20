@@ -101,14 +101,29 @@ jobs:
       run: |
         pip install --user -U pip
         pip install wheel poetry
-        poetry add -E dev git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}
+
+        echo "[project]
+        name = "test_project"
+        description = "test"
+        version = "0.0.1"
+        authors = [
+            { name = "Test", email = "test@test.test" }
+        ]
+
+        [build-system]
+        requires = ["poetry-core"]
+        build-backend = "poetry.core.masonry.api"
+        " >> pyproject.toml
+
+        poetry add git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}
 
     - name: Run 'import batchflow' in installed environment
-      run: pipenv run python -c 'import batchflow'
+      run: poetry run python -c 'import batchflow'
 
     - uses: actions/checkout@v2
 
     - name: Run basic tests
       run: |
+        poetry add pytest
         cd batchflow/tests
-        poetry run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
+        poetry run pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
