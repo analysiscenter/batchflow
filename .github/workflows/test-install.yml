@@ -21,6 +21,8 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+    - uses: actions/checkout@v2
+
     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
       uses: actions/setup-python@v2
       with:
@@ -29,22 +31,15 @@ jobs:
     - name: Install batchflow requirements
       run: |
         pip install --user -U pip poetry
-        pwd
-
-    - uses: actions/checkout@v2
-
-    - name: Install batchflow requirements
-      run: |
-        pwd
         poetry install -E dev
 
     - name: Run 'import batchflow'
-      run: python -c 'import batchflow'
+      run: poetry run python -c 'import batchflow'
 
     - name: Run basic tests
       run: |
         cd batchflow/tests
-        pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
+        poetry run pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
 
 
 # -----------------------------------------
