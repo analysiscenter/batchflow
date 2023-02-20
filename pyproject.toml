@@ -35,8 +35,10 @@ scipy = ">=0.19.1"
 
 tqdm = ">=4.19.7"
 
-[tool.poetry.group.image.dependencies]
 matplotlib = { version = "^3.0" }
+
+
+[tool.poetry.group.image.dependencies]
 pillow = { version = "^9.4", optional = true }
 
 [tool.poetry.group.research.dependencies]
