@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        python-version: [3.8, 3.9]
 
     runs-on: ${{ matrix.os }}
 
@@ -52,7 +52,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        python-version: [3.8, 3.9]
 
     runs-on: ${{ matrix.os }}
 
@@ -80,15 +80,15 @@ jobs:
 
 
 # -----------------------------------------
-#    Install with pipenv
+#    Install with poetry
 # -----------------------------------------
-  install_with_pipenv:
+  install_with_poetry:
 
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        python-version: [3.8, 3.9]
 
     runs-on: ${{ matrix.os }}
 
@@ -98,12 +98,11 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install batchflow with pipenv
+    - name: Install batchflow with poetry
       run: |
         pip install --user -U pip
-        pip install wheel pipenv
-        pipenv --python ${{ matrix.python-version }}
-        pipenv install git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}#egg=batchflow
+        pip install wheel poetry
+        poetry add git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}
 
     - name: Run 'import batchflow' in installed environment
       run: pipenv run python -c 'import batchflow'
@@ -113,12 +112,4 @@ jobs:
     - name: Run basic tests
       run: |
         cd batchflow/tests
-        echo "[[source]]" >> Pipfile
-        echo "url = 'https://pypi.org/simple'" >> Pipfile
-        echo "verify_ssl = true" >> Pipfile
-        echo "name = 'pypi'" >> Pipfile
-        echo "[packages]" >> Pipfile
-        echo "pytest = '*'" >> Pipfile
-        echo "batchflow = {git = 'https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}'}" >> Pipfile
-        pipenv install
-        pipenv run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
+        poetry run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py

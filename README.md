@@ -82,9 +82,9 @@ For more advanced cases and detailed API see [the documentation](https://analysi
 
 ### Stable python package
 
-With modern [pipenv](https://docs.pipenv.org/)
+With [poetry](https://python-poetry.org/)
 ```
-pipenv install batchflow
+poetry add batchflow
 ```
 
 With old-fashioned [pip](https://pip.pypa.io/en/stable/)
@@ -94,42 +94,14 @@ pip3 install batchflow
 
 ### Development version
 
-With modern [pipenv](https://docs.pipenv.org/)
+With [poetry](https://python-poetry.org/)
 ```
-pipenv install git+https://github.com/analysiscenter/batchflow.git#egg=batchflow
+poetry add --editable git+https://github.com/analysiscenter/batchflow
 ```
 
 With old-fashioned [pip](https://pip.pypa.io/en/stable/)
 ```
-pip3 install git+https://github.com/analysiscenter/batchflow.git
-```
-
-After that just import `batchflow`:
-```python
-import batchflow as bf
-```
-
-### Git submodule
-In many cases it might be more convenient to install `batchflow` as a submodule in your project repository than as a python package.
-```
-git submodule add https://github.com/analysiscenter/batchflow.git
-git submodule init
-git submodule update
-```
-
-If your python file is located in another directory, you might need to add a path to `batchflow`:
-```python
-import sys
-sys.path.insert(0, "/path/to/batchflow")
-import batchflow as bf
-```
-
-What is great about using a submodule that every commit in your project can be linked to its own commit of a submodule.
-This is extremely convenient in a fast paced research environment.
-
-Relative import is also possible:
-```python
-from .batchflow import Dataset
+pip install --editable git+https://github.com/analysiscenter/batchflow
 ```
 
 ## Projects based on BatchFlow
