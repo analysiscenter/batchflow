@@ -28,10 +28,13 @@ packages = [
 python = "^3.8"
 
 numpy = ">=1.10"
+numba = "^0.56"
+llvmlite = "^0.39"
+scipy = ">=0.19.1"
+
 dill = ">=0.2.7"
 multiprocess = ">=0.70.11"
 tqdm = ">=4.19.7"
-scipy = ">=0.19.1"
 
 
 [tool.poetry.group.nn.dependencies]
