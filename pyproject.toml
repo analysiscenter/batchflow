@@ -61,7 +61,7 @@ pylint = { version = "^2.16", optional = true }
 
 [tool.poetry.group.jupyter.dependencies]
 nbformat = { version = "*", optional = true }
-nbcobvert = { version = "*", optional = true }
+nbconvert = { version = "*", optional = true }
 ipykernel = { version = "*", optional = true }
 ipython = { version = "*", optional = true }
 notebook = { version = "*", optional = true }
@@ -77,7 +77,7 @@ image = ["pillow"]
 nn = ["torch", "torchvision", "einops", "ptflops", "nvidia_smi", "psutil"]
 datasets = ["requests"]
 profile = ["pandas", "psutil", "nvidia_smi"]
-jupyter = ["requests", "ipykernel", "ipython", "notebook", "jupyter_server"]
+jupyter = ["requests", "ipykernel", "ipython", "notebook", "nbconvert", "nbformat", "jupyter_client", "jupyter_server"]
 dev = ["pandas", "pytest", "pylint"]
 research = ["pandas", "multiprocess", "psutil"]
 telegram = ["urllib3"]
