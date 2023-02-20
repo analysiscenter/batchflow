@@ -108,6 +108,9 @@ jobs:
         version = "0.0.1"
         authors = ["Test <test@test.test>"]
 
+        [tool.poetry.dependencies]
+        python = "^${{ matrix.python-version }}"
+
         [build-system]
         requires = ["poetry-core"]
         build-backend = "poetry.core.masonry.api"
