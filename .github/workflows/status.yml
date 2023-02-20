@@ -21,9 +21,7 @@ jobs:
       run: pip3 install pylint==2.6.2
 
     - name: Check pylint
-      run: |
-        pylint -rn --rcfile pylintrc batchflow
-        (( res = $? & 3 )); [[ $res -ne 0 ]] && exit 1
+      run: pylint -rn --rcfile pylintrc batchflow; (( res = $? & 3 )); [[ $res -ne 0 ]] && exit 1
 
     - name: Run tests
       if: always()
