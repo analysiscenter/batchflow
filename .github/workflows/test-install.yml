@@ -64,7 +64,7 @@ jobs:
     - name: Install batchflow with pip
       run: |
         pip install --user -U pip wheel
-        pip install --user git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}#egg=batchflow
+        pip install --user "git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}#egg=batchflow[dev]"
 
     - name: Run 'import batchflow'
       run: python -c 'import batchflow'
@@ -100,7 +100,7 @@ jobs:
       run: |
         pip install --user -U pip
         pip install wheel poetry
-        poetry add git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}
+        poetry add -E dev git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}
 
     - name: Run 'import batchflow' in installed environment
       run: pipenv run python -c 'import batchflow'
