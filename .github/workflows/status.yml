@@ -21,24 +21,10 @@ jobs:
       run: pip3 install pylint==2.6.2
 
     - name: Check pylint
-      run: pylint -rn --rcfile pylintrc batchflow
+      run: |
+        pylint -rn --rcfile pylintrc batchflow
+        (( res = $? & 3 )); [[ $res -ne 0 ]] && exit 1
 
     - name: Run tests
       if: always()
       run: pytest -m "not slow" --disable-pytest-warnings -v
-
-    - name: Slack notification
-      if: success()
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      uses: pullreminders/slack-action@master
-      with:
-        args: '{\"channel\": \"#commits\", \"attachments\": [{\"color\": \"good\", \"text\": \"<${{ github.event.commits[0].url }}|${{ github.repository }}: *${{ github.event.commits[0].message }}*> by ${{ github.event.commits[0].author.name }}\n<${{ github.event.commits[0].url }}/checks|Workflow ${{ github.workflow }}>: `${{ job.status }}`\"}]}'
-
-    - name: Slack notification
-      if: failure()
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      uses: pullreminders/slack-action@master
-      with:
-        args: '{\"channel\": \"#commits\", \"attachments\": [{\"color\": \"danger\", \"text\": \"<${{ github.event.commits[0].url }}|${{ github.repository }}: *${{ github.event.commits[0].message }}*> by ${{ github.event.commits[0].author.name }}\n<${{ github.event.commits[0].url }}/checks|Workflow ${{ github.workflow }}>: `${{ job.status }}`\"}]}'
