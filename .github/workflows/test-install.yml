@@ -110,6 +110,8 @@ jobs:
             { name = "Test", email = "test@test.test" }
         ]
 
+        [tool.poetry]
+
         [build-system]
         requires = ["poetry-core"]
         build-backend = "poetry.core.masonry.api"
