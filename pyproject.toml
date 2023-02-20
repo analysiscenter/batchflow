@@ -54,9 +54,8 @@ urllib3 = { version = "^1.25", optional = true }
 
 [tool.poetry.extras]
 nn = ["torch", "einops"]
-dev = ["pandas", "pytest", "pylint", "matplotlib"]
+dev = ["pandas", "pytest", "pylint"]
 telegram = ["urllib3"]
-visual = ["matplotlib"]
 
 [build-system]
 requires = ["poetry-core"]
