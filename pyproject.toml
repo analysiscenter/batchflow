@@ -27,9 +27,9 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.8"
 
-numpy = ">=1.10"
+numpy = "^1.18"
 numba = "^0.56"
-llvmlite = "^0.39"
+llvmlite = "*"
 scipy = ">=0.19.1"
 
 dill = ">=0.2.7"
