@@ -102,7 +102,7 @@ jobs:
         pip install --user -U pip
         pip install wheel poetry
 
-        echo "[project]
+        echo '[project]
         name = "test_project"
         description = "test"
         version = "0.0.1"
@@ -113,7 +113,7 @@ jobs:
         [build-system]
         requires = ["poetry-core"]
         build-backend = "poetry.core.masonry.api"
-        " >> pyproject.toml
+        ' >> pyproject.toml
 
         poetry add git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}
 
