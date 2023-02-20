@@ -40,7 +40,7 @@ jobs:
       run: |
         pip install pytest
         cd batchflow/tests
-        poetry run pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
+        pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
 
 
 # -----------------------------------------
@@ -65,7 +65,7 @@ jobs:
     - name: Install batchflow with pip
       run: |
         pip install --user -U pip wheel
-        pip install --user "git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}[dev]"
+        pip install --user "git+https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git@${{ github.head_ref }}"
 
     - name: Run 'import batchflow'
       run: python -c 'import batchflow'
