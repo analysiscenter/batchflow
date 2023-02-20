@@ -21,8 +21,6 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
-
     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
       uses: actions/setup-python@v2
       with:
@@ -31,6 +29,13 @@ jobs:
     - name: Install batchflow requirements
       run: |
         pip install --user -U pip poetry
+        pwd
+
+    - uses: actions/checkout@v2
+
+    - name: Install batchflow requirements
+      run: |
+        pwd
         poetry install -E dev
 
     - name: Run 'import batchflow'
