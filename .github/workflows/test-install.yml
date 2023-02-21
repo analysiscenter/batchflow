@@ -21,10 +21,10 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -58,7 +58,7 @@ jobs:
 
     steps:
     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -70,7 +70,7 @@ jobs:
     - name: Run 'import batchflow'
       run: python -c 'import batchflow'
 
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Run basic tests
       run: |
         pip install -U pytest
@@ -93,7 +93,7 @@ jobs:
 
     steps:
     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -123,7 +123,7 @@ jobs:
     - name: Run 'import batchflow' in installed environment
       run: poetry run python -c 'import batchflow'
 
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Run basic tests
       run: |

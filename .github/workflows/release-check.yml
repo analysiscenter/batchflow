@@ -25,7 +25,7 @@ jobs:
       image: analysiscenter1/ds-py3
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Install dependencies
       run: pip3 install --upgrade setuptools wheel twine
