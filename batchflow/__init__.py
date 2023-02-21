@@ -14,7 +14,6 @@ from .pipeline import Pipeline
 from .monitor import *
 from .notifier import Notifier, notifier
 from .named_expr import NamedExpression, B, L, C, F, V, M, D, R, W, P, PP, I, eval_expr
-from .plotter import plot
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, any_action_failed, mjit, deprecated, apply_parallel
 from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline

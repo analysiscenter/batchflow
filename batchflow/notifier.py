@@ -20,8 +20,7 @@ except ImportError:
 from .named_expr import NamedExpression, eval_expr
 from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .utils_telegram import TelegramMessage
-from .plotter import plot
-from .plotter.utils import PlotConfig
+
 
 
 
@@ -407,11 +406,13 @@ class Notifier:
             **kwargs
         }
 
+        from .plotter import plot
         return plot(show=False, fix_config=True, **plot_config)
 
     def update_plot(self, index=0, add_suptitle=False, savepath=None, clear_display=True, show=True,
                     telegram=None, **kwargs):
         """ Draw plots anew. """
+        from .plotter.utils import PlotConfig
         plot_config = PlotConfig(kwargs)
 
         if clear_display:
