@@ -7,10 +7,13 @@ import operator
 import matplotlib.pyplot as plt
 import numpy as np
 
-from matplotlib.collections import PatchCollection
-from matplotlib.colors import ColorConverter, ListedColormap, to_rgba
-from matplotlib.patches import Rectangle
-from matplotlib.legend_handler import HandlerBase
+try:
+    from matplotlib.collections import PatchCollection
+    from matplotlib.colors import ColorConverter, ListedColormap, to_rgba
+    from matplotlib.patches import Rectangle
+    from matplotlib.legend_handler import HandlerBase
+except ImportError:
+    pass
 
 try:
     from numba import njit

@@ -16,7 +16,6 @@ except ImportError:
     # Use this value to raise ImportError later
     nvidia_smi = None
 
-from .plotter import plot
 from .decorators import deprecated
 
 
@@ -123,6 +122,7 @@ class ResourceMonitor:
         }
 
         if plotter is None:
+            from .plotter import plot
             plotter = plot([None], mode='curve', combine='separate', ratio=1, scale=0.5)
 
         plot_config = {**plotter.config, **plot_config}
@@ -293,6 +293,7 @@ class Monitor(list):
         }
 
         if plotter is None:
+            from .plotter import plot
             plotter = plot(data=[None] * len(self), mode='curve', combine='separate', **plot_config)
 
         positions = range(len(self))

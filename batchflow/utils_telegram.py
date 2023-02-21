@@ -6,13 +6,6 @@ from uuid import uuid4
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 
-try:
-    from urllib3 import PoolManager
-except ImportError:
-    import warnings
-    warnings.warn("urllib3 is missing. Install batchflow[telegram]")
-
-
 
 class TelegramMessage:
     """ Class to send a message with text or image (either a matplotlib figure or path to photo) to a Telegram bot.
@@ -32,6 +25,11 @@ class TelegramMessage:
     USER_AGENT = 'Python Telegram Bot (https://github.com/python-telegram-bot/python-telegram-bot)'
 
     def __init__(self, token=None, chat_id=None, silent=True, content=None):
+        try:
+            from urllib3 import PoolManager
+        except ImportError:
+            raise RuntimeError("urllib3 is missing. Install batchflow[telegram]")
+
         # Connection
         self.token = token or os.getenv('TELEGRAM_TOKEN')
         self.chat_id = chat_id or os.getenv('TELEGRAM_CHAT_ID')

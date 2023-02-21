@@ -35,11 +35,10 @@ scipy = ">=0.19.1"
 
 tqdm = ">=4.19.7"
 
-matplotlib = { version = "^3.0" }
-
 
 [tool.poetry.group.image.dependencies]
 pillow = { version = "^9.4", optional = true }
+matplotlib = { version = "^3.0", optional = true }
 
 [tool.poetry.group.research.dependencies]
 multiprocess = { version = ">=0.70.11", optional = true }
@@ -73,13 +72,13 @@ requests = { version = "*", optional = true }
 urllib3 = { version = "^1.25", optional = true }
 
 [tool.poetry.extras]
-image = ["pillow"]
+image = ["pillow", "matplotlib"]
 nn = ["torch", "torchvision", "einops", "ptflops", "nvidia_smi", "psutil"]
 datasets = ["requests"]
-profile = ["pandas", "psutil", "nvidia_smi"]
-jupyter = ["requests", "ipykernel", "ipython", "notebook", "nbconvert", "nbformat", "jupyter_client", "jupyter_server"]
+profile = ["pandas", "psutil", "nvidia_smi", "matplotlib"]
+jupyter = ["requests", "ipykernel", "ipython", "notebook", "nbconvert", "nbformat", "jupyter_client", "jupyter_server", "matplotlib"]
 dev = ["pandas", "pytest", "pylint"]
-research = ["pandas", "multiprocess", "psutil"]
+research = ["pandas", "multiprocess", "psutil", "matplotlib"]
 telegram = ["urllib3"]
 
 [build-system]

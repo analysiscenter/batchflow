@@ -4,11 +4,15 @@ import warnings
 from numbers import Number
 
 import numpy as np
-import PIL
-import PIL.ImageOps
-import PIL.ImageChops
-import PIL.ImageFilter
-import PIL.ImageEnhance
+try:
+    import PIL
+    import PIL.ImageOps
+    import PIL.ImageChops
+    import PIL.ImageFilter
+    import PIL.ImageEnhance
+except ImportError:
+    pass
+
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.interpolation import map_coordinates
 

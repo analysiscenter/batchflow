@@ -6,7 +6,6 @@ import numpy as np
 
 from ...decorators import mjit
 from . import Metrics, binarize, sigmoid, infmean
-from ...plotter import plot
 
 
 
@@ -192,6 +191,7 @@ class ClassificationMetrics(Metrics):
             **kwargs
         }
 
+        from ...plotter import plot
         return plot(data=confusion_matrix, mode='matrix', **plot_config)
 
     def copy(self):
