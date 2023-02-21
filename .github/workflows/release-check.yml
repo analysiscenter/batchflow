@@ -33,7 +33,10 @@ jobs:
       run: pip install --user -U pip poetry
 
     - name: Build and publish
+      env:
+        _USERNAME: __token__
+        _PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
       run: |
         poetry install
         poetry build
-        poetry publish --repository testpypi -u __token__ -p ${{ secrets.TEST_PYPI_TOKEN }}
+        poetry publish --repository testpypi -u $_USER -p $_PASSWORD
