@@ -34,5 +34,6 @@ jobs:
 
     - name: Build and publish
       run: |
+        poetry install
         poetry build
         poetry publish --repository testpypi -u __token__ -p ${{ secrets.TEST_PYPI_TOKEN }}
