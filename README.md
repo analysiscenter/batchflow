@@ -104,6 +104,22 @@ With old-fashioned [pip](https://pip.pypa.io/en/stable/)
 pip install --editable git+https://github.com/analysiscenter/batchflow
 ```
 
+### Extras
+Some `batchflow` functions and classed require additional dependencies.
+In order to use that functionality you might need to install `batchflow` with extras (e.g. `batchflow[nn]`):
+
+- image - working with image datasets and plotting
+- nn - for neural networks (includes torch, torchvision, ...)
+- datasets - loading standard datasets (MNIST, CIFAR, ...)
+- profile - performance profiling
+- jupyter - utility functions for notebooks
+- research - multiprocess research
+- telegram - for monitoring pipelines via a telegram bot
+- dev - batchflow development (pylint, pytest, ...)
+
+You can install several extras at once, like `batchflow[image,nn,research]`.
+
+
 ## Projects based on BatchFlow
 - [SeismiQB](https://github.com/gazprom-neft/seismiqb) - ML for seismic interpretation
 - [SeismicPro](https://github.com/gazprom-neft/SeismicPro) - ML for seismic processing
