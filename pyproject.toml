@@ -27,38 +27,38 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.8"
 
-dill = "^0.3.0"
+dill = "^0.3"
 numpy = "^1.18"
 numba = "^0.56"
 llvmlite = "*"
-scipy = ">=0.19.1"
+scipy = "^1.9"
 
-tqdm = ">=4.19.7"
+tqdm = "^4.19"
 
 
-[tool.poetry.group.image.dependencies]
+# [tool.poetry.group.image.dependencies]
 pillow = { version = "^9.4", optional = true }
 matplotlib = { version = "^3.0", optional = true }
 
-[tool.poetry.group.research.dependencies]
-multiprocess = { version = ">=0.70.11", optional = true }
+# [tool.poetry.group.research.dependencies]
+multiprocess = { version = "^0.70", optional = true }
 
-[tool.poetry.group.monitor.dependencies]
+# [tool.poetry.group.monitor.dependencies]
 psutil = { version = "*", optional = true }
 nvidia_smi = { version = "*", optional = true }
 
-[tool.poetry.group.nn.dependencies]
-torch = { version = ">=1.7", optional = true }
-torchvision = { version = "^0.10", optional = true }
-einops = { version = ">=0.3", optional = true }
+# [tool.poetry.group.nn.dependencies]
+torch = { version = "^1.13", optional = true }
+torchvision = { version = "^0.14", optional = true }
+einops = { version = "^0.3", optional = true }
 ptflops = { version = "^0.6", optional = true }
 
-[tool.poetry.group.dev.dependencies]
+# [tool.poetry.group.dev.dependencies]
 pandas = { version = "^0.24", optional = true }
 pytest = { version = "^7.0", optional = true }
 pylint = { version = "^2.16", optional = true }
 
-[tool.poetry.group.jupyter.dependencies]
+# [tool.poetry.group.jupyter.dependencies]
 nbformat = { version = "*", optional = true }
 nbconvert = { version = "*", optional = true }
 ipykernel = { version = "*", optional = true }
@@ -68,7 +68,7 @@ jupyter_client = { version = "*", optional = true }
 jupyter_server = { version = "*", optional = true }
 requests = { version = "*", optional = true }
 
-[tool.poetry.group.other.dependencies]
+# [tool.poetry.group.other.dependencies]
 urllib3 = { version = "^1.25", optional = true }
 
 [tool.poetry.extras]
