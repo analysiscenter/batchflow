@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v3
 
     - name: Check whether release version matches library version
       run: python3 check_release_version.py ${GITHUB_REF##*/}
@@ -21,19 +21,18 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    container:
-      image: analysiscenter1/ds-py3
-
     steps:
     - uses: actions/checkout@v3
 
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.8
+
     - name: Install dependencies
-      run: pip3 install --upgrade setuptools wheel twine
+      run: pip install --user -U pip poetry
 
     - name: Build and publish
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
       run: |
-        python3 setup.py sdist bdist_wheel
-        twine upload --repository testpypi dist/*
+        poetry build
+        poetry publish --repository testpypi -u __token__ -p ${{ secrets.TEST_PYPI_TOKEN }}
