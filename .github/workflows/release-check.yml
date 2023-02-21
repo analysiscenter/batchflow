@@ -2,7 +2,7 @@ name: release-check
 
 on:
   release:
-    types: [prereleased]
+    types: [created, edited]
 
 
 jobs:
