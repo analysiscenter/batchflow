@@ -129,7 +129,7 @@ jobs:
 
     - name: Run basic tests
       run: |
-        ls -la
-        cp -r src/batchflow/batchflow/tests .
+        ls -la src/batchflow/
+        cp -r src/batchflow/tests .
         cd tests
         poetry run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
