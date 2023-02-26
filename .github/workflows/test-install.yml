@@ -125,11 +125,11 @@ jobs:
 
     - uses: actions/checkout@v3
       with:
-        path: source
+        path: src
 
     - name: Run basic tests
       run: |
         ls -la
-        cp -r module/batchflow/batchflow/tests .
+        cp -r src/batchflow/batchflow/tests .
         cd tests
         poetry run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
