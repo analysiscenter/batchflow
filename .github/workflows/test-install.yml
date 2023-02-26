@@ -124,8 +124,12 @@ jobs:
       run: poetry run python -c 'import batchflow'
 
     - uses: actions/checkout@v3
+      with:
+        path: source
 
     - name: Run basic tests
       run: |
-        cd batchflow/tests
+        ls -la
+        cp -r module/batchflow/batchflow/tests .
+        cd tests
         poetry run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
