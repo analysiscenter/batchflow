@@ -127,6 +127,5 @@ jobs:
 
     - name: Run basic tests
       run: |
-        poetry add pytest
         cd batchflow/tests
-        poetry run pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
+        poetry run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
