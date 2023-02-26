@@ -138,5 +138,6 @@ jobs:
         xcopy /S src\batchflow\tests tests
   
     - name: Run basic tests
+      run: |
         cd tests
         poetry run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
