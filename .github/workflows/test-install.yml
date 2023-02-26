@@ -135,7 +135,7 @@ jobs:
     - name: Prepare directory
       if: runner.os == 'Windows'
       run: |
-        xcopy /S src\batchflow\tests tests
+        xcopy /I /S src\batchflow\tests tests
   
     - name: Run basic tests
       run: |
