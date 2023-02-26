@@ -127,9 +127,16 @@ jobs:
       with:
         path: src
 
-    - name: Run basic tests
+    - name: Prepare directory
+      if: runner.os != 'Windows'
       run: |
-        ls -la src/batchflow/
         cp -r src/batchflow/tests .
+
+    - name: Prepare directory
+      if: runner.os == 'Windows'
+      run: |
+        xcopy /S src\batchflow\tests tests
+  
+    - name: Run basic tests
         cd tests
         poetry run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
