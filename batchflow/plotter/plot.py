@@ -1598,7 +1598,8 @@ class Plot:
         default_savepath = datetime.now().strftime('%Y-%m-%d_%H:%M:%S.png')
         savepath = save_config.pop('savepath', default_savepath)
 
-        self.figure.savefig(fname=savepath, **save_config)
+        if savepath:
+            self.figure.savefig(fname=savepath, **save_config)
 
     def close(self):
         """ Close figure. """
