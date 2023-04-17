@@ -109,6 +109,7 @@ class Pipeline:
         state.pop('_local')
         state['_profiler'] = None
         state['_batch_generator'] = None
+        state['iter_params'] = None
         return state
 
     def __setstate__(self, state):

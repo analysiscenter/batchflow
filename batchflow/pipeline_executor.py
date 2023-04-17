@@ -99,6 +99,8 @@ class PipelineExecutor:
             finally:
                 self._prefetch_queue.task_done()
                 self._batch_queue.put(batch, block=True)
+                if batch == END_PIPELINE_SIGNAL:
+                    self._stop_flag = True
 
 
     def gen_batch(self, *args, dataset=None, rebatch=False, reset='iter', profile=False,
@@ -168,7 +170,8 @@ class PipelineExecutor:
         if prefetch > 0:
 
             if target in ['threads', 't']:
-                self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
+                self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1,
+                                                       thread_name_prefix='BatchFlow-PipelineExecutor')
             elif target in ['mpc', 'm']:
                 self._executor = cf.ProcessPoolExecutor(max_workers=prefetch + 1)
             else:
@@ -186,7 +189,8 @@ class PipelineExecutor:
             # due to count queue both prefetch and batch queue cannot contain more than prefetch+1 items
 
             # service executor runs batch generation and batch processing threads
-            self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
+            self._service_executor = cf.ThreadPoolExecutor(max_workers=2,
+                                                           thread_name_prefix='BatchFlow-PipelineServiceExecutor')
             # this thread submits batches (waits for count queue and puts into prefetch queue)
             self._service_executor.submit(self._put_batches_into_queue, batch_generator, seed=execution_seed)
             # this thread gets processed batches (waits for futures to be complete and puts into batch queue)
@@ -196,9 +200,7 @@ class PipelineExecutor:
             while not self._stop_flag:
                 batch_res = self._batch_queue.get(block=True)
                 self._batch_queue.task_done()
-                if batch_res == END_PIPELINE_SIGNAL:
-                    self._stop_flag = True
-                else:
+                if batch_res != END_PIPELINE_SIGNAL:
                     # the batch has been created in another thread, so we need to set pipeline
                     if batch_res is not None:
                         batch_res.pipeline = self.pipeline
