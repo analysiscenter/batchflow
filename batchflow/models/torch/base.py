@@ -954,18 +954,24 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         raise TypeError('Passed data should either be a `np.ndarray`, `torch.Tensor`, `cupy.ndarray`, '
                         f'or a container of them, got{type(data)}.')
 
-    def transfer_from_device(self, data):
+    def transfer_from_device(self, data, force_float32_dtype=True):
         """ Transfer (possibly nested) data structure from device and return the same structure. """
         if isinstance(data, (dict, Config)):
-            return type(data)({key : self.transfer_from_device(value) for key, value in data.items()})
+            return type(data)({key : self.transfer_from_device(value, force_float32_dtype)
+                               for key, value in data.items()})
 
         if isinstance(data, (tuple, list)):
-            return type(data)(self.transfer_from_device(item) for item in data)
+            return type(data)(self.transfer_from_device(item, force_float32_dtype) for item in data)
 
         if isinstance(data, (torch.Tensor, torch.autograd.Variable)):
+            # cpu_tensor = data.detach().cpu().numpy()
+            # if self.amp and cpu_tensor.dtype != np.float32:
+            #     cpu_tensor = cpu_tensor.astype(np.float32)
+            # return cpu_tensor
+
+            if force_float32_dtype and data.dtype != torch.float32:
+                data = data.float()
             cpu_tensor = data.detach().cpu().numpy()
-            if self.amp and cpu_tensor.dtype != np.float32:
-                cpu_tensor = cpu_tensor.astype(np.float32)
             return cpu_tensor
 
         if isinstance(data, (np.ndarray, int, float)):
@@ -986,7 +992,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     # Apply model to train/predict on given data
     def train(self, inputs, targets, outputs=None, mode='train', lock=True, profile=False,
               sync_frequency=True, microbatch_size=None, microbatch_drop_last=True, microbatch_pad_last=False,
-              sam_rho=None, sam_individual_norm=None, transfer_from_device=True):
+              sam_rho=None, sam_individual_norm=None, transfer_from_device=True, force_float32_dtype=True):
         """ Train the model with the data provided
 
         Parameters
@@ -1031,6 +1037,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
         transfer_from_device : bool
             Whether to transfer requested `outputs` from device to CPU.
+        force_float32_dtype : bool
+            Whether to force dtype float32 to the model outputs.
+            Otherwise, the dtype is preserved and may be affected by AMP.
 
         Returns
         -------
@@ -1111,7 +1120,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 chunk_outputs = self._train(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs[:],
                                             sync_frequency=sync_frequency*steps,
                                             sam_rho=sam_rho, sam_individual_norm=sam_individual_norm,
-                                            transfer_from_device=transfer_from_device)
+                                            transfer_from_device=transfer_from_device,
+                                            force_float32_dtype=force_float32_dtype)
                 chunked_outputs.append(chunk_outputs)
 
             # Exit the profiling
@@ -1161,7 +1171,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.model_lock.release()
         return result
 
-    def _train(self, inputs, targets, outputs, sync_frequency, sam_rho, sam_individual_norm, transfer_from_device):
+    def _train(self, inputs, targets, outputs, sync_frequency, sam_rho, sam_individual_norm,
+               transfer_from_device, force_float32_dtype):
         # Parse inputs
         inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
         targets = targets[0] if len(targets) == 1 and isinstance(targets, list) else targets
@@ -1245,7 +1256,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         # Transfer only the requested outputs to CPU
         if transfer_from_device:
-            requested_outputs = self.transfer_from_device(requested_outputs)
+            requested_outputs = self.transfer_from_device(requested_outputs, force_float32_dtype=force_float32_dtype)
         return requested_outputs
 
     def _train_sam_store_gradients(self):
@@ -1294,7 +1305,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     def predict(self, inputs, targets=None, outputs=None, lock=True, microbatch_size=False, microbatch_pad_last=False,
-                amp=None, mode='eval', no_grad=True, transfer_from_device=True):
+                amp=None, mode='eval', no_grad=True, transfer_from_device=True, force_float32_dtype=True):
         """ Get predictions on the data provided.
 
         Parameters
@@ -1325,6 +1336,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             Whether to disable gradient computation during model evaluation.
         transfer_from_device : bool
             Whether to transfer requested `outputs` from device to CPU.
+        force_float32_dtype : bool
+            Whether to force dtype float32 to the model outputs.
+            Otherwise, the dtype is preserved and may be affected by AMP.
 
         Returns
         -------
@@ -1387,7 +1401,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             for chunk_inputs, chunk_targets in zip(chunked_inputs, chunked_targets):
                 # Evaluate requested outputs
                 chunk_outputs = self._predict(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs[:],
-                                              amp=amp, no_grad=no_grad, transfer_from_device=transfer_from_device)
+                                              amp=amp, no_grad=no_grad, transfer_from_device=transfer_from_device,
+                                              force_float32_dtype=force_float32_dtype)
                 chunked_outputs.append(chunk_outputs)
 
             # Aggregate the outputs from microbatches
@@ -1407,7 +1422,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.model_lock.release()
         return result
 
-    def _predict(self, inputs, targets, outputs, amp, no_grad, transfer_from_device):
+    def _predict(self, inputs, targets, outputs, amp, no_grad, transfer_from_device, force_float32_dtype):
         # Parse inputs
         inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
         targets = targets[0] if len(targets) == 1 and isinstance(targets, list) else targets
@@ -1437,11 +1452,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.last_predict_info['available_outputs'] = list(output_container.keys())
 
         # Retrieve requested outputs
-        requested_outputs = self.extract_outputs(outputs, output_container)
+        requested_outputs = self.extract_outputs(outputs, output_container, predictions=predictions)
 
         # Transfer only the requested outputs to CPU
         if transfer_from_device:
-            requested_outputs = self.transfer_from_device(requested_outputs)
+            requested_outputs = self.transfer_from_device(requested_outputs, force_float32_dtype=force_float32_dtype)
         return requested_outputs
 
 
@@ -1586,21 +1601,25 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             if operation is None:
                 result = tensor
                 name = ''
-            elif operation == 'softplus':
-                result = torch.nn.functional.softplus(tensor)
-                name = operation
-            elif operation == 'sigmoid':
-                result = torch.sigmoid(tensor)
-                name = operation
-            elif operation == 'proba':
-                result = torch.nn.functional.softmax(tensor, dim=1)
-                name = operation
-            elif operation == 'labels':
-                result = tensor.argmax(dim=1)
-                name = operation
             elif callable(operation):
                 result = operation(tensor)
                 name = operation.__name__
+            else:
+                if operation == 'softplus':
+                    result = torch.nn.functional.softplus(tensor)
+                elif operation == 'sigmoid':
+                    result = torch.sigmoid(tensor)
+                elif operation == 'sigmoid_uint8':
+                    result = (torch.sigmoid(tensor) * 255).to(dtype=torch.uint8)
+                elif operation == 'sigmoid_int16':
+                    result = (torch.sigmoid(tensor) * 255).to(dtype=torch.int16)
+                elif operation == 'proba':
+                    result = torch.nn.functional.softmax(tensor, dim=1)
+                elif operation == 'labels':
+                    result = tensor.argmax(dim=1)
+                else:
+                    raise ValueError(f'Unknown type of operation `{operation}`!')
+                name = operation
         return result, name
 
 
@@ -1616,15 +1635,17 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 result.append(output_name)
         return result
 
-    def extract_outputs(self, outputs, output_container):
+    def extract_outputs(self, outputs, output_container, predictions=None):
         """ Retrieve activation data from hooks, get other requested outputs from container. """
         requested_outputs = []
         for item in outputs:
             if isinstance(item, LayerHook):
                 item.close()
                 value = item.activation
-            else:
+            elif item in output_container:
                 value = output_container[item]
+            else:
+                value = self.apply_output_operation(tensor=predictions, operation=item)[0]
 
             requested_outputs.append(value)
         return requested_outputs
