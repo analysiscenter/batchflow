@@ -61,7 +61,7 @@ class ResourceMonitor:
         """ Start a separate thread with `function` calls every `frequency` seconds. """
         if not self.running:
             self.running = True
-            self.thread = Thread(target=self.endless_repeat)
+            self.thread = Thread(target=self.endless_repeat, name=f'BatchFlow-{type(self).__name__}')
             self.thread.start()
 
     def stop(self):
@@ -184,6 +184,36 @@ class VMSMonitor(ProcessResourceMonitor):
         _ = kwargs
         return process.memory_info().vms / (1024 ** 3) # gbytes
 
+class SHRMonitor(ProcessResourceMonitor):
+    """ Track current process memory, potentially shared with other processes. """
+    UNIT = 'Gb'
+
+    @staticmethod
+    def get_usage(process=None, **kwargs):
+        """ Track current process unique virtual memory usage. """
+        _ = kwargs
+        return process.memory_info().shared / (1024 ** 3) # gbytes
+
+class CodeMonitor(ProcessResourceMonitor):
+    """ Track current process memory, devoted to executable code. """
+    UNIT = 'Gb'
+
+    @staticmethod
+    def get_usage(process=None, **kwargs):
+        """ Track current process unique virtual memory usage. """
+        _ = kwargs
+        return process.memory_info().text / (1024 ** 3) # gbytes
+
+class DataMonitor(ProcessResourceMonitor):
+    """ Track current process memory, devoted to anything but executable code. """
+    UNIT = 'Gb'
+
+    @staticmethod
+    def get_usage(process=None, **kwargs):
+        """ Track current process unique virtual memory usage. """
+        _ = kwargs
+        return process.memory_info().data / (1024 ** 3) # gbytes
+
 class USSMonitor(ProcessResourceMonitor):
     """ Track current process unique virtual memory usage. """
     UNIT = 'Gb'
@@ -253,6 +283,9 @@ MONITOR_ALIASES = {
     CPUMonitor: ['cmonitor', 'cpu', 'cpumonitor'],
     RSSMonitor: ['rss'],
     VMSMonitor: ['vms'],
+    SHRMonitor: ['shr', 'shared'],
+    CodeMonitor: ['code', 'text'],
+    DataMonitor: ['data'],
     USSMonitor: ['uss'],
     GPUMonitor: ['gpu'],
     GPUMemoryMonitor: ['gpu_memory'],
@@ -286,9 +319,9 @@ class Monitor(list):
     def plot(self, plotter=None, positions=None, savepath=None, **kwargs):
         """ Visualize multiple monitors in a single figure. """
         plot_config = {
-            'ratio': 1 / len(self),
+            'ratio': 1 / min(len(self), 4),
             'scale': 0.5,
-            'ncols': None if 'nrows' in kwargs else len(self),
+            'ncols': None if 'nrows' in kwargs else min(len(self), 4),
             **kwargs
         }
 
