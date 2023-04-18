@@ -126,7 +126,7 @@ class PipelineProfiler(Profiler):
             columns = columns or ['total_time', 'eval_time']
             sortby = sortby or ('total_time', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.groupby(['action', 'iter'])[columns
+            result = (self.profile_info.groupby(['action', 'iter'])[columns]
                       .mean(numeric_only=True).groupby('action').agg(aggs, numeric_only=True)
                       .sort_values(sortby, ascending=False))
 

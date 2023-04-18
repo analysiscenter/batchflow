@@ -1813,7 +1813,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         if per_iter is False:
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.reset_index().groupby(['name']).agg(aggs)
+            result = (self.profile_info.reset_index().groupby(['name']).agg(aggs, numeric_only=True)
                       .sort_values(sortby, ascending=False)[:limit])
         else:
             result = (self.profile_info.reset_index().set_index(['iter', 'name'])[columns]
