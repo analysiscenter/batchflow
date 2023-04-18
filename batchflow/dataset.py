@@ -369,7 +369,7 @@ class Dataset(Baseset):
         return splits
 
     def __getstate__(self):
-        return self.__dict__
+        return self.__dict__.copy()
 
     def __setstate__(self, state):
         for k, v in state.items():

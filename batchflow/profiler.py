@@ -1,6 +1,6 @@
 """ Profiler for batchflow units """
 
-import time
+from time import perf_counter
 from pstats import Stats
 from cProfile import Profile
 import threading
@@ -11,6 +11,8 @@ try:
 except ImportError:
     from . import _fake as pd
 
+
+# TODO: simpler profiler with perf_counter; fix pandas 2.0; make a context manager
 class Profiler:
     """ Profiler for batchflow units.
 
@@ -40,7 +42,7 @@ class Profiler:
 
     def enable(self):
         """ Enable profiling. """
-        self.start_time = time.time()
+        self.start_time = perf_counter()
         if self.detailed:
             self._profiler.enable()
 
@@ -48,7 +50,7 @@ class Profiler:
         """ Disable profiling. """
         if self.detailed:
             self._profiler.disable()
-        total_time = time.time() - self.start_time
+        total_time = perf_counter() - self.start_time
         self._add_profile_info(iteration, name, start_time=self.start_time, total_time=total_time, **kwargs)
 
     def _add_profile_info(self, iter_no, name, total_time, **kwargs):
@@ -89,6 +91,7 @@ class Profiler:
         for k, v in state.items():
             setattr(self, k, v)
 
+
 class PipelineProfiler(Profiler):
     """ Profiler for batchflow pipelines. """
     def show_profile_info(self, per_iter=False, detailed=False,
@@ -123,14 +126,15 @@ class PipelineProfiler(Profiler):
             columns = columns or ['total_time', 'eval_time']
             sortby = sortby or ('total_time', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.groupby(['action', 'iter'])[columns].mean().groupby('action').agg(aggs)
+            result = (self.profile_info.groupby(['action', 'iter'])[columns
+                      .mean(numeric_only=True).groupby('action').agg(aggs, numeric_only=True)
                       .sort_values(sortby, ascending=False))
 
         elif per_iter is False and detailed is True:
             columns = columns or ['ncalls', 'tottime', 'cumtime']
             sortby = sortby or ('tottime', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.reset_index().groupby(['action', 'id']).agg(aggs)
+            result = (self.profile_info.reset_index().groupby(['action', 'id']).agg(aggs, numeric_only=True)
                       .sort_values(['action', sortby], ascending=[True, False])
                       .groupby(level=0).apply(lambda df: df[:limit]).droplevel(0))
 
@@ -138,7 +142,7 @@ class PipelineProfiler(Profiler):
             groupby = groupby or ['iter', 'action']
             columns = columns or ['action', 'total_time', 'eval_time', 'batch_id']
             sortby = sortby or 'total_time'
-            result = (self.profile_info.reset_index().groupby(groupby)[columns].mean()
+            result = (self.profile_info.reset_index().groupby(groupby)[columns].mean(numeric_only=True)
                       .sort_values(['iter', sortby], ascending=[True, False]))
 
         elif per_iter is True and detailed is True:
