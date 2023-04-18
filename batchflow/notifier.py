@@ -378,6 +378,7 @@ class Notifier:
 
     def make_plotter(self, num_graphs=None, layout='horizontal', figsize=None, ncols=None, nrows=None, **kwargs):
         """ Make canvas for plotting graphs. """
+        from .plotter import plot
         if num_graphs is None:
             num_graphs = len(self.data_containers)
 
@@ -406,7 +407,6 @@ class Notifier:
             **kwargs
         }
 
-        from .plotter import plot
         return plot(show=False, fix_config=True, **plot_config)
 
     def update_plot(self, index=0, add_suptitle=False, savepath=None, clear_display=True, show=True,

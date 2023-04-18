@@ -209,6 +209,9 @@ class PipelineExecutor:
                     self._prefetch_count.get(block=True)
                     self._prefetch_count.task_done()
 
+            self._executor.shutdown()
+            self._service_executor.shutdown()
+
         else:
             # save RNG
             random = self.pipeline.random

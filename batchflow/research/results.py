@@ -8,7 +8,7 @@ import glob
 import multiprocess as mp
 try:
     import pandas as pd
-except:
+except ImportError:
     pass
 import numpy as np
 

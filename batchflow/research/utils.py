@@ -11,7 +11,7 @@ import dill
 import numpy as np
 try:
     import pandas as pd
-except:
+except ImportError:
     pass
 
 from ..plotter import plot
