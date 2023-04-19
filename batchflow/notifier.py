@@ -278,7 +278,7 @@ class Notifier:
         if self.bar is not None:
             try:
                 # jupyter bar must be closed and reopened
-                if not self.bar.disable:
+                if not getattr(self.bar, 'disable', False):
                     self.bar.display(close=True)
                 self.bar = self.bar_func(total=self.total)
             except TypeError:
