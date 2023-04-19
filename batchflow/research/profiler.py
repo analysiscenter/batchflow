@@ -49,7 +49,7 @@ class ExperimentProfiler(Profiler):
 
         if per_iter is False and detailed is False:
             groupby = ['experiment', 'unit', 'iter'] if per_experiment else ['unit', 'iter']
-            columns = columns or ['total_time', 'eval_time', 'unit_time']
+            columns = columns or ['total_time', 'unit_time']
             sortby = sortby or ('total_time', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
             result = (self.profile_info.groupby(groupby)[columns].mean(numeric_only=True)
@@ -73,7 +73,7 @@ class ExperimentProfiler(Profiler):
             groupby = groupby or ['iter', 'unit']
             groupby = ['experiment', *groupby] if per_experiment else groupby
 
-            columns = columns or ['unit', 'total_time', 'eval_time', 'unit_time']
+            columns = columns or ['unit', 'total_time', 'unit_time']
             sortby = sortby or 'total_time'
             result = (self.profile_info.reset_index().groupby(groupby)[columns].mean(numeric_only=True)
                       .sort_values([*groupby[:-1], sortby], ascending=[True] * (len(groupby)-1) + [False]))

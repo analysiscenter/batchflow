@@ -46,6 +46,9 @@ class Profiler:
         dicts.sort(key=lambda item: item['iter'])
         df = pd.DataFrame(dicts).set_index('name')
         df.index.name = self.UNIT_NAME
+
+        n_unique_units = df.index.unique().size
+        df['iter'] = df['iter'] // n_unique_units + 1
         return df
 
     def enable(self):
@@ -72,7 +75,7 @@ class Profiler:
                     call_id = f'{key[2]}::{k[0]}::{k[1]}::{k[2]}' # method_name, file_name, line_no, callee
                     row_dict = {
                         'name': name, 'id': call_id,
-                        'iter': self.iteration, 'pipeline_iter': iter_no,
+                        'iter': self.iteration, 'outer_iter': iter_no,
                         'total_time': total_time, 'eval_time': stats.total_tt, # base stats
                         'ncalls': v[0], 'tottime': v[2], 'cumtime': v[3], # detailed stats
                         **kwargs
@@ -82,7 +85,7 @@ class Profiler:
             values = [{
                 'name': name,
                 'iter': self.iteration, 'pipeline_iter': iter_no,
-                'total_time': total_time, 'eval_time': total_time,
+                'total_time': total_time,
                 **kwargs
             }]
 
@@ -138,7 +141,7 @@ class PipelineProfiler(Profiler):
         detailed = False if not self.detailed else detailed
 
         if per_iter is False and detailed is False:
-            columns = columns or ['total_time', 'eval_time']
+            columns = columns or ['total_time']
             sortby = sortby or ('total_time', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
             result = (profile_info.groupby(['action', 'iter'])[columns]
@@ -155,7 +158,7 @@ class PipelineProfiler(Profiler):
 
         elif per_iter is True and detailed is False:
             groupby = groupby or ['iter', 'action']
-            columns = columns or ['action', 'total_time', 'eval_time', 'batch_id']
+            columns = columns or ['action', 'total_time', 'batch_id']
             sortby = sortby or 'total_time'
             result = (profile_info.reset_index().groupby(groupby)[columns].mean(numeric_only=True)
                       .sort_values(['iter', sortby], ascending=[True, False]))
