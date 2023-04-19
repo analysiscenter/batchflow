@@ -24,7 +24,7 @@ from ._const import *       # pylint:disable=wildcard-import
 from .utils import save_data_to
 from .utils_random import make_rng
 from .pipeline_executor import PipelineExecutor
-from .profiler import PipelineProfiler
+from .profiler import PipelineProfiler  
 
 
 METRICS = dict(
