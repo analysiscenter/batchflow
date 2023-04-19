@@ -12,7 +12,7 @@ except ImportError:
     from . import _fake as pd
 
 
-# TODO: simpler profiler with perf_counter; fix pandas 2.0; make a context manager
+
 class Profiler:
     """ Profiler for batchflow units.
 
@@ -21,8 +21,8 @@ class Profiler:
     profile : bool or {0, 1, 2} or 'detailed'
         whether to use profiler
     """
-
     UNIT_NAME = 'action'
+
 
     def __init__(self, detailed=True):
         if detailed:
@@ -32,13 +32,21 @@ class Profiler:
             self.detailed = False
             self._profiler = None
 
-        self._profile_info = []
+        self._profile_info = []  # dicts with info about each item
         self._profile_info_lock = threading.Lock()
         self.start_time = None
+        self.iteration = 0
 
     @property
     def profile_info(self):
-        return pd.concat(self._profile_info)
+        """ Prepare profile results dataframe. """
+        if not self._profile_info:
+            return None
+        dicts = self._profile_info
+        dicts.sort(key=lambda item: item['iter'])
+        df = pd.DataFrame(dicts).set_index('name')
+        df.index.name = self.UNIT_NAME
+        return df
 
     def enable(self):
         """ Enable profiling. """
@@ -58,27 +66,29 @@ class Profiler:
             stats = Stats(self._profiler)
             self._profiler.clear()
 
-            indices, values = [], []
+            values = []
             for key, value in stats.stats.items():
                 for k, v in value[4].items():
-                    # action name, method_name, file_name, line_no, callee
-                    indices.append((name, '{}::{}::{}::{}'.format(key[2], *k)))
+                    call_id = f'{key[2]}::{k[0]}::{k[1]}::{k[2]}' # method_name, file_name, line_no, callee
                     row_dict = {
-                        'iter': iter_no, 'total_time': total_time, 'eval_time': stats.total_tt, # base stats
+                        'name': name, 'id': call_id,
+                        'iter': self.iteration, 'pipeline_iter': iter_no,
+                        'total_time': total_time, 'eval_time': stats.total_tt, # base stats
                         'ncalls': v[0], 'tottime': v[2], 'cumtime': v[3], # detailed stats
                         **kwargs
                     }
                     values.append(row_dict)
         else:
-            indices = [(name, '')]
-            values = [{'iter': iter_no, 'total_time': total_time, 'eval_time': total_time,
-                    **kwargs}]
-
-        multiindex = pd.MultiIndex.from_tuples(indices, names=[self.UNIT_NAME, 'id'])
-        df = pd.DataFrame(values, index=multiindex)
+            values = [{
+                'name': name,
+                'iter': self.iteration, 'pipeline_iter': iter_no,
+                'total_time': total_time, 'eval_time': total_time,
+                **kwargs
+            }]
 
         with self._profile_info_lock:
-            self._profile_info.append(df)
+            self._profile_info.extend(values)
+            self.iteration += 1
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -87,9 +97,13 @@ class Profiler:
         return state
 
     def __setstate__(self, state):
-        self._profile_info_lock = threading.Lock()
         for k, v in state.items():
             setattr(self, k, v)
+
+        self._profile_info_lock = threading.Lock()
+        if self.detailed:
+            self._profiler = Profile()
+
 
 
 class PipelineProfiler(Profiler):
@@ -116,7 +130,8 @@ class PipelineProfiler(Profiler):
         parse : bool
             Allows to re-create underlying dataframe from scratches.
         """
-        if self.profile_info is None:
+        profile_info = self.profile_info
+        if profile_info is None:
             warnings.warn("Profiling has not been enabled.")
             return None
 
@@ -126,7 +141,7 @@ class PipelineProfiler(Profiler):
             columns = columns or ['total_time', 'eval_time']
             sortby = sortby or ('total_time', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.groupby(['action', 'iter'])[columns]
+            result = (profile_info.groupby(['action', 'iter'])[columns]
                       .mean(numeric_only=True).groupby('action').agg(aggs, numeric_only=True)
                       .sort_values(sortby, ascending=False))
 
@@ -134,7 +149,7 @@ class PipelineProfiler(Profiler):
             columns = columns or ['ncalls', 'tottime', 'cumtime']
             sortby = sortby or ('tottime', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.reset_index().groupby(['action', 'id']).agg(aggs, numeric_only=True)
+            result = (profile_info.reset_index().groupby(['action', 'id']).agg(aggs, numeric_only=True)
                       .sort_values(['action', sortby], ascending=[True, False])
                       .groupby(level=0).apply(lambda df: df[:limit]).droplevel(0))
 
@@ -142,14 +157,14 @@ class PipelineProfiler(Profiler):
             groupby = groupby or ['iter', 'action']
             columns = columns or ['action', 'total_time', 'eval_time', 'batch_id']
             sortby = sortby or 'total_time'
-            result = (self.profile_info.reset_index().groupby(groupby)[columns].mean(numeric_only=True)
+            result = (profile_info.reset_index().groupby(groupby)[columns].mean(numeric_only=True)
                       .sort_values(['iter', sortby], ascending=[True, False]))
 
         elif per_iter is True and detailed is True:
             groupby = groupby or ['iter', 'action', 'id']
             columns = columns or ['ncalls', 'tottime', 'cumtime']
             sortby = sortby or 'tottime'
-            result = (self.profile_info.reset_index().set_index(groupby)[columns]
+            result = (profile_info.reset_index().set_index(groupby)[columns]
                       .sort_values(['iter', 'action', sortby], ascending=[True, True, False])
                       .groupby(level=[0, 1]).apply(lambda df: df[:limit]).droplevel([0, 1]))
         return result

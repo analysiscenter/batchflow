@@ -1446,11 +1446,12 @@ class Pipeline:
 
         self.random_seed = seed
 
-        if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
-            self._profiler = PipelineProfiler(detailed=True)
-        elif profile == 1 or profile is True:
-            self._profiler = PipelineProfiler(detailed=False)
-        else: # 0, False, None
+        if self._profiler is None:
+            if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
+                self._profiler = PipelineProfiler(detailed=True)
+            elif profile in [1, True]:
+                self._profiler = PipelineProfiler(detailed=False)
+        if profile in [0, False, None]:
             self._profiler = None
 
 
