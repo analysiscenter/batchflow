@@ -1057,7 +1057,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         # Lock the entire method; release in any case
         try:
             if lock:
-                self.model_lock.acquire()
+                self.model_lock.acquire() #pylint: disable=consider-using-with
             self.last_train_info = {}
 
             # Parse inputs and targets: always a list
@@ -1362,7 +1362,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         # Acquire lock; release in any case
         try:
             if lock:
-                self.model_lock.acquire()
+                self.model_lock.acquire() #pylint: disable=consider-using-with
             self.last_predict_info = {}
 
             # Parse inputs and targets: always a list

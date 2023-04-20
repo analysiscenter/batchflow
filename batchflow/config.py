@@ -360,7 +360,7 @@ class Config:
         kwargs :
             parameters from kwargs also will be included into the resulting config
         """
-        other = dict() if other is None else other
+        other = {} if other is None else other
         if isinstance(other, (dict, Config)):
             for key, value in other.items():
                 self.put(key, value)

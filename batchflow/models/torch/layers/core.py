@@ -1,6 +1,6 @@
 """ Basic Torch layers. """
 import torch
-import torch.nn as nn
+from torch import nn
 
 from ..utils import get_shape, get_num_dims, safe_eval
 

@@ -516,7 +516,7 @@ class TestResearch:
             parsed_id = research.results.df.id.apply(lambda x: x.split('_'))
 
             # check the number of digits for each prefix code
-            assert parsed_id.apply(lambda x: all([len(i) == create_id_prefix for i in x[:-1]])).all()
+            assert parsed_id.apply(lambda x: all(len(i) == create_id_prefix for i in x[:-1])).all()
 
 
     def test_remove(self, simple_research):
@@ -548,12 +548,12 @@ class TestResearch:
         path = os.path.join(tmp_path, 'research')
         simple_research.run(name=path, n_iters=3, dump_results=True, loglevel=loglevel)
 
-        with open(os.path.join(path, 'research.log')) as file:
+        with open(os.path.join(path, 'research.log'), encoding='utf-8') as file:
             lines = file.readlines()
             assert len(lines) == length_res
 
         for path in glob.glob(os.path.join(path, 'experiments', '*')):
-            with open(os.path.join(path, 'experiment.log')) as file:
+            with open(os.path.join(path, 'experiment.log'), encoding='utf-8') as file:
                 lines = file.readlines()
                 assert len(lines) == length_exp
 
@@ -610,7 +610,7 @@ class TestResearch:
 
                 if param in [True, 1, 3]:
                     if dump_results:
-                        with open(os.path.join(research.name, filename)) as file:
+                        with open(os.path.join(research.name, filename), encoding='utf-8') as file:
                             lines = ''.join(file.readlines())
                     else:
                         lines = list(getattr(research.storage, 'experiments_'+name).values())[0]
@@ -618,7 +618,7 @@ class TestResearch:
 
                 if dump_results and param in [2, 3]:
                     for full_path in research.results.artifacts_to_df(name=filename)['full_path']:
-                        with open(full_path) as file:
+                        with open(full_path, encoding='utf-8') as file:
                             lines = ''.join(file.readlines())
                             assert lines == output * 2
 

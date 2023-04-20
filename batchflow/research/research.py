@@ -51,7 +51,7 @@ class Research:
         self.redirect_stderr = True
         self.storage = None
 
-        self._env = dict() # current state of git repo and other environment information.
+        self._env = {} # current state of git repo and other environment information.
 
         self.workers = 1
         self.branches = 1
@@ -451,9 +451,9 @@ class Research:
         params_repr = '\n'.join(params_repr)
 
         items = {'params': params_repr, 'experiment': str(self.experiment), 'domain': str(self.domain)}
-        for name in items:
+        for name, items_ in items.items():
             repr += f"{name}:\n"
-            repr += '\n'.join([spacing + item for item in str(items[name]).split('\n')])
+            repr += '\n'.join([spacing + item for item in str(items_).split('\n')])
             repr += 2 * '\n'
 
         return repr

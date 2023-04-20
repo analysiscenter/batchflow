@@ -162,7 +162,7 @@ def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, 
 
     # Create temporal file with code, run pylint on it
     temp_name = os.path.splitext(path)[0] + '.py'
-    with open(temp_name, 'w') as temp_file:
+    with open(temp_name, 'w', encoding='utf-8') as temp_file:
         temp_file.write(code)
 
     pylint_stdout, pylint_stderr = lint.py_run(temp_name + options, return_std=True)
@@ -307,7 +307,7 @@ def set_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False, raise_err
     raise_error : bool
         Whether to raise an exception if not enough devices are available.
     """
-    if 'CUDA_VISIBLE_DEVICES' in os.environ.keys():
+    if 'CUDA_VISIBLE_DEVICES' in os.environ:
         str_devices = os.environ["CUDA_VISIBLE_DEVICES"]
         warnings.warn(f'`CUDA_VISIBLE_DEVICES` is already set to "{str_devices}"!')
         return [int(d) for d in str_devices.split(',')]

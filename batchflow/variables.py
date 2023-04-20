@@ -8,6 +8,7 @@ from .named_expr import eval_expr
 
 class Variable:
     """ Pipeline variable """
+    #pylint: disable=consider-using-with
     def __init__(self, name, default=None, lock=True, pipeline=None):
         self.name = name
         self.default = default
@@ -52,6 +53,7 @@ class Variable:
 
 class VariableDirectory:
     """ Storage for pipeline variables """
+    #pylint: disable=consider-using-with
     def __init__(self, strict=False):
         self.variables = {}
         self.strict = strict

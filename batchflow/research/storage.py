@@ -226,7 +226,7 @@ class LocalExperimentStorage(BaseExperimentStorage):
         """ Dump config as serialized ConfigAlias instance and as a dict in JSON. """
         with open(os.path.join(self.full_path, 'config.dill'), 'wb') as file:
             dill.dump(self.experiment.config_alias, file)
-        with open(os.path.join(self.full_path, 'config.json'), 'w') as file:
+        with open(os.path.join(self.full_path, 'config.json'), 'w', encoding='utf-8') as file:
             json.dump(jsonify(self.experiment.config_alias.alias().config), file)
 
     def create_redirection_streams(self):
@@ -386,6 +386,7 @@ class BaseResearchStorage:
                 else:
                     raise ValueError(f'Unknown env: {command}')
             else:
+                #pylint: disable=consider-using-with
                 process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, cwd=cwd)
                 output, _ = process.communicate()
                 result = output.decode('utf')
@@ -443,7 +444,7 @@ class MemoryResearchStorage(BaseResearchStorage):
         self.experiments_stdout = self._manager.dict()
         self.experiments_stderr = self._manager.dict()
 
-        self._env = dict()
+        self._env = {}
 
         self.experiment_storage_class = MemoryExperimentStorage
 
@@ -526,7 +527,7 @@ class LocalResearchStorage(BaseResearchStorage):
     def _dump_research(self, research):
         with open(os.path.join(self.path, 'research.dill'), 'wb') as f:
             dill.dump(research, f)
-        with open(os.path.join(self.path, 'research.txt'), 'w') as f:
+        with open(os.path.join(self.path, 'research.txt'), 'w', encoding='utf-8') as f:
             f.write(str(research))
 
     def _create_logger(self):
@@ -546,17 +547,17 @@ class LocalResearchStorage(BaseResearchStorage):
         subfolder = os.path.join(self.path, 'env', dst)
         if not os.path.exists(subfolder):
             os.makedirs(subfolder)
-        with open(os.path.join(subfolder, filename + '.txt'), 'a') as file:
+        with open(os.path.join(subfolder, filename + '.txt'), 'a', encoding='utf-8') as file:
             file.write(result)
 
     @property
     def env(self):
         """ Environment state. """
-        env = dict()
+        env = {}
         filenames = glob.glob(os.path.join(self.path, 'env', '*'))
         for filename in filenames:
             name = os.path.splitext(os.path.basename(filename))[0]
-            with open(filename, 'r') as file:
+            with open(filename, 'r', encoding='utf-8') as file:
                 env[name] = file.read().strip()
         return env
 

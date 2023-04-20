@@ -25,7 +25,8 @@ def files_setup(request):
     for folder in folders:
         os.mkdir(folder)
         for i in range(3):
-            open(os.path.join(folder, f'file_{i}.txt'), 'w').close()
+            with open(os.path.join(folder, f'file_{i}.txt'), 'w', encoding='utf-8'):
+                pass
 
     def fin():
         shutil.rmtree(path)

@@ -8,7 +8,7 @@ from batchflow import Config
 
 @pytest.fixture
 def config():
-    _config = dict(key1='val1', key2=dict())
+    _config = dict(key1='val1', key2={})
     _config['key2']['subkey1'] = 'val21'
     return Config(_config)
 
