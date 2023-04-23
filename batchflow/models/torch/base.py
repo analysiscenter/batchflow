@@ -697,7 +697,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     def unpack(self, value):
         """ Unpack argument to actual value and kwargs. """
-        if isinstance(value, dict):
+        if isinstance(value, (dict, Config)):
             kwargs = value.copy()
             value = kwargs.pop('name', None)
         else:
@@ -921,7 +921,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Transfer to/from device(s)
-    def transfer_to_device(self, data):
+    def transfer_to_device(self, data, non_blocking=False):
         """ Transfer (possibly nested) data structure to device and return the same structure. """
         if isinstance(data, (dict, Config)):
             return type(data)({key : self.transfer_to_device(value) for key, value in data.items()})
@@ -936,11 +936,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             if self.config['channels_last'] and data.ndim == 4:
                 data = data.to(memory_format=torch.channels_last)
-            data = data.to(self.device)
+            data = data.to(self.device, non_blocking=non_blocking)
             return data
 
         if isinstance(data, torch.Tensor):
-            data = data.to(self.device)
+            data = data.to(self.device, non_blocking=non_blocking)
             return data
 
         if CUPY_AVAILABLE and isinstance(data, cp.ndarray):
@@ -1177,7 +1177,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
         targets = targets[0] if len(targets) == 1 and isinstance(targets, list) else targets
         inputs = self.transfer_to_device(inputs)
-        targets = self.transfer_to_device(targets)
+        targets = self.transfer_to_device(targets, non_blocking=True)
 
         # Convert layer ids into LayerHooks
         outputs = self.prepare_outputs(outputs)
@@ -1728,6 +1728,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self._parse_devices()
         if self.device:
             kwargs['map_location'] = self.device
+        kwargs['map_location'] = 'cpu'
 
         # Load items from disk storage and set them as insance attributes
         checkpoint = torch.load(path, pickle_module=pickle_module, **kwargs)

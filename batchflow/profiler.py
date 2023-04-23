@@ -1,10 +1,11 @@
 """ Profiler for batchflow units """
-
 from time import perf_counter
 from pstats import Stats
 from cProfile import Profile
 import threading
 import warnings
+import string
+import random
 
 try:
     import pandas as pd
@@ -25,17 +26,13 @@ class Profiler:
 
 
     def __init__(self, detailed=True):
-        if detailed:
-            self.detailed = True
-            self._profiler = Profile()
-        else:
-            self.detailed = False
-            self._profiler = None
-
-        self._profile_info = []  # dicts with info about each item
-        self._profile_info_lock = threading.Lock()
-        self.start_time = None
+        self.start_times = {}
+        self.detailed = detailed
+        self.profilers = {}
         self.iteration = 0
+
+        self._profile_info = []  # list of dicts with info about each item
+        self._profile_info_lock = threading.Lock()
 
     @property
     def profile_info(self):
@@ -51,23 +48,27 @@ class Profiler:
         df['iter'] = df['iter'] // n_unique_units + 1
         return df
 
-    def enable(self):
-        """ Enable profiling. """
-        self.start_time = perf_counter()
-        if self.detailed:
-            self._profiler.enable()
+    @staticmethod
+    def generate_string(size=10, chars=string.ascii_uppercase + string.digits):
+        """ Generate random string of given size. Can be used to generate unique keys for profiling. """
+        return ''.join(random.choice(chars) for _ in range(size))
 
-    def disable(self, iteration, name, **kwargs):
+    def enable(self, key=None):
+        """ Start profiling. """
+        self.start_times[key] = perf_counter()
+        if self.detailed:
+            self.profilers[key] = self._profiler.enable()
+        return key
+
+    def disable(self, iteration, name, key=None, **kwargs):
         """ Disable profiling. """
-        if self.detailed:
-            self._profiler.disable()
-        total_time = perf_counter() - self.start_time
-        self._add_profile_info(iteration, name, start_time=self.start_time, total_time=total_time, **kwargs)
+        total_time = perf_counter() - self.start_times.pop(key)
 
-    def _add_profile_info(self, iter_no, name, total_time, **kwargs):
         if self.detailed:
-            stats = Stats(self._profiler)
-            self._profiler.clear()
+            profiler = self.profilers.pop(key)
+            profiler.disable()
+            stats = Stats(profiler)
+            profiler.clear()
 
             values = []
             for key, value in stats.stats.items():
@@ -75,7 +76,7 @@ class Profiler:
                     call_id = f'{key[2]}::{k[0]}::{k[1]}::{k[2]}' # method_name, file_name, line_no, callee
                     row_dict = {
                         'name': name, 'id': call_id,
-                        'iter': self.iteration, 'outer_iter': iter_no,
+                        'iter': self.iteration, 'outer_iter': iteration,
                         'total_time': total_time, 'eval_time': stats.total_tt, # base stats
                         'ncalls': v[0], 'tottime': v[2], 'cumtime': v[3], # detailed stats
                         **kwargs
@@ -84,7 +85,7 @@ class Profiler:
         else:
             values = [{
                 'name': name,
-                'iter': self.iteration, 'pipeline_iter': iter_no,
+                'iter': self.iteration, 'pipeline_iter': iteration,
                 'total_time': total_time,
                 **kwargs
             }]

@@ -129,6 +129,7 @@ class Config:
                 else:
                     raise KeyError(f"Key '{variable}' not found")
 
+            val = Config(val) if isinstance(val, (dict, Config.IAddDict)) else val
             ret_vars.append(val)
 
         if unpack:
@@ -367,6 +368,10 @@ class Config:
         else:
             for key, value in kwargs.items():
                 self.put(key, value)
+
+    def copy(self):
+        """ Create a shallow copy of the instance. """
+        return Config(self.config.copy())
 
     def __iter__(self):
         return iter(self.config)
