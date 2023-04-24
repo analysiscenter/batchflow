@@ -297,6 +297,11 @@ class Config:
         """
         return other << self
 
+    def __eq__(self, other):
+        self_ = self.flatten() if isinstance(self, Config) else self
+        other_ = Config(other).flatten() if isinstance(other, (dict, Config)) else other
+        return self_.__eq__(other_)
+
     def items(self, flatten=False):
         """ Returns config items
 

@@ -4,8 +4,6 @@ from pstats import Stats
 from cProfile import Profile
 import threading
 import warnings
-import string
-import random
 
 try:
     import pandas as pd

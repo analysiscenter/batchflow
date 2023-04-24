@@ -537,7 +537,7 @@ class TestResearch:
             research = Research().add_callable(func)
             research.run(dump_results=False, executor_target='f', parallel=False, debug=debug)
 
-    @pytest.mark.parametrize('profile, shape', list(zip([2, 1], [11, 6])))
+    @pytest.mark.parametrize('profile, shape', list(zip([2, 1], [10, 5])))
     def test_profile(self, profile, shape, simple_research):
         simple_research.run(n_iters=3, dump_results=False, profile=profile)
 
