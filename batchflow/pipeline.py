@@ -880,8 +880,7 @@ class Pipeline:
 
         for action in actions:
             if self._profiler:
-                profile_key = id(batch)
-                self._profiler.enable(key=profile_key)
+                self._profiler.enable()
 
             if action.get('#dont_run', False):
                 pass
@@ -916,7 +915,7 @@ class Pipeline:
 
             if self._profiler:
                 name = self.get_action_name(action, add_index=True)
-                self._profiler.disable(key=profile_key, iteration=batch.iteration, name=name,
+                self._profiler.disable(iteration=batch.iteration, name=name,
                                        batch_id=id(batch), action_time=action_time)
 
         return batch

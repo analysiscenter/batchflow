@@ -26,9 +26,9 @@ class Profiler:
 
 
     def __init__(self, detailed=True):
-        self.start_times = {}
+        self.start_time = None
         self.detailed = detailed
-        self.profilers = {}
+        self.profiler = Profile() if detailed else None
         self.iteration = 0
 
         self._profile_info = []  # list of dicts with info about each item
@@ -48,27 +48,20 @@ class Profiler:
         df['iter'] = df['iter'] // n_unique_units + 1
         return df
 
-    @staticmethod
-    def generate_string(size=10, chars=string.ascii_uppercase + string.digits):
-        """ Generate random string of given size. Can be used to generate unique keys for profiling. """
-        return ''.join(random.choice(chars) for _ in range(size))
-
-    def enable(self, key=None):
+    def enable(self):
         """ Start profiling. """
-        self.start_times[key] = perf_counter()
+        self.start_time = perf_counter()
         if self.detailed:
-            self.profilers[key] = self._profiler.enable()
-        return key
+            self.profiler.enable()
 
-    def disable(self, iteration, name, key=None, **kwargs):
+    def disable(self, iteration, name, **kwargs):
         """ Disable profiling. """
-        total_time = perf_counter() - self.start_times.pop(key)
+        total_time = perf_counter() - self.start_time
 
         if self.detailed:
-            profiler = self.profilers.pop(key)
-            profiler.disable()
-            stats = Stats(profiler)
-            profiler.clear()
+            self.profiler.disable()
+            stats = Stats(self.profiler)
+            self.profiler.clear()
 
             values = []
             for key, value in stats.stats.items():
@@ -97,17 +90,21 @@ class Profiler:
     def __getstate__(self):
         state = self.__dict__.copy()
         state.pop('_profile_info_lock')
-        state['_profiler'] = None
+        state['profiler'] = None
         return state
 
     def __setstate__(self, state):
         for k, v in state.items():
             setattr(self, k, v)
 
+        self.profiler = Profiler() if self.detailed else None
         self._profile_info_lock = threading.Lock()
-        if self.detailed:
-            self._profiler = Profile()
 
+    def __add__(self, other):
+        """ Combine multiple profilers with their collected info concatenated. """
+        new = type(self)(detailed=self.detailed)
+        new._profile_info = self._profile_info + other._profile_info
+        return new
 
 
 class PipelineProfiler(Profiler):
