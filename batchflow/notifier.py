@@ -458,7 +458,7 @@ class Notifier:
         plot_config = container.get('plot_config', {})
         plot_config = {**plot_config, **kwargs}
         x = np.arange(len(data))[self.slice]
-        y = np.array(data)[self.slice]
+        y = np.array(data, dtype='object')[self.slice]
 
         if plot_function is not None:
             plot_function(ax=subplot.ax, index=index, x=x, y=y, container=container, notifier=self, **plot_config)
