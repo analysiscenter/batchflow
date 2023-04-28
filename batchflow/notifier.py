@@ -463,8 +463,6 @@ class Notifier:
         if self.slice not in [None, slice(None)]:
             x = np.array(x)[self.slice]
             y = np.array(y)[self.slice]
-        # x = np.arange(len(data))[self.slice]
-        # y = np.array(data)[self.slice]
 
         if plot_function is not None:
             plot_function(ax=subplot.ax, index=index, x=x, y=y, container=container, notifier=self, **plot_config)
