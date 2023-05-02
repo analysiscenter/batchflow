@@ -92,6 +92,7 @@ class PascalSegmentation(BasePascal):
     classes = ['background', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair',
                'cow', 'dining table', 'dog', 'horse', 'motorbike', 'person', 'potted plant', 'sheep', 'sofa',
                'train', 'TV/monitor']
+    num_classes = len(classes)
 
     def _mask_path(self, name):
         """ Return the path in the archive to the mask which is .png image by its name"""
