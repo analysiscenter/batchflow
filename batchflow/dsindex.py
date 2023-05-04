@@ -121,7 +121,7 @@ class DatasetIndex(Baseset):
     def build_pos(self):
         """ Create a dictionary with positions in the index. """
         if self.indices is None:
-            return dict()
+            return {}
         return dict(zip(self.indices, np.arange(len(self))))
 
     def get_pos(self, index):
@@ -610,7 +610,7 @@ class FilesIndex(DatasetIndex):
             raise ValueError("`path` must contain at least one entry.")
 
         _all_index = []
-        _all_paths = dict()
+        _all_paths = {}
         for one_path in paths:
             _index, _paths = self.build_from_one_path(one_path, dirs, no_ext)
             _all_index.append(_index)

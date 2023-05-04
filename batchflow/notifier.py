@@ -237,6 +237,7 @@ class Notifier:
         # Function to initialize / reinitialize bar, when needed
         if disable:
             bar_func = DummyBar
+            self.bar = None
             self.disable()
 
         self.bar = None
@@ -277,7 +278,8 @@ class Notifier:
         if self.bar is not None:
             try:
                 # jupyter bar must be closed and reopened
-                self.bar.display(close=True)
+                if not getattr(self.bar, 'disable', False):
+                    self.bar.display(close=True)
                 self.bar = self.bar_func(total=self.total)
             except TypeError:
                 # text bar can work with a simple reassigning of `total`
@@ -372,12 +374,13 @@ class Notifier:
         """ Set the new bar description, if needed. """
         postfix = self.create_description(iteration=-1)
 
-        previous_postfix = self.bar.postfix or ''
+        previous_postfix = getattr(self.bar, 'postfix', None) or ''
         if postfix and not previous_postfix.startswith(postfix):
             self.bar.set_postfix_str(postfix)
 
     def make_plotter(self, num_graphs=None, layout='horizontal', figsize=None, ncols=None, nrows=None, **kwargs):
         """ Make canvas for plotting graphs. """
+        from .plotter import plot
         if num_graphs is None:
             num_graphs = len(self.data_containers)
 
@@ -406,7 +409,6 @@ class Notifier:
             **kwargs
         }
 
-        from .plotter import plot
         return plot(show=False, fix_config=True, **plot_config)
 
     def update_plot(self, index=0, add_suptitle=False, savepath=None, clear_display=True, show=True,

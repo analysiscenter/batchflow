@@ -129,6 +129,7 @@ class Config:
                 else:
                     raise KeyError(f"Key '{variable}' not found")
 
+            val = Config(val) if isinstance(val, (dict, Config.IAddDict)) else val
             ret_vars.append(val)
 
         if unpack:
@@ -296,6 +297,11 @@ class Config:
         """
         return other << self
 
+    def __eq__(self, other):
+        self_ = self.flatten() if isinstance(self, Config) else self
+        other_ = Config(other).flatten() if isinstance(other, (dict, Config)) else other
+        return self_.__eq__(other_)
+
     def items(self, flatten=False):
         """ Returns config items
 
@@ -360,13 +366,17 @@ class Config:
         kwargs :
             parameters from kwargs also will be included into the resulting config
         """
-        other = dict() if other is None else other
+        other = {} if other is None else other
         if isinstance(other, (dict, Config)):
             for key, value in other.items():
                 self.put(key, value)
         else:
             for key, value in kwargs.items():
                 self.put(key, value)
+
+    def copy(self):
+        """ Create a shallow copy of the instance. """
+        return Config(self.config.copy())
 
     def __iter__(self):
         return iter(self.config)

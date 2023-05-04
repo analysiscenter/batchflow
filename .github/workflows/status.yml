@@ -18,10 +18,10 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Update pylint
-      run: pip3 install pylint==2.6.2
+      run: pip3 install pylint
 
     - name: Check pylint
-      run: pylint -rn --rcfile pylintrc batchflow; (( res = $? & 3 )); [[ $res -ne 0 ]] && exit 1
+      run: pylint -rn --rcfile pylintrc batchflow
 
     - name: Run tests
       if: always()

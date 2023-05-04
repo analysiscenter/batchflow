@@ -11,7 +11,7 @@ import dill
 import numpy as np
 try:
     import pandas as pd
-except:
+except ImportError:
     pass
 
 from ..plotter import plot
@@ -141,16 +141,17 @@ def generate_id(config, random, create_prefix=False):
 
 def create_output_stream(redirect, dump=False, filename=None, path=None, common=True):
     """ Create stream to redirect stdout/stderr. """
+    #pylint: disable=consider-using-with
     if bool(redirect):
         values = [1, 3] if common else [2, 3]
         if redirect in values:
             if dump:
                 filename = os.path.join(path, filename)
-                file = open(filename, 'a')
+                file = open(filename, 'a', encoding='utf-8')
             else:
                 file = io.StringIO()
         else:
-            file = open(os.devnull, 'w')
+            file = open(os.devnull, 'w', encoding='utf-8')
     else:
         file = contextlib.nullcontext()
     return file

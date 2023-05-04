@@ -136,7 +136,7 @@ jobs:
       if: runner.os == 'Windows'
       run: |
         xcopy /I /S src\batchflow\tests tests
-  
+
     - name: Run basic tests
       run: |
         cd tests

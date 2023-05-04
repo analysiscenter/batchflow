@@ -349,7 +349,7 @@ class Experiment:
         self._is_failed = False # was an exception raised or not
 
         self.last = False
-        self.outputs = dict()
+        self.outputs = {}
         self.storage = None
         self.has_dump = False # does unit has any dump actions or not
         self.name = None # name of the executor/research
@@ -835,7 +835,7 @@ class Executor:
             self.n_branches = len(configs)
 
         self.configs = configs or [Config() for _ in range(self.n_branches)]
-        self.executor_config = Config(executor_config or dict())
+        self.executor_config = Config(executor_config or {})
         self.branches_configs = branches_configs or [Config() for _ in range(self.n_branches)]
         self.branches_configs = [Config(config) for config in self.branches_configs]
         self.n_iters = n_iters
@@ -879,11 +879,11 @@ class Executor:
             'dump_results': False,
             'finalize': False
         }
-        for attr in defaults:
+        for attr, value_ in defaults.items():
             if self.research:
                 value = getattr(self.research, attr)
             else:
-                value = kwargs.get(attr, defaults[attr])
+                value = kwargs.get(attr, value_)
             setattr(self, attr, value)
 
     def create_experiments(self):
@@ -915,7 +915,7 @@ class Executor:
                         self.call_root(iteration, unit_name)
                     else:
                         self.parallel_call(iteration, unit_name, target=self.target, debug=self.debug) #pylint:disable=unexpected-keyword-arg
-                if not any([experiment.is_alive for experiment in self.experiments]):
+                if not any(experiment.is_alive for experiment in self.experiments):
                     break
                 if self.research:
                     for experiment in self.experiments:

@@ -13,6 +13,7 @@ except ImportError:
 
 from ..profiler import Profiler
 
+
 class ExperimentProfiler(Profiler):
     """ Profiler for Research experiments. """
 
@@ -48,11 +49,11 @@ class ExperimentProfiler(Profiler):
 
         if per_iter is False and detailed is False:
             groupby = ['experiment', 'unit', 'iter'] if per_experiment else ['unit', 'iter']
-            columns = columns or ['total_time', 'eval_time', 'unit_time']
+            columns = columns or ['total_time', 'unit_time']
             sortby = sortby or ('total_time', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.groupby(groupby)[columns].mean()
-                      .groupby(groupby[:-1]).agg(aggs)
+            result = (self.profile_info.groupby(groupby)[columns].mean(numeric_only=True)
+                      .groupby(groupby[:-1]).agg(aggs, numeric_only=True)
                       .sort_values(sortby, ascending=False))
 
             if per_experiment:
@@ -64,7 +65,7 @@ class ExperimentProfiler(Profiler):
             sortby = sortby or ('tottime', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
             level = [0, 1] if per_experiment else 0
-            result = (self.profile_info.reset_index().groupby(groupby).agg(aggs)
+            result = (self.profile_info.reset_index().groupby(groupby).agg(aggs, numeric_only=True)
                     .sort_values([*groupby[:-1], sortby], ascending=[True] * (len(groupby)-1) + [False])
                     .groupby(level=level).apply(lambda df: df.iloc[:limit].reset_index(level)))
 
@@ -72,9 +73,9 @@ class ExperimentProfiler(Profiler):
             groupby = groupby or ['iter', 'unit']
             groupby = ['experiment', *groupby] if per_experiment else groupby
 
-            columns = columns or ['unit', 'total_time', 'eval_time', 'unit_time']
+            columns = columns or ['unit', 'total_time', 'unit_time']
             sortby = sortby or 'total_time'
-            result = (self.profile_info.reset_index().groupby(groupby)[columns].mean()
+            result = (self.profile_info.reset_index().groupby(groupby)[columns].mean(numeric_only=True)
                       .sort_values([*groupby[:-1], sortby], ascending=[True] * (len(groupby)-1) + [False]))
 
         elif per_iter is True and detailed is True:

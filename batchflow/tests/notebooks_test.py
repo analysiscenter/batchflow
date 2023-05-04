@@ -7,11 +7,11 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 import warnings
 from glob import glob
 import pytest
-from tensorflow.test import is_gpu_available
+import torch
 
 
 
-NO_GPU = pytest.mark.skipif(not is_gpu_available(), reason='No GPU')
+NO_GPU = pytest.mark.skipif(not torch.cuda.is_available(), reason='No GPU')
 
 NOTEBOOKS_DIR = './notebooks/'
 NOTEBOOKS = glob(NOTEBOOKS_DIR + '*.ipynb')

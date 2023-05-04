@@ -7,6 +7,7 @@ import threading
 import asyncio
 import logging
 import warnings
+from time import perf_counter
 
 from .base import Baseset
 from .config import Config
@@ -102,6 +103,7 @@ class Pipeline:
         self.random_seed = None
 
         self._profiler = None
+        self.run_time = None
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -109,6 +111,7 @@ class Pipeline:
         state.pop('_local')
         state['_profiler'] = None
         state['_batch_generator'] = None
+        state['iter_params'] = None
         return state
 
     def __setstate__(self, state):
@@ -912,7 +915,8 @@ class Pipeline:
 
             if self._profiler:
                 name = self.get_action_name(action, add_index=True)
-                self._profiler.disable(batch.iteration, name, batch_id=id(batch), action_time=action_time)
+                self._profiler.disable(iteration=batch.iteration, name=name,
+                                       batch_id=id(batch), action_time=action_time)
 
         return batch
 
@@ -1445,11 +1449,12 @@ class Pipeline:
 
         self.random_seed = seed
 
-        if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
-            self._profiler = PipelineProfiler(detailed=True)
-        elif profile == 1 or profile is True:
-            self._profiler = PipelineProfiler(detailed=False)
-        else: # 0, False, None
+        if self._profiler is None:
+            if profile == 2 or isinstance(profile, str) and 'detailed'.startswith(profile):
+                self._profiler = PipelineProfiler(detailed=True)
+            elif profile in [1, True]:
+                self._profiler = PipelineProfiler(detailed=False)
+        if profile in [0, False, None]:
             self._profiler = None
 
 
@@ -1636,6 +1641,7 @@ class Pipeline:
         --------
         :meth:`~.Pipeline.gen_batch`
         """
+        start_time = perf_counter()
         if kwargs.pop('lazy', False):
             # if lazy is passed, then store params for later execution
             self._lazy_run = args, kwargs
@@ -1650,7 +1656,9 @@ class Pipeline:
             warnings.warn('Batch generation will never stop as ' \
                           'n_epochs=None and n_iters=None', RuntimeWarning)
 
-        return PipelineExecutor(self).run(*args_value, **kwargs_value)
+        PipelineExecutor(self).run(*args_value, **kwargs_value)
+        self.run_time = perf_counter() - start_time
+        return self
 
     def run_now(self, *args, **kwargs):
         """ Execute pipeline immediately """

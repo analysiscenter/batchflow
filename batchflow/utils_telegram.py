@@ -27,8 +27,8 @@ class TelegramMessage:
     def __init__(self, token=None, chat_id=None, silent=True, content=None):
         try:
             from urllib3 import PoolManager
-        except ImportError:
-            raise RuntimeError("urllib3 is missing. Install batchflow[telegram]")
+        except ImportError as e:
+            raise ImportError("urllib3 is missing. Install batchflow[telegram]") from e
 
         # Connection
         self.token = token or os.getenv('TELEGRAM_TOKEN')

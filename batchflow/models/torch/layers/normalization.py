@@ -1,6 +1,6 @@
 """ Normalization layers. """
 import torch
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 
 from ..utils import get_num_channels, get_num_dims

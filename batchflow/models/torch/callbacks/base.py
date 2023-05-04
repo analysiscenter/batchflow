@@ -7,7 +7,7 @@ from ....monitor import USSMonitor, GPUMonitor, GPUMemoryMonitor
 
 def file_print(path, msg):
     """ Print to a file. """
-    with open(path, 'a+') as f:
+    with open(path, 'a+', encoding='utf-8') as f:
         print(msg, file=f)
 
 
@@ -35,7 +35,7 @@ class BaseCallback(ABC):
             return stream
 
         if isinstance(stream, str):
-            with open(stream, 'w') as _:
+            with open(stream, 'w', encoding='utf-8') as _:
                 pass
             return lambda msg: file_print(stream, msg)
         raise TypeError('`Stream` argument must be either None, callable or string.')

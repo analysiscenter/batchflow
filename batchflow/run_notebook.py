@@ -234,7 +234,7 @@ def notebook_to_html(notebook, out_path_html, display_link):
     html_exporter = HTMLExporter()
     body, _ = html_exporter.from_notebook_node(notebook)
 
-    with open(out_path_html, 'w') as f:
+    with open(out_path_html, 'w', encoding='utf-8') as f:
         f.write(body)
 
     if display_link:

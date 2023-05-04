@@ -256,7 +256,7 @@ class Domain:
         self.create_id_prefix = False
         self.random_state = None
 
-        self.values_indices = dict()
+        self.values_indices = {}
 
     def _get_all_options_names(self):
         options = []
@@ -325,7 +325,7 @@ class Domain:
         """ Set domain update parameters. """
         if isinstance(when, (int, str)):
             when = [when]
-        iter_kwargs = dict()
+        iter_kwargs = {}
         for attr in ['n_items', 'n_reps', 'repeat_each']:
             iter_kwargs[attr] = kwargs.pop(attr) if attr in kwargs else getattr(self, attr)
         self.updates.append({
@@ -592,7 +592,7 @@ class Domain:
         for value in values:
             if self.create_id_prefix:
                 n_digits = self.create_id_prefix if self.create_id_prefix is not True else 1
-                option_values = self.values_indices.get(name.alias, dict())
+                option_values = self.values_indices.get(name.alias, {})
                 current_index = option_values.get(value.alias, len(option_values))
                 option_values[value.alias] = current_index
                 self.values_indices[name.alias] = option_values

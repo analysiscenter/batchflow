@@ -5,7 +5,7 @@ Transactions on Image Processing Vol. 13. No. 4. April 2004.
 from math import exp
 
 import torch
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 
 

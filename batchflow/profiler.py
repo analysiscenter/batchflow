@@ -1,6 +1,5 @@
 """ Profiler for batchflow units """
-
-import time
+from time import perf_counter
 from pstats import Stats
 from cProfile import Profile
 import threading
@@ -11,6 +10,8 @@ try:
 except ImportError:
     from . import _fake as pd
 
+
+
 class Profiler:
     """ Profiler for batchflow units.
 
@@ -19,75 +20,88 @@ class Profiler:
     profile : bool or {0, 1, 2} or 'detailed'
         whether to use profiler
     """
-
     UNIT_NAME = 'action'
 
-    def __init__(self, detailed=True):
-        if detailed:
-            self.detailed = True
-            self._profiler = Profile()
-        else:
-            self.detailed = False
-            self._profiler = None
 
-        self._profile_info = []
-        self._profile_info_lock = threading.Lock()
+    def __init__(self, detailed=True):
         self.start_time = None
+        self.detailed = detailed
+        self.profiler = Profile() if detailed else None
+        self.iteration = 0
+
+        self._profile_info = []  # list of dicts with info about each item
+        self._profile_info_lock = threading.Lock()
 
     @property
     def profile_info(self):
-        return pd.concat(self._profile_info)
+        """ Prepare profile results dataframe. """
+        if not self._profile_info:
+            return None
+        df = pd.DataFrame(self._profile_info).set_index('name').sort_values('iter')
+        df.index.name = self.UNIT_NAME
+
+        n_unique_units = df.index.unique().size
+        df['iter'] = df['iter'] // n_unique_units + 1
+        return df
 
     def enable(self):
-        """ Enable profiling. """
-        self.start_time = time.time()
+        """ Start profiling. """
+        self.start_time = perf_counter()
         if self.detailed:
-            self._profiler.enable()
+            self.profiler.enable()
 
     def disable(self, iteration, name, **kwargs):
         """ Disable profiling. """
-        if self.detailed:
-            self._profiler.disable()
-        total_time = time.time() - self.start_time
-        self._add_profile_info(iteration, name, start_time=self.start_time, total_time=total_time, **kwargs)
+        total_time = perf_counter() - self.start_time
 
-    def _add_profile_info(self, iter_no, name, total_time, **kwargs):
         if self.detailed:
-            stats = Stats(self._profiler)
-            self._profiler.clear()
+            self.profiler.disable()
+            stats = Stats(self.profiler)
+            self.profiler.clear()
 
-            indices, values = [], []
+            values = []
             for key, value in stats.stats.items():
                 for k, v in value[4].items():
-                    # action name, method_name, file_name, line_no, callee
-                    indices.append((name, '{}::{}::{}::{}'.format(key[2], *k)))
+                    call_id = f'{key[2]}::{k[0]}::{k[1]}::{k[2]}' # method_name, file_name, line_no, callee
                     row_dict = {
-                        'iter': iter_no, 'total_time': total_time, 'eval_time': stats.total_tt, # base stats
+                        'name': name, 'id': call_id,
+                        'iter': self.iteration, 'outer_iter': iteration,
+                        'total_time': total_time, 'eval_time': stats.total_tt, # base stats
                         'ncalls': v[0], 'tottime': v[2], 'cumtime': v[3], # detailed stats
                         **kwargs
                     }
                     values.append(row_dict)
         else:
-            indices = [(name, '')]
-            values = [{'iter': iter_no, 'total_time': total_time, 'eval_time': total_time,
-                    **kwargs}]
-
-        multiindex = pd.MultiIndex.from_tuples(indices, names=[self.UNIT_NAME, 'id'])
-        df = pd.DataFrame(values, index=multiindex)
+            values = [{
+                'name': name,
+                'iter': self.iteration, 'outer_iter': iteration,
+                'total_time': total_time,
+                **kwargs
+            }]
 
         with self._profile_info_lock:
-            self._profile_info.append(df)
+            self._profile_info.extend(values)
+            self.iteration += 1
 
     def __getstate__(self):
         state = self.__dict__.copy()
         state.pop('_profile_info_lock')
-        state['_profiler'] = None
+        state['profiler'] = None
         return state
 
     def __setstate__(self, state):
-        self._profile_info_lock = threading.Lock()
         for k, v in state.items():
             setattr(self, k, v)
+
+        self.profiler = Profiler() if self.detailed else None
+        self._profile_info_lock = threading.Lock()
+
+    def __add__(self, other):
+        """ Combine multiple profilers with their collected info concatenated. """
+        new = type(self)(detailed=self.detailed)
+        new._profile_info = self._profile_info + other._profile_info
+        return new
+
 
 class PipelineProfiler(Profiler):
     """ Profiler for batchflow pipelines. """
@@ -113,39 +127,41 @@ class PipelineProfiler(Profiler):
         parse : bool
             Allows to re-create underlying dataframe from scratches.
         """
-        if self.profile_info is None:
+        profile_info = self.profile_info
+        if profile_info is None:
             warnings.warn("Profiling has not been enabled.")
             return None
 
         detailed = False if not self.detailed else detailed
 
         if per_iter is False and detailed is False:
-            columns = columns or ['total_time', 'eval_time']
+            columns = columns or ['total_time']
             sortby = sortby or ('total_time', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.groupby(['action', 'iter'])[columns].mean().groupby('action').agg(aggs)
+            result = (profile_info.groupby(['action', 'iter'])[columns]
+                      .mean(numeric_only=True).groupby('action').agg(aggs, numeric_only=True)
                       .sort_values(sortby, ascending=False))
 
         elif per_iter is False and detailed is True:
             columns = columns or ['ncalls', 'tottime', 'cumtime']
             sortby = sortby or ('tottime', 'sum')
             aggs = {key: ['sum', 'mean', 'max'] for key in columns}
-            result = (self.profile_info.reset_index().groupby(['action', 'id']).agg(aggs)
+            result = (profile_info.reset_index().groupby(['action', 'id']).agg(aggs, numeric_only=True)
                       .sort_values(['action', sortby], ascending=[True, False])
                       .groupby(level=0).apply(lambda df: df[:limit]).droplevel(0))
 
         elif per_iter is True and detailed is False:
             groupby = groupby or ['iter', 'action']
-            columns = columns or ['action', 'total_time', 'eval_time', 'batch_id']
+            columns = columns or ['action', 'total_time', 'batch_id']
             sortby = sortby or 'total_time'
-            result = (self.profile_info.reset_index().groupby(groupby)[columns].mean()
+            result = (profile_info.reset_index().groupby(groupby)[columns].mean(numeric_only=True)
                       .sort_values(['iter', sortby], ascending=[True, False]))
 
         elif per_iter is True and detailed is True:
             groupby = groupby or ['iter', 'action', 'id']
             columns = columns or ['ncalls', 'tottime', 'cumtime']
             sortby = sortby or 'tottime'
-            result = (self.profile_info.reset_index().set_index(groupby)[columns]
+            result = (profile_info.reset_index().set_index(groupby)[columns]
                       .sort_values(['iter', 'action', sortby], ascending=[True, True, False])
                       .groupby(level=[0, 1]).apply(lambda df: df[:limit]).droplevel([0, 1]))
         return result

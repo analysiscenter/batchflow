@@ -8,7 +8,7 @@ import glob
 import multiprocess as mp
 try:
     import pandas as pd
-except:
+except ImportError:
     pass
 import numpy as np
 
@@ -33,7 +33,7 @@ class ResearchResults:
         self._manager = mp.Manager()
         self.results = self._manager.dict()
         self.configs = self._manager.dict()
-        self.artifacts = dict()
+        self.artifacts = {}
         self.kwargs = kwargs
 
         if dump_results and os.path.exists(name):
@@ -84,7 +84,7 @@ class ResearchResults:
             is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.
         """
         experiment_id, name, iterations = self.filter(experiment_id, name, iterations, config, alias, domain, **kwargs)
-        results = dict()
+        results = {}
         for path in glob.glob(os.path.join(self.name, 'experiments', '*', 'results', '*')):
             path = os.path.normpath(path)
             _experiment_id, _, _name = path.split(os.sep)[-3:]
@@ -120,7 +120,7 @@ class ResearchResults:
         kwargs : dict
             is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.
         """
-        self.artifacts = dict()
+        self.artifacts = {}
         names = to_list('*' if name is None else name)
         experiment_id, _, _ = self.filter(experiment_id, None, None, config, alias, domain, **kwargs)
         for _name in names:
@@ -245,7 +245,7 @@ class ResearchResults:
             files_to_load = {int(os.path.basename(filename)): filename for filename in filenames}
         else:
             dumped_iteration = np.sort(np.array([int(os.path.basename(filename)) for filename in filenames]))
-            files_to_load = dict()
+            files_to_load = {}
             for iteration in iterations:
                 _it = dumped_iteration[np.argwhere(dumped_iteration >= iteration)[0, 0]]
                 files_to_load[_it] = os.path.join(path, str(_it))
@@ -332,8 +332,7 @@ class ResearchResults:
             self.load_configs()
             self.load_artifacts(**kwargs)
             df = []
-            for experiment_id in self.artifacts:
-                artifacts = self.artifacts[experiment_id]
+            for experiment_id, artifacts in self.artifacts.items():
                 df += [pd.DataFrame({'id': [experiment_id], **artifact}) for artifact in artifacts]
             if len(df) > 0:
                 df = pd.concat(df)

@@ -274,7 +274,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
             return post_fn(all_results, *args, **kwargs)
 
         def _prepare_args(self, args, kwargs):
-            params = list()
+            params = []
 
             def _get_value(value, pos=None, name=None):
                 if isinstance(value, P):
@@ -301,11 +301,11 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
                isinstance(init_args[0], tuple) and isinstance(init_args[1], dict):
                 margs, mkwargs = init_args
             elif isinstance(init_args, dict):
-                margs = list()
+                margs = []
                 mkwargs = init_args
             else:
                 margs = init_args
-                mkwargs = dict()
+                mkwargs = {}
 
             margs = margs if isinstance(margs, (list, tuple)) else [margs]
 
@@ -395,7 +395,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
                 futures.append(loop.create_task(method(*margs, **mkwargs)))
 
-            loop.run_until_complete(asyncio.gather(*futures, loop=loop, return_exceptions=True))
+            loop.run_until_complete(asyncio.gather(*futures, return_exceptions=True))
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
