@@ -116,6 +116,7 @@ class Layer:
         """ Calculate running average on given data with provided window. """
         window = self.config.get('window')
         if window is not None and window < len(data):
+            data = np.array(data, dtype='float32')
             data = convolve(data, np.ones(window), mode='nearest') / window
             return data
         return None

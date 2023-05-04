@@ -458,8 +458,12 @@ class Notifier:
         plot_function = container.get('plot_function')
         plot_config = container.get('plot_config', {})
         plot_config = {**plot_config, **kwargs}
-        x = np.arange(len(data))[self.slice]
-        y = np.array(data)[self.slice]
+
+        x = np.arange(len(data))
+        y = data
+        if self.slice not in [None, slice(None)]:
+            x = np.array(x)[self.slice]
+            y = np.array(y)[self.slice]
 
         if plot_function is not None:
             plot_function(ax=subplot.ax, index=index, x=x, y=y, container=container, notifier=self, **plot_config)
