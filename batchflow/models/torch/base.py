@@ -798,7 +798,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             # Remove unnecessary keys from kwargs
             for key in ['start_iter', 'last_iter', 'frequency']:
-                decay_kwargs.pop(key, None)
+                decay_kwargs.pop(key, default=None)
 
             # Create decay or store parameters for later usage
             decay_ = decay_(self.optimizer, **decay_kwargs)

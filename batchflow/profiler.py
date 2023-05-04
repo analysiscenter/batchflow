@@ -37,9 +37,7 @@ class Profiler:
         """ Prepare profile results dataframe. """
         if not self._profile_info:
             return None
-        dicts = self._profile_info
-        dicts.sort(key=lambda item: item['iter'])
-        df = pd.DataFrame(dicts).set_index('name')
+        df = pd.DataFrame(self._profile_info).set_index('name').sort_values('iter')
         df.index.name = self.UNIT_NAME
 
         n_unique_units = df.index.unique().size
@@ -76,7 +74,7 @@ class Profiler:
         else:
             values = [{
                 'name': name,
-                'iter': self.iteration, 'pipeline_iter': iteration,
+                'iter': self.iteration, 'outer_iter': iteration,
                 'total_time': total_time,
                 **kwargs
             }]
