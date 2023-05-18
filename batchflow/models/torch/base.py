@@ -794,7 +794,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 decay_dict = DECAYS_DEFAULTS.get(decay_).copy()
                 if decay == DECAYS['cos']:
                     decay_dict.update(T_max=step_params['frequency'])
-                decay_kwargs = {**decay_dict, **decay_kwargs}
+                decay_kwargs = Config({**decay_dict, **decay_kwargs})
+            else:
+                decay_kwargs = Config(decay_kwargs)
 
             # Remove unnecessary keys from kwargs
             for key in ['start_iter', 'last_iter', 'frequency']:
