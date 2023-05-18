@@ -48,4 +48,4 @@ jobs:
       run: |
         poetry install
         poetry build
-        poetry publish -u $_USER -p $_PASSWORD
+        poetry publish -u $_USERNAME -p $_PASSWORD
