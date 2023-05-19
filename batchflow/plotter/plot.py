@@ -1,9 +1,11 @@
 """ Plot primitives. """
 from copy import copy
 from datetime import datetime
+from functools import wraps
 from itertools import cycle
 from numbers import Number
 from warnings import warn
+from multiprocessing import Process
 
 import numpy as np
 
@@ -20,6 +22,29 @@ from .utils import CycledList, ColorMappingHandler, PlotConfig
 from .utils import evaluate_str_comparison, is_binary_mask, contains_numbers, ceil_div
 from .utils import make_cmap, scale_lightness, invert_color, wrap_by_delimiter
 from ..utils import to_list
+
+
+
+# Decorators
+def run_in_daemon_process(func):
+    """ Run `func` in a daemon process without result return.
+
+    Note, the decorator intercept the `detach` argument from the `func`.
+    """
+    @wraps(func)
+    def _wrapper(*args, **kwargs):
+        detach = kwargs.get('detach', False)
+
+        if detach is True:
+            process = Process(target=func, args=args,kwargs=kwargs, daemon=True)
+            process.start()
+            return None
+
+        else:
+            result = func(*args, **kwargs)
+            return result
+
+    return _wrapper
 
 
 
@@ -883,6 +908,11 @@ class Plot:
     fix_config : bool
         If False, every time `plot` is called update config with provided keyword arguments, replacing older parameters.
         If True, fix plotter config as provided on initialization. Usefull, if one want to reuse this config on updates.
+    detach : {True, False, 'save'}
+        Whether to use run `plot` in a daemon process.
+        If False, then don't use any daemon processes.
+        If True, then run :meth:`~.plot` in a daemon process.
+        If 'save', then run :meth:`~.save` (called from the :meth:`~.plot`) in a daemon process.
     kwargs :
         - For one of `image`, `histogram`, `curve`, `loss` methods of `Layer` (depending on chosen mode).
             Parameters and data nestedness levels must match if they are lists meant for differents subplots/layers.
@@ -1485,8 +1515,9 @@ class Plot:
         return defaults
 
     # Plotting delegator
+    @run_in_daemon_process
     def plot(self, data=None, combine='overlay', mode='image', show=True, force_show=False, save=False,
-             axes=None, positions=None, n_subplots=None, adjust_figsize='image', **kwargs):
+             axes=None, positions=None, n_subplots=None, adjust_figsize='image', detach=False, **kwargs):
         """ Plot data on subplots.
 
         If a first call (from `__init__`), parse axes from kwargs if they are provided, else create them.
@@ -1509,7 +1540,7 @@ class Plot:
                 self.config = PlotConfig()
             outer_config = PlotConfig(kwargs)
             if axes is not None:
-                msg = "Subplots already created and new axes cannot bespecified."
+                msg = "Subplots already created and new axes cannot be specified."
                 raise ValueError(msg)
 
         positions = list(range(len(data))) if positions is None else to_list(positions)
@@ -1543,7 +1574,8 @@ class Plot:
             self.close()
 
         if save or 'savepath' in self.config:
-            self.save()
+            detach_save = detach=='save'
+            self.save(detach=detach_save)
 
         return self
 
@@ -1598,9 +1630,14 @@ class Plot:
 
         default_savepath = datetime.now().strftime('%Y-%m-%d_%H:%M:%S.png')
         savepath = save_config.pop('savepath', default_savepath)
+        detach = save_config.pop('detach', False)
 
         if savepath:
-            self.figure.savefig(fname=savepath, **save_config)
+            if detach:
+                process = Process(target=self.figure.savefig, daemon=True, kwargs={'fname':savepath, **save_config})
+                process.start()
+            else:
+                self.figure.savefig(fname=savepath, **save_config)
 
     def close(self):
         """ Close figure. """
