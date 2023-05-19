@@ -1,0 +1,888 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <title>batchflow.research.domain &mdash; BatchFlow 0.8.3 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+
+  
+  
+
+  
+  
+
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> BatchFlow
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.8
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/batchflow.html">API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">BatchFlow</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>batchflow.research.domain</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for batchflow.research.domain</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot; Domain of parameters to generate configs. &quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">product</span><span class="p">,</span> <span class="n">islice</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">copy</span><span class="p">,</span> <span class="n">deepcopy</span>
+<span class="kn">from</span> <span class="nn">pprint</span> <span class="kn">import</span> <span class="n">pformat</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="n">must_execute</span>
+<span class="kn">from</span> <span class="nn">..utils</span> <span class="kn">import</span> <span class="n">to_list</span>
+<span class="kn">from</span> <span class="nn">..</span> <span class="kn">import</span> <span class="n">Config</span><span class="p">,</span> <span class="n">Sampler</span><span class="p">,</span> <span class="n">make_rng</span>
+<span class="kn">from</span> <span class="nn">..named_expr</span> <span class="kn">import</span> <span class="n">eval_expr</span>
+
+<div class="viewcode-block" id="Alias"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.Alias">[docs]</a><span class="k">class</span> <span class="nc">Alias</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot; Class to create alias for some Python object. This is useful for creating short names for complex objects</span>
+<span class="sd">    such as nested dictionaries.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    value : object</span>
+
+<span class="sd">    alias : str, optional</span>
+<span class="sd">        Alias for value, by default None. If None then alias will be equal to `value.__name__`</span>
+<span class="sd">        (if exists) or to `str(value)`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Alias</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">value</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">alias</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">alias</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span>
+            <span class="k">if</span> <span class="n">alias</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">alias</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_name</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">alias</span> <span class="o">=</span> <span class="n">alias</span>
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s1">&#39;Alias(&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">alias</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;: &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span>
+
+    <span class="k">def</span> <span class="nf">_get_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Create name for the value. &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s1">&#39;__name__&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="vm">__name__</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ConfigAlias"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ConfigAlias">[docs]</a><span class="k">class</span> <span class="nc">ConfigAlias</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot; Wrapper for Config to infer its aliased version. Each key and value from initial config will be</span>
+<span class="sd">    wrapped with `Alias` class (if it is not).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    config : dict, list of tuple</span>
+<span class="sd">        each tuple is a pair (key, value), key is `Alias` or str, value is `Alias` or object.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    ConfigAlias has two main methods: `config` and `alias`. `config` returns initial config as `Config` instance.</span>
+<span class="sd">    `alias` returns aliased versions of config or its string representation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">ConfigAlias</span><span class="p">):</span>
+            <span class="n">_config</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">_config</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">_config</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="p">(</span><span class="nb">dict</span><span class="p">,</span> <span class="n">Config</span><span class="p">)):</span>
+                <span class="n">config</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">config</span><span class="p">:</span>
+                    <span class="n">_key</span> <span class="o">=</span> <span class="n">key</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">Alias</span><span class="p">)</span> <span class="k">else</span> <span class="n">Alias</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+                    <span class="n">_value</span> <span class="o">=</span> <span class="n">value</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Alias</span><span class="p">)</span> <span class="k">else</span> <span class="n">Alias</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                    <span class="n">_config</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">_key</span><span class="p">,</span> <span class="n">_value</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="n">_config</span>
+
+<div class="viewcode-block" id="ConfigAlias.alias"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ConfigAlias.alias">[docs]</a>    <span class="k">def</span> <span class="nf">alias</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">as_string</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">delim</span><span class="o">=</span><span class="s1">&#39;-&#39;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns config alias.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        as_string : bool, optional</span>
+<span class="sd">            if True, return string representation of ConfigAlias. Different items will be</span>
+<span class="sd">            separated by `delim`, key and value for each pair will be separated by &#39;_&#39;.</span>
+<span class="sd">        delim : str, optional</span>
+<span class="sd">            delimiter for different ConfigAlias items in string representation.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        dict or str</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">config_alias</span> <span class="o">=</span> <span class="n">Config</span><span class="p">({</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">alias</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">alias</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">})</span>
+        <span class="k">if</span> <span class="n">as_string</span><span class="p">:</span>
+            <span class="n">config_alias</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">config_alias</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span>
+            <span class="n">config_alias</span> <span class="o">=</span> <span class="n">delim</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;_&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">config_alias</span><span class="o">.</span><span class="n">items</span><span class="p">()])</span>
+        <span class="k">return</span> <span class="n">config_alias</span></div>
+
+<div class="viewcode-block" id="ConfigAlias.config"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ConfigAlias.config">[docs]</a>    <span class="k">def</span> <span class="nf">config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns initial config as `Config` instance.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">            Config</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Config</span><span class="p">({</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">})</span></div>
+
+<div class="viewcode-block" id="ConfigAlias.pop_config"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ConfigAlias.pop_config">[docs]</a>    <span class="k">def</span> <span class="nf">pop_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Pop item from ConfigAlias by config value (not by alias).</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        ConfigAlias or None</span>
+<span class="sd">            ConfigAlias for popped keys. None if key doesn&#39;t exist.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">to_list</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="k">if</span> <span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">value</span> <span class="ow">in</span> <span class="n">key</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="k">if</span> <span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">key</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">res</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ConfigAlias</span><span class="p">(</span><span class="n">res</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="ConfigAlias.pop_alias"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ConfigAlias.pop_alias">[docs]</a>    <span class="k">def</span> <span class="nf">pop_alias</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Pop item from ConfigAlias by alias (not by value).</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        ConfigAlias or None</span>
+<span class="sd">            ConfigAlias for popped keys. None if key doesn&#39;t exist.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">to_list</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="k">if</span> <span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">alias</span> <span class="ow">in</span> <span class="n">key</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="k">if</span> <span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">alias</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">key</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">res</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ConfigAlias</span><span class="p">(</span><span class="n">res</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="ConfigAlias.set_prefix"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ConfigAlias.set_prefix">[docs]</a>    <span class="k">def</span> <span class="nf">set_prefix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">,</span> <span class="n">n_digits</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Create prefix from keys. &quot;&quot;&quot;</span>
+        <span class="n">prefix</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+            <span class="n">prefix</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">alias</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;#&#39;</span> <span class="o">+</span> <span class="n">key</span><span class="p">,</span> <span class="s1">&#39;null&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;_&#39;</span>
+        <span class="n">fmt</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;{:0&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">n_digits</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;d}&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">()[</span><span class="s1">&#39;repetition&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="p">[</span><span class="s1">&#39;_prefix&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">prefix</span> <span class="o">+</span> <span class="n">fmt</span> <span class="o">+</span> <span class="s1">&#39;_&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns true value (not alias). &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">()[</span><span class="n">key</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="fm">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">_key</span> <span class="o">=</span> <span class="n">key</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">Alias</span><span class="p">)</span> <span class="k">else</span> <span class="n">Alias</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="n">_value</span> <span class="o">=</span> <span class="n">value</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Alias</span><span class="p">)</span> <span class="k">else</span> <span class="n">Alias</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">_key</span><span class="p">,</span> <span class="n">_value</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">pformat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">alias</span><span class="p">()</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">ConfigAlias</span><span class="p">()</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">)</span> <span class="o">+</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">_config</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">config</span>
+
+<div class="viewcode-block" id="ConfigAlias.keys"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ConfigAlias.keys">[docs]</a>    <span class="k">def</span> <span class="nf">keys</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span></div></div>
+
+<div class="viewcode-block" id="Domain"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.Domain">[docs]</a><span class="k">class</span> <span class="nc">Domain</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot; Domain of parameters to generate configs for experiments.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    domain : dict</span>
+<span class="sd">        parameter values to try. Each key is a parameter, values is a list of parameter values</span>
+<span class="sd">        or batchflow.Sampler.</span>
+
+<span class="sd">    **kwargs :</span>
+<span class="sd">        the same as a `domain` dict. `domain` using is preferable when parameter name includes symbols like `&#39;/&#39;`.</span>
+
+<span class="sd">    Note</span>
+<span class="sd">    ----</span>
+<span class="sd">    `Domain` generates configs of parameters. The simplest example is `Domain(a=[1,2,3])`. That domain defines</span>
+<span class="sd">    parameter `&#39;a&#39;` and its possible values `[1,2,3]`. You can iterate over all possible configs (3 configs in our</span>
+<span class="sd">    example) and repeat generated configs in the same order several times (see `n_reps` in :meth:`~.set_iter_params`).</span>
+
+<span class="sd">    Besides, parameter values can be a `batchflow.Sampler`, e.g. `Domain(a=NumpySampler(&#39;normal&#39;))`. In that case</span>
+<span class="sd">    values for parameter `&#39;a&#39;` will be sampled from normal distribution.</span>
+
+<span class="sd">    Dict in domain definition can consist of several elements, then we will get all possible combinations of parameters,</span>
+<span class="sd">    e.g. `Domain(a=[1,2], b=[3,4])` will produce four configs. If domain has parameters with array-like values and</span>
+<span class="sd">    with sampler as values simultaneously, domain will produce all possible combinations of parameters with array-like</span>
+<span class="sd">    values and for each combination values of other parameters will be sampled.</span>
+
+<span class="sd">    To get configs from `Domain` use :meth:`~.iterator`. It produces configs wrapped by :class:`~.ConfigAlias`.</span>
+
+<span class="sd">    Additional parameters like the number of repetitions or the number of samples for domains with samplers</span>
+<span class="sd">    are defined in :meth:`~.set_iter_params`.</span>
+
+<span class="sd">    **Operations with Domain**</span>
+
+<span class="sd">    #. sum by `+`: Concatenate two domains. For example, the resulting domain</span>
+<span class="sd">       `Domain(a=[1]) + Domain(b=[1])` will produce two configs: `{&#39;a&#39;: 1}`, `{&#39;b&#39;: 1}`</span>
+<span class="sd">       (not one dict with `&#39;a&#39;` and `&#39;b&#39;`).</span>
+
+<span class="sd">    #. multiplication by `*`: Cartesian multiplications of options in Domain.</span>
+<span class="sd">       For example, if `domain1 = Domain({&#39;a&#39;: [1, 2]})`, `domain2 = Domain({&#39;b&#39;: [3, 4]})` and</span>
+<span class="sd">       `domain3 = Domain({&#39;c&#39;: bf.Sampler(&#39;n&#39;)})` then `domain1 * domain2 * domain3` will have</span>
+<span class="sd">       all options and generate 4 configs: `{&#39;a&#39;: 1, &#39;b&#39;: 3, &#39;c&#39;: xi_1}`, `{&#39;a&#39;: 1, &#39;b&#39;: 4, &#39;c&#39;: xi_2}`,</span>
+<span class="sd">       `{&#39;a&#39;: 2, &#39;b&#39;: 3, &#39;c&#39;: xi_3}`, `{&#39;a&#39;: 2, &#39;b&#39;: 4, &#39;c&#39;: xi_4}` where xi_i are independent samples from</span>
+<span class="sd">       normal distribution. The same resulting domain can be defined as `Domain({&#39;a&#39;: [1, 2], &#39;b&#39;: [3, 4],</span>
+<span class="sd">       &#39;c&#39;: bf.Sampler(&#39;n&#39;)})`.</span>
+<span class="sd">    #. multiplication by @: element-wise multiplication of array-like options.</span>
+<span class="sd">       For example, if `domain1 = Domain({&#39;a&#39;: [1, 2]})` and `domain2 = Domain({&#39;b&#39;: [3, 4]})` then</span>
+<span class="sd">       `domain1 @ domain2` will have two configs:</span>
+<span class="sd">       `{&#39;a&#39;: 1, `b`: 3}`, `{&#39;a&#39;: 2, `b`: 4}`.</span>
+<span class="sd">    #. multiplication with weights: can be used to sample configs from sum of domains.</span>
+<span class="sd">       For example, the first ten configs from `0.3 * Domain({&#39;p1&#39;: NS(&#39;n&#39;, loc=-10)}) + 0.2 * Domain({&#39;p2&#39;:  NS(&#39;u&#39;)})</span>
+<span class="sd">       + 0.5 * Domain({&#39;p3&#39;:  NS(&#39;n&#39;, loc=10)})` will be `{&#39;p1&#39;: -10.3059}, {&#39;p3&#39;: 8.9959},</span>
+<span class="sd">       {&#39;p3&#39;: 9.1302}, {&#39;p3&#39;: 10.2611}, {&#39;p1&#39;: -7.9388}, {&#39;p2&#39;: 0.5455}, {&#39;p1&#39;: -9.2497},</span>
+<span class="sd">       {&#39;p3&#39;: 9.9769}, {&#39;p2&#39;: 0.3510}, {&#39;p3&#39;: 8.8519}` (depends on seed).</span>
+
+<span class="sd">    If you sum options with and without weights, they are grouped into consequent groups where all options has or</span>
+<span class="sd">    not weights, for each group configs are generated consequently (for groups with weights) or sampled as described</span>
+<span class="sd">    above. For example, for `domain = domain1 + 1.2 * domain2 + 2.3 * domain3 + domain4 + 1. * domain5` we will get:</span>
+
+<span class="sd">        - all configs from domain1</span>
+<span class="sd">        - configs will be sampled from 1.2 * domain2 + 2.3 * domain3</span>
+<span class="sd">        - all configs from domain4</span>
+<span class="sd">        - configs will be sampled from 1. * domain4</span>
+
+<span class="sd">    If one of the domains here is a sampler-like domain, then samples from that domain will be generated endlessly.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">create_aliases</span><span class="p">(</span><span class="n">domain</span><span class="p">)]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">domain</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span> <span class="o">=</span> <span class="n">domain</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">domain</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">Domain</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">cubes</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">weights</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">create_aliases</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="n">domain</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;domain can be Domain, dict or nested list but </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="si">}</span><span class="s1"> were given&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">updates</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_produced</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_iterator</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_items</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">repeat_each</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_updates</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">additional</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">random_state</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">values_indices</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">def</span> <span class="nf">_get_all_options_names</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">options</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">cube</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">option</span> <span class="ow">in</span> <span class="n">cube</span><span class="p">:</span>
+                <span class="n">alias</span> <span class="o">=</span> <span class="n">option</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">alias</span>
+                <span class="k">if</span> <span class="n">alias</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">options</span> <span class="ow">and</span> <span class="n">alias</span> <span class="o">!=</span> <span class="s1">&#39;repetition&#39;</span><span class="p">:</span>
+                    <span class="n">options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">alias</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">options</span>
+
+<div class="viewcode-block" id="Domain.create_aliases"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.Domain.create_aliases">[docs]</a>    <span class="k">def</span> <span class="nf">create_aliases</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Create aliases by wrapping into Alias class for each key and value of the dict. &quot;&quot;&quot;</span>
+        <span class="n">aliases_options</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">parameter</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">options</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">parameter</span> <span class="o">=</span> <span class="n">Alias</span><span class="p">(</span><span class="n">parameter</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
+                <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="n">Alias</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">Sampler</span><span class="p">):</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;`values` must be array-like object or Sampler but </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s1"> were given&#39;</span><span class="p">)</span>
+            <span class="n">aliases_options</span> <span class="o">+=</span> <span class="p">[(</span><span class="n">parameter</span><span class="p">,</span> <span class="n">values</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="n">aliases_options</span></div>
+
+<div class="viewcode-block" id="Domain.set_iter_params"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.Domain.set_iter_params">[docs]</a>    <span class="k">def</span> <span class="nf">set_iter_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n_items</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">n_reps</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">repeat_each</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">produced</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">additional</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                        <span class="n">create_id_prefix</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Set parameters for iterator.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        n_items : int or None</span>
+<span class="sd">            the number of configs that will be generated from domain. If the size</span>
+<span class="sd">            of domain is less then `n_items`, elements will be repeated. If `n_items`</span>
+<span class="sd">            is `None` and there is not a cube that consists only of sampler-options</span>
+<span class="sd">            then `n_items` will be setted to the number of configs that can be produced</span>
+<span class="sd">            from that domain. If `n_items` is None and there is a cube that consists</span>
+<span class="sd">            only of sampler-option then domain will produce infinite number of configs.</span>
+<span class="sd">        n_reps : int</span>
+<span class="sd">            each element will be repeated `n_reps` times.</span>
+<span class="sd">        repeat_each : int</span>
+<span class="sd">            if there is not a cube that consists only of sampler-options then</span>
+<span class="sd">            elements will be repeated after producing `repeat_each` configs. Else</span>
+<span class="sd">            `repeat_each` will be setted to the number of configs that can be produced</span>
+<span class="sd">            from domain.</span>
+<span class="sd">        produced : int</span>
+<span class="sd">            how many configs was produced before (is needed to use after domain update).</span>
+<span class="sd">        additional : bool</span>
+<span class="sd">            append &#39;repetition&#39; and &#39;updates&#39; to config or not.</span>
+<span class="sd">        seed : bool or int or object with a seed sequence attribute</span>
+<span class="sd">            see :meth:`~batchflow.utils_random.make_seed_sequence`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">n_configs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">len</span> <span class="c1"># None means that domain has samplers</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_items</span> <span class="o">=</span> <span class="n">n_items</span> <span class="ow">or</span> <span class="n">n_configs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span> <span class="o">=</span> <span class="n">n_reps</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_items</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">repeat_each</span> <span class="o">=</span> <span class="n">repeat_each</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_items</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">repeat_each</span> <span class="o">=</span> <span class="n">repeat_each</span> <span class="ow">or</span> <span class="mi">100</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_produced</span> <span class="o">=</span> <span class="n">produced</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">additional</span> <span class="o">=</span> <span class="n">additional</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span> <span class="o">=</span> <span class="n">create_id_prefix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">random_state</span> <span class="o">=</span> <span class="n">make_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reset_iter</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Domain.set_update"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.Domain.set_update">[docs]</a>    <span class="k">def</span> <span class="nf">set_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">function</span><span class="p">,</span> <span class="n">when</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Set domain update parameters. &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">when</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">)):</span>
+            <span class="n">when</span> <span class="o">=</span> <span class="p">[</span><span class="n">when</span><span class="p">]</span>
+        <span class="n">iter_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;n_items&#39;</span><span class="p">,</span> <span class="s1">&#39;n_reps&#39;</span><span class="p">,</span> <span class="s1">&#39;repeat_each&#39;</span><span class="p">]:</span>
+            <span class="n">iter_kwargs</span><span class="p">[</span><span class="n">attr</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">attr</span><span class="p">)</span> <span class="k">if</span> <span class="n">attr</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="k">else</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">updates</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+            <span class="s1">&#39;function&#39;</span><span class="p">:</span> <span class="n">function</span><span class="p">,</span>
+            <span class="s1">&#39;when&#39;</span><span class="p">:</span> <span class="n">when</span><span class="p">,</span>
+            <span class="s1">&#39;kwargs&#39;</span><span class="p">:</span> <span class="n">kwargs</span><span class="p">,</span>
+            <span class="s1">&#39;iter_kwargs&#39;</span><span class="p">:</span> <span class="n">iter_kwargs</span>
+        <span class="p">})</span></div>
+
+<div class="viewcode-block" id="Domain.update"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.Domain.update">[docs]</a>    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">generated</span><span class="p">,</span> <span class="n">research</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Update domain by `update_func`. If returns None, domain will not be updated. &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">update</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">updates</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">must_execute</span><span class="p">(</span><span class="n">generated</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">update</span><span class="p">[</span><span class="s1">&#39;when&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_produced</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">):</span>
+                <span class="n">kwargs</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="n">update</span><span class="p">[</span><span class="s1">&#39;kwargs&#39;</span><span class="p">],</span> <span class="n">research</span><span class="o">=</span><span class="n">research</span><span class="p">)</span>
+                <span class="n">domain</span> <span class="o">=</span> <span class="n">update</span><span class="p">[</span><span class="s1">&#39;function&#39;</span><span class="p">](</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                <span class="n">domain</span><span class="o">.</span><span class="n">updates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">updates</span>
+                <span class="n">domain</span><span class="o">.</span><span class="n">n_updates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_updates</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">domain</span><span class="o">.</span><span class="n">values_indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">values_indices</span>
+                <span class="n">domain</span><span class="o">.</span><span class="n">set_iter_params</span><span class="p">(</span><span class="n">produced</span><span class="o">=</span><span class="n">generated</span><span class="p">,</span> <span class="n">additional</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">additional</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">random_state</span><span class="p">,</span>
+                                       <span class="n">create_id_prefix</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span><span class="p">,</span> <span class="o">**</span><span class="n">update</span><span class="p">[</span><span class="s1">&#39;iter_kwargs&#39;</span><span class="p">])</span>
+                <span class="k">return</span> <span class="n">domain</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return the number of configs that will be produces from domain. &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_items</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_items</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">len</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return the number of configs that will be produced from domain without repetitions. None if infinite. &quot;&quot;&quot;</span>
+        <span class="n">size</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">cube</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">:</span>
+            <span class="n">lengthes</span> <span class="o">=</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">cube</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">))]</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">lengthes</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">size</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="n">lengthes</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">size</span>
+
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; __len__ can&#39;t return None so we have to separate functions. &quot;&quot;&quot;</span>
+        <span class="n">cube_sizes</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">cube</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">))],</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;int&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">cube</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span>
+        <span class="p">]</span> <span class="c1"># np.prod returns 1.0 for empty list</span>
+        <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">sum</span><span class="p">(</span><span class="n">cube_sizes</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="fm">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span> <span class="ow">and</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">other</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">)):</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span>
+            <span class="n">weights</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weights</span>
+            <span class="n">weights</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">weights</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">weights</span> <span class="o">*</span> <span class="n">other</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Domain</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">other</span><span class="o">.</span><span class="n">cubes</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">product</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">cubes</span><span class="p">))</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">res</span><span class="p">]</span>
+                <span class="n">pairs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">product</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">weights</span><span class="p">)))</span>
+                <span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">nanprod</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">])</span>
+                <span class="n">nan_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">item</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">])</span>
+                <span class="n">weights</span><span class="p">[</span><span class="n">nan_mask</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">()</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">cubes</span> <span class="o">=</span> <span class="n">res</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">weights</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;Arguments must be numeric or Domains&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="fm">__matmul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_array_option</span><span class="p">():</span>
+            <span class="n">that</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_scalar_product</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">that</span> <span class="o">=</span> <span class="bp">self</span>
+
+        <span class="k">if</span> <span class="n">other</span><span class="o">.</span><span class="n">_is_array_option</span><span class="p">():</span>
+            <span class="n">other</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">_to_scalar_product</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">that</span><span class="o">.</span><span class="n">_is_scalar_product</span><span class="p">()</span> <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">_is_scalar_product</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">that</span><span class="o">.</span><span class="n">cubes</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">cubes</span><span class="p">):</span>
+                <span class="n">cubes</span> <span class="o">=</span> <span class="p">[</span><span class="n">cube_1</span> <span class="o">+</span> <span class="n">cube_2</span> <span class="k">for</span> <span class="n">cube_1</span><span class="p">,</span> <span class="n">cube_2</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">that</span><span class="o">.</span><span class="n">cubes</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">cubes</span><span class="p">)]</span>
+                <span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nanprod</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">that</span><span class="o">.</span><span class="n">weights</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">weights</span><span class="p">]),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+                <span class="n">nan_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">logical_and</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">that</span><span class="o">.</span><span class="n">weights</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">weights</span><span class="p">))</span>
+                <span class="n">weights</span><span class="p">[</span><span class="n">nan_mask</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+                <span class="n">domain</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">()</span>
+                <span class="n">domain</span><span class="o">.</span><span class="n">cubes</span> <span class="o">=</span> <span class="n">cubes</span>
+                <span class="n">domain</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">weights</span>
+                <span class="k">return</span> <span class="n">domain</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The numbers of domain cubes must conincide.&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__rmul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span> <span class="o">*</span> <span class="n">other</span>
+
+    <span class="k">def</span> <span class="fm">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">other</span>
+        <span class="k">elif</span> <span class="n">other</span><span class="o">.</span><span class="n">cubes</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span>
+        <span class="k">else</span><span class="p">:</span> <span class="c1"># Domain</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">()</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">cubes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">cubes</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">weights</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">cubes</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">[</span><span class="n">index</span><span class="p">]]</span>
+        <span class="k">return</span> <span class="n">domain</span>
+
+    <span class="k">def</span> <span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">cubes</span>
+
+    <span class="k">def</span> <span class="fm">__next__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">next</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iterator</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Domain.reset_iter"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.Domain.reset_iter">[docs]</a>    <span class="k">def</span> <span class="nf">reset_iter</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Reset iterator and set seeds for samplers. &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">cube</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">cube</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">Sampler</span><span class="p">):</span>
+                    <span class="n">values</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">make_rng</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">random_state</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_iterator</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="Domain.create_iter"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.Domain.create_iter">[docs]</a>    <span class="k">def</span> <span class="nf">create_iter</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Create iterator. &quot;&quot;&quot;</span>
+        <span class="n">blocks</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_sampling_blocks</span><span class="p">()</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_all_options_names</span><span class="p">()</span>
+
+        <span class="k">def</span> <span class="nf">_iterator</span><span class="p">():</span>
+            <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">blocks</span><span class="p">:</span>
+                    <span class="n">weights</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">[</span><span class="n">block</span><span class="p">]</span>
+                    <span class="n">weights</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">weights</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">1</span>
+                    <span class="n">iterators</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_cube_iterator</span><span class="p">(</span><span class="n">cube</span><span class="p">)</span> <span class="k">for</span> <span class="n">cube</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)[</span><span class="n">block</span><span class="p">]]</span>
+                    <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">iterators</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="n">index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">random_state</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">block</span><span class="p">),</span> <span class="n">p</span><span class="o">=</span><span class="n">weights</span><span class="o">/</span><span class="n">weights</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="k">yield</span> <span class="nb">next</span><span class="p">(</span><span class="n">iterators</span><span class="p">[</span><span class="n">index</span><span class="p">])</span>
+                        <span class="k">except</span> <span class="ne">StopIteration</span><span class="p">:</span>
+                            <span class="k">del</span> <span class="n">iterators</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+                            <span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span>
+                            <span class="n">block</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">block</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">_iterator_with_repetitions</span><span class="p">():</span>
+            <span class="n">iterator</span> <span class="o">=</span> <span class="n">_iterator</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">additional</span><span class="p">:</span>
+                    <span class="n">additional</span> <span class="o">=</span> <span class="n">ConfigAlias</span><span class="p">([(</span><span class="s1">&#39;repetition&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)])</span> <span class="o">+</span> <span class="n">ConfigAlias</span><span class="p">([(</span><span class="s1">&#39;updates&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_updates</span><span class="p">)])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">additional</span> <span class="o">=</span> <span class="n">ConfigAlias</span><span class="p">()</span>
+                <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_items</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_items</span><span class="p">:</span>
+                    <span class="n">res</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">iterator</span><span class="p">)</span> <span class="o">+</span> <span class="n">additional</span> <span class="c1"># pylint: disable=stop-iteration-return</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span><span class="p">:</span>
+                        <span class="n">res</span><span class="o">.</span><span class="n">set_prefix</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">n_digits</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span><span class="p">))</span>
+                    <span class="k">yield</span> <span class="n">res</span>
+                    <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_items</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_items</span><span class="p">:</span>
+                    <span class="n">samples</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">islice</span><span class="p">(</span><span class="n">iterator</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">repeat_each</span><span class="p">)))</span>
+                    <span class="k">for</span> <span class="n">rep</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span><span class="p">):</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">additional</span><span class="p">:</span>
+                            <span class="n">additional</span> <span class="o">=</span> <span class="n">ConfigAlias</span><span class="p">({</span><span class="s1">&#39;repetition&#39;</span><span class="p">:</span> <span class="n">rep</span><span class="p">})</span> <span class="o">+</span> <span class="n">ConfigAlias</span><span class="p">({</span><span class="s1">&#39;updates&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_updates</span><span class="p">})</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">additional</span> <span class="o">=</span> <span class="n">ConfigAlias</span><span class="p">()</span>
+                        <span class="k">for</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">samples</span><span class="p">:</span>
+                            <span class="n">res</span> <span class="o">=</span> <span class="n">sample</span> <span class="o">+</span> <span class="n">additional</span>
+                            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span><span class="p">:</span>
+                                <span class="n">res</span><span class="o">.</span><span class="n">set_prefix</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">n_digits</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span><span class="p">))</span>
+                            <span class="k">yield</span> <span class="n">res</span>
+                    <span class="n">i</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">repeat_each</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_iterator</span> <span class="o">=</span> <span class="n">_iterator_with_repetitions</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="nf">_get_sampling_blocks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return groups of cubes. Cubes are split into consequent groups where all cubes has or not weights. &quot;&quot;&quot;</span>
+        <span class="n">incl</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">))</span>
+        <span class="n">excl</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(([</span><span class="mi">0</span><span class="p">],</span> <span class="n">incl</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+        <span class="n">block_indices</span> <span class="o">=</span> <span class="n">incl</span> <span class="o">+</span> <span class="n">excl</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">block_indices</span> <span class="o">==</span> <span class="n">i</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="n">block_indices</span><span class="p">)]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Get domain iterator. &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_iterator</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">set_iter_params</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_items</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">repeat_each</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_produced</span><span class="p">,</span>
+                                 <span class="bp">self</span><span class="o">.</span><span class="n">additional</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">random_state</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">create_iter</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_iterator</span>
+
+    <span class="k">def</span> <span class="nf">_is_array_option</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return True if domain consists of only one array-like option. &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
+                    <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">_is_scalar_product</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return True if domain is a result of matmul. It means that each cube has</span>
+<span class="sd">        an only one array-like option of length 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">cube</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">:</span>
+            <span class="n">samplers</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">cube</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">Sampler</span><span class="p">)]</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">samplers</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">cube</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="k">def</span> <span class="nf">_to_scalar_product</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Transform domain to the matmul format (see :meth:`~.Domain._is_scalar_product`)&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_array_option</span><span class="p">():</span>
+            <span class="n">name</span><span class="p">,</span> <span class="n">values</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">cubes</span> <span class="o">=</span> <span class="p">[[[</span><span class="n">name</span><span class="p">,</span> <span class="p">[</span><span class="n">value</span><span class="p">]]]</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">]</span>
+            <span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([[</span><span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">cubes</span><span class="p">)])</span>
+            <span class="n">domain</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">()</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">cubes</span> <span class="o">=</span> <span class="n">cubes</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">weights</span>
+            <span class="k">return</span> <span class="n">domain</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_scalar_product</span><span class="p">():</span>
+            <span class="k">return</span> <span class="n">Domain</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Domain cannot be represented as scalar product.&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_cube_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cube</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return iterator from the cube. All array-like options will be transformed</span>
+<span class="sd">        to Cartesian product and all sampler-like options will produce independent samples</span>
+<span class="sd">        for each condig. &quot;&quot;&quot;</span>
+        <span class="n">arrays</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">cube</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">))]</span>
+        <span class="n">samplers</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">cube</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">Sampler</span><span class="p">)]</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">arrays</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">combination</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">product</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">option_items</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">arrays</span><span class="p">])):</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">samplers</span><span class="p">:</span>
+                    <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">option_sample</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">))</span>
+                <span class="n">res</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">combination</span><span class="p">)</span>
+                <span class="k">yield</span> <span class="nb">sum</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="n">ConfigAlias</span><span class="p">())</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">iterators</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">option_iterator</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">cube</span><span class="p">]</span>
+            <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">yield</span> <span class="nb">sum</span><span class="p">([</span><span class="nb">next</span><span class="p">(</span><span class="n">iterator</span><span class="p">)</span> <span class="k">for</span> <span class="n">iterator</span> <span class="ow">in</span> <span class="n">iterators</span><span class="p">],</span> <span class="n">ConfigAlias</span><span class="p">())</span>
+                <span class="k">except</span> <span class="ne">StopIteration</span><span class="p">:</span>
+                    <span class="k">break</span>
+
+<div class="viewcode-block" id="Domain.option_items"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.Domain.option_items">[docs]</a>    <span class="k">def</span> <span class="nf">option_items</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return all possible `ConfigAlias` instances which can be created from the option.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        list of `ConfigAlias` objects.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;`values` must be array-like object but </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s1"> were given&#39;</span><span class="p">)</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span><span class="p">:</span>
+                <span class="n">n_digits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="k">else</span> <span class="mi">1</span>
+                <span class="n">option_values</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">values_indices</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="o">.</span><span class="n">alias</span><span class="p">,</span> <span class="p">{})</span>
+                <span class="n">current_index</span> <span class="o">=</span> <span class="n">option_values</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">alias</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">option_values</span><span class="p">))</span>
+                <span class="n">option_values</span><span class="p">[</span><span class="n">value</span><span class="o">.</span><span class="n">alias</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_index</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">values_indices</span><span class="p">[</span><span class="n">name</span><span class="o">.</span><span class="n">alias</span><span class="p">]</span> <span class="o">=</span> <span class="n">option_values</span>
+                <span class="n">fmt</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;{:0&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">n_digits</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;d}&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">current_index</span><span class="p">)</span>
+                <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ConfigAlias</span><span class="p">([[</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;#&quot;</span> <span class="o">+</span> <span class="n">name</span><span class="o">.</span><span class="n">alias</span><span class="p">,</span> <span class="n">fmt</span><span class="p">]]))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ConfigAlias</span><span class="p">([[</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">]]))</span>
+        <span class="k">return</span> <span class="n">res</span></div>
+
+<div class="viewcode-block" id="Domain.option_sample"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.Domain.option_sample">[docs]</a>    <span class="k">def</span> <span class="nf">option_sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return `ConfigAlias` objects created on the base of Sampler-option.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        size : int or None</span>
+<span class="sd">            the size of the sample</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">            ConfigAlias (if size is None) or list of ConfigAlias objects (otherwise).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">Sampler</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;`values` must be Sampler but </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s1"> was given&#39;</span><span class="p">)</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">size</span> <span class="ow">or</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span><span class="p">:</span>
+                <span class="n">n_digits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_id_prefix</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="k">else</span> <span class="mi">1</span>
+                <span class="n">current_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">values_indices</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="o">.</span><span class="n">alias</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">values_indices</span><span class="p">[</span><span class="n">name</span><span class="o">.</span><span class="n">alias</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_index</span>
+                <span class="n">fmt</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;{:0&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">n_digits</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;d}&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">current_index</span><span class="p">)</span>
+                <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ConfigAlias</span><span class="p">([[</span><span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]],</span> <span class="p">[</span><span class="s2">&quot;#&quot;</span> <span class="o">+</span> <span class="n">name</span><span class="o">.</span><span class="n">alias</span><span class="p">,</span> <span class="n">fmt</span><span class="p">]]))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ConfigAlias</span><span class="p">([[</span><span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]]]))</span>
+        <span class="k">if</span> <span class="n">size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">res</span> <span class="o">=</span> <span class="n">res</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">res</span></div>
+
+<div class="viewcode-block" id="Domain.option_iterator"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.Domain.option_iterator">[docs]</a>    <span class="k">def</span> <span class="nf">option_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Produce `ConfigAlias` from the option.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">            generator.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">Sampler</span><span class="p">):</span>
+            <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="n">ConfigAlias</span><span class="p">([[</span><span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]]])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="n">ConfigAlias</span><span class="p">([[</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">]])</span></div>
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">repr</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">cubes_reprs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">spacing</span> <span class="o">=</span> <span class="mi">4</span> <span class="o">*</span> <span class="s1">&#39; &#39;</span>
+
+        <span class="k">for</span> <span class="n">cube</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cubes</span><span class="p">:</span>
+            <span class="n">cubes_reprs</span> <span class="o">+=</span> <span class="p">[</span><span class="s1">&#39; * &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_option_repr</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">cube</span><span class="p">])]</span>
+        <span class="nb">repr</span> <span class="o">+=</span> <span class="s1">&#39; + </span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cubes_reprs</span><span class="p">)</span>
+        <span class="nb">repr</span> <span class="o">+=</span> <span class="mi">2</span> <span class="o">*</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">+</span> <span class="s1">&#39;params:</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="nb">repr</span> <span class="o">+=</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">spacing</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">attr</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;n_items&#39;</span><span class="p">,</span> <span class="s1">&#39;n_reps&#39;</span><span class="p">,</span> <span class="s1">&#39;repeat_each&#39;</span><span class="p">]])</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">updates</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">repr</span> <span class="o">+=</span> <span class="mi">2</span> <span class="o">*</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">+</span> <span class="s1">&#39;updates:</span><span class="se">\n</span><span class="s1">&#39;</span>
+            <span class="n">update_reprs</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">update</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">updates</span><span class="p">:</span>
+                <span class="n">update_reprs</span> <span class="o">+=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">spacing</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">update</span><span class="o">.</span><span class="n">items</span><span class="p">()))]</span>
+            <span class="nb">repr</span> <span class="o">+=</span> <span class="s1">&#39;</span><span class="se">\n\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">update_reprs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">repr</span>
+
+    <span class="k">def</span> <span class="nf">_option_repr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="n">alias</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">alias</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="o">.</span><span class="n">alias</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39;&quot;</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">values</span><span class="p">]</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;[</span><span class="si">{</span><span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s1">]&#39;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s1">: </span><span class="si">{</span><span class="n">values</span><span class="si">}</span><span class="s1">&#39;</span></div>
+
+<span class="k">class</span> <span class="nc">Option</span><span class="p">(</span><span class="n">Domain</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Alias for Domain({name: values}). &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">({</span><span class="n">name</span><span class="p">:</span> <span class="n">values</span><span class="p">})</span>
+
+<span class="n">KV</span> <span class="o">=</span> <span class="n">Alias</span> <span class="c1"># is needed to load and transform old researches</span>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &#169; Copyright 2017-2021, Analysis Center.
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

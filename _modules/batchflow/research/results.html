@@ -1,0 +1,608 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <title>batchflow.research.results &mdash; BatchFlow 0.8.3 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+
+  
+  
+
+  
+  
+
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> BatchFlow
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.8
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/batchflow.html">API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">BatchFlow</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>batchflow.research.results</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for batchflow.research.results</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot; Research results. &quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+<span class="kn">import</span> <span class="nn">glob</span>
+
+<span class="kn">import</span> <span class="nn">multiprocess</span> <span class="k">as</span> <span class="nn">mp</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="k">pass</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">..utils</span> <span class="kn">import</span> <span class="n">to_list</span>
+<span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="n">deserialize</span>
+
+<div class="viewcode-block" id="ResearchResults"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults">[docs]</a><span class="k">class</span> <span class="nc">ResearchResults</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot; Class to collect, load and process research results.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    name : str</span>
+<span class="sd">        research name.</span>
+<span class="sd">    dump_results : bool, optional</span>
+<span class="sd">        does research dump results or not, by default True.</span>
+<span class="sd">    kwargs :</span>
+<span class="sd">        filtering kwargs for load.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">dump_results</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dump_results</span> <span class="o">=</span> <span class="n">dump_results</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span> <span class="o">=</span> <span class="n">mp</span><span class="o">.</span><span class="n">Manager</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">dict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">configs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">dict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">artifacts</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span> <span class="o">=</span> <span class="n">kwargs</span>
+
+        <span class="k">if</span> <span class="n">dump_results</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+
+<div class="viewcode-block" id="ResearchResults.put"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.put">[docs]</a>    <span class="k">def</span> <span class="nf">put</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">experiment_id</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">[</span><span class="n">experiment_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">results</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="p">[</span><span class="n">experiment_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">config</span></div>
+
+<div class="viewcode-block" id="ResearchResults.load"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.load">[docs]</a>    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Load (filtered if needed) results, configs and artifacts paths if they was dumped. &quot;&quot;&quot;</span>
+        <span class="n">kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dump_results</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">load_configs</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">load_results</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">load_artifacts</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">configs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">close_manager</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ResearchResults.load_configs"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.load_configs">[docs]</a>    <span class="k">def</span> <span class="nf">load_configs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Load all experiment configs. &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;experiments&#39;</span><span class="p">,</span> <span class="s1">&#39;*&#39;</span><span class="p">,</span> <span class="s1">&#39;config.dill&#39;</span><span class="p">)):</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+            <span class="n">_experiment_id</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="p">)[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="p">[</span><span class="n">_experiment_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">deserialize</span><span class="p">(</span><span class="n">f</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ResearchResults.load_results"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.load_results">[docs]</a>    <span class="k">def</span> <span class="nf">load_results</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">experiment_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">iterations</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                     <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Load and filter experiment results.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        experiment_id : str or list, optional</span>
+<span class="sd">            exepriments to load, by default None.</span>
+<span class="sd">        name : str or list, optional</span>
+<span class="sd">            keys of results to load, by default None.</span>
+<span class="sd">        iterations : int or list, optional</span>
+<span class="sd">            iterations to load, by default None.</span>
+<span class="sd">        config : Config, optional</span>
+<span class="sd">            config with parameters values to load, by default None.</span>
+<span class="sd">        alias : Config, optional</span>
+<span class="sd">            the same as config but with aliased values, by default None.</span>
+<span class="sd">        domain : Domain, optional</span>
+<span class="sd">            domain with parameters values to load, by default None.</span>
+<span class="sd">        kwargs : dict</span>
+<span class="sd">            is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">experiment_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">iterations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">experiment_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">iterations</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">alias</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;experiments&#39;</span><span class="p">,</span> <span class="s1">&#39;*&#39;</span><span class="p">,</span> <span class="s1">&#39;results&#39;</span><span class="p">,</span> <span class="s1">&#39;*&#39;</span><span class="p">)):</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+            <span class="n">_experiment_id</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_name</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="p">)[</span><span class="o">-</span><span class="mi">3</span><span class="p">:]</span>
+            <span class="k">if</span> <span class="n">experiment_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">_experiment_id</span> <span class="ow">in</span> <span class="n">experiment_id</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">_name</span> <span class="ow">in</span> <span class="n">name</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">_experiment_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                        <span class="n">results</span><span class="p">[</span><span class="n">_experiment_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+                    <span class="n">experiment_results</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="n">_experiment_id</span><span class="p">]</span>
+
+                    <span class="k">if</span> <span class="n">_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">experiment_results</span><span class="p">:</span>
+                        <span class="n">experiment_results</span><span class="p">[</span><span class="n">_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+                    <span class="n">name_results</span> <span class="o">=</span> <span class="n">experiment_results</span><span class="p">[</span><span class="n">_name</span><span class="p">]</span>
+                    <span class="n">new_values</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_iteration_files</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">iterations</span><span class="p">)</span>
+                    <span class="n">experiment_results</span><span class="p">[</span><span class="n">_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">([</span><span class="o">*</span><span class="n">name_results</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> <span class="o">*</span><span class="n">new_values</span><span class="o">.</span><span class="n">items</span><span class="p">()])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="ResearchResults.load_artifacts"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.load_artifacts">[docs]</a>    <span class="k">def</span> <span class="nf">load_artifacts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">experiment_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Load and filter experiment artifacts (all files/folders in experiment folder except standart</span>
+<span class="sd">        &#39;results&#39;, &#39;config.dill&#39;, &#39;config.json&#39;, &#39;experiment.log&#39;).</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        experiment_id : str or list, optional</span>
+<span class="sd">            exepriments to load, by default None</span>
+<span class="sd">        name : str or list, optional</span>
+<span class="sd">            names of artifacts to load into artifacts list, by default None</span>
+<span class="sd">        config : Config, optional</span>
+<span class="sd">            config with parameters values to load, by default None</span>
+<span class="sd">        alias : Config, optional</span>
+<span class="sd">            the same as config but with aliased values, by default None</span>
+<span class="sd">        domain : Domain, optional</span>
+<span class="sd">            domain with parameters values to load, by default None</span>
+<span class="sd">        kwargs : dict</span>
+<span class="sd">            is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">artifacts</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="n">to_list</span><span class="p">(</span><span class="s1">&#39;*&#39;</span> <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">name</span><span class="p">)</span>
+        <span class="n">experiment_id</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">experiment_id</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">alias</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">_name</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;experiments&#39;</span><span class="p">,</span> <span class="s1">&#39;*&#39;</span><span class="p">,</span> <span class="n">_name</span><span class="p">)):</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;results&#39;</span><span class="p">,</span> <span class="s1">&#39;config.dill&#39;</span><span class="p">,</span> <span class="s1">&#39;config.json&#39;</span><span class="p">,</span> <span class="s1">&#39;experiment.log&#39;</span><span class="p">]:</span>
+                    <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+                    <span class="n">_experiment_id</span><span class="p">,</span> <span class="n">_name</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="p">)[</span><span class="o">-</span><span class="mi">2</span><span class="p">:]</span>
+                    <span class="k">if</span> <span class="n">experiment_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">_experiment_id</span> <span class="ow">in</span> <span class="n">experiment_id</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">_experiment_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">artifacts</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">artifacts</span><span class="p">[</span><span class="n">_experiment_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">artifacts</span><span class="p">[</span><span class="n">_experiment_id</span><span class="p">]</span> <span class="o">+=</span> <span class="p">[</span>
+                            <span class="p">{</span><span class="s1">&#39;artifact_name&#39;</span><span class="p">:</span> <span class="n">_name</span><span class="p">,</span>
+                            <span class="s1">&#39;full_path&#39;</span><span class="p">:</span> <span class="n">path</span><span class="p">,</span>
+                            <span class="s1">&#39;relative_path&#39;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="p">)[</span><span class="o">-</span><span class="mi">3</span><span class="p">:])</span>
+                            <span class="p">}</span>
+                        <span class="p">]</span></div>
+
+<div class="viewcode-block" id="ResearchResults.filter"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.filter">[docs]</a>    <span class="k">def</span> <span class="nf">filter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">experiment_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">iterations</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Filter experiment_id by specified parameters and convert `name`, `iterations` to lists.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        experiment_id : str or list, optional</span>
+<span class="sd">            exepriments to load, by default None</span>
+<span class="sd">        name : str or list, optional</span>
+<span class="sd">            keys of results to load, by default None</span>
+<span class="sd">        iterations : int or list, optional</span>
+<span class="sd">            iterations to load, by default None</span>
+<span class="sd">        config : Config, optional</span>
+<span class="sd">            config with parameters values to load, by default None</span>
+<span class="sd">        alias : Config, optional</span>
+<span class="sd">            the same as config but with aliased values, by default None</span>
+<span class="sd">        domain : Domain, optional</span>
+<span class="sd">            domain with parameters values to load, by default None</span>
+<span class="sd">        kwargs : dict</span>
+<span class="sd">            is used as `config`. If `config` is not defined but `alias` is, then will be concated to `alias`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">experiment_id</span> <span class="o">=</span> <span class="n">experiment_id</span> <span class="k">if</span> <span class="n">experiment_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">to_list</span><span class="p">(</span><span class="n">experiment_id</span><span class="p">)</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">name</span> <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">to_list</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">iterations</span> <span class="o">=</span> <span class="n">iterations</span> <span class="k">if</span> <span class="n">iterations</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">to_list</span><span class="p">(</span><span class="n">iterations</span><span class="p">)</span>
+
+        <span class="n">filtered_ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_ids_by_configs</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">alias</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">experiment_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">intersect1d</span><span class="p">(</span><span class="n">experiment_id</span><span class="p">,</span> <span class="n">filtered_ids</span><span class="p">)</span> <span class="k">if</span> <span class="n">experiment_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">filtered_ids</span>
+
+        <span class="k">return</span> <span class="n">experiment_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">iterations</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">df</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Create pandas.DataFrame from results. &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_df</span><span class="p">()</span>
+
+<div class="viewcode-block" id="ResearchResults.to_df"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.to_df">[docs]</a>    <span class="k">def</span> <span class="nf">to_df</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pivot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">include_config</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">use_alias</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">concat_config</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+              <span class="n">remove_auxilary</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">drop_columns</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Create pandas.DataFrame from filtered results.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        pivot : bool, optional</span>
+<span class="sd">            if True, two columns will be created: `name` (for results variable) and `value`. If False, for each</span>
+<span class="sd">            variable separate column will be created. By default True</span>
+<span class="sd">        include_config : bool, optional</span>
+<span class="sd">            include config into dataframe or not, by default True</span>
+<span class="sd">        use_alias : bool, optional</span>
+<span class="sd">            use alias of config values or not, by default True</span>
+<span class="sd">        concat_config : bool, optional</span>
+<span class="sd">            create one column for config (it will be concated) or create columns for each config parameter,</span>
+<span class="sd">            by default False</span>
+<span class="sd">        remove_auxilary : bool, optional</span>
+<span class="sd">            remove columns &#39;repetition&#39;, &#39;device&#39;, &#39;updates&#39; or not, by default True</span>
+<span class="sd">        drop_columns : bool, optional</span>
+<span class="sd">            remove or not separate columns for config parametrs when `concat_config=True`.</span>
+<span class="sd">        kwargs : dict</span>
+<span class="sd">            kwargs for :meth:`~.filter`.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        pandas.DataFrame</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dump_results</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">}</span>
+        <span class="n">experiment_ids</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">iterations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">df</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">experiment_id</span> <span class="ow">in</span> <span class="n">experiment_ids</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">experiment_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">:</span>
+                <span class="n">experiment_df</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="n">names</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">[</span><span class="n">experiment_id</span><span class="p">]):</span>
+                    <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">[</span><span class="n">experiment_id</span><span class="p">]:</span>
+                        <span class="n">_df</span> <span class="o">=</span> <span class="p">{</span>
+                            <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="n">experiment_id</span><span class="p">,</span>
+                            <span class="s1">&#39;iteration&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">[</span><span class="n">experiment_id</span><span class="p">][</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+                        <span class="p">}</span>
+                        <span class="k">if</span> <span class="n">pivot</span><span class="p">:</span>
+                            <span class="n">_df</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">[</span><span class="n">experiment_id</span><span class="p">][</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">_df</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">name</span>
+                            <span class="n">_df</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">[</span><span class="n">experiment_id</span><span class="p">][</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+                        <span class="n">_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">_df</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">iterations</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="n">_df</span> <span class="o">=</span> <span class="n">_df</span><span class="p">[</span><span class="n">_df</span><span class="o">.</span><span class="n">iteration</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">iterations</span><span class="p">)]</span>
+                        <span class="n">experiment_df</span> <span class="o">+=</span> <span class="p">[</span><span class="n">_df</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">pivot</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">experiment_df</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">experiment_df</span> <span class="o">=</span> <span class="p">[</span>
+                        <span class="n">functools</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span>
+                            <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;iteration&#39;</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s1">&#39;outer&#39;</span><span class="p">),</span>
+                            <span class="n">experiment_df</span>
+                        <span class="p">)</span>
+                    <span class="p">]</span>
+                <span class="n">df</span> <span class="o">+=</span> <span class="n">experiment_df</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">df</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">include_config</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">res</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">left</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">configs_to_df</span><span class="p">(</span><span class="n">use_alias</span><span class="p">,</span> <span class="n">concat_config</span><span class="p">,</span> <span class="n">remove_auxilary</span><span class="p">,</span> <span class="n">drop_columns</span><span class="p">)</span>
+            <span class="n">res</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s1">&#39;inner&#39;</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">res</span></div>
+
+<div class="viewcode-block" id="ResearchResults.load_iteration_files"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.load_iteration_files">[docs]</a>    <span class="k">def</span> <span class="nf">load_iteration_files</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">iterations</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Load files for specified iterations from specified path. &quot;&quot;&quot;</span>
+        <span class="n">filenames</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;*&#39;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">iterations</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">files_to_load</span> <span class="o">=</span> <span class="p">{</span><span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">filename</span><span class="p">)):</span> <span class="n">filename</span> <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">filenames</span><span class="p">}</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">dumped_iteration</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span> <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">filenames</span><span class="p">]))</span>
+            <span class="n">files_to_load</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">iteration</span> <span class="ow">in</span> <span class="n">iterations</span><span class="p">:</span>
+                <span class="n">_it</span> <span class="o">=</span> <span class="n">dumped_iteration</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">argwhere</span><span class="p">(</span><span class="n">dumped_iteration</span> <span class="o">&gt;=</span> <span class="n">iteration</span><span class="p">)[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]]</span>
+                <span class="n">files_to_load</span><span class="p">[</span><span class="n">_it</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">_it</span><span class="p">))</span>
+        <span class="n">files_to_load</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">files_to_load</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">files_to_load</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                <span class="n">values</span> <span class="o">=</span> <span class="n">deserialize</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">iteration</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">iterations</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">iteration</span> <span class="ow">in</span> <span class="n">iterations</span><span class="p">:</span>
+                        <span class="n">results</span><span class="p">[</span><span class="n">iteration</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="n">iteration</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="ResearchResults.configs_to_df"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.configs_to_df">[docs]</a>    <span class="k">def</span> <span class="nf">configs_to_df</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">use_alias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">concat_config</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">remove_auxilary</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">drop_columns</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Create pandas.DataFrame with configs.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        use_alias : bool, optional</span>
+<span class="sd">            use alias of config values or not, by default True</span>
+<span class="sd">        concat_config : bool, optional</span>
+<span class="sd">            create one column for config (it will be concated) or create columns for each config parameter,</span>
+<span class="sd">            by default False</span>
+<span class="sd">        remove_auxilary : bool, optional</span>
+<span class="sd">            remove columns &#39;repetition&#39;, &#39;device&#39;, &#39;updates&#39; or not, by default True</span>
+<span class="sd">        drop_columns : bool, optional</span>
+<span class="sd">            remove or not separate columns for config parametrs when `concat_config=True`.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        pandas.DataFrame</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">experiment_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="p">:</span>
+            <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="p">[</span><span class="n">experiment_id</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">remove_auxilary</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;repetition&#39;</span><span class="p">,</span> <span class="s1">&#39;device&#39;</span><span class="p">,</span> <span class="s1">&#39;updates&#39;</span><span class="p">]:</span>
+                    <span class="n">config</span><span class="o">.</span><span class="n">pop_config</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">concat_config</span><span class="p">:</span>
+                <span class="n">popped</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">pop_config</span><span class="p">([</span><span class="s1">&#39;repetition&#39;</span><span class="p">,</span> <span class="s1">&#39;device&#39;</span><span class="p">,</span> <span class="s1">&#39;updates&#39;</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">popped</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">popped</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">popped</span> <span class="o">=</span> <span class="n">popped</span><span class="o">.</span><span class="n">alias</span><span class="p">()</span> <span class="k">if</span> <span class="n">use_alias</span> <span class="k">else</span> <span class="n">popped</span><span class="o">.</span><span class="n">config</span><span class="p">()</span>
+                <span class="n">_config</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;config&#39;</span><span class="p">:</span> <span class="n">config</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="n">as_string</span><span class="o">=</span><span class="n">concat_config</span><span class="p">),</span> <span class="o">**</span><span class="n">popped</span><span class="p">}</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">_config</span> <span class="o">=</span> <span class="p">{}</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">concat_config</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">drop_columns</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">use_alias</span><span class="p">:</span>
+                    <span class="n">_config</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">_config</span><span class="p">,</span> <span class="o">**</span><span class="n">config</span><span class="o">.</span><span class="n">alias</span><span class="p">()}</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">_config</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">_config</span><span class="p">,</span> <span class="o">**</span><span class="n">config</span><span class="o">.</span><span class="n">config</span><span class="p">()}</span>
+
+            <span class="n">df</span> <span class="o">+=</span> <span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">experiment_id</span><span class="p">],</span> <span class="o">**</span><span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="p">[</span><span class="n">val</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">_config</span><span class="o">.</span><span class="n">items</span><span class="p">()}})]</span>
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">df</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ResearchResults.artifacts_to_df"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.artifacts_to_df">[docs]</a>    <span class="k">def</span> <span class="nf">artifacts_to_df</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">include_config</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">use_alias</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">concat_config</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                        <span class="n">remove_auxilary</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">drop_columns</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Create pandas.DataFrame with experiment artifacts (all in experiment folder except standart</span>
+<span class="sd">        &#39;results&#39;, &#39;config.dill&#39;, &#39;config.json&#39;, &#39;experiment.log&#39;).</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        use_alias : bool, optional</span>
+<span class="sd">            use alias of config values or not, by default True</span>
+<span class="sd">        concat_config : bool, optional</span>
+<span class="sd">            create one column for config (it will be concated) or create columns for each config parameter,</span>
+<span class="sd">            by default False</span>
+<span class="sd">        remove_auxilary : bool, optional</span>
+<span class="sd">            remove columns &#39;repetition&#39;, &#39;device&#39;, &#39;updates&#39; or not, by default True</span>
+<span class="sd">        drop_columns : bool, optional</span>
+<span class="sd">            remove or not separate columns for config parametrs when `concat_config=True`.</span>
+<span class="sd">        kwargs : dict, optional</span>
+<span class="sd">            filtering kwargs for :meth:`~.load_artifacts`.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        pandas.DataFrame</span>
+<span class="sd">            dataframe with name of the id of the experiment, artifact full path (with path to research folder)</span>
+<span class="sd">            and relative path (inner path in research folder). Also can include experiment config.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dump_results</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">load_configs</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">load_artifacts</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">experiment_id</span><span class="p">,</span> <span class="n">artifacts</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">artifacts</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">df</span> <span class="o">+=</span> <span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">experiment_id</span><span class="p">],</span> <span class="o">**</span><span class="n">artifact</span><span class="p">})</span> <span class="k">for</span> <span class="n">artifact</span> <span class="ow">in</span> <span class="n">artifacts</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">include_config</span><span class="p">:</span>
+                    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">configs_to_df</span><span class="p">(</span><span class="n">use_alias</span><span class="p">,</span> <span class="n">concat_config</span><span class="p">,</span> <span class="n">remove_auxilary</span><span class="p">,</span> <span class="n">drop_columns</span><span class="p">),</span>
+                                <span class="n">df</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s1">&#39;inner&#39;</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">df</span>
+            <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({})</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Research without dump can&#39;t have artifacts.&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ResearchResults.filter_ids_by_configs"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.filter_ids_by_configs">[docs]</a>    <span class="k">def</span> <span class="nf">filter_ids_by_configs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Filter configs.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        repetition : int, optional</span>
+<span class="sd">            index of the repetition to load, by default None</span>
+<span class="sd">        experiment_id : str or list, optional</span>
+<span class="sd">            experiment id to load, by default None</span>
+<span class="sd">        configs : dict, optional</span>
+<span class="sd">            specify keys and corresponding values to load results, by default None</span>
+<span class="sd">        aliases : dict, optional</span>
+<span class="sd">            the same as `configs` but specify aliases of parameters, by default None</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        list</span>
+<span class="sd">            filtered list on configs</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">sum</span><span class="p">([</span><span class="n">domain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="n">config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="n">alias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Only one of `config`, `alias` and `domain` can be not None&#39;</span><span class="p">)</span>
+        <span class="n">filtered_ids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">domain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">reset_iter</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">_config</span> <span class="ow">in</span> <span class="n">domain</span><span class="o">.</span><span class="n">iterator</span><span class="p">:</span>
+                <span class="n">filtered_ids</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_ids_by_configs</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">_config</span><span class="o">.</span><span class="n">config</span><span class="p">())</span>
+            <span class="k">return</span> <span class="n">filtered_ids</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">config</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">}</span>
+            <span class="k">elif</span> <span class="n">alias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">alias</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">alias</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">}</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">config</span> <span class="o">=</span> <span class="n">kwargs</span>
+
+        <span class="k">if</span> <span class="n">config</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">alias</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+
+        <span class="k">for</span> <span class="n">experiment_id</span><span class="p">,</span> <span class="n">supconfig</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">_config</span> <span class="o">=</span> <span class="n">supconfig</span><span class="o">.</span><span class="n">config</span><span class="p">()</span>
+                <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">item</span> <span class="ow">in</span> <span class="n">_config</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">config</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+                    <span class="n">filtered_ids</span> <span class="o">+=</span> <span class="p">[</span><span class="n">experiment_id</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">_config</span> <span class="o">=</span> <span class="n">supconfig</span><span class="o">.</span><span class="n">alias</span><span class="p">()</span>
+                <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">item</span> <span class="ow">in</span> <span class="n">_config</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">alias</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+                    <span class="n">filtered_ids</span> <span class="o">+=</span> <span class="p">[</span><span class="n">experiment_id</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">filtered_ids</span></div>
+
+<div class="viewcode-block" id="ResearchResults.close_manager"><a class="viewcode-back" href="../../../api/batchflow.research.html#batchflow.research.ResearchResults.close_manager">[docs]</a>    <span class="k">def</span> <span class="nf">close_manager</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Close manager. &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">configs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">shutdown</span><span class="p">()</span></div></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &#169; Copyright 2017-2021, Analysis Center.
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
