@@ -864,7 +864,7 @@ class ImagesBatch(BaseImagesBatch):
                               "stores data as `np.uint8`. To suppress this warning, use `preserve_type=True` or "
                               "consider using `to_array` action before multiplication.")
             return PIL.Image.fromarray(np.clip(multiplier*np.asarray(image), 0, 255).astype(np.uint8))
-        dtype = image.dtype if preserve_type else np.float
+        dtype = image.dtype if preserve_type else np.float32
         if clip:
             image = np.clip(multiplier*image, 0, 255 if dtype == np.uint8 else 1.)
         else:
@@ -893,7 +893,7 @@ class ImagesBatch(BaseImagesBatch):
         term = np.float32(term)
         if isinstance(image, PIL.Image.Image):
             return PIL.Image.fromarray(np.clip(term+np.asarray(image), 0, 255).astype(np.uint8))
-        dtype = image.dtype if preserve_type else np.float
+        dtype = image.dtype if preserve_type else np.float32
         if clip:
             image = np.clip(term+image, 0, 255 if dtype == np.uint8 else 1.)
         else:
