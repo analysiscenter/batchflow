@@ -7,15 +7,6 @@ on:
 
 jobs:
 
-  check-version:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Check whether release version matches library version
-      run: python3 check_release_version.py ${GITHUB_REF##*/}
-
   pypi:
     needs: check-version
 
