@@ -40,9 +40,8 @@ def run_in_daemon_process(func):
             process.start()
             return None
 
-        else:
-            result = func(*args, **kwargs)
-            return result
+        result = func(*args, **kwargs)
+        return result
 
     return _wrapper
 
@@ -247,7 +246,7 @@ class Layer:
         mask_color = self.config.get('mask_color', None)
         cmap.set_bad(color=mask_color)
 
-        image_keys = ['alpha', 'vmin', 'vmax', 'v_common', 'extent']
+        image_keys = ['alpha', 'vmin', 'vmax', 'extent']
         image_config = self.config.filter(keys=image_keys, prefix='image_')
         image = self.ax.imshow(data, cmap=cmap, **image_config)
 
@@ -255,7 +254,7 @@ class Layer:
 
     def matrix(self, data):
         """ Display data as a matrix. """
-        matrix_keys = ['cmap', 'vmin', 'vmax', 'v_common']
+        matrix_keys = ['cmap', 'vmin', 'vmax']
         matrix_config = self.config.filter(keys=matrix_keys, prefix='matrix_')
 
         matrix = self.ax.matshow(data, **matrix_config)
