@@ -195,8 +195,27 @@ class Layer:
             data = self.preprocess(data)
             self.main_object.set_data(data)
 
-            vmin = self.config.get('vmin', np.nanmin(data))
-            vmax = self.config.get('vmax', np.nanmax(data))
+            # Parse (vmin, vmax)
+            vmax = self.config.get('vmax', None)
+            vmin = self.config.get('vmin', None)
+
+            if isinstance(vmax, str):
+                vmax = np.nanquantile(data, q=float(vmax))
+            if isinstance(vmin, str):
+                vmin = np.nanquantile(data, q=float(vmin))
+
+            # Parse v_common
+            v_common = self.config.get('v_common', None)
+
+            if v_common is True:
+                v_common = max(abs(np.nanmin(data)), abs(np.nanmax(data)))
+            elif isinstance(v_common, str):
+                v_common = abs(np.nanquantile(data, q=(float(v_common), 1-float(v_common)))).max()
+
+            # Set (vmin, vmax)
+            vmax = vmax or v_common or np.nanmax(data)
+            vmin = vmin or (-v_common if v_common is not None else None) or np.nanmin(data)
+
             self.main_object.set_clim([vmin, vmax])
 
         if self.mode == 'histogram':
@@ -228,7 +247,7 @@ class Layer:
         mask_color = self.config.get('mask_color', None)
         cmap.set_bad(color=mask_color)
 
-        image_keys = ['alpha', 'vmin', 'vmax', 'extent']
+        image_keys = ['alpha', 'vmin', 'vmax', 'v_common', 'extent']
         image_config = self.config.filter(keys=image_keys, prefix='image_')
         image = self.ax.imshow(data, cmap=cmap, **image_config)
 
@@ -236,7 +255,7 @@ class Layer:
 
     def matrix(self, data):
         """ Display data as a matrix. """
-        matrix_keys = ['cmap', 'vmin', 'vmax']
+        matrix_keys = ['cmap', 'vmin', 'vmax', 'v_common']
         matrix_config = self.config.filter(keys=matrix_keys, prefix='matrix_')
 
         matrix = self.ax.matshow(data, **matrix_config)
@@ -959,13 +978,23 @@ class Plot:
         If a callable, must return boolean mask with the same shape as original image that mark image pixels to mask.
         If a tuple, contain any combination of items of types above.
     cmap : str or matplotlib colormap object
-        Сolormap to display single-channel images with. Must be valid matplotlib colormap (e.g. 'ocean', 'tab20b').
+        Colormap to display single-channel images with. Must be valid matplotlib colormap (e.g. 'ocean', 'tab20b').
     mask_color : string or tuple of 3 or 4 numbers
         Color to display masked values with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
     alpha : number in (0, 1) range
         Image opacity (0 means fully transparent, i.e. invisible, 1 - totally opaque). Useful when `combine='overlay'`.
-    vmin, vmax : number
+    vmin, vmax : number, str, None
         Limits for normalizing image into (0, 1) range. Values beyond range are clipped (default matplotlib behaviour).
+        Note, if you provide a str it must be a repr of a float value in (0, 1) range.
+        If number, then it is used as a clipping value.
+        If str, then `float(str)` data quantile will be clipping value.
+        If None, then vmin and vmax are evaluated from data.
+    v_common : number, str, True, optional
+        Way to evaluate symmetric zero-centered vmin and vmax values.
+        Note, if you provide a str it must be a repr of a float value in (0, 1) range.
+        If number, then (-v_common, v_common) are used as clipping values.
+        If str, then v_common is max abs value from (float(str), 1-float(str)) quantiles.
+        If True, then v_common is max abs value from data extremes.
     extent : tuple of 4 numbers
         The bounding box in data coordinates that the image will fill.
     image_{parameter} : misc
