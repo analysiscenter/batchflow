@@ -254,7 +254,7 @@ class Domain:
         self.n_updates = 0
         self.additional = True
         self.create_id_prefix = False
-        self.random_state = None
+        self.rng = None
 
         self.values_indices = {}
 
@@ -318,7 +318,7 @@ class Domain:
         self.n_produced = produced
         self.additional = additional
         self.create_id_prefix = create_id_prefix
-        self.random_state = make_rng(seed)
+        self.rng = make_rng(seed)
         self.reset_iter()
 
     def set_update(self, function, when, **kwargs):
@@ -344,7 +344,7 @@ class Domain:
                 domain.updates = self.updates
                 domain.n_updates = self.n_updates + 1
                 domain.values_indices = self.values_indices
-                domain.set_iter_params(produced=generated, additional=self.additional, seed=self.random_state,
+                domain.set_iter_params(produced=generated, additional=self.additional, seed=self.rng,
                                        create_id_prefix=self.create_id_prefix, **update['iter_kwargs'])
                 return domain
         return None
@@ -453,7 +453,7 @@ class Domain:
         for cube in self.cubes:
             for _, values in cube:
                 if isinstance(values, Sampler):
-                    values.state = make_rng(self.random_state)
+                    values.rng = make_rng(self.rng)
         self._iterator = None
 
     def create_iter(self):
@@ -468,7 +468,7 @@ class Domain:
                     weights[np.isnan(weights)] = 1
                     iterators = [self._cube_iterator(cube) for cube in np.array(self.cubes, dtype=object)[block]]
                     while len(iterators) > 0:
-                        index = self.random_state.choice(len(block), p=weights/weights.sum())
+                        index = self.rng.choice(len(block), p=weights/weights.sum())
                         try:
                             yield next(iterators[index])
                         except StopIteration:
@@ -519,7 +519,7 @@ class Domain:
         """ Get domain iterator. """
         if self._iterator is None:
             self.set_iter_params(self.n_items, self.n_reps, self.repeat_each, self.n_produced,
-                                 self.additional, self.create_id_prefix, self.random_state)
+                                 self.additional, self.create_id_prefix, self.rng)
             self.create_iter()
         return self._iterator
 
