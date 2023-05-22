@@ -194,27 +194,7 @@ class Layer:
             data = self.preprocess(data)
             self.main_object.set_data(data)
 
-            # Parse (vmin, vmax)
-            vmax = self.config.get('vmax', None)
-            vmin = self.config.get('vmin', None)
-
-            if isinstance(vmax, str):
-                vmax = np.nanquantile(data, q=float(vmax))
-            if isinstance(vmin, str):
-                vmin = np.nanquantile(data, q=float(vmin))
-
-            # Parse v_common
-            v_common = self.config.get('v_common', None)
-
-            if v_common is True:
-                v_common = max(abs(np.nanmin(data)), abs(np.nanmax(data)))
-            elif isinstance(v_common, str):
-                v_common = abs(np.nanquantile(data, q=(float(v_common), 1-float(v_common)))).max()
-
-            # Set (vmin, vmax)
-            vmax = vmax or v_common or np.nanmax(data)
-            vmin = vmin or (-v_common if v_common is not None else None) or np.nanmin(data)
-
+            vmin, vmax = self._parse_v_ranges(data)
             self.main_object.set_clim([vmin, vmax])
 
         if self.mode == 'histogram':
@@ -227,6 +207,29 @@ class Layer:
 
         if self.mode == 'loss':
             raise NotImplementedError("Updating layer data is not in supported in 'loss' mode. ")
+
+    def _parse_v_ranges(self, data):
+        """ Parse vmin and vmax values from the `self.config`. """
+        vmin = self.config.get('vmin', None)
+        vmax = self.config.get('vmax', None)
+        v_common = self.config.get('v_common', None)
+
+        # Parse vmin, vmax
+        if isinstance(vmin, str):
+            vmin = np.nanquantile(data, q=float(vmin))
+        if isinstance(vmax, str):
+            vmax = np.nanquantile(data, q=float(vmax))
+
+        # Parse v_common
+        if v_common is True:
+            v_common = max(abs(np.nanmin(data)), abs(np.nanmax(data)))
+        elif isinstance(v_common, str):
+            v_common = abs(np.nanquantile(data, q=(float(v_common), 1-float(v_common)))).max()
+
+        # Set vmin, vmax
+        vmin = vmin or (-v_common if v_common is not None else None) or np.nanmin(data)
+        vmax = vmax or v_common or np.nanmax(data)
+        return vmin, vmax
 
     # Plotting methods
     def image(self, data):
@@ -248,6 +251,11 @@ class Layer:
 
         image_keys = ['alpha', 'vmin', 'vmax', 'extent']
         image_config = self.config.filter(keys=image_keys, prefix='image_')
+
+        vmin, vmax = self._parse_v_ranges(data)
+        image_config['vmin'] = vmin
+        image_config['vmax'] = vmax
+
         image = self.ax.imshow(data, cmap=cmap, **image_config)
 
         return [image]
@@ -256,6 +264,10 @@ class Layer:
         """ Display data as a matrix. """
         matrix_keys = ['cmap', 'vmin', 'vmax']
         matrix_config = self.config.filter(keys=matrix_keys, prefix='matrix_')
+
+        vmin, vmax = self._parse_v_ranges(data)
+        matrix_config['vmin'] = vmin
+        matrix_config['vmax'] = vmax
 
         matrix = self.ax.matshow(data, **matrix_config)
 
