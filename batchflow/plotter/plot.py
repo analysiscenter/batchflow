@@ -36,7 +36,8 @@ def run_in_daemon_process(func):
         detach = kwargs.get('detach', False)
 
         if detach is True:
-            process = Process(target=func, args=args,kwargs=kwargs, daemon=True)
+            process = Process(target=func, args=args, kwargs=kwargs,
+                              daemon=True, name=f'daemon_for_{func.__qualname__}')
             process.start()
             return None
 
@@ -210,8 +211,8 @@ class Layer:
 
     def _parse_v_ranges(self, data):
         """ Parse vmin and vmax values from the `self.config`. """
-        vmin = self.config.get('vmin', None)
-        vmax = self.config.get('vmax', None)
+        vmin = self.config.get('vmin', np.nanmin(data))
+        vmax = self.config.get('vmax', np.nanmax(data))
         v_common = self.config.get('v_common', None)
 
         # Parse vmin, vmax
@@ -226,9 +227,8 @@ class Layer:
         elif isinstance(v_common, str):
             v_common = abs(np.nanquantile(data, q=(float(v_common), 1-float(v_common)))).max()
 
-        # Set vmin, vmax
-        vmin = vmin or (-v_common if v_common is not None else None) or np.nanmin(data)
-        vmax = vmax or v_common or np.nanmax(data)
+        if v_common is not None:
+            vmin, vmax = -v_common, v_common
         return vmin, vmax
 
     # Plotting methods
@@ -1674,7 +1674,8 @@ class Plot:
 
         if savepath:
             if detach:
-                process = Process(target=self.figure.savefig, daemon=True, kwargs={'fname':savepath, **save_config})
+                process = Process(target=self.figure.savefig, kwargs={'fname': savepath, **save_config},
+                                  daemon=True, name=f'daemon_for_{self.save.__qualname__}')
                 process.start()
             else:
                 self.figure.savefig(fname=savepath, **save_config)
