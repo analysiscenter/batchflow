@@ -234,7 +234,7 @@ class GPUResourceMonitor(ResourceMonitor):
         super().__init__(function=function, frequency=frequency, **kwargs)
 
         # Fallback to env variable
-        if gpu_list is None:
+        if gpu_list is None or len(gpu_list) == 0:
             env_variable = os.environ.get('CUDA_VISIBLE_DEVICES', '0')
             env_variable = literal_eval(env_variable)
             gpu_list = list(env_variable) if isinstance(env_variable, tuple) else [env_variable]
