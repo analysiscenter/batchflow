@@ -25,5 +25,9 @@ from .utils_notebook import in_notebook, get_notebook_path, get_notebook_name, p
                             get_available_gpus, set_gpus
 from .utils_telegram import TelegramMessage
 
-
-__version__ = '0.8.3'
+from importlib.metadata import version, PackageNotFoundError
+try:
+    __version__ = version('batchflow')
+except PackageNotFoundError:
+    # batchflow cannot be found within batchflow dev env only
+    pass

@@ -243,6 +243,10 @@ class GPUResourceMonitor(ResourceMonitor):
         gpu_handles = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
         self.kwargs.update({'gpu_list': gpu_list, 'gpu_handles': gpu_handles})
 
+    def __del__(self):
+        super().__del__()
+        nvidia_smi.nvmlShutdown()
+
 
 class GPUMonitor(GPUResourceMonitor):
     """ Track GPU usage. """
