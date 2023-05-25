@@ -26,7 +26,7 @@ from ..utils import to_list
 
 
 # Decorators
-def run_in_daemon_process(func):
+def detachable(func):
     """ Run `func` in a daemon process without result return.
 
     Note, the decorator intercept the `detach` argument from the `func`.
@@ -209,11 +209,11 @@ class Layer:
         if self.mode == 'loss':
             raise NotImplementedError("Updating layer data is not in supported in 'loss' mode. ")
 
-    def _parse_v_ranges(self, data):
+    def _parse_vrange(self, data):
         """ Parse vmin and vmax values from the `self.config`. """
         vmin = self.config.get('vmin', np.nanmin(data))
         vmax = self.config.get('vmax', np.nanmax(data))
-        v_common = self.config.get('v_common', None)
+        vrange = self.config.get('vrange', None)
 
         # Parse vmin, vmax
         if isinstance(vmin, str):
@@ -221,14 +221,17 @@ class Layer:
         if isinstance(vmax, str):
             vmax = np.nanquantile(data, q=float(vmax))
 
-        # Parse v_common
-        if v_common is True:
-            v_common = max(abs(np.nanmin(data)), abs(np.nanmax(data)))
-        elif isinstance(v_common, str):
-            v_common = abs(np.nanquantile(data, q=(float(v_common), 1-float(v_common)))).max()
+        # Parse vrange
+        if vrange is True:
+            vrange = max(abs(np.nanmin(data)), abs(np.nanmax(data)))
+        elif isinstance(vrange, str):
+            vrange = abs(np.nanquantile(data, q=(float(vrange), 1-float(vrange)))).max()
 
-        if v_common is not None:
-            vmin, vmax = -v_common, v_common
+        if vrange is not None:
+            if isinstance(vrange, (list, tuple, np.ndarray)):
+                vmin, vmax = vrange
+            else:
+                vmin, vmax = -vrange, vrange
         return vmin, vmax
 
     # Plotting methods
@@ -1000,12 +1003,13 @@ class Plot:
         If number, then it is used as a clipping value.
         If str, then `float(str)` data quantile will be clipping value.
         If None, then vmin and vmax are evaluated from data.
-    v_common : number, str, True, optional
+    vrange : number, str, True, sequence of two numbers optional
         Way to evaluate symmetric zero-centered vmin and vmax values.
         Note, if you provide a str it must be a repr of a float value in (0, 1) range.
-        If number, then (-v_common, v_common) are used as clipping values.
-        If str, then v_common is max abs value from (float(str), 1-float(str)) quantiles.
-        If True, then v_common is max abs value from data extremes.
+        If sequence of two numbers, then this values are used as low and high clipping values.
+        If number, then (-vrange, vrange) are used as clipping values.
+        If str, then vrange is max abs value from (float(str), 1-float(str)) quantiles.
+        If True, then vrange is max abs value from data extremes.
     extent : tuple of 4 numbers
         The bounding box in data coordinates that the image will fill.
     image_{parameter} : misc
@@ -1555,7 +1559,7 @@ class Plot:
         return defaults
 
     # Plotting delegator
-    @run_in_daemon_process
+    @detachable
     def plot(self, data=None, combine='overlay', mode='image', show=True, force_show=False, save=False,
              axes=None, positions=None, n_subplots=None, adjust_figsize='image', detach=False, **kwargs):
         """ Plot data on subplots.
