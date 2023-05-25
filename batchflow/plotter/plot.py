@@ -560,6 +560,10 @@ class Subplot:
         if tick_config:
             self.ax.tick_params(**tick_config)
 
+        # Change visibility of xaxis/yaxis
+        self.ax.get_xaxis().set_visible(self.config.get('xaxis_visible', True))
+        self.ax.get_yaxis().set_visible(self.config.get('yaxis_visible', True))
+
         # Change scale of axis, if needed
         if self.config.get('log') or self.config.get('log_loss'):
             self.ax.set_yscale('log')
