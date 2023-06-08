@@ -204,7 +204,7 @@ class BAM(nn.Module):
         # Channel attention module
         self.ca = Block(
             inputs=inputs, layout='V>cnacn',
-            kernel_size=1, channels = [in_channels//ratio, in_channels],
+            kernel_size=1, channels=[in_channels//ratio, in_channels],
             dim=get_num_dims(inputs), activation='relu', bias=True,
             **kwargs
         )
