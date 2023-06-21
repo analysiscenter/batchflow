@@ -215,7 +215,7 @@ def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, 
     return 0
 
 
-def get_available_gpus(n=1, min_free_memory=1, max_processes=2, verbose=False, raise_error=False, return_memory=False):
+def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False, raise_error=False, return_memory=False):
     """ Select `n` gpus from available and free devices.
 
     Parameters
@@ -226,7 +226,7 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=2, verbose=False, r
     min_free_memory : float
         Minimum amount of free memory (in MB) on a device to consider it free.
     max_processes : int
-        Maximum amount of computed processes on a device to consider it free.
+        Maximum amount of processes on a device to consider it free.
     verbose : bool
         Whether to show individual device information.
     raise_error : bool
@@ -253,7 +253,7 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=2, verbose=False, r
 
         num_processes = len(nvidia_smi.nvmlDeviceGetComputeRunningProcesses(handle))
 
-        consider_available = (info.free >= min_free_memory * 1024**2) & (num_processes <= max_processes)
+        consider_available = (info.free >= min_free_memory * 1024**2) & (max_processes is None or num_processes <= max_processes)
         if consider_available:
             available_devices.append(i)
             memory_usage.append(info.free)
@@ -290,14 +290,15 @@ def get_gpu_free_memory(index):
 
     return info.free / 1024**2
 
-def set_gpus(n=1, min_free_memory=1, max_processes=2, verbose=False, raise_error=False):
+def set_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False, raise_error=False):
     """ Set the `CUDA_VISIBLE_DEVICES` variable to `n` available devices.
 
     Parameters
     ----------
-    n : int, str
+    n : int, str, list
         If `max`, then use maximum number of available devices.
         If int, then number of devices to select.
+        if list, use the devices specified in a list
     min_free_memory : float
         Minimum amount of free memory (in MB) on a device to consider it free.
     max_processes : int
@@ -315,8 +316,11 @@ def set_gpus(n=1, min_free_memory=1, max_processes=2, verbose=False, raise_error
         warnings.warn(f'`CUDA_VISIBLE_DEVICES` is already set to "{str_devices}"!')
         return [int(d) for d in str_devices.split(',')]
 
-    devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes,
-                                 verbose=(verbose==2), raise_error=raise_error)
+    if isinstance(n, (tuple, list)):
+        devices = n
+    else:
+        devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes,
+                                     verbose=(verbose==2), raise_error=raise_error)
     str_devices = ','.join(str(i) for i in devices)
     os.environ['CUDA_VISIBLE_DEVICES'] = str_devices
 
