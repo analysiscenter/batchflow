@@ -224,7 +224,7 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False,
         If `max`, then use maximum number of available devices.
         If int, then number of devices to select.
     min_free_memory : float
-        Minimum percentage of free memory on a device to consider it free.
+        Minimum amount of free memory (in MB) on a device to consider it free.
     max_processes : int
         Maximum amount of computed processes on a device to consider it free.
     verbose : bool
@@ -249,16 +249,15 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False,
         handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
         info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
 
-        fraction_free = info.free / info.total
         num_processes = len(nvidia_smi.nvmlDeviceGetComputeRunningProcesses(handle))
 
-        consider_available = (fraction_free > min_free_memory) & (num_processes <= max_processes)
+        consider_available = (info.free > min_free_memory * 1024**2) & (num_processes <= max_processes)
         if consider_available:
             available_devices.append(i)
-            memory_usage.append(fraction_free)
+            memory_usage.append(info.free)
 
         if verbose:
-            print(f'Device {i} | Free memory: {fraction_free:4.2f} | '
+            print(f'Device {i} | Free memory: {info.free:4.2f} | '
                   f'Number of running processes: {num_processes:>2} | Free: {consider_available}')
 
     if isinstance(n, str) and n.startswith('max'):
@@ -274,7 +273,7 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False,
     return sorted(available_devices[:n])
 
 def get_gpu_free_memory(index):
-    """ Get free memory of the gpu"""
+    """ Return free memory (in MB) of a given gpu """
     try:
         import nvidia_smi
     except ImportError as exception:
@@ -285,7 +284,7 @@ def get_gpu_free_memory(index):
     handle = nvidia_smi.nvmlDeviceGetHandleByIndex(index)
     info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
 
-    return info.free / info.total
+    return info.free / 1024**2
 
 def set_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False, raise_error=False):
     """ Set the `CUDA_VISIBLE_DEVICES` variable to `n` available devices.
@@ -296,7 +295,7 @@ def set_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False, raise_err
         If `max`, then use maximum number of available devices.
         If int, then number of devices to select.
     min_free_memory : float
-        Minimum percentage of free memory on a device to consider it free.
+        Minimum amount of free memory (in MB) on a device to consider it free.
     max_processes : int
         Maximum amount of computed processes on a device to consider it free.
     verbose : bool or int
