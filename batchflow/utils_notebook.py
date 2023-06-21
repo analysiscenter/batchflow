@@ -236,7 +236,7 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
 
     Returns
     -------
-    List with indices of availble GPUs
+    List with available GPUs indices or dict of indices and available memory (in MB)
     """
     try:
         import nvidia_smi
@@ -252,11 +252,12 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
         info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
 
         num_processes = len(nvidia_smi.nvmlDeviceGetComputeRunningProcesses(handle))
+        free_memory = info.free / 1024**2
 
-        consider_available = (info.free >= min_free_memory * 1024**2) & (max_processes is None or num_processes <= max_processes)
+        consider_available = (free_memory >= min_free_memory) & (max_processes is None or num_processes <= max_processes)
         if consider_available:
             available_devices.append(i)
-            memory_usage.append(info.free)
+            memory_usage.append(free_memory)
 
         if verbose:
             print(f'Device {i} | Free memory: {info.free:4.2f} | '
@@ -273,7 +274,7 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
 
     order = np.argsort(memory_usage)[::-1]
     if return_memory:
-        return zip(np.array(available_devices)[order], np.array(memory_usage)[order])[:n]
+        return dict(zip(np.array(available_devices)[order][:n], np.array(memory_usage)[order][:n]))
     return np.array(available_devices)[order][:n]
 
 def get_gpu_free_memory(index):
