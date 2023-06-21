@@ -215,7 +215,7 @@ def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, 
     return 0
 
 
-def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False, raise_error=False):
+def get_available_gpus(n=1, min_free_memory=1, max_processes=2, verbose=False, raise_error=False, return_memory=False):
     """ Select `n` gpus from available and free devices.
 
     Parameters
@@ -231,6 +231,8 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False,
         Whether to show individual device information.
     raise_error : bool
         Whether to raise an exception if not enough devices are available.
+    return_memory : bool
+        Whether to return memory available on each GPU
 
     Returns
     -------
@@ -251,7 +253,7 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False,
 
         num_processes = len(nvidia_smi.nvmlDeviceGetComputeRunningProcesses(handle))
 
-        consider_available = (info.free > min_free_memory * 1024**2) & (num_processes <= max_processes)
+        consider_available = (info.free >= min_free_memory * 1024**2) & (num_processes <= max_processes)
         if consider_available:
             available_devices.append(i)
             memory_usage.append(info.free)
@@ -269,8 +271,10 @@ def get_available_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False,
             raise ValueError(msg)
         warnings.warn(msg, RuntimeWarning)
 
-    available_devices = np.array(available_devices)[np.argsort(memory_usage)[::-1]]
-    return sorted(available_devices[:n])
+    order = np.argsort(memory_usage)[::-1]
+    if return_memory:
+        return zip(np.array(available_devices)[order], np.array(memory_usage)[order])[:n]
+    return np.array(available_devices)[order][:n]
 
 def get_gpu_free_memory(index):
     """ Return free memory (in MB) of a given gpu """
@@ -286,7 +290,7 @@ def get_gpu_free_memory(index):
 
     return info.free / 1024**2
 
-def set_gpus(n=1, min_free_memory=0.9, max_processes=2, verbose=False, raise_error=False):
+def set_gpus(n=1, min_free_memory=1, max_processes=2, verbose=False, raise_error=False):
     """ Set the `CUDA_VISIBLE_DEVICES` variable to `n` available devices.
 
     Parameters
