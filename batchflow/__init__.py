@@ -24,6 +24,7 @@ from .utils_random import make_rng, make_seed_sequence, spawn_seed_sequence
 from .utils_notebook import in_notebook, get_notebook_path, get_notebook_name, pylint_notebook,\
                             get_available_gpus, set_gpus
 from .utils_telegram import TelegramMessage
+from .utils_transforms import Normalizer, Quantizer
 
 from importlib.metadata import version, PackageNotFoundError
 try:
