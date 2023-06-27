@@ -5,6 +5,8 @@ import sys
 if sys.version_info < (3, 5):
     raise ImportError("BatchFlow module requires Python 3.5 or higher")
 
+from importlib.metadata import version, PackageNotFoundError
+
 from .base import Baseset
 from .batch import Batch
 from .batch_image import ImagesBatch
@@ -26,7 +28,6 @@ from .utils_notebook import in_notebook, get_notebook_path, get_notebook_name, p
 from .utils_telegram import TelegramMessage
 from .utils_transforms import Normalizer, Quantizer
 
-from importlib.metadata import version, PackageNotFoundError
 try:
     __version__ = version('batchflow')
 except PackageNotFoundError:

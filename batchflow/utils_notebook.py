@@ -215,7 +215,8 @@ def pylint_notebook(path=None, options='', printer=print, ignore_comments=True, 
     return 0
 
 
-def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False, raise_error=False, return_memory=False):
+def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False,
+                       raise_error=False, return_memory=False):
     """ Select `n` gpus from available and free devices.
 
     Parameters
@@ -254,7 +255,11 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
         num_processes = len(nvidia_smi.nvmlDeviceGetComputeRunningProcesses(handle))
         free_memory = info.free / 1024**2
 
-        consider_available = (free_memory >= min_free_memory) & (max_processes is None or num_processes <= max_processes)
+        consider_available = (
+            (free_memory >= min_free_memory) & 
+            (max_processes is None or num_processes <= max_processes)
+        )
+
         if consider_available:
             available_devices.append(i)
             memory_usage.append(free_memory)

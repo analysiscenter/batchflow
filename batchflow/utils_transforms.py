@@ -81,7 +81,7 @@ class Normalizer:
 
         # Actual normalization
         if callable(self.mode):
-            array[:] = mode(array, normalization_stats)
+            array[:] = self.mode(array, normalization_stats)
         else:
             if 'mean' in self.mode:
                 array -= normalization_stats['mean']
@@ -142,7 +142,7 @@ class Normalizer:
 
 class Quantizer:
     """ Class to hold parameters and methods for (de)quantization. """
-    def __init__(self, data, ranges, clip=True, center=False, mean=None, dtype=np.int8):
+    def __init__(self, ranges, clip=True, center=False, mean=None, dtype=np.int8):
         # Parse parameters
         if center:
             ranges = tuple(item - self.v_mean for item in ranges)
