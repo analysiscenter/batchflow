@@ -256,7 +256,7 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
         free_memory = info.free / 1024**2
 
         consider_available = (
-            (free_memory >= min_free_memory) & 
+            (free_memory >= min_free_memory) &
             (max_processes is None or num_processes <= max_processes)
         )
 
