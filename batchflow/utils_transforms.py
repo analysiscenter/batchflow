@@ -19,6 +19,7 @@ class Normalizer:
         Quantiles for clipping. Used as keys to `normalization_stats`, provided by either of the ways.
     normalization_stats : dict, optional
         If provided, then used to get statistics for normalization.
+        Otherwise, compute them from a given array. 
     inplace : bool
         Whether to apply operation inplace or return a new array.
     """
@@ -30,7 +31,7 @@ class Normalizer:
         self.normalization_stats = normalization_stats
         self.inplace = inplace
 
-    def normalize(self, array, normalization_stats=None, return_stats=False):
+    def normalize(self, array, normalization_stats=None, mode=None, return_stats=False):
         """ Normalize image with provided stats.
 
         Parameters
@@ -49,53 +50,50 @@ class Normalizer:
         numpy.ndarray or (numpy.ndarray, dict)
         """
         clip_to_quantiles = self.clip_to_quantiles
+        mode = self.mode if mode is None else mode
         array = array if self.inplace else array.copy()
 
-        if normalization_stats is None:
-            if self.normalization_stats is not None:
-                normalization_stats = self.normalization_stats
-            else:
-                if clip_to_quantiles:
-                    np.clip(array, *np.quantile(array, self.q), out=array)
-                    clip_to_quantiles = False
+        normalization_stats = normalization_stats if normalization_stats is not None else self.normalization_stats
 
-                if callable(self.mode):
-                    normalization_stats = {
-                        'mean': np.mean(array),
-                        'std': np.std(array),
-                        'min': np.min(array),
-                        'max': np.max(array),
-                    }
-                else:
-                    normalization_stats = {}
-                    if 'mean' in self.mode:
-                        normalization_stats['mean'] = np.mean(array)
-                    if 'std' in self.mode:
-                        normalization_stats['std'] = np.std(array)
-                    if 'min' in self.mode:
-                        normalization_stats['min'] = np.min(array)
-                    if 'max' in self.mode:
-                        normalization_stats['max'] = np.max(array)
+        if normalization_stats is None:
+            normalization_stats = {}
+
+            if clip_to_quantiles:
+                normalization_stats['q'] = np.quantile(array, self.q)
+                np.clip(array, *normalization_stats['q'], out=array)
+                clip_to_quantiles = False
+
+            if isinstance(mode, str):
+                if 'mean' in mode:
+                    normalization_stats['mean'] = np.mean(array)
+                if 'std' in mode:
+                    normalization_stats['std'] = np.std(array)
+                if 'min' in mode:
+                    normalization_stats['min'] = np.min(array)
+                if 'max' in mode:
+                    normalization_stats['max'] = np.max(array)
+    
         if clip_to_quantiles:
-            np.clip(array, normalization_stats['q_01'], normalization_stats['q_99'], out=array)
+            np.clip(array, *normalization_stats['q'], out=array)
 
         # Actual normalization
-        if callable(self.mode):
-            array[:] = self.mode(array, normalization_stats)
+        if callable(mode):
+            array[:] = mode(array, normalization_stats)
         else:
-            if 'mean' in self.mode:
+            if 'mean' in mode:
                 array -= normalization_stats['mean']
-            if 'std' in self.mode:
+            if 'std' in mode:
                 array /= normalization_stats['std'] + 1e-6
-            if 'min' in self.mode and 'max' in self.mode:
+            if 'min' in mode and 'max' in mode:
                 if clip_to_quantiles:
-                    array -= normalization_stats['q_01']
-                    array /= normalization_stats['q_99'] - normalization_stats['q_01']
-                elif normalization_stats['max'] != normalization_stats['min']:
-                    array -= normalization_stats['min']
-                    array /= normalization_stats['max'] - normalization_stats['min']
+                    min_, max_ = normalization_stats['q']
                 else:
-                    array -= normalization_stats['min']
+                    min_, max_ = normalization_stats['min'], normalization_stats['max']
+
+                array -= min_
+                if min_ != max_:
+                    array /= (max_ - min_)
+
         if return_stats:
             return array, normalization_stats
         return array
@@ -103,7 +101,7 @@ class Normalizer:
     def __call__(self, array):
         return self.normalize(array)
 
-    def denormalize(self, array, normalization_stats=None):
+    def denormalize(self, array, normalization_stats=None, mode=None):
         """ Deormalize image with provided stats.
 
         Parameters
@@ -121,23 +119,28 @@ class Normalizer:
         numpy.ndarray or (numpy.ndarray, dict)
         """
         array = array if self.inplace else array.copy()
+        mode = self.mode if mode is None else mode
 
         if self.normalization_stats is not None:
             normalization_stats = self.normalization_stats
 
-        if callable(self.mode):
-            array[:] = self.mode(array, normalization_stats)
+        if callable(mode):
+            array[:] = mode(array, normalization_stats)
         else:
-            if 'std' in self.mode:
-                array *= normalization_stats['std'] # TODO: eps to normalize/denormalize?
-            if 'mean' in self.mode:
+            if 'std' in mode:
+                array *= normalization_stats['std']
+            if 'mean' in mode:
                 array += normalization_stats['mean']
-            if 'min' in self.mode and 'max' in self.mode:
-                if normalization_stats['max'] != normalization_stats['min']:
-                    array *= normalization_stats['max'] - normalization_stats['min']
-                    array += normalization_stats['min']
+            if 'min' in mode and 'max' in mode:
+                if self.clip_to_quantiles:
+                    min_, max_ = normalization_stats['q']
                 else:
-                    array += normalization_stats['min']
+                    min_, max_ = normalization_stats['min'], normalization_stats['max']
+ 
+                if min_ != max_:
+                    array *= max_ - min_
+                array += min_
+
         return array
 
 class Quantizer:
