@@ -29,8 +29,9 @@ class TestNormalizer:
         assert np.isclose(result, (array - np.min(array)) / np.ptp(array)).all()
 
     def test_callable(self, array):
-        callable = lambda x, stats: (x - np.mean(x)) / np.std(x)
-        result = Normalizer(mode=callable).normalize(array)
+        def func(x, _):
+            return (x - np.mean(x)) / np.std(x)
+        result = Normalizer(mode=func).normalize(array)
         assert np.isclose(result, callable(array, None)).all()
 
     def test_clipping(self, array):
@@ -118,5 +119,3 @@ class TestQuantizer:
         quantizer = Quantizer(ranges=ranges, copy=True)
 
         assert quantizer.quantize([0]) == [0]
-
-    

@@ -72,7 +72,7 @@ class Normalizer:
                     normalization_stats['min'] = np.min(array)
                 if 'max' in mode:
                     normalization_stats['max'] = np.max(array)
-    
+
         if clip_to_quantiles:
             np.clip(array, *normalization_stats['q'], out=array)
 
@@ -136,7 +136,7 @@ class Normalizer:
                     min_, max_ = normalization_stats['q']
                 else:
                     min_, max_ = normalization_stats['min'], normalization_stats['max']
- 
+
                 if min_ != max_:
                     array *= max_ - min_
                 array += min_
@@ -163,7 +163,6 @@ class Quantizer:
         Enabled copy will not allow to change input data but quantization will be slower.
     """
     def __init__(self, ranges, clip=True, center=False, mean=None, dtype=np.int8, copy=False):
-        # Parse parameters
         self.ranges = ranges
         self.clip, self.center = clip, center
         self.mean = mean
@@ -175,7 +174,7 @@ class Quantizer:
 
     def quantize(self, array):
         """ Quantize data: find the index of each element in the pre-computed bins and use it as the new value.
-        Converts `array` to int8 dtype. Lossy.
+        Converts `array` to `self.dtype`. Lossy.
         """
         if self.copy:
             array = array.copy()
