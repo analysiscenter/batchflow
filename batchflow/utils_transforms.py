@@ -19,7 +19,7 @@ class Normalizer:
         Quantiles for clipping. Used as keys to `normalization_stats`, provided by either of the ways.
     normalization_stats : dict, optional
         If provided, then used to get statistics for normalization.
-        Otherwise, compute them from a given array. 
+        Otherwise, compute them from a given array.
     inplace : bool
         Whether to apply operation inplace or return a new array.
     """
@@ -149,7 +149,7 @@ class Quantizer:
     Parameters
     ----------
     ranges : tuple
-        Bounds to create bins. 
+        Bounds to create bins.
     clip : bool, optional
         Whether to clip data to selected ranges, by default True
     center : bool, optional
@@ -159,7 +159,7 @@ class Quantizer:
     dtype : numpy.dtype, optional
         dtype for the quantized array, by default np.int8
     copy : bool, optional
-        Whether to make copy of the data under the hood, by default False. 
+        Whether to make copy of the data under the hood, by default False.
         Enabled copy will not allow to change input data but quantization will be slower.
     """
     def __init__(self, ranges, clip=True, center=False, mean=None, dtype=np.int8, copy=False):

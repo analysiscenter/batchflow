@@ -32,7 +32,7 @@ class TestNormalizer:
         def func(x, _):
             return (x - np.mean(x)) / np.std(x)
         result = Normalizer(mode=func).normalize(array)
-        assert np.isclose(result, callable(array, None)).all()
+        assert np.isclose(result, func(array, None)).all()
 
     def test_clipping(self, array):
         result = Normalizer(mode='meanstd', clip_to_quantiles=True).normalize(array)
