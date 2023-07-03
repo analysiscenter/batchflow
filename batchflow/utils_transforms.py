@@ -102,7 +102,7 @@ class Normalizer:
         return self.normalize(array)
 
     def denormalize(self, array, normalization_stats=None, mode=None):
-        """ Deormalize image with provided stats.
+        """ Denormalize image with provided stats.
 
         Parameters
         ----------
@@ -144,39 +144,66 @@ class Normalizer:
         return array
 
 class Quantizer:
-    """ Class to hold parameters and methods for (de)quantization. """
-    def __init__(self, ranges, clip=True, center=False, mean=None, dtype=np.int8):
-        # Parse parameters
-        if center:
-            ranges = tuple(item - self.v_mean for item in ranges)
+    """ Class to hold parameters and methods for (de)quantization.
 
+    Parameters
+    ----------
+    ranges : tuple
+        Bounds to create bins. 
+    clip : bool, optional
+        Whether to clip data to selected ranges, by default True
+    center : bool, optional
+        Whether to make data have 0-mean before quantization, by default False
+    mean : _type_, optional
+        Mean value for centering, by default None
+    dtype : numpy.dtype, optional
+        dtype for the quantized array, by default np.int8
+    copy : bool, optional
+        Whether to make copy of the data under the hood, by default False. 
+        Enabled copy will not allow to change input data but quantization will be slower.
+    """
+    def __init__(self, ranges, clip=True, center=False, mean=None, dtype=np.int8, copy=False):
+        # Parse parameters
         self.ranges = ranges
         self.clip, self.center = clip, center
         self.mean = mean
         self.dtype = dtype
+        self.copy = copy
 
-        self.bins = np.histogram_bin_edges(None, bins=254, range=ranges).astype(np.float32)
+        n_bins = np.iinfo(dtype).max - np.iinfo(dtype).min - 1
+        self.bins = np.histogram_bin_edges(None, bins=n_bins, range=ranges).astype(np.float32)
 
     def quantize(self, array):
         """ Quantize data: find the index of each element in the pre-computed bins and use it as the new value.
         Converts `array` to int8 dtype. Lossy.
         """
+        if self.copy:
+            array = array.copy()
         if self.center:
             array -= self.mean
         if self.clip:
             array = np.clip(array, *self.ranges)
-        array = np.digitize(array, self.bins) - 128
+
+        array = np.digitize(array, self.bins, right=False) + np.iinfo(self.dtype).min
+        if not self.clip:
+            array[array == np.iinfo(self.dtype).max + 1] = np.iinfo(self.dtype).max # to put maximum value into bin
         return array.astype(self.dtype)
 
     def dequantize(self, array):
         """ Dequantize data: use each element as the index in the array of pre-computed bins.
         Converts `array` to float32 dtype. Unable to recover full information.
         """
-        array += 128
+        if self.copy:
+            array = array.copy()
+        array -= np.iinfo(self.dtype).min
         array = self.bins[array]
         if self.center:
             array += self.mean
         return array.astype(np.float32)
+
+    @property
+    def error(self):
+        return np.diff(self.bins).max()
 
     def __call__(self, array):
         return self.quantize(array)
