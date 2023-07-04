@@ -85,7 +85,7 @@ class TestQuantizer:
         quantized = quantizer.quantize(normal_array)
         dequantized = ((quantized + 128) / 255) * normal_array.ptp() + normal_array.min()
 
-        assert (np.abs(dequantized - normal_array) < quantizer.error).all()
+        assert (np.abs(dequantized - normal_array) < quantizer.estimated_absolute_error).all()
 
     @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.uint8, np.uint16])
     def test_dequantize(self, normal_array, dtype):
@@ -94,7 +94,7 @@ class TestQuantizer:
         quantized = quantizer.quantize(normal_array)
         dequantized = quantizer.dequantize(quantized)
 
-        assert (np.abs(normal_array - dequantized) < quantizer.error).all()
+        assert (np.abs(normal_array - dequantized) < quantizer.estimated_absolute_error).all()
 
     @pytest.mark.parametrize('clip', [False, True])
     @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.uint8, np.uint16])
@@ -107,7 +107,7 @@ class TestQuantizer:
         diff = np.abs(normal_array - dequantized)
         central_mask = np.logical_and(normal_array > ranges[0], normal_array < ranges[1])
 
-        assert (diff[central_mask] < quantizer.error).all()
+        assert (diff[central_mask] < quantizer.estimated_absolute_error).all()
         if clip:
             assert set(quantized[~central_mask]) == set([np.iinfo(dtype).min+1, np.iinfo(dtype).max])
         else:

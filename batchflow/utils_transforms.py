@@ -203,8 +203,14 @@ class Quantizer:
             array += self.mean
         return array.astype(np.float32)
 
+    def compute_mean_error(self, data):
+        """ Estimate quantization error on data. """
+        quantized_data = self.quantize(data)
+        dequantized_data = self.dequantize(quantized_data)
+        return np.mean(np.abs(dequantized_data - data)) / data.std()
+
     @property
-    def error(self):
+    def estimated_absolute_error(self):
         return np.diff(self.bins).max()
 
     def __call__(self, array):
