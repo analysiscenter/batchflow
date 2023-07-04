@@ -172,7 +172,7 @@ class ResearchResults:
         """ Create pandas.DataFrame from results. """
         return self.to_df()
 
-    def to_df(self, pivot=True, include_config=True, use_alias=False, concat_config=False,
+    def to_df(self, pivot=True, include_config=True, use_alias=True, concat_config=False,
               remove_auxilary=True, drop_columns=True, **kwargs):
         """ Create pandas.DataFrame from filtered results.
 
