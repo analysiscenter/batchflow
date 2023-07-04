@@ -163,6 +163,8 @@ class Quantizer:
         Enabled copy will not allow to change input data but quantization will be slower.
     """
     def __init__(self, ranges, clip=True, center=False, mean=None, dtype=np.int8, copy=False):
+        if dtype not in [np.int8, np.int16, np.uint8, np.uint16]:
+            raise TypeError(f'{dtype} is not supported, use int8, int16, uint8, uint16')
         self.ranges = ranges
         self.clip, self.center = clip, center
         self.mean = mean
@@ -194,7 +196,8 @@ class Quantizer:
         """
         if self.copy:
             array = array.copy()
-        array -= np.iinfo(self.dtype).min
+        array = array.astype(np.int32) - np.iinfo(self.dtype).min
+        np.clip(array, 0, len(self.bins)-1, out=array)
         array = self.bins[array]
         if self.center:
             array += self.mean

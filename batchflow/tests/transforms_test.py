@@ -87,18 +87,20 @@ class TestQuantizer:
 
         assert (np.abs(dequantized - normal_array) < quantizer.error).all()
 
-    def test_dequantize(self, normal_array):
+    @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.uint8, np.uint16])
+    def test_dequantize(self, normal_array, dtype):
         ranges = (np.min(normal_array), np.max(normal_array))
-        quantizer = Quantizer(ranges=ranges, copy=True)
+        quantizer = Quantizer(ranges=ranges, copy=True, dtype=dtype)
         quantized = quantizer.quantize(normal_array)
         dequantized = quantizer.dequantize(quantized)
 
         assert (np.abs(normal_array - dequantized) < quantizer.error).all()
 
     @pytest.mark.parametrize('clip', [False, True])
-    def test_ranges(self, normal_array, clip):
+    @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.uint8, np.uint16])
+    def test_ranges(self, normal_array, clip, dtype):
         ranges = np.quantile(normal_array, (0.05, 0.95))
-        quantizer = Quantizer(ranges=ranges, clip=clip, copy=True)
+        quantizer = Quantizer(ranges=ranges, clip=clip, copy=True, dtype=dtype)
         quantized = quantizer.quantize(normal_array)
         dequantized = quantizer.dequantize(quantized)
 
@@ -107,15 +109,26 @@ class TestQuantizer:
 
         assert (diff[central_mask] < quantizer.error).all()
         if clip:
-            assert set(quantized[~central_mask]) == set([-127, 127])
+            assert set(quantized[~central_mask]) == set([np.iinfo(dtype).min+1, np.iinfo(dtype).max])
         else:
-            assert set(quantized[~central_mask]) == set([-128, 127])
+            assert set(quantized[~central_mask]) == set([np.iinfo(dtype).min, np.iinfo(dtype).max])
 
-    def test_zero_transform(self, normal_array):
+    @pytest.mark.parametrize('clip', [False, True])
+    @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.uint8, np.uint16])
+    def test_zero_transform(self, normal_array, clip, dtype):
         ranges = np.quantile(normal_array, (0.05, 0.95))
         ranges = np.abs(ranges).min()
         ranges = (-ranges, ranges)
 
-        quantizer = Quantizer(ranges=ranges, copy=True)
+        quantizer = Quantizer(ranges=ranges, clip=clip, copy=True, dtype=dtype)
 
-        assert quantizer.quantize([0]) == [0]
+        assert quantizer.quantize([0]) == [np.iinfo(dtype).max - (np.iinfo(dtype).max - np.iinfo(dtype).min) // 2]
+
+    @pytest.mark.parametrize('clip', [False, True])
+    @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.uint8, np.uint16])
+    def test_outliers_transform(self, normal_array, clip, dtype):
+        ranges = normal_array.min(), normal_array.max()
+
+        quantizer = Quantizer(ranges=ranges, clip=clip, copy=True, dtype=dtype)
+
+        assert (quantizer.quantize([ranges[0]-1, ranges[1]+1]) == [np.iinfo(dtype).min+clip, np.iinfo(dtype).max]).all()
