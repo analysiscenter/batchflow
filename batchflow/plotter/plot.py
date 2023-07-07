@@ -941,7 +941,7 @@ class Plot:
     fix_config : bool
         If False, every time `plot` is called update config with provided keyword arguments, replacing older parameters.
         If True, fix plotter config as provided on initialization. Usefull, if one want to reuse this config on updates.
-    detach : {True, False, 'save'}
+    detach : {True, False, 'save'}, default: False
         Whether to use run `plot` in a daemon process.
         If False, then don't use any daemon processes.
         If True, then run :meth:`~.plot` in a daemon process.
