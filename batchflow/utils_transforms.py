@@ -23,6 +23,7 @@ class Normalizer:
     inplace : bool
         Whether to apply operation inplace or return a new array.
     """
+
     def __init__(self, mode='meanstd', clip_to_quantiles=False, q=(0.01, 0.99),
                  normalization_stats=None, inplace=False):
         self.mode = mode
@@ -72,9 +73,9 @@ class Normalizer:
                     normalization_stats['min'] = np.min(array)
                 if 'max' in mode:
                     normalization_stats['max'] = np.max(array)
-
-        if clip_to_quantiles:
-            np.clip(array, *normalization_stats['q'], out=array)
+        else:
+            if clip_to_quantiles:
+                np.clip(array, *normalization_stats['q'], out=array)
 
         # Actual normalization
         if callable(mode):
@@ -84,7 +85,7 @@ class Normalizer:
                 array -= normalization_stats['mean']
             if 'std' in mode:
                 array /= normalization_stats['std'] + 1e-6
-            if 'min' in mode and 'max' in mode:
+            if mode == 'minmax':
                 if clip_to_quantiles:
                     min_, max_ = normalization_stats['q']
                 else:
@@ -98,8 +99,7 @@ class Normalizer:
             return array, normalization_stats
         return array
 
-    def __call__(self, array):
-        return self.normalize(array)
+    __call__ = normalize
 
     def denormalize(self, array, normalization_stats=None, mode=None):
         """ Denormalize image with provided stats.
@@ -162,23 +162,35 @@ class Quantizer:
         Whether to make copy of the data under the hood, by default False.
         Enabled copy will not allow to change input data but quantization will be slower.
     """
-    def __init__(self, ranges, clip=True, center=False, mean=None, dtype=np.int8, copy=False):
+    def __init__(self, ranges, clip=True, center=False, mean=None, dtype=np.int8):
         if dtype not in [np.int8, np.int16, np.uint8, np.uint16]:
             raise TypeError(f'{dtype} is not supported, use int8, int16, uint8, uint16')
         self.ranges = ranges
         self.clip, self.center = clip, center
         self.mean = mean
         self.dtype = dtype
-        self.copy = copy
 
         n_bins = np.iinfo(dtype).max - np.iinfo(dtype).min - 1
         self.bins = np.histogram_bin_edges(None, bins=n_bins, range=ranges).astype(np.float32)
 
-    def quantize(self, array):
+    def quantize(self, array, copy=False):
         """ Quantize data: find the index of each element in the pre-computed bins and use it as the new value.
         Converts `array` to `self.dtype`. Lossy.
+
+        Parameters
+        ----------
+        array : numpy.ndarray
+
+        copy : bool, optional
+            Whether to make copy of the data under the hood, by default False.
+            Enabled copy will not allow to change input data but quantization will be slower.
+
+        Resturns
+        --------
+        numpy.ndarray
+            quantized array
         """
-        if self.copy:
+        if copy:
             array = array.copy()
         if self.center:
             array -= self.mean
@@ -190,11 +202,26 @@ class Quantizer:
             array[array == np.iinfo(self.dtype).max + 1] = np.iinfo(self.dtype).max # to put maximum value into bin
         return array.astype(self.dtype)
 
-    def dequantize(self, array):
+    __call__ = quantize
+
+    def dequantize(self, array, copy=False):
         """ Dequantize data: use each element as the index in the array of pre-computed bins.
         Converts `array` to float32 dtype. Unable to recover full information.
+
+        Parameters
+        ----------
+        array : numpy.ndarray
+
+        copy : bool, optional
+            Whether to make copy of the data under the hood, by default False.
+            Enabled copy will not allow to change input data but dequantization will be slower.
+
+        Resturns
+        --------
+        numpy.ndarray
+            dequantized array
         """
-        if self.copy:
+        if copy:
             array = array.copy()
         array = array.astype(np.int32) - np.iinfo(self.dtype).min
         np.clip(array, 0, len(self.bins)-1, out=array)
@@ -211,7 +238,7 @@ class Quantizer:
 
     @property
     def estimated_absolute_error(self):
-        return np.diff(self.bins).max()
+        return self.bins[1] - self.bins[0]
 
     def __call__(self, array):
         return self.quantize(array)
