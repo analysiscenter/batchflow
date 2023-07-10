@@ -90,9 +90,9 @@ class TestQuantizer:
     @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.uint8, np.uint16])
     def test_dequantize(self, normal_array, dtype):
         ranges = (np.min(normal_array), np.max(normal_array))
-        quantizer = Quantizer(ranges=ranges, copy=True, dtype=dtype)
-        quantized = quantizer.quantize(normal_array)
-        dequantized = quantizer.dequantize(quantized)
+        quantizer = Quantizer(ranges=ranges, dtype=dtype)
+        quantized = quantizer.quantize(normal_array, copy=True)
+        dequantized = quantizer.dequantize(quantized, copy=True)
 
         assert (np.abs(normal_array - dequantized) < quantizer.estimated_absolute_error).all()
 
@@ -100,9 +100,9 @@ class TestQuantizer:
     @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.uint8, np.uint16])
     def test_ranges(self, normal_array, clip, dtype):
         ranges = np.quantile(normal_array, (0.05, 0.95))
-        quantizer = Quantizer(ranges=ranges, clip=clip, copy=True, dtype=dtype)
-        quantized = quantizer.quantize(normal_array)
-        dequantized = quantizer.dequantize(quantized)
+        quantizer = Quantizer(ranges=ranges, clip=clip, dtype=dtype)
+        quantized = quantizer.quantize(normal_array, copy=True)
+        dequantized = quantizer.dequantize(quantized, copy=True)
 
         diff = np.abs(normal_array - dequantized)
         central_mask = np.logical_and(normal_array > ranges[0], normal_array < ranges[1])
@@ -120,7 +120,7 @@ class TestQuantizer:
         ranges = np.abs(ranges).min()
         ranges = (-ranges, ranges)
 
-        quantizer = Quantizer(ranges=ranges, clip=clip, copy=True, dtype=dtype)
+        quantizer = Quantizer(ranges=ranges, clip=clip, dtype=dtype)
 
         assert quantizer.quantize([0]) == [np.iinfo(dtype).max - (np.iinfo(dtype).max - np.iinfo(dtype).min) // 2]
 
@@ -129,6 +129,6 @@ class TestQuantizer:
     def test_outliers_transform(self, normal_array, clip, dtype):
         ranges = normal_array.min(), normal_array.max()
 
-        quantizer = Quantizer(ranges=ranges, clip=clip, copy=True, dtype=dtype)
+        quantizer = Quantizer(ranges=ranges, clip=clip, dtype=dtype)
 
         assert (quantizer.quantize([ranges[0]-1, ranges[1]+1]) == [np.iinfo(dtype).min+clip, np.iinfo(dtype).max]).all()

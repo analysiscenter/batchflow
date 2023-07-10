@@ -238,7 +238,7 @@ class Quantizer:
 
     @property
     def estimated_absolute_error(self):
-        return self.bins[1] - self.bins[0]
+        return np.diff(self.bins).max()
 
     def __call__(self, array):
         return self.quantize(array)
