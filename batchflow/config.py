@@ -120,9 +120,21 @@ class Config(dict):
         value = self._get(key, pop=True, **kwargs)
         return value
     
-    def _get(self, key, **kwargs):
-
-        pop = kwargs.get('pop', False)
+    def _get(self, key, pop=False, **kwargs):
+        """ Recursively get values corresponding to key 
+        If key doesn't contain '/', get() or pop() from the `dict` class is invoked
+        """
+        # For example, let d = {'a': {'b': {'c': 30}}}. If 
+        # we want to get d['a/b'], the __getitem__ method will invoke 
+        # this method.
+        # keys = ['a', 'b']
+        # value = self (value = {'a': {'b': {'c': 30}}})
+        # k = 'a':
+        #     Then parent starts to link to this value, i.e., parent = {'a': {'b': {'c': 30}}}
+        #     Then we get value for 'a', so a new value starts to link to the {'b': {'c': 30}}
+        # k = 'b':
+        #     Then parent starts to link to the new value, i.e., parent = {'b': {'c': 30}}
+        #     Then we get value for 'b', so a new value starts to link to the {'c': 30}
         has_default = 'default' in kwargs 
         default = kwargs.get('default')
         default = Config(default) if isinstance(default, dict) else default
@@ -131,33 +143,35 @@ class Config(dict):
 
         unpack = False
         if not isinstance(key, list):
-            key = list([key])
+            key = [key]
             unpack = True
 
         ret_vars = []
         for variable in key:
             if isinstance(variable, str) and '/' in variable:
                 keys = variable.split('/')
-                value = self
+                value = self # value starts to link to self which is original dict
                 for k in keys:
                     if isinstance(value, dict):
-                        parent = value
-                        value = value[k]
+                        parent = value # parent starts to link to value
+                        value = value[k] # this invokes the __getitem__ method and returns the value corresponding to the k,
+                                         # value starts to link to the dict inside the previous dict
+
+                    # if we want to get, for example, 'a/b/c' from {'a': {'b': 30}} 
                     else:
                         if has_default:
                             return default
                         raise KeyError(k)
                 if pop:
                     del parent[k]
-
+            
             else:
                 if variable in self:
                     value = method(variable)
                 else:
                     if has_default:
                         return default
-                    else:
-                        raise KeyError(variable)
+                    raise KeyError(variable)
 
             ret_vars.append(value)
 
@@ -185,12 +199,9 @@ class Config(dict):
         kwargs :
             parameters from kwargs also will be included into the resulting config
         """
-        if isinstance(other, dict):
-            for key, value in other.items():
-                self.put(key, value)
-        else:
-            for key, value in kwargs.items():
-                self.put(key, value)
+        iterable = other if isinstance(other, dict) else kwargs
+        for key, value in iterable.items():
+            self.put(key, value)
 
     def flatten(self, config=None):
         """ Transforms nested dict into flatten dict
