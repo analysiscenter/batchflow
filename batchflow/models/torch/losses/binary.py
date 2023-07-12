@@ -196,8 +196,8 @@ class SSLoss(nn.Module):
 
 
 
-class WeightedBCE(nn.Module):
-    """ Weighted BCE for the unbalanced data which computes weights dynamically """
+class BalancedWeightedBCE(nn.Module):
+    """ Balanced weighted BCE loss for the unbalanced data which computes weights dynamically """
     def __init__(self):
         super().__init__()
 
@@ -213,7 +213,3 @@ class WeightedBCE(nn.Module):
         loss += F.binary_cross_entropy_with_logits(prediction, target, weight=mask)
 
         return loss
-
-losses = [WeightedBCE(), Dice()]
-weights = [.5, .5]
-comboloss = Weighted(losses, weights)
