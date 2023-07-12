@@ -1,9 +1,11 @@
 """ Plot primitives. """
 from copy import copy
 from datetime import datetime
+from functools import wraps
 from itertools import cycle
 from numbers import Number
 from warnings import warn
+from multiprocessing import Process
 
 import numpy as np
 
@@ -20,6 +22,29 @@ from .utils import CycledList, ColorMappingHandler, PlotConfig
 from .utils import evaluate_str_comparison, is_binary_mask, contains_numbers, ceil_div
 from .utils import make_cmap, scale_lightness, invert_color, wrap_by_delimiter
 from ..utils import to_list
+
+
+
+# Decorators
+def detachable(func):
+    """ Run `func` in a daemon process without result return.
+
+    Note, the decorator intercept the `detach` argument from the `func`.
+    """
+    @wraps(func)
+    def _wrapper(*args, **kwargs):
+        detach = kwargs.get('detach', False)
+
+        if detach is True:
+            process = Process(target=func, args=args, kwargs=kwargs,
+                              daemon=True, name=f'daemon_for_{func.__qualname__}')
+            process.start()
+            return None
+
+        result = func(*args, **kwargs)
+        return result
+
+    return _wrapper
 
 
 
@@ -170,8 +195,7 @@ class Layer:
             data = self.preprocess(data)
             self.main_object.set_data(data)
 
-            vmin = self.config.get('vmin', np.nanmin(data))
-            vmax = self.config.get('vmax', np.nanmax(data))
+            vmin, vmax = self._parse_v_ranges(data)
             self.main_object.set_clim([vmin, vmax])
 
         if self.mode == 'histogram':
@@ -184,6 +208,31 @@ class Layer:
 
         if self.mode == 'loss':
             raise NotImplementedError("Updating layer data is not in supported in 'loss' mode. ")
+
+    def _parse_vrange(self, data):
+        """ Parse vmin and vmax values from the `self.config`. """
+        vmin = self.config.get('vmin', np.nanmin(data))
+        vmax = self.config.get('vmax', np.nanmax(data))
+        vrange = self.config.get('vrange', None)
+
+        # Parse vmin, vmax
+        if isinstance(vmin, str):
+            vmin = np.nanquantile(data, q=float(vmin))
+        if isinstance(vmax, str):
+            vmax = np.nanquantile(data, q=float(vmax))
+
+        # Parse vrange
+        if vrange is True:
+            vrange = max(abs(np.nanmin(data)), abs(np.nanmax(data)))
+        elif isinstance(vrange, str):
+            vrange = abs(np.nanquantile(data, q=(float(vrange), 1-float(vrange)))).max()
+
+        if vrange is not None:
+            if isinstance(vrange, (list, tuple, np.ndarray)):
+                vmin, vmax = vrange
+            else:
+                vmin, vmax = -vrange, vrange
+        return vmin, vmax
 
     # Plotting methods
     def image(self, data):
@@ -205,6 +254,11 @@ class Layer:
 
         image_keys = ['alpha', 'vmin', 'vmax', 'extent']
         image_config = self.config.filter(keys=image_keys, prefix='image_')
+
+        vmin, vmax = self._parse_v_ranges(data)
+        image_config['vmin'] = vmin
+        image_config['vmax'] = vmax
+
         image = self.ax.imshow(data, cmap=cmap, **image_config)
 
         return [image]
@@ -213,6 +267,10 @@ class Layer:
         """ Display data as a matrix. """
         matrix_keys = ['cmap', 'vmin', 'vmax']
         matrix_config = self.config.filter(keys=matrix_keys, prefix='matrix_')
+
+        vmin, vmax = self._parse_v_ranges(data)
+        matrix_config['vmin'] = vmin
+        matrix_config['vmax'] = vmax
 
         matrix = self.ax.matshow(data, **matrix_config)
 
@@ -887,6 +945,11 @@ class Plot:
     fix_config : bool
         If False, every time `plot` is called update config with provided keyword arguments, replacing older parameters.
         If True, fix plotter config as provided on initialization. Usefull, if one want to reuse this config on updates.
+    detach : {True, False, 'save'}, default: False
+        Whether to use run `plot` in a daemon process.
+        If False, then don't use any daemon processes.
+        If True, then run :meth:`~.plot` in a daemon process.
+        If 'save', then run :meth:`~.save` (called from the :meth:`~.plot`) in a daemon process.
     kwargs :
         - For one of `image`, `histogram`, `curve`, `loss` methods of `Layer` (depending on chosen mode).
             Parameters and data nestedness levels must match if they are lists meant for differents subplots/layers.
@@ -933,13 +996,24 @@ class Plot:
         If a callable, must return boolean mask with the same shape as original image that mark image pixels to mask.
         If a tuple, contain any combination of items of types above.
     cmap : str or matplotlib colormap object
-        Сolormap to display single-channel images with. Must be valid matplotlib colormap (e.g. 'ocean', 'tab20b').
+        Colormap to display single-channel images with. Must be valid matplotlib colormap (e.g. 'ocean', 'tab20b').
     mask_color : string or tuple of 3 or 4 numbers
         Color to display masked values with. Must be valid matplotlib color (e.g. 'salmon', '#120FA3', (0.3, 0.4, 0.5)).
     alpha : number in (0, 1) range
         Image opacity (0 means fully transparent, i.e. invisible, 1 - totally opaque). Useful when `combine='overlay'`.
-    vmin, vmax : number
+    vmin, vmax : number, str, None
         Limits for normalizing image into (0, 1) range. Values beyond range are clipped (default matplotlib behaviour).
+        Note, if you provide a str it must be a repr of a float value in (0, 1) range.
+        If number, then it is used as a clipping value.
+        If str, then `float(str)` data quantile will be clipping value.
+        If None, then vmin and vmax are evaluated from data.
+    vrange : number, str, True, sequence of two numbers optional
+        Way to evaluate symmetric zero-centered vmin and vmax values.
+        Note, if you provide a str it must be a repr of a float value in (0, 1) range.
+        If sequence of two numbers, then this values are used as low and high clipping values.
+        If number, then (-vrange, vrange) are used as clipping values.
+        If str, then vrange is max abs value from (float(str), 1-float(str)) quantiles.
+        If True, then vrange is max abs value from data extremes.
     extent : tuple of 4 numbers
         The bounding box in data coordinates that the image will fill.
     image_{parameter} : misc
@@ -1489,8 +1563,9 @@ class Plot:
         return defaults
 
     # Plotting delegator
+    @detachable
     def plot(self, data=None, combine='overlay', mode='image', show=True, force_show=False, save=False,
-             axes=None, positions=None, n_subplots=None, adjust_figsize='image', **kwargs):
+             axes=None, positions=None, n_subplots=None, adjust_figsize='image', detach=False, **kwargs):
         """ Plot data on subplots.
 
         If a first call (from `__init__`), parse axes from kwargs if they are provided, else create them.
@@ -1513,7 +1588,7 @@ class Plot:
                 self.config = PlotConfig()
             outer_config = PlotConfig(kwargs)
             if axes is not None:
-                msg = "Subplots already created and new axes cannot bespecified."
+                msg = "Subplots already created and new axes cannot be specified."
                 raise ValueError(msg)
 
         positions = list(range(len(data))) if positions is None else to_list(positions)
@@ -1547,7 +1622,8 @@ class Plot:
             self.close()
 
         if save or 'savepath' in self.config:
-            self.save()
+            detach_save = detach=='save'
+            self.save(detach=detach_save)
 
         return self
 
@@ -1602,9 +1678,15 @@ class Plot:
 
         default_savepath = datetime.now().strftime('%Y-%m-%d_%H:%M:%S.png')
         savepath = save_config.pop('savepath', default_savepath)
+        detach = save_config.pop('detach', False)
 
         if savepath:
-            self.figure.savefig(fname=savepath, **save_config)
+            if detach:
+                process = Process(target=self.figure.savefig, kwargs={'fname': savepath, **save_config},
+                                  daemon=True, name=f'daemon_for_{self.save.__qualname__}')
+                process.start()
+            else:
+                self.figure.savefig(fname=savepath, **save_config)
 
     def close(self):
         """ Close figure. """
