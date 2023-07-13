@@ -195,7 +195,7 @@ class Layer:
             data = self.preprocess(data)
             self.main_object.set_data(data)
 
-            vmin, vmax = self._parse_v_ranges(data)
+            vmin, vmax = self._parse_vrange(data)
             self.main_object.set_clim([vmin, vmax])
 
         if self.mode == 'histogram':
@@ -255,7 +255,7 @@ class Layer:
         image_keys = ['alpha', 'vmin', 'vmax', 'extent']
         image_config = self.config.filter(keys=image_keys, prefix='image_')
 
-        vmin, vmax = self._parse_v_ranges(data)
+        vmin, vmax = self._parse_vrange(data)
         image_config['vmin'] = vmin
         image_config['vmax'] = vmax
 
@@ -268,7 +268,7 @@ class Layer:
         matrix_keys = ['cmap', 'vmin', 'vmax']
         matrix_config = self.config.filter(keys=matrix_keys, prefix='matrix_')
 
-        vmin, vmax = self._parse_v_ranges(data)
+        vmin, vmax = self._parse_vrange(data)
         matrix_config['vmin'] = vmin
         matrix_config['vmax'] = vmax
 
