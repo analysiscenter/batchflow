@@ -20,19 +20,17 @@ class Normalizer:
     normalization_stats : dict, optional
         If provided, then used to get statistics for normalization.
         Otherwise, compute them from a given array.
-    inplace : bool
-        Whether to apply operation inplace or return a new array.
     """
 
     def __init__(self, mode='meanstd', clip_to_quantiles=False, q=(0.01, 0.99),
-                 normalization_stats=None, inplace=False):
+                 normalization_stats=None):
         self.mode = mode
         self.clip_to_quantiles = clip_to_quantiles
         self.q = q
         self.normalization_stats = normalization_stats
-        self.inplace = inplace
 
-    def normalize(self, array, normalization_stats=None, mode=None, return_stats=False):
+    def normalize(self, array, normalization_stats=None, mode=None, return_stats=False, inplace=False,
+                  clip_to_quantiles=None):
         """ Normalize image with provided stats.
 
         Parameters
@@ -45,14 +43,16 @@ class Normalizer:
             If self.normalization_stats is also None, then statistics will by computed by array.
         return_stats : bool, optional
             Whether to return stats used for normalization, by default False
+        inplace : bool
+            Whether to apply operation inplace or return a new array.
 
         Returns
         -------
         numpy.ndarray or (numpy.ndarray, dict)
         """
-        clip_to_quantiles = self.clip_to_quantiles
+        clip_to_quantiles = self.clip_to_quantiles if clip_to_quantiles is None else clip_to_quantiles
         mode = self.mode if mode is None else mode
-        array = array if self.inplace else array.copy()
+        array = array if inplace else array.copy()
 
         normalization_stats = normalization_stats if normalization_stats is not None else self.normalization_stats
 
@@ -101,7 +101,7 @@ class Normalizer:
 
     __call__ = normalize
 
-    def denormalize(self, array, normalization_stats=None, mode=None):
+    def denormalize(self, array, normalization_stats=None, mode=None, inplace=False):
         """ Denormalize image with provided stats.
 
         Parameters
@@ -118,7 +118,7 @@ class Normalizer:
         -------
         numpy.ndarray or (numpy.ndarray, dict)
         """
-        array = array if self.inplace else array.copy()
+        array = array if inplace else array.copy()
         mode = self.mode if mode is None else mode
 
         if self.normalization_stats is not None:
