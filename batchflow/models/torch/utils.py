@@ -123,7 +123,7 @@ def center_crop(inputs, target_shape, dims):
 
 
 def get_blocks_and_activations(model):
-    """ Retrieve intermediate blocks of the neural netowork model
+    """ Retrieve intermediate blocks of the neural network model
     and corresponding activation names.
     """
     encoder_blocks = list(filter(lambda x: 'block' in x, model.model.encoder))
@@ -144,7 +144,7 @@ def get_blocks_and_activations(model):
 
 def compress_activations(batch, activation_names, **kwargs):
     """ Apply PCA channel reduction to intermidiate activations of the neural network model
-    and assign compressed images to the batch's attributes
+    and assign compressed images to the batch's attributes.
     """
     for activation_name in activation_names:
         activation_images = getattr(batch, activation_name).copy()
@@ -157,12 +157,11 @@ def compress_activations(batch, activation_names, **kwargs):
     return batch, explained_variance
 
 def reduce_channels(images, n_components=3, **kwargs):
-    """ Convert multichannel 'b c h w' images from neural network model to RGB images """
+    """ Convert multichannel 'b c h w' images from neural network model to RGB images. """
     _ = kwargs
     images = images.transpose(0, 2, 3, 1)
     pca_instance = PCA(n_components=n_components)
     compressed_images = pca_instance.fit_transform(images.reshape(-1, images.shape[-1]))
     compressed_images = compressed_images.reshape(*images.shape[:3], n_components)
     compressed_images = (compressed_images - compressed_images.min()) / (compressed_images.max() - compressed_images.min())
-
     return compressed_images, pca_instance.explained_variance_ratio_
