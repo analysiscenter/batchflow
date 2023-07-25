@@ -149,12 +149,12 @@ def compress_activations(batch, activation_names, **kwargs):
     for activation_name in activation_names:
         activation_images = getattr(batch, activation_name).copy()
         if not np.isnan(activation_images.min()):
-            compressed_images, var = reduce_channels(activation_images, **kwargs)
+            compressed_images, explained_variance = reduce_channels(activation_images, **kwargs)
             setattr(batch, activation_name, compressed_images)
         else:
             return None
 
-    return batch, var
+    return batch, explained_variance
 
 def reduce_channels(images, n_components=3, **kwargs):
     """ Convert multichannel 'b c h w' images from neural network model to RGB images """
