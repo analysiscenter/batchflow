@@ -63,6 +63,18 @@ def get_shape(inputs, default_shape=None):
         raise TypeError(f'Inputs can be array, tensor, or sequence, got {type(inputs)} instead!')
     return shape
 
+def get_size(inputs):
+    """ Compute number of elements in tensor or in list of tensors """
+    if isinstance(inputs, np.ndarray):
+        size = inputs.size
+    elif isinstance(inputs, torch.Tensor):
+        size = inputs.numel()
+    elif isinstance(inputs, list):
+        size = [get_size(item) for item in inputs]
+    else:
+        raise TypeError(f'Inputs can be array, tensor, or sequence, got {type(inputs)} instead!')
+    return size
+
 def get_num_channels(inputs):
     """ Get number of channels in one tensor. """
     return inputs.shape[1]
