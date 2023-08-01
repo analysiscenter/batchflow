@@ -29,7 +29,7 @@ from .base_mixins import OptimalBatchSizeMixin, LayerHook, ExtractionMixin, Visu
 from .initialization import best_practice_resnet_init
 from .losses import CrossEntropyLoss, BinaryLovaszLoss, LovaszLoss, SSIM, MSSIM
 from .losses import binary as binary_losses, multiclass as multiclass_losses
-from .utils import get_shape
+from .utils import get_shape, get_size
 from ..base import BaseModel
 from ...config import Config
 
@@ -1540,7 +1540,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         for i, _ in enumerate(outputs):
             # All tensors for current `output_name`
             chunked_output = [chunk_outputs[i] for chunk_outputs in chunked_outputs]
-            if chunked_output[0].size != 1:
+            if get_size(chunked_output[0]) != 1:
                 if len(chunked_output) == 1:
                     output_ = chunked_output[0][:chunk_sizes[0]]
                 elif isinstance(chunked_output[0], np.ndarray):
@@ -1551,7 +1551,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                                          for chunk_output, chunk_size in zip(chunked_output, chunk_sizes)], dim=0)
                 result.append(output_)
             else:
-                result.append(np.mean(chunked_output))
+                if isinstance(chunked_output[0], np.ndarray):
+                    result.append(np.mean(chunked_output))
+                else:
+                    result.append(torch.mean(torch.stack(chunked_output)))
 
         if single_output:
             result = result[0]
