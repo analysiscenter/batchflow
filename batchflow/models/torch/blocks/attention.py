@@ -201,14 +201,20 @@ class BAM(nn.Module):
         super().__init__()
         in_channels = get_num_channels(inputs)
 
-        self.bam_attention = Block(
-            inputs=inputs, layout='R' + 'cna'*3  + 'c' + '+ a',
+        # Channel attention module
+        self.ca = Block(
+            inputs=inputs, layout='V>cnacn',
+            kernel_size=1, channels=[in_channels//ratio, in_channels],
+            dim=get_num_dims(inputs), activation='relu', bias=True,
+            **kwargs
+        )
+
+        # Spatial attention module
+        self.sa = Block(
+            inputs=inputs, layout='cna'*3 + 'cn',
             channels=[f'same//{ratio}', 'same', 'same', 1], kernel_size=[1, 3, 3, 1],
-            dilation=[1, dilation, dilation, 1], activation=['relu']*3+['sigmoid'], bias=True,
-            branch={'layout': 'Vfnaf >',
-                    'features': [in_channels//ratio, in_channels],
-                    'dim': get_num_dims(inputs),
-                    'activation': 'relu', 'bias': True, **kwargs}
+            dilation=[1, dilation, dilation, 1], activation=['relu']*3, bias=False,
+            **kwargs
         )
 
         self.desc_kwargs = {
@@ -220,7 +226,10 @@ class BAM(nn.Module):
         }
 
     def forward(self, x):
-        return x * (1 + self.bam_attention(x))
+        tensor_ca = self.ca(x)
+        tensor_sa = self.sa(x)
+        attention = Activation('sigmoid')(tensor_ca + tensor_sa)
+        return x * (1 + attention)
 
     def __repr__(self):
         if getattr(self, 'debug', False):
