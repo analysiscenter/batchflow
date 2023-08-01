@@ -1551,7 +1551,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                                          for chunk_output, chunk_size in zip(chunked_output, chunk_sizes)], dim=0)
                 result.append(output_)
             else:
-                result.append(np.mean([chunk_output.item() for chunk_output in chunked_output]))
+                if isinstance(chunked_output[0], np.ndarray):
+                    result.append(np.mean(chunked_output))
+                else:
+                    result.append(torch.mean(torch.stack(chunked_output)))
 
         if single_output:
             result = result[0]
