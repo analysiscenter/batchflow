@@ -246,7 +246,7 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
 
     try:
         nvidia_smi.nvmlInit()
-    except Exception:
+    except Exception:   # pylint: disable=broad-except
         # NVidia SMI is not available
         return {} if return_memory else None
     n_devices = nvidia_smi.nvmlDeviceGetCount()
