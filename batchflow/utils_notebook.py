@@ -246,7 +246,7 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
 
     try:
         nvidia_smi.nvmlInit()
-    except:
+    except Exception:
         # NVidia SMI is not available
         return {} if return_memory else None
     n_devices = nvidia_smi.nvmlDeviceGetCount()
@@ -288,7 +288,7 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
         for ix, gpu in enumerate(np.array(available_devices)[:n]):
             gpus[gpu] = { 'available': memory_free[ix], 'max': memory_total[ix] }
         return gpus
-    order = np.argsort(memory_usage)[::-1]
+    order = np.argsort(memory_free)[::-1]
     return np.array(available_devices)[order][:n]
 
 def get_gpu_free_memory(index):
