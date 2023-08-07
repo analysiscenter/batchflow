@@ -286,7 +286,7 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
     if return_memory:
         gpus = {}
         for ix, gpu in enumerate(np.array(available_devices)[:n]):
-            gpus[gpu] = { 'available': memory_free[ix], 'max': memory_total[ix] }
+            gpus[gpu] = {'available': memory_free[ix], 'max': memory_total[ix]}
         return gpus
     order = np.argsort(memory_free)[::-1]
     return np.array(available_devices)[order][:n]
