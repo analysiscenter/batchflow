@@ -237,23 +237,28 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
 
     Returns
     -------
-    List with available GPUs indices or dict of indices and available memory (in MB)
+    List with available GPUs indices or dict of indices and `available` and `max` memory (in MB)
     """
     try:
         import nvidia_smi
     except ImportError as exception:
         raise ImportError('Install Python interface for nvidia_smi') from exception
 
-    nvidia_smi.nvmlInit()
+    try:
+        nvidia_smi.nvmlInit()
+    except Exception:   # pylint: disable=broad-except
+        # NVidia SMI is not available
+        return {} if return_memory else None
     n_devices = nvidia_smi.nvmlDeviceGetCount()
 
-    available_devices, memory_usage = [], []
+    available_devices, memory_free, memory_total  = [], [], []
     for i in range(n_devices):
         handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
         info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
 
         num_processes = len(nvidia_smi.nvmlDeviceGetComputeRunningProcesses(handle))
         free_memory = info.free / 1024**2
+        total_memory = info.total / 1024**2
 
         consider_available = (
             (free_memory >= min_free_memory) &
@@ -262,7 +267,8 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
 
         if consider_available:
             available_devices.append(i)
-            memory_usage.append(free_memory)
+            memory_free.append(free_memory)
+            memory_total.append(total_memory)
 
         if verbose:
             print(f'Device {i} | Free memory: {info.free:4.2f} | '
@@ -277,9 +283,12 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
             raise ValueError(msg)
         warnings.warn(msg, RuntimeWarning)
 
-    order = np.argsort(memory_usage)[::-1]
     if return_memory:
-        return dict(zip(np.array(available_devices)[order][:n], np.array(memory_usage)[order][:n]))
+        gpus = {}
+        for ix, gpu in enumerate(np.array(available_devices)[:n]):
+            gpus[gpu] = {'available': memory_free[ix], 'max': memory_total[ix]}
+        return gpus
+    order = np.argsort(memory_free)[::-1]
     return np.array(available_devices)[order][:n]
 
 def get_gpu_free_memory(index):
