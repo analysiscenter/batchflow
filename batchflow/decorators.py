@@ -9,6 +9,11 @@ import logging
 import inspect
 
 try:
+    from viztracer import log_sparse
+except:
+    log_sparse = lambda func=None, stack_depth=0, dynamic_tracer_check=False: lambda x: x
+
+try:
     from numba import jit
 except ImportError:
     jit = None
@@ -69,6 +74,12 @@ def _make_action_wrapper_with_args(use_lock=None, no_eval=None):    # pylint: di
     return functools.partial(_make_action_wrapper, use_lock=use_lock, no_eval=no_eval)
 
 def _make_action_wrapper(action_method, use_lock=None, no_eval=None):
+    try:
+        closure = inspect.getclosurevars(action_method)[3]
+        assert 'apply_parallel' in closure
+    except Exception as e:
+        if action_method.__name__ != 'apply_parallel':
+            action_method = log_sparse(action_method, dynamic_tracer_check=True)
     @functools.wraps(action_method)
     def _action_wrapper(action_self, *args, **kwargs):
         """ Call the action method """

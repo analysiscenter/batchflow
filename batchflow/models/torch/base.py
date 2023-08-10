@@ -6,6 +6,7 @@ from math import ceil
 from threading import Lock
 from functools import partial
 from contextlib import nullcontext
+from viztracer import get_tracer
 
 import dill
 import numpy as np
@@ -1060,113 +1061,115 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         try:
             if lock:
                 self.model_lock.acquire() #pylint: disable=consider-using-with
-            self.last_train_info = {}
+            tracer = get_tracer()
+            with tracer.log_event("train model") if tracer is not None else nullcontext():
+                self.last_train_info = {}
 
-            # Parse inputs and targets: always a list
-            inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
-            targets = list(targets) if isinstance(targets, (tuple, list)) else [targets]
+                # Parse inputs and targets: always a list
+                inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
+                targets = list(targets) if isinstance(targets, (tuple, list)) else [targets]
 
-            # Parse outputs: always a list
-            single_output = isinstance(outputs, str)
-            outputs = [outputs] if single_output else (outputs or [])
+                # Parse outputs: always a list
+                single_output = isinstance(outputs, str)
+                outputs = [outputs] if single_output else (outputs or [])
 
-            # Parse train parameters
-            if sync_frequency is True:
-                sync_frequency = self.sync_frequency
-            elif sync_frequency is False or sync_frequency is None:
-                sync_frequency = 1
+                # Parse train parameters
+                if sync_frequency is True:
+                    sync_frequency = self.sync_frequency
+                elif sync_frequency is False or sync_frequency is None:
+                    sync_frequency = 1
 
-            # Prepare parameters for SAM
-            if sam_rho is None:
-                sam_rho = self.sam_rho
-            if sam_individual_norm is None:
-                sam_individual_norm = self.sam_individual_norm
+                # Prepare parameters for SAM
+                if sam_rho is None:
+                    sam_rho = self.sam_rho
+                if sam_individual_norm is None:
+                    sam_individual_norm = self.sam_individual_norm
 
-            # Split the data into `microbatch_size` size chunks
-            split_result = self.split_into_microbatches(inputs, targets, microbatch_size,
-                                                        drop_last=microbatch_drop_last, pad_last=microbatch_pad_last)
-            (chunked_inputs, chunked_targets, chunk_sizes, batch_size, microbatch_size) = split_result
+                # Split the data into `microbatch_size` size chunks
+                split_result = self.split_into_microbatches(inputs, targets, microbatch_size,
+                                                            drop_last=microbatch_drop_last, pad_last=microbatch_pad_last)
+                (chunked_inputs, chunked_targets, chunk_sizes, batch_size, microbatch_size) = split_result
 
-            steps = len(chunked_inputs)
-            inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
-            targets_shapes = [get_shape(item) for item in chunked_targets[-1]]
-            self.last_train_info.update({'inputs_shapes': inputs_shapes,
-                                         'targets_shapes': targets_shapes})
+                steps = len(chunked_inputs)
+                inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
+                targets_shapes = [get_shape(item) for item in chunked_targets[-1]]
+                self.last_train_info.update({'inputs_shapes': inputs_shapes,
+                                            'targets_shapes': targets_shapes})
 
-            # Create PyTorch model if it is yet to be initialized, based on the actual inputs
-            if self.model is None:
-                # Update config with shapes
-                self.inputs_shapes = inputs_shapes
-                self.targets_shapes = targets_shapes
-                if not self.classes and len(targets_shapes) > 2:
-                    self.classes = [shape[1] for shape in targets_shapes]
+                # Create PyTorch model if it is yet to be initialized, based on the actual inputs
+                if self.model is None:
+                    # Update config with shapes
+                    self.inputs_shapes = inputs_shapes
+                    self.targets_shapes = targets_shapes
+                    if not self.classes and len(targets_shapes) > 2:
+                        self.classes = [shape[1] for shape in targets_shapes]
 
-                self.update_config()
+                    self.update_config()
 
-                # Can use the first two items to build model: no need for the whole tensor
-                build_inputs = [item[:2] for item in chunked_inputs[0]]
-                self.build_model(build_inputs)
+                    # Can use the first two items to build model: no need for the whole tensor
+                    build_inputs = [item[:2] for item in chunked_inputs[0]]
+                    self.build_model(build_inputs)
 
-            self.set_model_mode(mode)
+                self.set_model_mode(mode)
 
-            # Set up the profiling, if needed
-            profile = profile or self.profile
-            if profile:
-                profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
-                profiler.__enter__()
+                # Set up the profiling, if needed
+                profile = profile or self.profile
+                if profile:
+                    profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
+                    profiler.__enter__()
 
-            # Train on each of the microbatches
-            chunked_outputs = []
-            for chunk_inputs, chunk_targets in zip(chunked_inputs, chunked_targets):
-                # Compute forward and backward passes of the model, apply gradients, evaluate requested outputs
-                chunk_outputs = self._train(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs[:],
-                                            sync_frequency=sync_frequency*steps,
-                                            sam_rho=sam_rho, sam_individual_norm=sam_individual_norm,
-                                            transfer_from_device=transfer_from_device,
-                                            force_float32_dtype=force_float32_dtype)
-                chunked_outputs.append(chunk_outputs)
+                # Train on each of the microbatches
+                chunked_outputs = []
+                for chunk_inputs, chunk_targets in zip(chunked_inputs, chunked_targets):
+                    # Compute forward and backward passes of the model, apply gradients, evaluate requested outputs
+                    chunk_outputs = self._train(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs[:],
+                                                sync_frequency=sync_frequency*steps,
+                                                sam_rho=sam_rho, sam_individual_norm=sam_individual_norm,
+                                                transfer_from_device=transfer_from_device,
+                                                force_float32_dtype=force_float32_dtype)
+                    chunked_outputs.append(chunk_outputs)
 
-            # Exit the profiling
-            if profile:
-                profiler.__exit__(None, None, None)
-                self.profilers.append(profiler)
+                # Exit the profiling
+                if profile:
+                    profiler.__exit__(None, None, None)
+                    self.profilers.append(profiler)
 
-            # Call the callbacks
-            for callback in self.callbacks:
-                callback.on_iter_end()
+                # Call the callbacks
+                for callback in self.callbacks:
+                    callback.on_iter_end()
 
-            # Use current weights for weights averaging
-            if self.weight_averaging:
-                start_iter, frequency, last_iter = self.wa_config.get(['start_iter', 'frequency', 'last_iter'])
+                # Use current weights for weights averaging
+                if self.weight_averaging:
+                    start_iter, frequency, last_iter = self.wa_config.get(['start_iter', 'frequency', 'last_iter'])
 
-                if self.iteration >= last_iter and not self.wa_finalized:
-                    self.finalize_wa()
+                    if self.iteration >= last_iter and not self.wa_finalized:
+                        self.finalize_wa()
 
-                elif (start_iter <= self.iteration <= last_iter and
-                    (self.iteration - start_iter) % frequency == 0):
-                    self.wa_model.update_parameters(self.model)
-                    self.wa_iters.append(self.iteration)
+                    elif (start_iter <= self.iteration <= last_iter and
+                        (self.iteration - start_iter) % frequency == 0):
+                        self.wa_model.update_parameters(self.model)
+                        self.wa_iters.append(self.iteration)
 
-                    if self.wa_decay:
-                        self.wa_decay.step()
+                        if self.wa_decay:
+                            self.wa_decay.step()
 
-            # Aggregate the outputs from microbatches
-            result = self.aggregate_microbatches(outputs, chunked_outputs, chunk_sizes, single_output)
+                # Aggregate the outputs from microbatches
+                result = self.aggregate_microbatches(outputs, chunked_outputs, chunk_sizes, single_output)
 
-            # Store the average value of loss over microbatches
-            self.loss_list.append(np.mean(self._loss_list[-steps:]))
+                # Store the average value of loss over microbatches
+                self.loss_list.append(np.mean(self._loss_list[-steps:]))
 
-            # Store info about current train iteration
-            self.last_train_info.update({
-                'amp': self.amp,
-                'batch_size': batch_size,
-                'microbatch_size': microbatch_size,
-                'sync_frequency': sync_frequency,
-                'steps': steps,
-                'sam': bool(sam_rho), 'sam_rho': sam_rho,
-                'sam_individual_norm': sam_individual_norm,
-                'outputs': outputs,
-            })
+                # Store info about current train iteration
+                self.last_train_info.update({
+                    'amp': self.amp,
+                    'batch_size': batch_size,
+                    'microbatch_size': microbatch_size,
+                    'sync_frequency': sync_frequency,
+                    'steps': steps,
+                    'sam': bool(sam_rho), 'sam_rho': sam_rho,
+                    'sam_individual_norm': sam_individual_norm,
+                    'outputs': outputs,
+                })
 
         finally:
             if lock:
@@ -1365,59 +1368,61 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         try:
             if lock:
                 self.model_lock.acquire() #pylint: disable=consider-using-with
-            self.last_predict_info = {}
+            tracer = get_tracer()
+            with tracer.log_event("predict model") if tracer is not None else nullcontext():
+                self.last_predict_info = {}
 
-            # Parse inputs and targets: always a list
-            inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
-            if targets is not None:
-                targets = (list(targets) if isinstance(targets, (tuple, list)) else [targets])
-            else:
-                targets = []
+                # Parse inputs and targets: always a list
+                inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
+                if targets is not None:
+                    targets = (list(targets) if isinstance(targets, (tuple, list)) else [targets])
+                else:
+                    targets = []
 
-            # Parse outputs: always a list
-            single_output = isinstance(outputs, str)
-            outputs = [outputs] if single_output else (outputs or [])
+                # Parse outputs: always a list
+                single_output = isinstance(outputs, str)
+                outputs = [outputs] if single_output else (outputs or [])
 
-            # Parse other parameters
-            amp = amp if amp is not None else self.amp
+                # Parse other parameters
+                amp = amp if amp is not None else self.amp
 
-            # Raise error early
-            if 'loss' in outputs and targets is None:
-                raise TypeError('`targets` should be explicitly provided to compute `loss`!')
+                # Raise error early
+                if 'loss' in outputs and targets is None:
+                    raise TypeError('`targets` should be explicitly provided to compute `loss`!')
 
-            # Split the data into `microbatch` size chunks
-            split_result = self.split_into_microbatches(inputs, targets, microbatch_size,
-                                                        drop_last=False, pad_last=microbatch_pad_last)
-            (chunked_inputs, chunked_targets, chunk_sizes, batch_size, microbatch_size) = split_result
+                # Split the data into `microbatch` size chunks
+                split_result = self.split_into_microbatches(inputs, targets, microbatch_size,
+                                                            drop_last=False, pad_last=microbatch_pad_last)
+                (chunked_inputs, chunked_targets, chunk_sizes, batch_size, microbatch_size) = split_result
 
-            steps = len(chunked_inputs)
-            inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
-            targets_shapes = [get_shape(item) for item in chunked_targets[-1]]
-            self.last_predict_info.update({'inputs_shapes': inputs_shapes,
-                                           'targets_shapes': targets_shapes})
+                steps = len(chunked_inputs)
+                inputs_shapes = [get_shape(item) for item in chunked_inputs[-1]]
+                targets_shapes = [get_shape(item) for item in chunked_targets[-1]]
+                self.last_predict_info.update({'inputs_shapes': inputs_shapes,
+                                            'targets_shapes': targets_shapes})
 
-            # Evaluate each microbatch separately
-            self.set_model_mode(mode)
+                # Evaluate each microbatch separately
+                self.set_model_mode(mode)
 
-            chunked_outputs = []
-            for chunk_inputs, chunk_targets in zip(chunked_inputs, chunked_targets):
-                # Evaluate requested outputs
-                chunk_outputs = self._predict(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs[:],
-                                              amp=amp, no_grad=no_grad, transfer_from_device=transfer_from_device,
-                                              force_float32_dtype=force_float32_dtype)
-                chunked_outputs.append(chunk_outputs)
+                chunked_outputs = []
+                for chunk_inputs, chunk_targets in zip(chunked_inputs, chunked_targets):
+                    # Evaluate requested outputs
+                    chunk_outputs = self._predict(inputs=chunk_inputs, targets=chunk_targets, outputs=outputs[:],
+                                                amp=amp, no_grad=no_grad, transfer_from_device=transfer_from_device,
+                                                force_float32_dtype=force_float32_dtype)
+                    chunked_outputs.append(chunk_outputs)
 
-            # Aggregate the outputs from microbatches
-            result = self.aggregate_microbatches(outputs, chunked_outputs, chunk_sizes, single_output)
+                # Aggregate the outputs from microbatches
+                result = self.aggregate_microbatches(outputs, chunked_outputs, chunk_sizes, single_output)
 
-            # Store info about current predict iteration
-            self.last_predict_info.update({
-                'amp': amp,
-                'batch_size': batch_size,
-                'microbatch_size': microbatch_size,
-                'steps': steps,
-                'outputs': outputs,
-            })
+                # Store info about current predict iteration
+                self.last_predict_info.update({
+                    'amp': amp,
+                    'batch_size': batch_size,
+                    'microbatch_size': microbatch_size,
+                    'steps': steps,
+                    'outputs': outputs,
+                })
 
         finally:
             if lock:

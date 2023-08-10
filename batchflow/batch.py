@@ -24,6 +24,10 @@ try:
     import dask.dataframe as dd
 except ImportError:
     from . import _fake as dd
+try:
+    from viztracer import log_sparse
+except:
+    log_sparse = lambda func=None, stack_depth=0, dynamic_tracer_check=False: lambda x: x
 
 from .dsindex import DatasetIndex, FilesIndex
 # renaming apply_parallel decorator is needed as Batch.apply_parallel method is also in the same namespace
@@ -62,6 +66,7 @@ class MethodsTransformingMeta(type):
     @classmethod
     def use_apply_parallel(cls, method, **apply_kwargs):
         """ Wrap passed `method` in accordance with `all` arg value """
+        method = log_sparse(method, dynamic_tracer_check=True)
         @functools.wraps(method)
         def apply_parallel_wrapper(self, *args, **kwargs):
             transform = self.apply_parallel
