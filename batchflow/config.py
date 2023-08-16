@@ -69,8 +69,8 @@ class Config(dict):
         Parameters
         ----------
         key : hashable object
-            key to add. '/' is used to put value into nested dict
-        value : masc
+            Key to add. '/' is used to put value into nested dict.
+        value : misc
         """
         if isinstance(key, str) and '/' in key:
             config = self
@@ -79,6 +79,9 @@ class Config(dict):
             if parent in config and isinstance(config[parent], Config): # for example, we put value=3 with key='a/c' into the
                 config[parent].update(Config({child: value}))           # config = {'a': {'b': 1}} and want to receive {'a': {'b': 1, 'c': 3}}
             else:
+                if parent in config:
+                    import warnings
+                    warnings.warn('Note that ...')
                 config[parent] = Config({child: value})
 
         else:
@@ -86,15 +89,7 @@ class Config(dict):
                 self[key].update(Config(value))
             else:
                 super().__setitem__(key, value)
-
-    def __getitem__(self, key):
-        value = self._get(key)
-        return value
-
-    def __setitem__(self, key, value):
-        _ = self.pop(key, None)
-        self.put(key, value)
-
+    
     def get(self, key, default=None):
         """ Returns the value or tuple of values for key in the config.
         If not found, returns a default value.
@@ -102,8 +97,8 @@ class Config(dict):
         Parameters
         ----------
         key : str or list of hashable objects
-            '/' is used to get value from nested dict.
-        default : masc
+            A key in the dictionary. '/' is used to get value from nested dict.
+        default : misc
             Default value if key doesn't exist in config.
             Defaults to None, so that this method never raises a KeyError.
 
@@ -114,24 +109,6 @@ class Config(dict):
         value = self._get(key, default=default)
         return value
     
-    def pop(self, key, default=None):
-        """ Returns the value or tuple of values for key and remove them from config.
-
-        Parameters
-        ----------
-        key : str or list of hashable objects
-            '/' is used to get value from nested dict.
-        default : masc
-            Default value if key doesn't exist in config.
-            Defaults to None, so that this method never raises a KeyError.
-
-        Returns
-        -------
-        Single value or a tuple
-        """
-        value = self._get(key, pop=True, default=default)
-        return value
-
     def _get(self, key, pop=False, **kwargs):
         """ Recursively retrieve values for a given key if the key contains '/'.
         If key doesn't contain '/', get or pop from the `dict` class is invoked.
@@ -194,16 +171,24 @@ class Config(dict):
         ret_vars = ret_vars[0] if unpack else tuple(ret_vars)
 
         return ret_vars
+    
+    def pop(self, key, default=None):
+        """ Returns the value or tuple of values for key and remove them from config.
 
-    def __delitem__(self, key):
-        self.pop(key)
+        Parameters
+        ----------
+        key : str or list of hashable objects
+            A key in the dictionary. '/' is used to get value from nested dict.
+        default : misc
+            Default value if key doesn't exist in config.
+            Defaults to None, so that this method never raises a KeyError.
 
-    def __getattr__(self, key):
-        if key in self:
-            value = self.get(key)
-            value = Config(value) if isinstance(value, dict) else value
-            return value
-        raise AttributeError(key)
+        Returns
+        -------
+        Single value or a tuple
+        """
+        value = self._get(key, pop=True, default=default)
+        return value
     
     def update(self, other, **kwargs):
         """ Update config with values from other.
@@ -242,51 +227,6 @@ class Config(dict):
                 new_config[key] = value
 
         return new_config
-    
-    def __iadd__(self, other):
-        if isinstance(other, dict):
-            self.update(other)
-        else:
-            raise TypeError(f"Unsupported operand type(s) for +=: 'Config' and '{type(other)}'")
-        return self
-
-    def __add__(self, other):
-        if isinstance(other, dict) and not isinstance(other, Config):
-            other = Config(other)
-        if isinstance(other, Config):
-            return Config([*self.flatten().items(), *other.flatten().items()])
-        return NotImplemented
-
-    def __radd__(self, other):
-        if isinstance(other, dict):
-            other = Config(other)
-        return other.__add__(self)
-
-    def __eq__(self, other):
-        self_ = self.flatten() if isinstance(self, Config) else self
-        other_ = Config(other).flatten() if isinstance(other, dict) else other
-        return self_.__eq__(other_)
-    
-    def __rshift__(self, other):
-        """
-            Parameters
-            ----------
-            other : Pipeline
-
-            Returns
-            -------
-            Pipeline
-                Pipeline object with an updated config.
-        """
-        return other << self
-    
-    def __getstate__(self):
-        """ Must be explicitly defined for pickling to work. """
-        return vars(self)
-
-    def __setstate__(self, state):
-        """ Must be explicitly defined for pickling to work. """
-        vars(self).update(state)
     
     def copy(self):
         """ Create a shallow copy of the instance. """
@@ -345,3 +285,66 @@ class Config(dict):
         else:
             items = super().items()
         return items
+    
+    def __getitem__(self, key):
+        value = self._get(key)
+        return value
+
+    def __setitem__(self, key, value):
+        _ = self.pop(key, None)
+        self.put(key, value)
+
+    def __delitem__(self, key):
+        self.pop(key)
+
+    def __getattr__(self, key):
+        if key in self:
+            value = self.get(key)
+            value = Config(value) if isinstance(value, dict) else value
+            return value
+        raise AttributeError(key)
+    
+    def __iadd__(self, other):
+        if isinstance(other, dict):
+            self.update(other)
+        else:
+            raise TypeError(f"Unsupported operand type(s) for +=: 'Config' and '{type(other)}'")
+        return self
+
+    def __add__(self, other):
+        if isinstance(other, dict) and not isinstance(other, Config):
+            other = Config(other)
+        if isinstance(other, Config):
+            return Config([*self.flatten().items(), *other.flatten().items()])
+        return NotImplemented
+
+    def __radd__(self, other):
+        if isinstance(other, dict):
+            other = Config(other)
+        return other.__add__(self)
+
+    def __eq__(self, other):
+        self_ = self.flatten() if isinstance(self, Config) else self
+        other_ = Config(other).flatten() if isinstance(other, dict) else other
+        return self_.__eq__(other_)
+    
+    def __rshift__(self, other):
+        """
+            Parameters
+            ----------
+            other : Pipeline
+
+            Returns
+            -------
+            Pipeline
+                Pipeline object with an updated config.
+        """
+        return other << self
+    
+    def __getstate__(self):
+        """ Must be explicitly defined for pickling to work. """
+        return vars(self)
+
+    def __setstate__(self, state):
+        """ Must be explicitly defined for pickling to work. """
+        vars(self).update(state)
