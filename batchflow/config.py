@@ -1,4 +1,5 @@
 """ Config class"""
+import warnings
 
 class Config(dict):
     """ Class for configs that can be represented as nested dicts with easy indexing by slashes. """
@@ -80,8 +81,7 @@ class Config(dict):
                 config[parent].update(Config({child: value}))           # config = {'a': {'b': 1}} and want to receive {'a': {'b': 1, 'c': 3}}
             else:
                 if parent in config:
-                    import warnings
-                    warnings.warn('Note that ...')
+                    warnings.warn(f'Note that value for `{parent}` was overridden, not updated!')
                 config[parent] = Config({child: value})
 
         else:
