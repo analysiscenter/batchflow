@@ -70,6 +70,7 @@ requests = { version = "*", optional = true }
 
 # [tool.poetry.group.other.dependencies]
 urllib3 = { version = "^1.25", optional = true }
+Bottleneck = { version = "*", optional = true }
 
 [tool.poetry.extras]
 image = ["pillow", "matplotlib"]
