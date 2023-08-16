@@ -1868,7 +1868,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         Returns
         -------
         activation_blocks : list of str
-            List with activation blocks which will be fed into `outputs` parameter of self.predict.
+            List with activation blocks which will be passed into `outputs` parameter of `self.predict`.
         activation_names : list of str
             List with names of activations corresponding to activation blocks.
 
