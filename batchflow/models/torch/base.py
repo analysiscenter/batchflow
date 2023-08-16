@@ -33,6 +33,9 @@ from .utils import get_shape, get_size
 from ..base import BaseModel
 from ...config import Config
 
+from collections.abc import Iterable
+from collections import defaultdict
+
 
 
 LOSSES = {
@@ -1847,3 +1850,60 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                                          columns=['ncalls', 'CPU_tottime', 'CPU_cumtime', 'CUDA_cumtime'])
         self.profile_info['CPU_tottime_avg'] = self.profile_info['CPU_tottime'] / self.profile_info['ncalls']
         self.profile_info['CUDA_cumtime_avg'] = self.profile_info['CUDA_cumtime'] / self.profile_info['ncalls']
+
+
+    # Utilities for activations
+    @staticmethod
+    def get_blocks_and_activations(model, modules=None):
+        """ Retrieve intermediate blocks of the neural network model
+        and corresponding activation names.
+
+        Parameters
+        ----------
+        model : Network
+        modules : str or list of str, default None
+            The main parts of the model for retrieving activations from.
+            If None, all of the parts from the model.config['order'] wil be used.
+
+        Returns
+        -------
+        activation_blocks : list of str
+            List with activation blocks which will be fed into `outputs` parameter of self.predict.
+        activation_names : list of str
+            List with names of activations corresponding to activation blocks.
+
+        Examples
+        --------
+        >>> get_blocks_and_activations(model, modules=['encoder', 'embedding', 'decoder'])
+        activation_blocks = ['model.encoder["block-0"]', 'model.encoder["block-1"]', 'model.embedding', 'model.decoder["block-0"]']
+        activation_names = ['encoder_0', 'encoder_1', 'embedding_0', 'decoder_0']
+        """
+        extracted_blocks = defaultdict(list)
+        modules = modules or model.config['order']
+        activation_names = []
+
+        for module in modules:
+            extracted_module = getattr(model, module)
+            if isinstance(extracted_module, Iterable):
+                for block in extracted_module:
+                    if 'block' in block:
+                        extracted_blocks[module].append(f'model.{module}["{block}"]')
+            else:
+                extracted_blocks[module].append(f'model.{module}')
+
+        activation_blocks = []
+        for module, blocks in extracted_blocks.items():
+            activation_blocks.extend(blocks)
+            activation_names += [f'{module}_{i}' for i in range(len(blocks))]
+
+        return activation_blocks, activation_names
+
+    @staticmethod
+    def reduce_channels(pca_instance, images, normalize=True):
+        """ Convert multichannel 'b c h w' images to RGB images using PCA. """
+        images = images.transpose(0, 2, 3, 1)
+        compressed_images = pca_instance.fit_transform(images.reshape(-1, images.shape[-1]))
+        compressed_images = compressed_images.reshape(*images.shape[:3], pca_instance.n_components)
+        if normalize:
+            compressed_images = (compressed_images - compressed_images.min()) / (compressed_images.max() - compressed_images.min())
+        return compressed_images, pca_instance.explained_variance_ratio_
