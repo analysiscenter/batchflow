@@ -234,7 +234,7 @@ class GPUResourceMonitor(ResourceMonitor):
         super().__init__(function=function, frequency=frequency, **kwargs)
 
         # Fallback to env variable
-        if gpu_list is None:
+        if not gpu_list:
             env_variable = os.environ.get('CUDA_VISIBLE_DEVICES', '0')
             env_variable = literal_eval(env_variable)
             gpu_list = list(env_variable) if isinstance(env_variable, tuple) else [env_variable]
@@ -242,6 +242,10 @@ class GPUResourceMonitor(ResourceMonitor):
         nvidia_smi.nvmlInit()
         gpu_handles = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
         self.kwargs.update({'gpu_list': gpu_list, 'gpu_handles': gpu_handles})
+
+    def __del__(self):
+        super().__del__()
+        nvidia_smi.nvmlShutdown()
 
 
 class GPUMonitor(GPUResourceMonitor):

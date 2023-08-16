@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "batchflow"
-version = "0.8.0"
+version = "0.8.7"
 description = "ML pipelines, model configuration and batch management"
 authors = ["Roman Kh <rhudor@gmail.com>"]
 license = "Apache License 2.0"
@@ -29,7 +29,7 @@ python = "^3.8"
 
 dill = "^0.3"
 numpy = "^1.18"
-numba = "^0.56"
+numba = ">=0.56"
 llvmlite = "*"
 scipy = "^1.9"
 
