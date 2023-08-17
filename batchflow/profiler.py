@@ -5,11 +5,8 @@ from cProfile import Profile
 import threading
 import warnings
 
-try:
-    import pandas as pd
-except ImportError:
-    from . import _fake as pd
-
+from .utils_import import make_delayed_import
+pd = make_delayed_import('pandas')
 
 
 class Profiler:

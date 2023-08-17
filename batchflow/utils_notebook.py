@@ -233,7 +233,7 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
     raise_error : bool
         Whether to raise an exception if not enough devices are available.
     return_memory : bool
-        Whether to return memory available on each GPU
+        Whether to return memory available on each GPU.
 
     Returns
     -------
@@ -288,8 +288,9 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
         for ix, gpu in enumerate(np.array(available_devices)[:n]):
             gpus[gpu] = {'available': memory_free[ix], 'max': memory_total[ix]}
         return gpus
+
     order = np.argsort(memory_free)[::-1]
-    return np.array(available_devices)[order][:n]
+    return np.array(available_devices)[order][:n].tolist()
 
 def get_gpu_free_memory(index):
     """ Return free memory (in MB) of a given gpu """

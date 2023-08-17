@@ -7,23 +7,8 @@ import warnings
 import functools
 
 import dill
-try:
-    import blosc
-except ImportError:
-    pass
 import numpy as np
-try:
-    import pandas as pd
-except ImportError:
-    from . import _fake as pd
-try:
-    import feather
-except ImportError:
-    pass
-try:
-    import dask.dataframe as dd
-except ImportError:
-    from . import _fake as dd
+
 
 from .dsindex import DatasetIndex, FilesIndex
 # renaming apply_parallel decorator is needed as Batch.apply_parallel method is also in the same namespace
@@ -32,6 +17,13 @@ from .decorators import action, inbatch_parallel, any_action_failed, apply_paral
 from .components import create_item_class, BaseComponents
 from .named_expr import P, R
 from .utils_random import make_rng
+
+from .utils_import import make_delayed_import
+blosc = make_delayed_import('blosc')
+pd = make_delayed_import('pandas')
+feather = make_delayed_import('feather')
+dd = make_delayed_import('dask.dataframe') # import dask.dataframe as dd
+
 
 
 class MethodsTransformingMeta(type):

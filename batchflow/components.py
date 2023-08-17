@@ -2,12 +2,12 @@
 import copy as cp
 
 import numpy as np
-try:
-    import pandas as pd
-except ImportError:
-    from . import _fake as pd
 
 from .utils import is_iterable
+
+from .utils_import import make_delayed_import
+pd = make_delayed_import('pandas')
+
 
 
 class AdvancedDict(dict):
