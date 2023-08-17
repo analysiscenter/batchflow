@@ -140,7 +140,7 @@ class Config(dict):
 
         unpack = False
         if not isinstance(key, list):
-            key = [key]
+            key = list(key)
             unpack = True
 
         ret_vars = []
