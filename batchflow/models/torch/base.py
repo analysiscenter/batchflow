@@ -1879,8 +1879,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         activation_names = ['encoder_0', 'encoder_1', 'embedding_0', 'decoder_0']
         """
         extracted_blocks = defaultdict(list)
-        modules = modules or model.config['order']
-        activation_names = []
+        modules = [modules] if isinstance(modules, str) else modules or model.config['order']
 
         for module in modules:
             extracted_module = getattr(model, module)
@@ -1892,6 +1891,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 extracted_blocks[module].append(f'model.{module}')
 
         activation_blocks = []
+        activation_names = []
         for module, blocks in extracted_blocks.items():
             activation_blocks.extend(blocks)
             activation_names += [f'{module}_{i}' for i in range(len(blocks))]
