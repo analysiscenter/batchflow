@@ -96,7 +96,7 @@ class Config(dict):
 
         Parameters
         ----------
-        key : str or list of hashable objects
+        key : str or list of hashable objects or tuple of hashable objects
             A key in the dictionary. '/' is used to get value from nested dict.
         default : misc
             Default value if key doesn't exist in config.
@@ -182,7 +182,7 @@ class Config(dict):
 
         Parameters
         ----------
-        key : str or list of hashable objects
+        key : str or list of hashable objects or tuple of hashable objects
             A key in the dictionary. '/' is used to get value from nested dict.
         default : misc
             Default value if key doesn't exist in config.
