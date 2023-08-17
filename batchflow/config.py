@@ -4,7 +4,7 @@ import warnings
 class Config(dict):
     """ Class for configs that can be represented as nested dicts with easy indexing by slashes. """
     def __init__(self, config=None, **kwargs):
-        """ Create Config
+        """ Create Config.
 
         Parameters
         ----------
@@ -15,7 +15,7 @@ class Config(dict):
             and the resulting dictionary is saved to self.
             For example, `{'a/b': 1, 'c/d/e': 2}` will be parsed into `{'a': {'b': 1}, 'c': {'d': {'e': 2}}}`.
 
-            If list or tuple, should contain key-value pairs with the length of 2.
+            If list or tuples, should contain key-value pairs with the length of 2.
             For example, `[('a/b', 1), ('c/d/e', 2)]` will be parsed into `{'a': {'b': 1}, 'c': {'d': {'e': 2}}}`.
 
             If an instance of Config, config is saved to self.
@@ -108,24 +108,29 @@ class Config(dict):
         """
         value = self._get(key, default=default)
         return value
-    
+
     def _get(self, key, pop=False, **kwargs):
         """ Recursively retrieve values for a given key if the key contains '/'.
         If key doesn't contain '/', get or pop from the `dict` class is invoked.
 
-        Example:
-        Let d = {'a': {'b': {'c': 30}}}.
-        If we want to get d['a/b'], __getitem__ method will invoke _get method.
+        Examples
+        --------
+        >>> config = Config({'a': {'b': {'c': 30}}})
+            config.get('a/b')
+        {'c': 30}
 
-        Given the key='a/b', keys will be ['a', 'b'].
+        Explaining:
+
+        If we want to get d['a/b'], __getitem__ method will invoke _get method.
+        Given the key = 'a/b', keys will be ['a', 'b'].
         value = self (value = {'a': {'b': {'c': 30}}}).
-        k = 'a':
-            Then parent starts to link to this value, i.e., parent = {'a': {'b': {'c': 30}}};
-            Then we get value for 'a', so a new value starts to link to the {'b': {'c': 30}}.
-        k = 'b':
-            Then parent starts to link to the new value, i.e., parent = {'b': {'c': 30}};
-            Then we get value for 'b', so a new value starts to link to the {'c': 30}.
-        Returns {'c': 30}
+        Iterate over keys:
+            k = 'a':
+                Then parent starts to link to this value, i.e., parent = {'a': {'b': {'c': 30}}};
+                Then we get value for 'a', so a new value starts to link to the {'b': {'c': 30}}.
+            k = 'b':
+                Then parent starts to link to the new value, i.e., parent = {'b': {'c': 30}};
+                Then we get value for 'b', so a new value starts to link to the {'c': 30}.
         """
         has_default = 'default' in kwargs 
         default = kwargs.get('default')
@@ -198,7 +203,7 @@ class Config(dict):
         other : dict or Config
 
         kwargs :
-            parameters from kwargs also will be included into the resulting config
+            Parameters from kwargs also will be included into the resulting config.
         """
         iterable = other if isinstance(other, dict) else kwargs
         for key, value in iterable.items():
@@ -238,7 +243,7 @@ class Config(dict):
         Parameters
         ----------
         flatten : bool
-            if False, keys will be getted from first level of nested dict, else from the last.
+            If False, keys will be getted from first level of nested dict, else from the last.
 
         Returns
         -------
@@ -256,7 +261,7 @@ class Config(dict):
         Parameters
         ----------
         flatten : bool
-            if False, values will be getted from first level of nested dict, else from the last.
+            If False, values will be getted from first level of nested dict, else from the last.
 
         Returns
         -------
@@ -274,7 +279,7 @@ class Config(dict):
         Parameters
         ----------
         flatten : bool
-            if False, keys and values will be getted from first level of nested dict, else from the last.
+            If False, keys and values will be getted from first level of nested dict, else from the last.
 
         Returns
         -------
@@ -285,7 +290,7 @@ class Config(dict):
         else:
             items = super().items()
         return items
-    
+
     def __getitem__(self, key):
         value = self._get(key)
         return value
@@ -327,10 +332,9 @@ class Config(dict):
         self_ = self.flatten() if isinstance(self, Config) else self
         other_ = Config(other).flatten() if isinstance(other, dict) else other
         return self_.__eq__(other_)
-    
+
     def __rshift__(self, other):
-        """
-            Parameters
+        """ Parameters
             ----------
             other : Pipeline
 
@@ -340,7 +344,7 @@ class Config(dict):
                 Pipeline object with an updated config.
         """
         return other << self
-    
+
     def __getstate__(self):
         """ Must be explicitly defined for pickling to work. """
         return vars(self)
