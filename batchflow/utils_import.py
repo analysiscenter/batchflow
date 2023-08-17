@@ -44,7 +44,7 @@ class DelayedImport:
                     self._loaded_module = getattr(self._loaded_module, self.attribute)
             except ImportError as e:
                 if self.help:
-                    raise ImportError(f"No module named '{self.module.strip()}'! {self.help}") from e
+                    raise ImportError(f"No module named '{self.module}'! {self.help}") from e
                 raise
 
         return self._loaded_module
@@ -70,7 +70,9 @@ class DelayedImport:
 
 
 def make_delayed_import(module, package=None, attribute=None, help=None):
-    """ Make delayed import only if needed. """
+    """ Make delayed import only if needed.
+    Setting `BATCHFLOW_IMMEDIATE_IMPORT` variable to any value makes all imports immediate.
+    """
     if module in sys.modules or os.environ.get('BATCHFLOW_IMMEDIATE_IMPORT', False):
         loaded_module = import_module(module, package)
         if attribute is not None:
@@ -98,7 +100,7 @@ class MissingImport:
             import_module(self.module, self.package)
         except ImportError as e:
             if self.help:
-                raise ImportError(f"No module named '{self.module.strip()}'! {self.help}") from e
+                raise ImportError(f"No module named '{self.module}'! {self.help}") from e
             raise
 
     def __getattr__(self, name):
