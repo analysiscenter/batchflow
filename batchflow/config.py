@@ -96,7 +96,7 @@ class Config(dict):
 
         Parameters
         ----------
-        key : str or list of hashable objects or tuple of hashable objects
+        key : str or list of hashable objects
             A key in the dictionary. '/' is used to get value from nested dict.
         default : misc
             Default value if key doesn't exist in config.
@@ -132,7 +132,7 @@ class Config(dict):
                 Then parent starts to link to the new value, i.e., parent = {'b': {'c': 30}};
                 Then we get value for 'b', so a new value starts to link to the {'c': 30}.
         """
-        has_default = 'default' in kwargs 
+        has_default = 'default' in kwargs
         default = kwargs.get('default')
         default = Config(default) if isinstance(default, dict) else default
 
@@ -140,7 +140,7 @@ class Config(dict):
 
         unpack = False
         if not isinstance(key, list):
-            key = list(key)
+            key = [key]
             unpack = True
 
         ret_vars = []
@@ -151,8 +151,13 @@ class Config(dict):
                 for k in keys:
                     if isinstance(value, dict):
                         parent = value # parent starts to link to value
-                        value = value[k] # this invokes the __getitem__ method again and returns the value corresponding to the k,
-                                         # value starts to link to the dict inside the previous dict
+
+                        if not has_default:
+                            value = value[k] # this invokes the __getitem__ method again and returns the value corresponding to the k,
+                                             # value starts to link to the dict inside the previous dict
+
+                        else: # if we want to get/pop, for example, 'a/c' from {'a': 1} and expect default value to be returned
+                            value = value.get(k, default=default)
 
                     # if we want to get, for example, 'a/b/c' from {'a': {'b': 30}} 
                     else:
@@ -176,13 +181,13 @@ class Config(dict):
         ret_vars = ret_vars[0] if unpack else tuple(ret_vars)
 
         return ret_vars
-    
+
     def pop(self, key, default=None):
         """ Returns the value or tuple of values for key and remove them from config.
 
         Parameters
         ----------
-        key : str or list of hashable objects or tuple of hashable objects
+        key : str or list of hashable objects
             A key in the dictionary. '/' is used to get value from nested dict.
         default : misc
             Default value if key doesn't exist in config.
@@ -194,7 +199,7 @@ class Config(dict):
         """
         value = self._get(key, pop=True, default=default)
         return value
-    
+
     def update(self, other, **kwargs):
         """ Update config with values from other.
 
@@ -310,10 +315,10 @@ class Config(dict):
         raise AttributeError(key)
     
     def __iadd__(self, other):
-        if isinstance(other, dict):
-            self.update(other)
-        else:
+        if not isinstance(other, dict):
             raise TypeError(f"Unsupported operand type(s) for +=: 'Config' and '{type(other)}'")
+
+        self.update(other)
         return self
 
     def __add__(self, other):
