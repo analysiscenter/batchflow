@@ -1912,7 +1912,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         images : np.ndarray
             4D array of shape (B, C, H, W).
         normalize : bool, default True
-            Apply 'minmax' normalization to the images or not.
+            Whether to apply 'minmax' normalization to the images.
         pca_instance : sklearn.decomposition.PCA, default None
             Instance of the PCA from sklearn.
             If None, the PCA with n_components == 3 will be used.
