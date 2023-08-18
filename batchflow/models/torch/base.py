@@ -34,7 +34,10 @@ from ..base import BaseModel
 from ...config import Config
 
 from collections.abc import Iterable
-from collections import defaultdict
+
+from ...utils_transforms import Normalizer
+
+from sklearn.decomposition import PCA
 
 
 
@@ -1861,49 +1864,76 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         Parameters
         ----------
         model : Network
+
         modules : str or list of str, default None
-            The main parts of the model for retrieving activations from.
-            If None, all of the parts from the model.config['order'] wil be used.
+            The modules of the model for retrieving activations from.
+            If None, all of the parts from the `model.config['order']` will be used.
 
         Returns
         -------
         activation_blocks : list of str
-            List with activation blocks which will be passed into `outputs` parameter of `self.predict`.
+            Intermediate activation blocks.
         activation_names : list of str
-            List with names of activations corresponding to activation blocks.
+            Names of activations corresponding to activation blocks.
 
         Examples
         --------
         >>> get_blocks_and_activations(model, modules=['encoder', 'embedding', 'decoder'])
-        activation_blocks = ['model.encoder["block-0"]', 'model.encoder["block-1"]', 'model.embedding', 'model.decoder["block-0"]']
-        activation_names = ['encoder_0', 'encoder_1', 'embedding_0', 'decoder_0']
+        >>> print(activation_blocks)
+        ['model.encoder["block-0"]', 'model.encoder["block-1"]', 'model.embedding', 'model.decoder["block-0"]']
+        >>> print(activation_names)
+        ['encoder_0', 'encoder_1', 'embedding_0', 'decoder_0']
         """
-        extracted_blocks = defaultdict(list)
         modules = [modules] if isinstance(modules, str) else modules or model.config['order']
+        activation_names = []
+        activation_blocks = []
 
         for module in modules:
+            number = -1
             extracted_module = getattr(model, module)
             if isinstance(extracted_module, Iterable):
                 for block in extracted_module:
                     if 'block' in block:
-                        extracted_blocks[module].append(f'model.{module}["{block}"]')
+                        number += 1
+                        activation_blocks.append(f'model.{module}["{block}"]')
+                        activation_names.append(f'{module}_{number}')
             else:
-                extracted_blocks[module].append(f'model.{module}')
-
-        activation_blocks = []
-        activation_names = []
-        for module, blocks in extracted_blocks.items():
-            activation_blocks.extend(blocks)
-            activation_names += [f'{module}_{i}' for i in range(len(blocks))]
+                activation_blocks.append(f'model.{module}')
+                activation_names.append(f'{module}_0')
 
         return activation_blocks, activation_names
 
     @staticmethod
-    def reduce_channels(pca_instance, images, normalize=True):
-        """ Convert multichannel 'b c h w' images to RGB images using PCA. """
+    def reduce_channels(images, normalize=True, pca_instance=None):
+        """ Convert multichannel images to RGB images using PCA.
+
+        Parameters
+        ----------
+        images : np.ndarray
+            4D array of shape (B, C, H, W).
+        normalize : bool, default True
+            Apply 'minmax' normalization to the images or not.
+        pca_instance : sklearn.decomposition.PCA, default None
+            Instance of the PCA from sklearn.
+            If None, the PCA with n_components == 3 will be used.
+
+        Returns
+        -------
+        compressed_images : np.ndarray
+            Compressed RGB images of shape (B, H, W, 3).
+        explained_variance_ratio : np.ndarray
+            Percentage of variance explained by each of the selected components.
+        """
         images = images.transpose(0, 2, 3, 1)
+        if pca_instance is None:
+            pca_instance = PCA(n_components=3)
+
         compressed_images = pca_instance.fit_transform(images.reshape(-1, images.shape[-1]))
         compressed_images = compressed_images.reshape(*images.shape[:3], pca_instance.n_components)
         if normalize:
-            compressed_images = (compressed_images - compressed_images.min()) / (compressed_images.max() - compressed_images.min())
-        return compressed_images, pca_instance.explained_variance_ratio_
+            normalizer = Normalizer(mode='minmax')
+            compressed_images = normalizer.normalize(compressed_images, inplace=True)
+
+        explained_variance_ratio = pca_instance.explained_variance_ratio_
+
+        return compressed_images, explained_variance_ratio
