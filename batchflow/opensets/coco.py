@@ -42,7 +42,7 @@ class BaseCOCO(ImagesOpenset):
         filename = basename(url)
         localname = os.path.join(path, filename)
         if not os.path.isfile(localname):
-            r = requests.get(url, stream=True)
+            r = requests.get(url, stream=True, headers={"User-Agent": "XY"})
             file_size = int(r.headers['Content-Length'])
             chunk_size = 1024 * 1000 #MBs
             num_bars = int(file_size / chunk_size)
@@ -51,6 +51,7 @@ class BaseCOCO(ImagesOpenset):
                 for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars,
                                        unit='MB', desc=filename, leave=True, disable=self.disable_tqdm):
                     f.write(chunk)
+
 
         folder_to_extract = os.path.join(dirname(localname), content)
         #check that root folder from the archive already exists to avoid extracting, as its time consuming
