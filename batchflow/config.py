@@ -116,7 +116,7 @@ class Config(dict):
         Examples
         --------
         >>> config = Config({'a': {'b': {'c': 30}}})
-            config.get('a/b')
+        >>> config.get('a/b')
         {'c': 30}
 
         Explaining:
@@ -301,7 +301,7 @@ class Config(dict):
         return value
 
     def __setitem__(self, key, value):
-        _ = self.pop(key, None)
+        self.pop(key)
         self.put(key, value)
 
     def __delitem__(self, key):
