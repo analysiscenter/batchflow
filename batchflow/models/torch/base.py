@@ -1914,7 +1914,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         normalize : bool, default True
             Whether to apply 'minmax' normalization to the images.
         pca_instance : sklearn.decomposition.PCA, default None
-            Instance of the PCA from sklearn.
+            Instance of the PCA.
             If None, the PCA with n_components == 3 will be used.
 
         Returns
