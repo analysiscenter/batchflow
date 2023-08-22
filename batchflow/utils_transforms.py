@@ -1,6 +1,10 @@
 """ Transformations of ranges of values: normalizations and quantizations. """
 import numpy as np
-import bottleneck as bn
+
+try:
+    import bottleneck as bn
+except:
+    bn = np
 
 class Normalizer:
     """ Class to hold parameters and methods for (de)normalization with provided stats.
