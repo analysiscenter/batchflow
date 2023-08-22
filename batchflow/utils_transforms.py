@@ -3,7 +3,7 @@ import numpy as np
 
 try:
     import bottleneck as bn
-except:
+except ImportError:
     bn = np
 
 class Normalizer:
