@@ -1854,7 +1854,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Utilities for activations
-    def get_blocks_and_activations(self, modules=None):
+    def get_activation_blocks(self, modules=None):
         """ Retrieve intermediate blocks of the neural network model
         and corresponding activation names.
 
