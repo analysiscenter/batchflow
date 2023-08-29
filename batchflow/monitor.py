@@ -154,6 +154,16 @@ class MemoryMonitor(ResourceMonitor):
         _ = kwargs
         return psutil.virtual_memory().used / (1024 **3)
 
+class DiskMemoryMonitor(ResourceMonitor):
+    """ Track total disk memory usage. """
+    UNIT = 'Gb'
+
+    @staticmethod
+    def get_usage(**kwargs):
+        """ Track total disk memory usage. """
+        _ = kwargs
+        return psutil.disk_usage('/').used / (1024 **3)
+
 
 # Process resource monitors: pre-initialize instance of `psutil.Process`
 class ProcessResourceMonitor(ResourceMonitor):
@@ -284,6 +294,7 @@ class GPUMemoryMonitor(GPUResourceMonitor):
 
 MONITOR_ALIASES = {
     MemoryMonitor: ['mmonitor', 'memory', 'memorymonitor'],
+    DiskMemoryMonitor: ['dmonitor', 'disk', 'diskmonitor'],
     CPUMonitor: ['cmonitor', 'cpu', 'cpumonitor'],
     RSSMonitor: ['rss'],
     VMSMonitor: ['vms'],
