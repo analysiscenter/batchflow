@@ -164,6 +164,26 @@ class DiskMemoryMonitor(ResourceMonitor):
         _ = kwargs
         return psutil.disk_usage('/').used / (1024 **3)
 
+class IOMonitorRead(ResourceMonitor):
+    """ Track read i/o operations amount. """
+    UNIT = 'number'
+
+    @staticmethod
+    def get_usage(**kwargs):
+        """ Track read i/o operations amount. """
+        _ = kwargs
+        return psutil.disk_io_counters().read_count
+
+class IOMonitorWrite(ResourceMonitor):
+    """ Track write i/o operations amount. """
+    UNIT = 'number'
+
+    @staticmethod
+    def get_usage(**kwargs):
+        """ Track write i/o operations amount. """
+        _ = kwargs
+        return psutil.disk_io_counters().write_count
+
 
 # Process resource monitors: pre-initialize instance of `psutil.Process`
 class ProcessResourceMonitor(ResourceMonitor):
@@ -295,6 +315,8 @@ class GPUMemoryMonitor(GPUResourceMonitor):
 MONITOR_ALIASES = {
     MemoryMonitor: ['mmonitor', 'memory', 'memorymonitor'],
     DiskMemoryMonitor: ['dmonitor', 'disk', 'diskmonitor'],
+    IOMonitorRead:['iomonitor_read', 'ioread', 'io_read'],
+    IOMonitorWrite:['iomonitor_write', 'iowrite', 'io_write'],
     CPUMonitor: ['cmonitor', 'cpu', 'cpumonitor'],
     RSSMonitor: ['rss'],
     VMSMonitor: ['vms'],
