@@ -164,26 +164,6 @@ class DiskMemoryMonitor(ResourceMonitor):
         _ = kwargs
         return psutil.disk_usage('/').used / (1024 **3)
 
-class IOMonitorRead(ResourceMonitor):
-    """ Track read i/o operations amount. """
-    UNIT = 'number'
-
-    @staticmethod
-    def get_usage(**kwargs):
-        """ Track read i/o operations amount. """
-        _ = kwargs
-        return psutil.disk_io_counters().read_count
-
-class IOMonitorWrite(ResourceMonitor):
-    """ Track write i/o operations amount. """
-    UNIT = 'number'
-
-    @staticmethod
-    def get_usage(**kwargs):
-        """ Track write i/o operations amount. """
-        _ = kwargs
-        return psutil.disk_io_counters().write_count
-
 
 # Process resource monitors: pre-initialize instance of `psutil.Process`
 class ProcessResourceMonitor(ResourceMonitor):
@@ -193,6 +173,26 @@ class ProcessResourceMonitor(ResourceMonitor):
     def __init__(self, function=None, frequency=0.1, **kwargs):
         super().__init__(function=function, frequency=frequency, **kwargs)
         self.kwargs['process'] = psutil.Process(os.getpid())
+
+class IOMonitorRead(ProcessResourceMonitor):
+    """ Track read i/o operations amount. """
+    UNIT = 'number'
+
+    @staticmethod
+    def get_usage(process=None, **kwargs):
+        """ Track read i/o operations amount. """
+        _ = kwargs
+        return process.io_counters().read_count
+
+class IOMonitorWrite(ProcessResourceMonitor):
+    """ Track write i/o operations amount. """
+    UNIT = 'number'
+
+    @staticmethod
+    def get_usage(process=None,**kwargs):
+        """ Track write i/o operations amount. """
+        _ = kwargs
+        return process.io_counters().write_count
 
 class RSSMonitor(ProcessResourceMonitor):
     """ Track non-swapped physical memory usage. """
