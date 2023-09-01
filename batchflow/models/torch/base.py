@@ -18,6 +18,8 @@ import torch
 from torch import nn
 from torch.optim.swa_utils import AveragedModel, SWALR
 
+from sklearn.decomposition import PCA
+
 try:
     import cupy as cp
     CUPY_AVAILABLE = True
@@ -32,6 +34,8 @@ from .losses import binary as binary_losses, multiclass as multiclass_losses
 from .utils import get_shape, get_size
 from ..base import BaseModel
 from ...config import Config
+from ...utils_transforms import Normalizer
+from .modules import EncoderModule, DecoderModule, MLPDecoderModule
 
 
 
@@ -1847,3 +1851,72 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                                          columns=['ncalls', 'CPU_tottime', 'CPU_cumtime', 'CUDA_cumtime'])
         self.profile_info['CPU_tottime_avg'] = self.profile_info['CPU_tottime'] / self.profile_info['ncalls']
         self.profile_info['CUDA_cumtime_avg'] = self.profile_info['CUDA_cumtime'] / self.profile_info['ncalls']
+
+
+    # Utilities for activations
+    def get_activation_blocks(self, modules=None):
+        """ Retrieve intermediate blocks of the neural network model.
+
+        Parameters
+        ----------
+        modules : str or list of str or None, default None
+            The modules of the model for retrieving activations from.
+            If None, all of the parts from the `model.config['order']` will be used.
+
+        Returns
+        -------
+        activation_blocks : list of str
+            Intermediate activation blocks.
+
+        Examples
+        --------
+        >>> model.get_activation_blocks(modules=['encoder', 'embedding', 'decoder'])
+        >>> print(activation_blocks)
+        ['model.encoder["block-0"]', 'model.encoder["block-1"]', 'model.embedding', 'model.decoder["block-0"]']
+        """
+        modules = [modules] if isinstance(modules, str) else modules or self.model.config['order']
+        activation_blocks = []
+
+        for module_name in modules:
+            extracted_module = getattr(self.model, module_name)
+            if isinstance(extracted_module, (EncoderModule, DecoderModule, MLPDecoderModule)):
+                for block_name in extracted_module:
+                    if 'block' in block_name:
+                        activation_blocks.append(f'model.{module_name}["{block_name}"]')
+            else:
+                activation_blocks.append(f'model.{module_name}')
+
+        return activation_blocks
+
+    @staticmethod
+    def reduce_channels(array, normalize=True, n_components=3):
+        """ Convert multichannel array to low-dimenional array using PCA.
+
+        Parameters
+        ----------
+        array : np.ndarray
+            4D array of shape (B, C, H, W).
+        normalize : bool, default True
+            Apply 'minmax' normalization to the images or not.
+        n_components : int, default 3
+            Number of components for PCA.
+
+        Returns
+        -------
+        compressed_array : np.ndarray
+            Compressed array of shape (B, H, W, n_components).
+        explained_variance_ratio : np.ndarray
+            Percentage of variance explained by each of the selected components.
+        """
+        array = array.transpose(0, 2, 3, 1)
+        pca_instance = PCA(n_components=n_components)
+
+        compressed_array= pca_instance.fit_transform(array.reshape(-1, array.shape[-1]))
+        compressed_array = compressed_array.reshape(*array.shape[:3], n_components)
+        if normalize:
+            normalizer = Normalizer(mode='minmax')
+            compressed_array = normalizer.normalize(compressed_array, inplace=True)
+
+        explained_variance_ratio = pca_instance.explained_variance_ratio_
+
+        return compressed_array, explained_variance_ratio
