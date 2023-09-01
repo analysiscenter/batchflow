@@ -1855,8 +1855,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     # Utilities for activations
     def get_activation_blocks(self, modules=None):
-        """ Retrieve intermediate blocks of the neural network model
-        and corresponding activation names.
+        """ Retrieve intermediate blocks of the neural network model.
 
         Parameters
         ----------
@@ -1871,7 +1870,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         Examples
         --------
-        >>> model.get_blocks_and_activations(modules=['encoder', 'embedding', 'decoder'])
+        >>> model.get_activation_blocks(modules=['encoder', 'embedding', 'decoder'])
         >>> print(activation_blocks)
         ['model.encoder["block-0"]', 'model.encoder["block-1"]', 'model.embedding', 'model.decoder["block-0"]']
         """
@@ -1881,9 +1880,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         for module_name in modules:
             extracted_module = getattr(self.model, module_name)
             if isinstance(extracted_module, (EncoderModule, DecoderModule, MLPDecoderModule)):
-                for block in extracted_module:
-                    if 'block' in block:
-                        activation_blocks.append(f'model.{module_name}["{block}"]')
+                for block_name in extracted_module:
+                    if 'block' in block_name:
+                        activation_blocks.append(f'model.{module_name}["{block_name}"]')
             else:
                 activation_blocks.append(f'model.{module_name}')
 
