@@ -174,25 +174,16 @@ class ProcessResourceMonitor(ResourceMonitor):
         super().__init__(function=function, frequency=frequency, **kwargs)
         self.kwargs['process'] = psutil.Process(os.getpid())
 
-class IOMonitorRead(ProcessResourceMonitor):
-    """ Track read i/o operations amount. """
+class DiskIOMonitor(ProcessResourceMonitor):
+    """ Track disk i/o operations amount. """
     UNIT = 'number'
 
     @staticmethod
     def get_usage(process=None, **kwargs):
-        """ Track read i/o operations amount. """
+        """ Track disk i/o operations amount. """
         _ = kwargs
-        return process.io_counters().read_count
-
-class IOMonitorWrite(ProcessResourceMonitor):
-    """ Track write i/o operations amount. """
-    UNIT = 'number'
-
-    @staticmethod
-    def get_usage(process=None,**kwargs):
-        """ Track write i/o operations amount. """
-        _ = kwargs
-        return process.io_counters().write_count
+        counters = process.io_counters()
+        return counters.read_count + counters.write_count
 
 class RSSMonitor(ProcessResourceMonitor):
     """ Track non-swapped physical memory usage. """
@@ -315,8 +306,7 @@ class GPUMemoryMonitor(GPUResourceMonitor):
 MONITOR_ALIASES = {
     MemoryMonitor: ['mmonitor', 'memory', 'memorymonitor'],
     DiskMemoryMonitor: ['dmonitor', 'disk', 'diskmonitor'],
-    IOMonitorRead:['iomonitor_read', 'ioread', 'io_read'],
-    IOMonitorWrite:['iomonitor_write', 'iowrite', 'io_write'],
+    DiskIOMonitor: ['disk_io_monitor', 'disk_io'],
     CPUMonitor: ['cmonitor', 'cpu', 'cpumonitor'],
     RSSMonitor: ['rss'],
     VMSMonitor: ['vms'],
