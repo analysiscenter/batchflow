@@ -6,7 +6,10 @@ from math import ceil
 from threading import Lock
 from functools import partial
 from contextlib import nullcontext
-from viztracer import get_tracer
+try:
+    from viztracer import get_tracer
+except:
+    get_tracer = lambda: None
 
 import dill
 import numpy as np
@@ -1062,7 +1065,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             if lock:
                 self.model_lock.acquire() #pylint: disable=consider-using-with
             tracer = get_tracer()
-            with tracer.log_event("train model") if tracer is not None else nullcontext():
+            with tracer.log_event("Actual train model") if tracer is not None else nullcontext():
                 self.last_train_info = {}
 
                 # Parse inputs and targets: always a list
@@ -1369,7 +1372,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             if lock:
                 self.model_lock.acquire() #pylint: disable=consider-using-with
             tracer = get_tracer()
-            with tracer.log_event("predict model") if tracer is not None else nullcontext():
+            with tracer.log_event("Actual predict model") if tracer is not None else nullcontext():
                 self.last_predict_info = {}
 
                 # Parse inputs and targets: always a list

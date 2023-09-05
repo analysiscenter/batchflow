@@ -9,6 +9,11 @@ import logging
 import warnings
 from time import perf_counter
 
+try:
+    from viztracer import log_sparse
+except:
+    log_sparse = lambda func=None, stack_depth=0, dynamic_tracer_check=False: lambda x: x
+
 from .base import Baseset
 from .config import Config
 from .batch import Batch
@@ -1163,12 +1168,14 @@ class Pipeline:
     def _save_output(self, batch, model, output, locations):
         save_data_to(data=output, dst=locations, batch=batch, model=model)
 
+    @log_sparse(dynamic_tracer_check=True)
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action)
         output = model.train(*args, **kwargs)
         self._save_output(batch, model, output, action['save_to'])
 
+    @log_sparse(dynamic_tracer_check=True)
     def _exec_predict_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action)
