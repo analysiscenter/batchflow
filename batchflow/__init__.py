@@ -1,11 +1,13 @@
 """ BatchFlow enables a fast processing of large dataset using flexible pipelines """
 
 import sys
+import os
 
 if sys.version_info < (3, 5):
     raise ImportError("BatchFlow module requires Python 3.5 or higher")
 
 from importlib.metadata import version, PackageNotFoundError
+import tomli
 
 from .base import Baseset
 from .batch import Batch
@@ -32,4 +34,6 @@ try:
     __version__ = version('batchflow')
 except PackageNotFoundError:
     # batchflow cannot be found within batchflow dev env only
-    pass
+    pyproject_path = os.path.join(os.path.dirname(__file__), '..', 'pyproject.toml')
+    with open(pyproject_path, 'rb') as f:
+        __version__ = tomli.load(f)['tool']['poetry']['version']
