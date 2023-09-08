@@ -2,12 +2,12 @@
 
 import sys
 import os
+import re
 
 if sys.version_info < (3, 5):
     raise ImportError("BatchFlow module requires Python 3.5 or higher")
 
 from importlib.metadata import version, PackageNotFoundError
-import tomli
 
 from .base import Baseset
 from .batch import Batch
@@ -35,5 +35,5 @@ try:
 except PackageNotFoundError:
     # batchflow cannot be found within batchflow dev env only
     pyproject_path = os.path.join(os.path.dirname(__file__), '..', 'pyproject.toml')
-    with open(pyproject_path, 'rb') as f:
-        __version__ = tomli.load(f)['tool']['poetry']['version']
+    with open(pyproject_path, encoding="utf-8") as f:
+        __version__ = re.search(r'^version\s*=\s*[\'"]([^\'"]*)[\'"]', f.read(), re.MULTILINE).group(1)
