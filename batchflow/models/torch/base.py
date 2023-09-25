@@ -595,7 +595,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         # Parse operations, that should be applied to model predictions, into a dictionary
         operations = self.config['output']
-        if not isinstance(operations, dict):
+        if not isinstance(operations, (dict, Config)):
             operations = operations or []
             operations = list(operations) if isinstance(operations, (tuple, list)) else [operations]
             operations = {'' : operations}
