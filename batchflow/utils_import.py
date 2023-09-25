@@ -71,7 +71,7 @@ class DelayedImport:
 
 def make_delayed_import(module, package=None, attribute=None, help=None):
     """ Make delayed import only if needed.
-    Setting `BATCHFLOW_IMMEDIATE_IMPORT` variable to any value makes all imports immediate.
+    Setting `BATCHFLOW_IMMEDIATE_IMPORT` environment variable to any value makes all imports immediate.
     """
     if module in sys.modules or os.environ.get('BATCHFLOW_IMMEDIATE_IMPORT', False):
         loaded_module = import_module(module, package)
