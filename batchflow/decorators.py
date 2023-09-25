@@ -8,10 +8,8 @@ import functools
 import logging
 import inspect
 
-try:
-    from numba import jit
-except ImportError:
-    jit = None
+from .utils_import import make_delayed_import
+jit = make_delayed_import('numba', attribute='jit')
 
 from .named_expr import P
 
