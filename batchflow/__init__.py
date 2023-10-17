@@ -19,7 +19,7 @@ from .monitor import *
 from .notifier import Notifier, notifier
 from .named_expr import NamedExpression, B, L, C, F, V, M, D, R, W, P, PP, I, eval_expr
 from .dsindex import DatasetIndex, FilesIndex
-from .decorators import action, any_action_failed, mjit, deprecated, apply_parallel
+from .decorators import action, any_action_failed, mjit, deprecated, apply_parallel, parallel, inbatch_parallel
 from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
 from .run_notebook import run_notebook
 from .sampler import Sampler, ConstantSampler, NumpySampler, HistoSampler, ScipySampler

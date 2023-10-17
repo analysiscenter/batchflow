@@ -26,13 +26,16 @@ jobs:
         pip3 install sphinx
         pip3 install sphinx-rtd-theme
         git checkout --orphan gh-pages
-        rm -rf *
+        shopt -s extglob
+        rm -rf !("pyproject.toml") # we need this file for correct version extraction
         git fetch
         git reset
-        git clean -fdx
+        git clean -fdx -n --exclude="!pyproject.toml"
+        ls -a
         git checkout ${{ github.sha }} -- batchflow docs
         cd docs
         make html
+        rm ../pyproject.toml
 
     - name: Push docs
       if: github.event_name == 'pull_request'
