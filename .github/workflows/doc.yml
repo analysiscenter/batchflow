@@ -31,7 +31,6 @@ jobs:
         git fetch
         git reset
         git clean -fdx -n --exclude="!pyproject.toml"
-        ls -a
         git checkout ${{ github.sha }} -- batchflow docs
         cd docs
         make html
