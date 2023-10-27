@@ -8,15 +8,13 @@ import functools
 import logging
 import inspect
 
+from .utils_import import make_delayed_import
+jit = make_delayed_import('numba', attribute='jit')
+
 try:
     from viztracer import log_sparse
 except:
     log_sparse = lambda func=None, stack_depth=0, dynamic_tracer_check=False: lambda x: x
-
-try:
-    from numba import jit
-except ImportError:
-    jit = None
 
 from .named_expr import P
 

@@ -68,7 +68,7 @@ class TestNormalizer:
         assert np.isclose(result, (array - 20) / 3, atol=1e-5).all()
 
     def test_outer_stats_denormalize(self, array):
-        stats = {'q': (5, 95)}
+        stats = {'quantiles': (5, 95), 'q': (0.05, 0.95)}
 
         normalizer = Normalizer(mode='minmax', normalization_stats=stats, clip_to_quantiles=True)
         result = normalizer.normalize(array)

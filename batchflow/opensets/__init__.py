@@ -8,3 +8,4 @@ from .imagenette import (Imagenette160, Imagenette320, Imagenette,
                          ImageWoof2_160, ImageWoof2_320, ImageWoof2)
 from .pascal import PascalClassification, PascalSegmentation
 from .coco import COCOSegmentation
+from .ade import ADESegmentation
