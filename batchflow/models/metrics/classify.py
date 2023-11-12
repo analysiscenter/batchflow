@@ -3,8 +3,8 @@ from copy import copy
 from functools import partial
 
 import numpy as np
+from numba import jit
 
-from ...decorators import mjit
 from . import Metrics, binarize, sigmoid, infmean
 
 
@@ -242,17 +242,7 @@ class ClassificationMetrics(Metrics):
 
     def _calc(self):
         self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.intp)
-        return self._calc_confusion_jit(self.targets, self.predictions, self.num_classes, self._confusion_matrix)
-
-    @mjit
-    def _calc_confusion_jit(self, targets, predictions, num_classes, confusion):
-        for i in range(targets.shape[0]):
-            targ = targets[i].flatten()
-            pred = predictions[i].flatten()
-            for t in range(num_classes):
-                coords = np.where(targ == t)
-                for c in pred[coords]:
-                    confusion[i, c, t] += 1
+        return _calc_confusion_jit(self.targets, self.predictions, self.num_classes, self._confusion_matrix)
 
     def _return(self, value):
         return value[0] if isinstance(value, np.ndarray) and value.shape == (1, ) else value
@@ -386,3 +376,14 @@ class ClassificationMetrics(Metrics):
     def jaccard(self, *args, **kwargs):
         d = self.dice(*args, **kwargs)
         return np.nan_to_num(d / (2 - d), nan=np.inf)
+
+
+@jit(nopython=True, nogil=True)
+def _calc_confusion_jit(targets, predictions, num_classes, confusion):
+    for i in range(targets.shape[0]):
+        targ = targets[i].flatten()
+        pred = predictions[i].flatten()
+        for t in range(num_classes):
+            coords = np.where(targ == t)
+            for c in pred[coords]:
+                confusion[i, c, t] += 1

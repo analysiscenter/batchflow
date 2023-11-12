@@ -482,16 +482,21 @@ def mjit(*args, nopython=True, nogil=True, **kwargs):
     """
     def _jit(method):
         if jit is not None:
-            func = make_function(method)
-            func = jit(*args, nopython=nopython, nogil=nogil, **kwargs)(func)
+            try:
+                func = make_function(method)
+                func = jit(*args, nopython=nopython, nogil=nogil, **kwargs)(func)
+            except Exception:
+                # the source is not available or not compilable
+                func = method
+                logging.warning('The method cannot be compiled because the source code is not available. This causes a severe performance degradation for method %s',
+                                method.__name__)
         else:
             func = method
             logging.warning('numba is not installed. This causes a severe performance degradation for method %s',
                             method.__name__)
 
         @functools.wraps(method)
-        def _wrapped_method(self, *args, **kwargs):
-            _ = self
+        def _wrapped_method(_, *args, **kwargs):
             return func(None, *args, **kwargs)
         return _wrapped_method
 
