@@ -488,7 +488,7 @@ def mjit(*args, nopython=True, nogil=True, **kwargs):
             except Exception:   # pylint:disable=broad-except
                 # the source is not available or not compilable
                 func = method
-                logging.warning('The method cannot be compiled because the source code is not available. ' + \
+                logging.warning('The method cannot be compiled because the source code is not available. '
                                 'This causes a severe performance degradation for method %s',
                                 method.__name__)
         else:
