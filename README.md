@@ -1,6 +1,6 @@
 [![License](https://img.shields.io/github/license/analysiscenter/batchflow.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-[![Python](https://img.shields.io/badge/python-3.6-blue.svg)](https://python.org)
-[![PyTorch](https://img.shields.io/badge/PyTorch-1.7-orange.svg)](https://pytorch.org)
+[![Python](https://img.shields.io/badge/python-3.8-blue.svg)](https://python.org)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0-orange.svg)](https://pytorch.org)
 [![codecov](https://codecov.io/gh/analysiscenter/batchflow/branch/master/graph/badge.svg)](https://codecov.io/gh/analysiscenter/batchflow)
 [![PyPI](https://badge.fury.io/py/batchflow.svg)](https://badge.fury.io/py/batchflow)
 [![Status](https://github.com/analysiscenter/batchflow/workflows/status/badge.svg)](https://github.com/analysiscenter/batchflow/actions?query=workflow%3Astatus)
