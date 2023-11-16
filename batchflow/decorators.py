@@ -485,10 +485,11 @@ def mjit(*args, nopython=True, nogil=True, **kwargs):
             try:
                 func = make_function(method)
                 func = jit(*args, nopython=nopython, nogil=nogil, **kwargs)(func)
-            except Exception:
+            except Exception:   # pylint:disable=broad-except
                 # the source is not available or not compilable
                 func = method
-                logging.warning('The method cannot be compiled because the source code is not available. This causes a severe performance degradation for method %s',
+                logging.warning('The method cannot be compiled because the source code is not available. ' + \
+                                'This causes a severe performance degradation for method %s',
                                 method.__name__)
         else:
             func = method
