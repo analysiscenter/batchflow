@@ -1,5 +1,6 @@
 """ Utility functions to work with Jupyter Notebooks. """
 import os
+import sys
 import re
 import json
 import warnings
@@ -245,10 +246,15 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
         raise ImportError('Install Python interface for nvidia_smi') from exception
 
     try:
+        error_message = None
+        import pynvml
         nvidia_smi.nvmlInit()
-    except Exception:   # pylint: disable=broad-except
-        # NVidia SMI is not available
-        return {} if return_memory else None
+    except pynvml.NVMLError_LibraryNotFound:
+        if sys.platform == 'win32':
+            error_message = " Copy nvml.dll from 'Windows/System32' to 'Program Files/NVIDIA Corporation/NVSMI'"
+    finally:
+        if error_message:
+            raise RuntimeError('NVIDIA SMI is not available.' + error_message)
     n_devices = nvidia_smi.nvmlDeviceGetCount()
 
     available_devices, memory_free, memory_total  = [], [], []
@@ -335,9 +341,16 @@ def set_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False, raise_er
     if isinstance(n, (tuple, list)):
         devices = n
     else:
-        devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes,
-                                     verbose=(verbose==2), raise_error=raise_error)
-    str_devices = ','.join(str(i) for i in devices)
+        try:
+            devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes,
+                                         verbose=(verbose==2), raise_error=raise_error)
+        except:
+            devices = []
+
+    if devices:
+        str_devices = ','.join(str(i) for i in devices)
+    else:
+        str_devices = ''
     os.environ['CUDA_VISIBLE_DEVICES'] = str_devices
 
     newline = "\n" if verbose==2 else ""
