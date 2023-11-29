@@ -157,7 +157,7 @@ class Config(dict):
                                              # value starts to link to the dict inside the previous dict
 
                         else: # if we want to get/pop, for example, 'a/c' from {'a': 1} and expect default value to be returned
-                            value = value.get(k, default=default)
+                            value = value.get(k, default)
 
                     # if we want to get, for example, 'a/b/c' from {'a': {'b': 30}} 
                     else:
