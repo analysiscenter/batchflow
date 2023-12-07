@@ -4,6 +4,26 @@ class Config(dict):
     class IAddDict(dict):
         pass
     def __init__(self, config=None, **kwargs):
+        """ Create Config.
+
+        Parameters
+        ----------
+        config : dict, Config, list, tuple or None
+            An object to initialize Config.
+
+            If dict, all keys with slashes and values are parsed into nested structure of dicts,
+            and the resulting dictionary is saved to self.config.
+            For example, `{'a/b': 1, 'c/d/e': 2}` will be parsed into `{'a': {'b': 1}, 'c': {'d': {'e': 2}}}`.
+
+            If list or tuples, should contain key-value pairs with the length of 2.
+            For example, `[('a/b', 1), ('c/d/e', 2)]` will be parsed into `{'a': {'b': 1}, 'c': {'d': {'e': 2}}}`.
+
+            If an instance of Config, config is saved to self.config.
+
+            If None, empty dictionary is created.
+        kwargs :
+            Parameters from kwargs also are parsed and saved to self.config.
+        """
         self.config = {}
 
         if config is None:
@@ -19,41 +39,64 @@ class Config(dict):
             self.put(key, value)
     
     def parse(self, config):
+        """ Parses flatten config with slashes.
+
+        Parameters
+        ----------
+        config : dict, Config, list or tuple
+
+        Returns
+        -------
+        self : Config
+
+        """
         items = config.items() if isinstance(config, dict) else dict(config).items()
 
         for key, value in items:
-            if isinstance(key, str):
+            if isinstance(key, str): # if key contains multiple consecutive '/'
                 key = '/'.join(s for s in key.split('/') if s)
             self.put(key, value)
 
         return self
 
     def put(self, key, value):
+        """ Put a new key into config recursively.
+
+        Parameters
+        ----------
+        key : hashable object
+            Key to add. '/' is used to put value into nested dict.
+        value : misc
+
+        """
+        if isinstance(value, dict): # for example, value = {'a/b': 3}, and we need to parse it before put
+            value = Config(value).config
 
         if isinstance(key, str):
-            d = self.config
+
+            config = self.config
             levels = key.split('/')
+            last_level = levels[-1]
 
-            # Iterate to the last level
             for level in levels[:-1]:
-                prev_d = d
-                if level not in d:
-                    d[level] = {}
-                d = d[level]
+                prev_config = config
+                if level not in config:
+                    config[level] = {}
+                config = config[level]
 
-            # Update the last leaf
-            if isinstance(value, dict) and levels[-1] in d and isinstance(d[levels[-1]], dict):
-                d[levels[-1]].update(value)
+            if isinstance(value, dict) and last_level in config and isinstance(config[last_level], dict):
+                config[last_level].update(value)
             else:
-                if isinstance(d, dict):
-                    d[levels[-1]] = value
+                # for example, we try to set config['a/b/c'] = 3, where config = Config({'a/b': 1})
+                if isinstance(config, dict):
+                    config[last_level] = value
                 else:
-                    prev_d[level] = {levels[-1]: value}
+                    prev_config[level] = {last_level: value}
         else:
             self.config[key] = value
 
     def _get(self, key, default=None, has_default=False, pop=False):
-
+        """ Consecutively retrieve values for a given key if the key contains '/'. """
         method = 'get' if not pop else 'pop'
         method = getattr(self.config, method)
 
@@ -62,14 +105,21 @@ class Config(dict):
             key = [key]
             unpack = True
 
+        # Provide `default` for each variable in key
+        if has_default:
+            if isinstance(default, (list, tuple)) and len(key) != 1 and len(default) != len(key):
+                raise ValueError() # 
+            elif not isinstance(default, (list, tuple)) and len(key) != 1:
+                default = [default] * len(key)
+
         ret_vars = []
         for variable in key:
+
             if isinstance(variable, str) and '/' in variable:
                 value = self.config
                 levels = variable.split('/')
                 values = []
 
-                # Iterate to the last level
                 for level in levels:
                     if not isinstance(value, dict):
                         if has_default:
@@ -81,8 +131,10 @@ class Config(dict):
                         raise KeyError(level)
                     value = value[level]
                     values.append(value)
+
                 if pop:
-                    del values[-2][level]
+                    del values[-2][level] # delete the last level from the parent dict
+
             else:
                 if variable not in self.config:
                     if has_default:
@@ -94,7 +146,7 @@ class Config(dict):
                 value = Config(value)
 
             ret_vars.append(value)
-            
+
         ret_vars = ret_vars[0] if unpack else tuple(ret_vars)
         return ret_vars
 
@@ -112,7 +164,8 @@ class Config(dict):
 
         Returns
         -------
-        Single value or a tuple.
+        value : misc
+            Single value or a tuple.
         """
         value = self._get(key, default=default, has_default=True)
 
@@ -132,7 +185,8 @@ class Config(dict):
 
         Returns
         -------
-        Single value or a tuple.
+        value : misc
+            Single value or a tuple.
         """
         has_default = 'default' in kwargs
         default = kwargs.get('default')
@@ -146,88 +200,86 @@ class Config(dict):
     def __getitem__(self, key):
         value = self._get(key)
         return value
-    
-    def update(self, other=None, **kwargs):
-        iterable = other if isinstance(other, (dict, tuple, list)) else kwargs
-        
-        if isinstance(iterable, dict):
-            items = iterable.items()
-        elif isinstance(iterable, (tuple, list)):
-            items = iterable
-            if any([not isinstance(item, (tuple, list)) for item in items]):
-                raise ValueError('Tuple or list should contain only tuples or lists')
-            if any([len(item) != 2 for item in items]):
-                raise ValueError('Tuples in list should represent pairs key-value'
-                                 ', and therefore must be always the length of 2')
 
-        for key, value in iterable.items():
+    def update(self, other=None, **kwargs):
+        other = other or {}
+        if not isinstance(other, (dict, tuple, list)):
+            raise TypeError(f'{type(other)} object is not iterable')
+
+        self.parse(other)
+
+        for key, value in kwargs.items():
             self.put(key, value)
-            
+
     def keys(self, flatten=False):
         """ Returns config keys
 
         Parameters
         ----------
         flatten : bool
-            if False, keys will be getted from first level of nested dict, else from the last
+            If False, keys will be got from first level of nested dict, else from the last.
 
         Returns
         -------
-            dict_keys
+            keys : dict_keys
+
         """
         if flatten:
             keys = self.flatten().keys()
         else:
             keys = self.config.keys()
         return keys
-    
+
     def values(self, flatten=False):
         """ Return config values
 
         Parameters
         ----------
         flatten : bool
-            if False, values will be getted from first level of nested dict, else from the last
+            If False, values will be got from first level of nested dict, else from the last.
 
         Returns
         -------
-            dict_values
+            values : dict_values
+
         """
         if flatten:
             values = self.flatten().values()
         else:
             values = self.config.values()
         return values
-    
+
     def items(self, flatten=False):
         """ Returns config items
 
         Parameters
         ----------
         flatten : bool
-            if False, keys and values will be getted from first level of nested dict, else from the last
+            If False, keys and values will be got from first level of nested dict, else from the last.
 
         Returns
         -------
-            dict_items
+            items : dict_items
+
         """
         if flatten:
             items = self.flatten().items()
         else:
             items = self.config.items()
         return items
-    
+
     def flatten(self, config=None):
         """ Transforms nested dict into flatten dict.
 
         Parameters
         ----------
         config : dict, Config or None
-            If None self will be parsed else config.
+            If None `self.config` will be parsed else config.
 
         Returns
         -------
         new_config : dict
+
         """
         config = self.config if config is None else config
         new_config = {}
@@ -243,7 +295,7 @@ class Config(dict):
                 new_config[key] = value
 
         return new_config
-    
+
     def __setitem__(self, key, value):
         if key in self.config:
             self.pop(key, default=None)
@@ -251,32 +303,32 @@ class Config(dict):
 
     def __delitem__(self, key):
         self.pop(key)
-    
+
     def copy(self):
         """ Create a shallow copy of the instance. """
         return Config(self.config.copy())
-    
+
     def __getattr__(self, key):
         if key in self.config:
             value = self.config.get(key)
             value = Config(value) if isinstance(value, dict) else value
             return value
         raise AttributeError(key)
-        
+
     def __add__(self, other):
         if isinstance(other, dict) and not isinstance(other, Config):
             other = Config(other)
         if isinstance(other, Config):
             return Config([*self.flatten().items(), *other.flatten().items()])
         return NotImplemented
-    
+
     def __iter__(self):
         return iter(self.config)
-    
+
     def __repr__(self):
         lines = ['\n' + 4 * ' ' + line for line in pformat(self.config).split('\n')]
         return f"Config({''.join(lines)})"
-    
+
     def __iadd__(self, other):
         if isinstance(other, dict):
             self.update(other)
@@ -288,10 +340,10 @@ class Config(dict):
         if isinstance(other, dict):
             other = Config(other)
         return other.__add__(self)
-    
+
     def __len__(self):
         return len(self.config)
-    
+
     def __eq__(self, other):
         self_ = self.flatten()
         print(self_, 'self_')
