@@ -1,8 +1,11 @@
 from pprint import pformat
 
 class Config(dict):
+
+    # Should be defined temporarily for the already pickled configs
     class IAddDict(dict):
         pass
+
     def __init__(self, config=None, **kwargs):
         """ Create Config.
 
@@ -50,7 +53,15 @@ class Config(dict):
         self : Config
 
         """
-        items = config.items() if isinstance(config, dict) else dict(config).items()
+        if isinstance(config, Config):
+            items = config.items(flatten=True) # suppose we have config = {'a': {'b': {'c': 1}}},
+                                               # and we try to update config with other = {'a': {'b': {'d': 3}}},
+                                               # and expect to see config = {'a': {'b': {'c': 1, 'd': 3}}}
+        elif isinstance(config, dict):
+            items = config.items()
+        else:
+            items = dict(config).items()
+        # items = config.items() if isinstance(config, dict) else dict(config).items()
 
         for key, value in items:
             if isinstance(key, str): # if key contains multiple consecutive '/'
@@ -87,7 +98,7 @@ class Config(dict):
             if isinstance(value, dict) and last_level in config and isinstance(config[last_level], dict):
                 config[last_level].update(value)
             else:
-                # for example, we try to set config['a/b/c'] = 3, where config = Config({'a/b': 1})
+                # for example, we try to set config['a/b/c'] = 3, where config = Config({'a/b': 1}) and don't want error here
                 if isinstance(config, dict):
                     config[last_level] = value
                 else:
@@ -96,7 +107,9 @@ class Config(dict):
             self.config[key] = value
 
     def _get(self, key, default=None, has_default=False, pop=False):
-        """ Consecutively retrieve values for a given key if the key contains '/'. """
+        """ Consecutively retrieve values for a given key if the key contains '/'.
+        This method supports the `default` to be unique for each variable in key.
+        """
         method = 'get' if not pop else 'pop'
         method = getattr(self.config, method)
 
@@ -106,14 +119,12 @@ class Config(dict):
             unpack = True
 
         # Provide `default` for each variable in key
-        if has_default:
-            if isinstance(default, (list, tuple)) and len(key) != 1 and len(default) != len(key):
-                raise ValueError() # 
-            elif not isinstance(default, (list, tuple)) and len(key) != 1:
-                default = [default] * len(key)
+        if default is not None and len(key) != 1 and len(default) != len(key):
+            raise ValueError('You should provide `default` for each variable in `key`') # edit
+        default = [default] if not isinstance(default, list) else default
 
         ret_vars = []
-        for variable in key:
+        for ix, variable in enumerate(key):
 
             if isinstance(variable, str) and '/' in variable:
                 value = self.config
@@ -121,33 +132,44 @@ class Config(dict):
                 values = []
 
                 for level in levels:
+
                     if not isinstance(value, dict):
-                        if has_default:
-                            return default
-                        raise KeyError(level)
-                    if level not in value:
-                        if has_default:
-                            return default
-                        raise KeyError(level)
-                    value = value[level]
-                    values.append(value)
+                        if not has_default:
+                            raise KeyError(level)
+                        value = default[ix]
+                        ret_vars.append(value)
+                        break
+
+                    elif level not in value:
+                        if not has_default:
+                            raise KeyError(level)
+                        value = default[ix]
+                        ret_vars.append(value)
+                        break
+
+                    else:
+                        value = value[level]
+                        values.append(value)
 
                 if pop:
                     del values[-2][level] # delete the last level from the parent dict
 
             else:
                 if variable not in self.config:
-                    if has_default:
-                        return default
-                    raise KeyError
-                value = method(variable)
+                    if not has_default:
+                        raise KeyError(variable)
+                    value = default[ix]
+                    ret_vars.append(value)
+
+                else:
+                    value = method(variable)
 
             if isinstance(value, dict):
                 value = Config(value)
-
             ret_vars.append(value)
 
         ret_vars = ret_vars[0] if unpack else tuple(ret_vars)
+
         return ret_vars
 
     def get(self, key, default=None):
@@ -206,7 +228,7 @@ class Config(dict):
         if not isinstance(other, (dict, tuple, list)):
             raise TypeError(f'{type(other)} object is not iterable')
 
-        self.parse(other)
+        self.parse(Config(other))
 
         for key, value in kwargs.items():
             self.put(key, value)
@@ -346,7 +368,6 @@ class Config(dict):
 
     def __eq__(self, other):
         self_ = self.flatten()
-        print(self_, 'self_')
         other_ = Config(other).flatten() if isinstance(other, dict) else other
         return self_.__eq__(other_)
 
