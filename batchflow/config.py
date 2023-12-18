@@ -1,6 +1,8 @@
+""" Config class"""
 from pprint import pformat
 
 class Config(dict):
+    """ Class for configs that can be represented as nested dicts with easy indexing by slashes. """
 
     # Should be defined temporarily for the already pickled configs
     class IAddDict(dict):
@@ -27,6 +29,7 @@ class Config(dict):
         kwargs :
             Parameters from kwargs also are parsed and saved to self.config.
         """
+        # pylint: disable=super-init-not-called
         self.config = {}
 
         if config is None:
@@ -40,7 +43,7 @@ class Config(dict):
 
         for key, value in kwargs.items():
             self.put(key, value)
-    
+
     def parse(self, config):
         """ Parses flatten config with slashes.
 
@@ -54,14 +57,14 @@ class Config(dict):
 
         """
         if isinstance(config, Config):
-            items = config.items(flatten=True) # suppose we have config = {'a': {'b': {'c': 1}}},
-                                               # and we try to update config with other = {'a': {'b': {'d': 3}}},
-                                               # and expect to see config = {'a': {'b': {'c': 1, 'd': 3}}}
+            # suppose we have config = {'a': {'b': {'c': 1}}},
+            # and we try to update config with other = {'a': {'b': {'d': 3}}},
+            # and expect to see config = {'a': {'b': {'c': 1, 'd': 3}}}
+            items = config.items(flatten=True)
         elif isinstance(config, dict):
             items = config.items()
         else:
             items = dict(config).items()
-        # items = config.items() if isinstance(config, dict) else dict(config).items()
 
         for key, value in items:
             if isinstance(key, str): # if key contains multiple consecutive '/'
@@ -98,11 +101,12 @@ class Config(dict):
             if isinstance(value, dict) and last_level in config and isinstance(config[last_level], dict):
                 config[last_level].update(value)
             else:
-                # for example, we try to set config['a/b/c'] = 3, where config = Config({'a/b': 1}) and don't want error here
                 if isinstance(config, dict):
                     config[last_level] = value
+                # for example, we try to set my_config['a/b/c'] = 3,
+                # where my_config = Config({'a/b': 1}) and don't want error here
                 else:
-                    prev_config[level] = {last_level: value}
+                    prev_config[level] = {last_level: value} # pylint: disable=undefined-loop-variable
         else:
             self.config[key] = value
 
@@ -118,15 +122,19 @@ class Config(dict):
             key = [key]
             unpack = True
 
-        # Provide `default` for each variable in key
-        if default is not None and len(key) != 1 and len(default) != len(key):
-            raise ValueError('You should provide `default` for each variable in `key`') # edit
-        default = [default] if not isinstance(default, list) else default
+        n = len(key)
+        if n > 1:
+            default = [default] * n  if not isinstance(default, list) else default
+            if len(default) != n:
+                raise ValueError('The length of `default` must be equal to the length of `key`')
+        else:
+            default = [default]
 
         ret_vars = []
         for ix, variable in enumerate(key):
 
             if isinstance(variable, str) and '/' in variable:
+
                 value = self.config
                 levels = variable.split('/')
                 values = []
@@ -137,29 +145,29 @@ class Config(dict):
                         if not has_default:
                             raise KeyError(level)
                         value = default[ix]
-                        ret_vars.append(value)
+                        values.append(value)
                         break
 
-                    elif level not in value:
+                    if level not in value:
                         if not has_default:
                             raise KeyError(level)
                         value = default[ix]
-                        ret_vars.append(value)
+                        values.append(value)
                         break
 
-                    else:
-                        value = value[level]
-                        values.append(value)
+                    value = value[level]
+                    values.append(value)
 
                 if pop:
-                    del values[-2][level] # delete the last level from the parent dict
+                    # delete the last level from the parent dict
+                    values[-2].pop(level, default[ix]) # pylint: disable=undefined-loop-variable
 
             else:
+
                 if variable not in self.config:
                     if not has_default:
                         raise KeyError(variable)
                     value = default[ix]
-                    ret_vars.append(value)
 
                 else:
                     value = method(variable)
@@ -182,7 +190,8 @@ class Config(dict):
             A key in the dictionary. '/' is used to get value from nested dict.
         default : misc
             Default value if key doesn't exist in config.
-            Defaults to None, so that this method never raises a KeyError.
+            By default None, so this method never raises a KeyError.
+            If key has several variables, `default` can be a list with defaults for each variable.
 
         Returns
         -------
@@ -192,7 +201,7 @@ class Config(dict):
         value = self._get(key, default=default, has_default=True)
 
         return value
-    
+
     def pop(self, key, **kwargs):
         """ Returns the value or tuple of values for key in the config.
         If not found, returns a default value.
@@ -203,7 +212,6 @@ class Config(dict):
             A key in the dictionary. '/' is used to get value from nested dict.
         default : misc
             Default value if key doesn't exist in config.
-            Defaults to None, so that this method never raises a KeyError.
 
         Returns
         -------
@@ -216,13 +224,6 @@ class Config(dict):
 
         return value
 
-    def __repr__(self):
-        return repr(self.config)
-
-    def __getitem__(self, key):
-        value = self._get(key)
-        return value
-
     def update(self, other=None, **kwargs):
         other = other or {}
         if not isinstance(other, (dict, tuple, list)):
@@ -232,6 +233,34 @@ class Config(dict):
 
         for key, value in kwargs.items():
             self.put(key, value)
+
+    def flatten(self, config=None):
+        """ Transforms nested dict into flatten dict.
+
+        Parameters
+        ----------
+        config : dict, Config or None
+            If None `self.config` will be parsed else config.
+
+        Returns
+        -------
+        new_config : dict
+
+        """
+        config = self.config if config is None else config
+        new_config = {}
+        for key, value in config.items():
+            if isinstance(value, dict) and len(value) > 0:
+                value = self.flatten(value)
+                for _key, _value in value.items():
+                    if isinstance(_key, str):
+                        new_config[key + '/' + _key] = _value
+                    else:
+                        new_config[key] = {_key: _value}
+            else:
+                new_config[key] = value
+
+        return new_config
 
     def keys(self, flatten=False):
         """ Returns config keys
@@ -290,33 +319,13 @@ class Config(dict):
             items = self.config.items()
         return items
 
-    def flatten(self, config=None):
-        """ Transforms nested dict into flatten dict.
+    def copy(self):
+        """ Create a shallow copy of the instance. """
+        return Config(self.config.copy())
 
-        Parameters
-        ----------
-        config : dict, Config or None
-            If None `self.config` will be parsed else config.
-
-        Returns
-        -------
-        new_config : dict
-
-        """
-        config = self.config if config is None else config
-        new_config = {}
-        for key, value in config.items():
-            if isinstance(value, dict) and len(value) > 0:
-                value = self.flatten(value)
-                for _key, _value in value.items():
-                    if isinstance(_key, str):
-                        new_config[key + '/' + _key] = _value
-                    else:
-                        new_config[key] = {_key: _value}
-            else:
-                new_config[key] = value
-
-        return new_config
+    def __getitem__(self, key):
+        value = self._get(key)
+        return value
 
     def __setitem__(self, key, value):
         if key in self.config:
@@ -325,10 +334,6 @@ class Config(dict):
 
     def __delitem__(self, key):
         self.pop(key)
-
-    def copy(self):
-        """ Create a shallow copy of the instance. """
-        return Config(self.config.copy())
 
     def __getattr__(self, key):
         if key in self.config:
@@ -344,13 +349,6 @@ class Config(dict):
             return Config([*self.flatten().items(), *other.flatten().items()])
         return NotImplemented
 
-    def __iter__(self):
-        return iter(self.config)
-
-    def __repr__(self):
-        lines = ['\n' + 4 * ' ' + line for line in pformat(self.config).split('\n')]
-        return f"Config({''.join(lines)})"
-
     def __iadd__(self, other):
         if isinstance(other, dict):
             self.update(other)
@@ -363,21 +361,20 @@ class Config(dict):
             other = Config(other)
         return other.__add__(self)
 
-    def __len__(self):
-        return len(self.config)
-
     def __eq__(self, other):
         self_ = self.flatten()
         other_ = Config(other).flatten() if isinstance(other, dict) else other
         return self_.__eq__(other_)
 
-    def __getstate__(self):
-        """ Must be explicitly defined for pickling to work. """
-        return vars(self)
+    def __len__(self):
+        return len(self.config)
 
-    def __setstate__(self, state):
-        """ Must be explicitly defined for pickling to work. """
-        vars(self).update(state)
+    def __iter__(self):
+        return iter(self.config)
+
+    def __repr__(self):
+        lines = ['\n' + 4 * ' ' + line for line in pformat(self.config).split('\n')]
+        return f"Config({''.join(lines)})"
 
     def __rshift__(self, other):
         """ Parameters
@@ -390,3 +387,11 @@ class Config(dict):
                 Pipeline object with an updated config.
         """
         return other << self
+
+    def __getstate__(self):
+        """ Must be explicitly defined for pickling to work. """
+        return vars(self)
+
+    def __setstate__(self, state):
+        """ Must be explicitly defined for pickling to work. """
+        vars(self).update(state)
