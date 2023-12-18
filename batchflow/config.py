@@ -212,6 +212,7 @@ class Config(dict):
             A key in the dictionary. '/' is used to get value from nested dict.
         default : misc
             Default value if key doesn't exist in config.
+            If key has several variables, `default` can be a list with defaults for each variable.
 
         Returns
         -------
