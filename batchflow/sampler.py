@@ -343,7 +343,8 @@ class TruncateSampler(Sampler):
 class WeightedSampler(Sampler):
     """ Class for implementing `&` (weighting) operation on a number and a `Sampler` instance.
     """
-    def __init__(self, base, weight):
+    def __init__(self, base, weight, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.bases = [base]
         self.weight = weight
 
