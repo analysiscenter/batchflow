@@ -151,8 +151,7 @@ class Sampler():
             result of the multiplication.
         """
         if isinstance(other, (float, int)):
-            self.weight *= other
-            return self
+            return WeightedSampler(self, self.weight * other)
 
         return AndSampler(self, other)
 
@@ -340,6 +339,19 @@ class TruncateSampler(Sampler):
             ctr += 1
 
         return np.concatenate(samples)[:size]
+
+class WeightedSampler(Sampler):
+    """ Class for implementing `&` (weighting) operation on a number and a `Sampler` instance.
+    """
+    def __init__(self, base, weight):
+        self.bases = [base]
+        self.weight = weight
+
+    def sample(self, size):
+        """ Sampling procedure of a product of the number and the sampler instance. Check out the docstring of
+        `Sampler.sample` for more info.
+        """
+        return self.bases[0].sample(size)
 
 
 class BaseOperationSampler(Sampler):
