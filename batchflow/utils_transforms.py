@@ -153,6 +153,9 @@ class Normalizer:
 
         return array
 
+    def reset_stats(self, normalization_stats=None):
+        self.normalization_stats = normalization_stats
+
 class Quantizer:
     """ Class to hold parameters and methods for (de)quantization.
 
