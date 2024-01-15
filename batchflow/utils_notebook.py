@@ -344,7 +344,7 @@ def set_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False, raise_er
         try:
             devices = get_available_gpus(n=n, min_free_memory=min_free_memory, max_processes=max_processes,
                                          verbose=(verbose==2), raise_error=raise_error)
-        except:
+        except: # pylint: disable=bare-except
             devices = []
 
     if devices:
