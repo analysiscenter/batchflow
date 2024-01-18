@@ -121,9 +121,8 @@ You can install several extras at once, like `batchflow[image,nn,research]`.
 
 
 ## Projects based on BatchFlow
-- [SeismiQB](https://github.com/gazprom-neft/seismiqb) - ML for seismic interpretation
-- [SeismicPro](https://github.com/gazprom-neft/SeismicPro) - ML for seismic processing
-- [PetroFlow](https://github.com/gazprom-neft/petroflow) - ML for well interpretation
+- [SeismiQB](https://github.com/GeoscienceML/seismiqb) - ML for seismic interpretation
+- [SeismicPro](https://github.com/GeoscienceML/SeismicPro) - ML for seismic processing
 - [PyDEns](https://github.com/analysiscenter/pydens) - DL Solver for ODE and PDE
 - [RadIO](https://github.com/analysiscenter/radio) - ML for CT imaging
 - [CardIO](https://github.com/analysiscenter/cardio) - ML for heart signals
