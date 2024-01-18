@@ -251,8 +251,14 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
         return {} if return_memory else None
     n_devices = nvidia_smi.nvmlDeviceGetCount()
 
+    cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES')
+    if cuda_visible_devices is not None:
+        cuda_visible_devices = [int(i) for i in cuda_visible_devices.split(',')]
+
     available_devices, memory_free, memory_total  = [], [], []
     for i in range(n_devices):
+        if cuda_visible_devices is not None and i not in cuda_visible_devices:
+            continue
         handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
         info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
 
@@ -273,6 +279,8 @@ def get_available_gpus(n=1, min_free_memory=1, max_processes=None, verbose=False
         if verbose:
             print(f'Device {i} | Free memory: {info.free:4.2f} | '
                   f'Number of running processes: {num_processes:>2} | Free: {consider_available}')
+
+    nvidia_smi.nvmlShutdown()
 
     if isinstance(n, str) and n.startswith('max'):
         n = len(available_devices)
