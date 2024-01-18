@@ -457,13 +457,13 @@ class Batch(metaclass=MethodsTransformingMeta):
         return self.data[item] if self.data is not None else None
 
     def __iter__(self):
-        for item in self.indices:
-            yield self[item]
+        for ix, _ in enumerate(self.indices):
+            yield self[ix]
 
     @property
     def items(self):
         """: list - batch items """
-        return [[self[ix]] for ix in self.indices]
+        return [[self[ix]] for ix, _ in enumerate(self.indices)]
 
     def run_once(self, *args, **kwargs):
         """ Init function for no parallelism
