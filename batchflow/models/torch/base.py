@@ -406,8 +406,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     ]
 
     def __init__(self, config=None):
-        if isinstance(config, str):
-            config = {'load/path': config}
+        if not isinstance(config, (dict, Config)):
+            config = {'load/file': config}
         self.model_lock = Lock()
 
         # Configs
@@ -1715,16 +1715,16 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             torch.save({item: getattr(self, item) for item in self.PRESERVE},
                        path, pickle_module=pickle_module, **kwargs)
 
-    def load(self, path, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
-        """ Load a torch model from path.
+    def load(self, file, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
+        """ Load a torch model from a file.
 
         If the model was saved in ONNX format (refer to :meth:`.save` for more info), we fix the microbatch size
         to the batch size of ONNX conversion. Moreover, we disable model ability to train.
 
         Parameters
         ----------
-        path : str
-            File path where a model is stored.
+        file : str, PathLike, io.Bytes
+            a file where a model is stored.
         eval_mode : bool
             Whether to switch the model to eval mode.
         make_infrastructure : bool
@@ -1740,7 +1740,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         kwargs['map_location'] = 'cpu'
 
         # Load items from disk storage and set them as insance attributes
-        checkpoint = torch.load(path, pickle_module=pickle_module, **kwargs)
+        checkpoint = torch.load(file, pickle_module=pickle_module, **kwargs)
 
         # `load_config` is a reference to `self.external_config` used to update `config`
         # It is required since `self.external_config` may be overwritten in the cycle below
