@@ -1,4 +1,5 @@
 """ Contains mixin for :class:`~.torch.TorchModel` to provide textual and graphical visualizations. """
+import gc
 import sys
 from ast import literal_eval
 from pprint import pformat as _pformat
@@ -221,6 +222,197 @@ class OptimalBatchSizeMixin:
 
     For stable measurements, we make `n` iterations of `train`/`predict`, until the memory consumption stabilizes.
     """
+
+    def is_cuda_out_of_memory(self, exception):
+        """ Check if exception is CUDA OOM """
+        return (
+            isinstance(exception, RuntimeError)
+            and len(exception.args) == 1
+            and "CUDA" in exception.args[0]
+            and "out of memory" in exception.args[0]
+        )
+
+    # not sure if it's necessary
+    def is_cudnn_snafu(self, exception):
+        return (
+            isinstance(exception, RuntimeError)
+            and len(exception.args) == 1
+            and "cuDNN error: CUDNN_STATUS_NOT_SUPPORTED." in exception.args[0]
+        )
+
+    def is_out_of_cpu_memory(self, exception):
+        return (
+            isinstance(exception, RuntimeError)
+            and len(exception.args) == 1
+            and "DefaultCPUAllocator: can't allocate memory" in exception.args[0]
+        )
+
+    def is_oom_error(self, exception):
+        return (self.is_cuda_out_of_memory(exception) or
+                self.is_cudnn_snafu(exception) or
+                self.is_out_of_cpu_memory(exception))
+
+    def garbage_collection_cuda(self):
+        """ Garbage collection Torch (CUDA) memory. """
+        gc.collect()
+        try:
+            # This is the last thing that should cause an OOM error, but seemingly it can.
+            torch.cuda.empty_cache()
+        except RuntimeError as exception:
+            if not self.is_oom_error(exception):
+                # Only handle OOM errors
+                raise
+
+
+    def _compute_optimal_batch_size(self, method='train', inputs=None, targets=None,
+                                    start_batch_size=4, max_iters=25, factor=2,
+                                    spread=0.2, use_estimation=False, n=4,
+                                    max_memory=100, pbar='n', tail_size=20,
+                                    frequency=0.05, delta_batch_size=16,
+                                    max_batch_size=1024, max_iters_estimation=2):
+        """ Compute memory usage for multiple batch sizes. """
+
+        # first calculate optimal batch_size estimation
+        if use_estimation:
+            batch_size_estimation = self.compute_optimal_batch_size(method=method, max_memory=max_memory,
+                                                                    inputs=inputs, targets=targets, pbar='n',
+                                                                    start_batch_size=start_batch_size,
+                                                                    delta_batch_size=delta_batch_size, n=n,
+                                                                    max_iters=max_iters_estimation,
+                                                                    max_batch_size=max_batch_size)
+            batch_size_estimation = batch_size_estimation['batch_size']
+            low = int(batch_size_estimation * (1 - spread))
+            high = int(batch_size_estimation * (1 + spread))
+        else:
+            low, high = self._run_power_scaling(inputs=inputs, targets=targets, factor=factor,
+                                                start_batch_size=start_batch_size, method=method,
+                                                max_memory=max_memory, pbar=pbar, tail_size=10,
+                                                frequency=frequency)
+            batch_size_estimation = (low + high) // 2
+
+        # then run precise method in neighbourhood of batch_size_estimation
+        return self._run_binary_scaling(inputs=inputs, targets=targets,
+                                        start_batch_size=batch_size_estimation,
+                                        low=low, high=high, method=method,
+                                        max_iters=max_iters, tail_size=tail_size,
+                                        max_memory=max_memory, pbar=pbar,
+                                        frequency=frequency)
+
+
+    def _run_power_scaling(self, inputs=None, targets=None, factor=2,
+                           start_batch_size=4, method='train', pbar='n',
+                           tail_size=10, max_memory=100, frequency=0.05):
+        """ Returns `batch_size` and `batch_size * factor`, so that `batch_size` 
+            fits in max_memory, while `batch_size * factor` does not."""
+
+        batch_size = start_batch_size if isinstance(start_batch_size, list) else [start_batch_size]
+        notifier = Notifier(n_iters=None, bar=pbar,
+                            monitors=[{'source': batch_size, 'name': 'batch_size'}])
+        while True:
+            try:
+                notifier.update()
+                input = inputs or self.make_placeholder_data(batch_size[-1], to_device=False)
+                input = list(input) if isinstance(input, (tuple, list)) else [input]
+                input = [item[:batch_size[-1]] for item in input]
+
+                with GPUMemoryMonitor(frequency=frequency) as monitor:
+                    if method == 'train':
+                        target = targets or self.predict(inputs=input, outputs='predictions')
+                        target = list(target) if isinstance(target, (tuple, list)) else [target]
+                        target = [item[:batch_size[-1]] for item in target]
+
+                        _ = self.train(inputs=input, targets=target, microbatch_size=False)
+                    else:
+                        _ = self.predict(inputs=input, microbatch_size=False)
+
+                data = monitor.data
+                consumed_memory = np.mean(np.sort(data, axis=0)[-tail_size:])
+
+                # exit if max_memory was exceeded
+                if consumed_memory > max_memory:
+                    batch_size.append(batch_size[-1] // factor)
+                    break
+
+                batch_size.append(batch_size[-1] * factor)
+            except RuntimeError as exception:
+                if self.is_oom_error(exception):
+                    batch_size.append(batch_size[-1] // factor)
+                    break
+                raise # some other error not memory related
+
+            self.garbage_collection_cuda()
+        self.garbage_collection_cuda()
+        return batch_size[-1], batch_size[-1] * factor
+
+
+    def _run_binary_scaling(self, inputs=None, targets=None, low=2, high=None,
+                            start_batch_size=4, max_iters=25, pbar='n',
+                            method='train', max_memory=100, frequency=0.01,
+                            tail_size=20):
+        count = 0
+
+        # if None => make equal distance between low, start_batch_size and high
+        high = high if high is not None else 2 * start_batch_size - low
+
+        low = low if isinstance(low, list) else [low]
+        high = high if isinstance(high, list) else [high]
+        batch_size = start_batch_size if isinstance(start_batch_size, list) else [start_batch_size]
+
+        n_iters = int(np.ceil(np.log2(high[-1] - low[-1])))
+        notifier = Notifier(n_iters=n_iters, bar=pbar,
+                            monitors=[{'source': low, 'name': 'low'},
+                                      {'source': high, 'name': 'high'},
+                                      {'source': batch_size, 'name': 'batch_size'}])
+        while True:
+            try:
+                notifier.update()
+                # exit when >= max_iters
+                if count >= max_iters:
+                    batch_size.append(low[-1])
+                    break
+                count += 1
+
+                # monitor consumed memory
+                with GPUMemoryMonitor(frequency=frequency) as monitor:
+                    input = inputs or self.make_placeholder_data(batch_size[-1], to_device=False)
+                    input = list(input) if isinstance(input, (tuple, list)) else [input]
+                    input = [item[:batch_size[-1]] for item in input]
+
+                    if method == 'train':
+                        target = targets or self.predict(inputs=input, outputs='predictions')
+                        target = list(target) if isinstance(target, (tuple, list)) else [target]
+                        target = [item[:batch_size[-1]] for item in target]
+
+                        _ = self.train(inputs=input, targets=target, microbatch_size=False)
+                    else:
+                        _ = self.predict(inputs=input, microbatch_size=False)
+
+                data = monitor.data
+                # take mean of top_k memory measures
+                consumed_memory = np.mean(np.sort(data, axis=0)[-tail_size:])
+
+                # update borders
+                if consumed_memory > max_memory:
+                    high.append(batch_size[-1])
+                else:
+                    low.append(batch_size[-1])
+
+                batch_size.append((high[-1] + low[-1]) // 2)
+            except RuntimeError as exception:
+                if self.is_oom_error(exception):
+                    high.append(batch_size[-1])
+                    batch_size.append((high[-1] + low[-1]) // 2)
+                else:
+                    raise # some other error not memory related
+
+            if high[-1] - low[-1] <= 1:
+                break
+
+            self.garbage_collection_cuda()
+        self.garbage_collection_cuda()
+        return batch_size[-1]
+
+
     def compute_optimal_batch_size(self, method='train', max_memory=90, inputs=None, targets=None, pbar='n',
                                    start_batch_size=4, delta_batch_size=4, max_batch_size=128, max_iters=16,
                                    n=20, frequency=0.05, time_threshold=3, tail_size=20, std_threshold=0.1):
@@ -257,7 +449,7 @@ class OptimalBatchSizeMixin:
     def get_memory_utilization(self, batch_size, method='train', inputs=None, targets=None, n=20, frequency=0.05,
                                time_threshold=3, tail_size=20, std_threshold=0.1):
         """ For a given `batch_size`, make `inputs` and `targets` and compute memory utilization. """
-        inputs = inputs or self.make_placeholder_data(batch_size)
+        inputs = inputs or self.make_placeholder_data(batch_size, to_device=False) # maybe use to_device=False
         inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
         inputs = [item[:batch_size] for item in inputs]
 
@@ -266,7 +458,7 @@ class OptimalBatchSizeMixin:
         targets = [item[:batch_size] for item in targets]
 
         # Clear the GPU from potential previous runs
-        torch.cuda.empty_cache()
+        self.garbage_collection_cuda()
         return self._get_memory_utilization(method=method, inputs=inputs, targets=targets, n=n, frequency=frequency,
                                             time_threshold=time_threshold,
                                             tail_size=tail_size, std_threshold=std_threshold)
