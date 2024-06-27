@@ -38,7 +38,7 @@ tqdm = "^4.19"
 
 # [tool.poetry.group.image.dependencies]
 pillow = { version = ">=9.4,<11.0", optional = true }
-matplotlib = { version = "^3.0", optional = true }
+matplotlib = { version = "^3.7", optional = true }
 
 # [tool.poetry.group.research.dependencies]
 multiprocess = { version = "^0.70", optional = true }
