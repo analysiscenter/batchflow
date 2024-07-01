@@ -8,7 +8,6 @@ on:
 jobs:
 
   pypi:
-    needs: check-version
 
     runs-on: ubuntu-latest
 
