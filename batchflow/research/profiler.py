@@ -6,12 +6,9 @@ import glob
 import warnings
 import multiprocess as mp
 
-try:
-    import pandas as pd
-except ImportError:
-    pass
-
 from ..profiler import Profiler
+from ..utils_import import make_delayed_import
+pd = make_delayed_import('pandas')
 
 
 class ExperimentProfiler(Profiler):

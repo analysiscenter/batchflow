@@ -9,14 +9,13 @@ from copy import deepcopy
 
 import dill
 import numpy as np
-try:
-    import pandas as pd
-except ImportError:
-    pass
 
 from ..plotter import plot
 from ..plotter.plot import Subplot
 from ..utils import to_list
+
+from ..utils_import import make_delayed_import
+pd = make_delayed_import('pandas')
 
 
 class MultiOut:

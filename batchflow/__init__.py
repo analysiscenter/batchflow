@@ -3,8 +3,8 @@ import sys
 import os
 import re
 
-if sys.version_info < (3, 5):
-    raise ImportError("BatchFlow module requires Python 3.5 or higher")
+if sys.version_info < (3, 8):
+    raise ImportError("BatchFlow module requires Python 3.8 or higher")
 
 from importlib.metadata import version, PackageNotFoundError
 
@@ -27,9 +27,13 @@ from .utils_telegram import TelegramMessage
 from .utils_transforms import Normalizer, Quantizer
 
 
-from .utils_import import try_import
+from .utils_import import try_import, make_delayed_import
 plot = try_import(module='.plotter', package=__name__, attribute='plot',
                   help='Try `pip install batchflow[image]`!')
+
+pylint_notebook = make_delayed_import(module='.utils_notebook', package=__name__, attribute='pylint_notebook')
+get_available_gpus = make_delayed_import(module='.utils_notebook', package=__name__, attribute='get_available_gpus')
+set_gpus = make_delayed_import(module='.utils_notebook', package=__name__, attribute='set_gpus')
 
 
 try:
