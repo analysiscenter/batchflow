@@ -42,7 +42,7 @@ class BaseCOCO(ImagesOpenset):
         filename = basename(url)
         localname = os.path.join(path, filename)
         if not os.path.isfile(localname):
-            r = requests.get(url, stream=True, headers={"User-Agent": "XY"})
+            r = requests.get(url, stream=True, headers={"User-Agent": "XY"}, timeout=10)
             file_size = int(r.headers['Content-Length'])
             chunk_size = 1024 * 1000 #MBs
             num_bars = int(file_size / chunk_size)

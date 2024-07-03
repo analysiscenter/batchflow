@@ -52,7 +52,7 @@ class BasePascal(ImagesOpenset):
         self.localname = localname
 
         if not os.path.isfile(localname):
-            r = requests.get(self.SOURCE_URL, stream=True)
+            r = requests.get(self.SOURCE_URL, stream=True, timeout=10)
             file_size = int(r.headers['Content-Length'])
             chunk = 1
             chunk_size = 1024
