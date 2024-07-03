@@ -118,7 +118,7 @@ def pad(inputs, spatial_shape, target_shape):
     for dim in pad_dims:
         pad_values[dim * 2] = (target_shape[dim] - spatial_shape[dim]) // 2
         pad_values[dim * 2 + 1] = (target_shape[dim] - spatial_shape[dim] + 1) // 2
-    padded_inputs = F.pad(inputs, pad_values[::-1])
+    padded_inputs = F.pad(inputs, pad_values[::-1]) # pylint: disable=not-callable
     return padded_inputs
 
 def center_crop(inputs, target_shape, dims):
