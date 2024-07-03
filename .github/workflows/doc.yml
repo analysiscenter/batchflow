@@ -13,7 +13,8 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: analysiscenter1/ds-py3
+      image: analysiscenter1/ds-py3:3.8
+      options: --entrypoint ""
 
     steps:
     - uses: actions/checkout@v3
