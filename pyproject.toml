@@ -52,6 +52,7 @@ torch = { version = ">=1.13", optional = true }
 torchvision = { version = ">=0.14", optional = true }
 einops = { version = "^0.3", optional = true }
 ptflops = { version = "^0.6", optional = true }
+scikit-learn = { version = ">=0.21.3", optional = true }
 
 # [tool.poetry.group.dev.dependencies]
 pandas = { version = "^0.24", optional = true }
