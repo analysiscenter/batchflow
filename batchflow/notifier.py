@@ -223,7 +223,7 @@ class Notifier:
             if bar_func is tqdm:
                 ncols = min(80 + 10 * self.n_monitors, 120)
                 colour = self.COLOUR_SUCCESS
-            elif bar_func is tqdm_notebook:
+            else:
                 ncols = min(700 + 150 * self.n_monitors, 1000)
                 colour = None
 

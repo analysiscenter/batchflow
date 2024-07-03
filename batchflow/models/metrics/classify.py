@@ -1,4 +1,5 @@
 """ Contains two class classification metrics """
+# pylint: disable=superfluous-parens, unnecessary-lambda-assignment
 from copy import copy
 from functools import partial
 

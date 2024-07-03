@@ -321,6 +321,8 @@ def plot_research(df, variables=None, subplots=None, aggregate=None, aggregate_f
             ncols, nrows = 1, len(index)
         elif layout == 'horizontal':
             ncols, nrows = len(index), 1
+        else:
+            raise ValueError(f'Unknown layout: {layout}')
 
         plot_config = {**plot_config, 'ncols': ncols, 'nrows': nrows, 'ratio': nrows / ncols}
 

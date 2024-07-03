@@ -27,7 +27,7 @@ def unpack_fn_from_config(param, config=None):
 
     if isinstance(par, (tuple, list)):
         if len(par) == 0:
-            par_name = None
+            par_name, par_args = None, {}
         elif len(par) == 1:
             par_name, par_args = par[0], {}
         elif len(par) == 2:

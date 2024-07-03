@@ -9,7 +9,7 @@ import multiprocess as mp
 try:
     import pandas as pd
 except ImportError:
-    from . import _fake as pd
+    pass
 
 from ..profiler import Profiler
 

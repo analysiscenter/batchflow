@@ -236,7 +236,7 @@ class BilinearConvTransposeInit:
             # delta = [-3, -2, -1, 0, 1, 2, 3]
             # channel_filter = [0.25, 0.5, 0.75, 1.0, 0.75, 0.5, 0.25]
             delta = torch.arange(-left, right)
-            channel_filter = (1 - torch.abs(delta / denominator))
+            channel_filter = 1 - torch.abs(delta / denominator)
 
             # Apply the channel filter to the current channel
             shape = [1] * n_dims

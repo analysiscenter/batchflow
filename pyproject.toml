@@ -42,6 +42,7 @@ matplotlib = { version = "^3.7", optional = true }
 
 # [tool.poetry.group.research.dependencies]
 multiprocess = { version = "^0.70", optional = true }
+py-nbtools = { version = "*", optional = true }
 
 # [tool.poetry.group.monitor.dependencies]
 psutil = { version = "*", optional = true }
