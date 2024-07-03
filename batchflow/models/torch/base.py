@@ -10,16 +10,15 @@ from contextlib import nullcontext
 
 import dill
 import numpy as np
-try:
-    import pandas as pd
-except ImportError:
-    pass
 
 import torch
 from torch import nn
 from torch.optim.swa_utils import AveragedModel, SWALR
 
 from sklearn.decomposition import PCA
+
+from ...utils_import import make_delayed_import
+pd = make_delayed_import('pandas')
 
 try:
     import cupy as cp
