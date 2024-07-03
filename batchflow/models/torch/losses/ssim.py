@@ -8,6 +8,9 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+# pylint: disable=not-callable
+# By some reason pylint think that F.conv2d is not callable
+
 
 class SSIM(nn.Module):
     """ Structural similarity between two images.

@@ -133,6 +133,8 @@ class Layer:
                     condition_mask = evaluate_str_comparison(data, condition)
                 elif callable(condition):
                     condition_mask = condition(data)
+                else:
+                    raise ValueError(f'Wrong condition type: {type(condition)}')
                 mask = np.logical_or(mask, condition_mask)
             data = np.ma.array(data, mask=mask)
         return data
@@ -294,6 +296,8 @@ class Layer:
                     for dtype, dtype_formatter in label_format.items():
                         if isinstance(value, dtype):
                             formatter = dtype_formatter
+                else:
+                    raise ValueError(f'Wrong label_format: {type(label_format)}')
 
                 text = format(value, formatter)
 
@@ -773,6 +777,8 @@ class Subplot:
                         handler_map[PatchCollection] = ColorMappingHandler()
                 elif mode in ('curve', 'loss'):
                     handle = Line2D(xdata=[0], ydata=[0], color=label_color, alpha=label_alpha, label=label_item)
+                else:
+                    raise ValueError(f"Mode must be 'image', 'histogram', 'curve' or 'loss' but mode is {mode}")
                 new_handles.append(handle)
             elif not label_item.get_label().startswith('_'):
                 new_handles.append(label_item)
@@ -817,6 +823,8 @@ class Subplot:
             locator = AutoMinorLocator
         elif grid_type == 'major':
             locator = MaxNLocator
+        else:
+            raise ValueError(f'Unknown grid_type: {grid_type}')
 
         if isinstance(frequency, tuple):
             x_frequency, y_frequency = frequency
@@ -1373,6 +1381,9 @@ class Plot:
 
         elif mode in ('curve', 'loss'):
             ratio = 1 / 3 / ncols * nrows
+
+        else:
+            raise ValueError(f"Mode must be 'image', 'histogram', 'curve' or 'loss' but mode is {mode}")
 
         return ratio
 

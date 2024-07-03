@@ -595,19 +595,21 @@ class ExtractionMixin:
             Model to base visualizations on.
         input_tensor : Tensor
             Input tensor for signal propagation.
-        statistics : list or dict
+        statistics : tuple, list or dict
             If list, must contain keys for dict returned by `ExtractionMixin.get_signal_propagation`.
             If dict, must map signal propagation statistics names to 1d arrays.
         kwargs : misc
             For `batchflow.plot`
         """
-        if isinstance(statistics, tuple):
+        if isinstance(statistics, (list, tuple)):
             names = list(statistics)
             statistics = self.get_signal_propagation(model=model, input_tensor=input_tensor)
             data = [statistics[name] for name in names]
         elif isinstance(statistics, dict):
             data = list(statistics.values())
             names = list(statistics.keys())
+        else:
+            raise ValueError(f"statistics must be tuple, list or dict but it is {type(statistics)}")
 
         plot_params = {
             'title': [f"{text} over network units" for text in names],
