@@ -27,7 +27,8 @@ except ImportError:
     CUPY_AVAILABLE = False
 
 from .network import Network
-from .base_mixins import OptimalBatchSizeMixin, LayerHook, ExtractionMixin, VisualizationMixin
+from .base_mixins import LayerHook, ExtractionMixin, VisualizationMixin
+from .batch_opt_mixin import OptimalBatchSizeMixin
 from .initialization import best_practice_resnet_init
 from .losses import CrossEntropyLoss, BinaryLovaszLoss, LovaszLoss, SSIM, MSSIM
 from .losses import binary as binary_losses, multiclass as multiclass_losses
