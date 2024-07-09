@@ -1,6 +1,5 @@
 """ Contains mixin for :class:`~.torch.TorchModel` to provide textual and graphical visualizations. """
 import gc
-from pprint import pformat as _pformat
 
 import numpy as np
 import torch
@@ -71,7 +70,7 @@ class OptimalBatchSizeMixin:
             Value by which we multiply `batch_size` at each iteration. Used in bruteforce estimation.
 
         spread: float
-            Used to create an interval for binary search. 
+            Used to create an interval for binary search.
             The interval is ((1 - `spread`) * `batch_size_estimation`; (1 + `spread`) * `batch_size_estimation`)
             Used in `predictive` estimation.
 
@@ -140,13 +139,13 @@ class OptimalBatchSizeMixin:
 
 
     def _bruteforce_batch_size_generator(self, factor, max_memory):
-        """ Calculates next batch size for bruteforce estimation method. If consumed memory is lower 
-        than max_memory, then batch_size is multiplied by factor, otherwise it is divided by factor 
+        """ Calculates next batch size for bruteforce estimation method. If consumed memory is lower
+        than max_memory, then batch_size is multiplied by factor, otherwise it is divided by factor
 
         Yields
         ------
         new_batch_size, exit: tuple(int, bool)
-            New batch size to check, and exit condition whether the optimal 
+            New batch size to check, and exit condition whether the optimal
             batch size computation is finished
         """
 
@@ -160,13 +159,13 @@ class OptimalBatchSizeMixin:
 
 
     def _binary_batch_size_generator(self, low, high, max_memory):
-        """ Calculates next batch size for binary search method. If consumed memory is lower 
-        than max_memory, then lower bound is increased, otherwise the upped bound is decreased. 
+        """ Calculates next batch size for binary search method. If consumed memory is lower
+        than max_memory, then lower bound is increased, otherwise the upped bound is decreased.
 
         Yields
         ------
         new_batch_size, exit: tuple(int, bool)
-            New batch size to check, and exit condition whether the optimal 
+            New batch size to check, and exit condition whether the optimal
             batch size computation is finished.
         """
         while True:
