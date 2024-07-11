@@ -169,7 +169,9 @@ class PipelineExecutor:
 
         if prefetch > 0:
 
-            if target in ['threads', 't']:
+            if isinstance(target, cf.Executor):
+                self._executor = target
+            elif target in ['threads', 't']:
                 self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1,
                                                        thread_name_prefix='BatchFlow-PipelineExecutor')
             elif target in ['mpc', 'm']:
@@ -197,7 +199,7 @@ class PipelineExecutor:
             self._service_executor.submit(self._run_batches_from_queue, ignore_exceptions)
 
             # main thread gets ready batches and yield them one by one (releasing count queue after each one)
-            while not self._stop_flag:
+            while not self._stop_flag or not self._batch_queue.empty():
                 batch_res = self._batch_queue.get(block=True)
                 self._batch_queue.task_done()
                 if batch_res != END_PIPELINE_SIGNAL:
@@ -209,7 +211,8 @@ class PipelineExecutor:
                     self._prefetch_count.get(block=True)
                     self._prefetch_count.task_done()
 
-            self._executor.shutdown()
+            if self._executor != target:
+                self._executor.shutdown()
             self._service_executor.shutdown()
 
         else:
