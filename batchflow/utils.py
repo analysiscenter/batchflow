@@ -71,32 +71,47 @@ def save_data_to(data, dst, **kwargs):
 
     Parameters
     ----------
-    data : value or a list of values
+    data : value, list of values or dict of values
 
-    dst : NamedExpression, array or a list of them
+    dst : NamedExpression, array, list of them or dict of them
 
     kwargs
         arguments to be passed into a NamedExpression
     """
     from .named_expr import NamedExpression
-    if not isinstance(dst, (tuple, list)):
-        dst = [dst]
-        if isinstance(dst, (tuple, list)):
+
+    if isinstance(data, dict):
+        if not isinstance(dst, dict):
+            raise ValueError(f'Expected dst to be dict, but got type {type(dst)}')
+        for name, var in dst.items():
+            if name not in data:
+                raise KeyError(f"Key '{name}' not found in data")
+            item = data[name]
+            if isinstance(var, NamedExpression):
+                var.set(item, **kwargs)
+            elif isinstance(var, np.ndarray):
+                var[:] = item
+            else:
+                dst[name] = item
+    else:
+        if not isinstance(dst, (tuple, list)):
+            dst = [dst]
+            if isinstance(dst, (tuple, list)):
+                data = [data]
+        if not isinstance(data, (tuple, list)):
             data = [data]
-    if not isinstance(data, (tuple, list)):
-        data = [data]
 
-    if len(dst) != len(data):
-        raise ValueError("The lengths of outputs and saving locations mismatch")
+        if len(dst) != len(data):
+            raise ValueError("The lengths of outputs and saving locations mismatch")
 
-    for i, var in enumerate(dst):
-        item = data[i]
-        if isinstance(var, NamedExpression):
-            var.set(item, **kwargs)
-        elif isinstance(var, np.ndarray):
-            var[:] = item
-        else:
-            dst[i] = item
+        for i, var in enumerate(dst):
+            item = data[i]
+            if isinstance(var, NamedExpression):
+                var.set(item, **kwargs)
+            elif isinstance(var, np.ndarray):
+                var[:] = item
+            else:
+                dst[i] = item
 
 
 def read_data_from(src, **kwargs):
