@@ -1,4 +1,4 @@
-""" Contains mixin for :class:`~.torch.TorchModel` to provide textual and graphical visualizations. """
+""" Contains mixin for :class:`~.torch.TorchModel` to compute optimal batch size. """
 import gc
 
 import numpy as np
