@@ -103,7 +103,7 @@ Git submodule
 
 .. note:: `BatchFlow` module is in the beta stage. Your suggestions and improvements are very welcome.
 
-.. note:: `BatchFlow` supports python 3.5 or higher.
+.. note:: `BatchFlow` supports Python 3.8 or higher.
 
 
 In many cases it is much more convenient to install `batchflow` as a submodule in your project repository than as a python package::

@@ -6,13 +6,13 @@ import itertools
 import traceback
 import multiprocess as mp
 
+from nbtools import get_gpu_free_memory
 import numpy as np
 
 from .. import Config
 from .domain import Domain
 from .utils import generate_id
 from ..utils_random import make_rng, spawn_seed_sequence
-from ..utils_notebook import get_gpu_free_memory
 
 class DynamicQueue:
     """ Queue of tasks that can be changed depending on previous results. """

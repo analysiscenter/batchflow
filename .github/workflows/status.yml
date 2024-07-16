@@ -12,13 +12,14 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: analysiscenter1/ds-py3
+      image: analysiscenter1/ds-py3:3.8
+      options: --entrypoint ""
 
     steps:
     - uses: actions/checkout@v3
 
     - name: Update pylint
-      run: pip3 install pylint
+      run: pip3 install -U pylint>=3.2
 
     - name: Check pylint
       run: pylint -rn --rcfile pylintrc batchflow

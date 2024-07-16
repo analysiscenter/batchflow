@@ -14,9 +14,7 @@ classifiers = [
     'Operating System :: OS Independent',
     'Programming Language :: Python',
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.5',
-    'Programming Language :: Python :: 3.6',
-    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
     'Topic :: Scientific/Engineering'
 ]
 
@@ -42,6 +40,7 @@ matplotlib = { version = "^3.7", optional = true }
 
 # [tool.poetry.group.research.dependencies]
 multiprocess = { version = "^0.70", optional = true }
+py-nbtools = { version = "*", optional = true }
 
 # [tool.poetry.group.monitor.dependencies]
 psutil = { version = "*", optional = true }
@@ -52,6 +51,7 @@ torch = { version = ">=1.13", optional = true }
 torchvision = { version = ">=0.14", optional = true }
 einops = { version = "^0.3", optional = true }
 ptflops = { version = "^0.6", optional = true }
+scikit-learn = { version = ">=0.21.3", optional = true }
 
 # [tool.poetry.group.dev.dependencies]
 pandas = { version = "^0.24", optional = true }
