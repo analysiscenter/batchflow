@@ -1042,13 +1042,13 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         Returns
         -------
-        Calculated values of requested tensors from `outputs` in the same order.
+        Calculated values of requested tensors from `outputs`.
 
         Examples
         --------
         .. code-block:: python
 
-            model.train(B('images'), B('labels'), fetches='loss')
+            model.train(B('images'), B('labels'), outputs='loss')
         """
         if self.disable_training:
             raise RuntimeError('Training model after ONNX conversion is not allowed!')
@@ -1343,7 +1343,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         Returns
         -------
-        Calculated values of tensors in `outputs` in the same order.
+        Calculated values of tensors in `outputs`.
 
         Examples
         --------
