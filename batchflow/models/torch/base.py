@@ -1155,6 +1155,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 result = list(result.values())[0]
             elif isinstance(outputs, (tuple, list, set)):
                 result = list(result.values())
+            elif outputs is None:
+                result = None
 
             # Store the average value of loss over microbatches
             self.loss_list.append(np.mean(self._loss_list[-steps:]))
@@ -1366,20 +1368,22 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.model_lock.acquire() #pylint: disable=consider-using-with
             self.last_predict_info = {}
 
-            # Parse inputs and targets: always a list
-            inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
-            if targets is not None:
-                targets = (list(targets) if isinstance(targets, (tuple, list)) else [targets])
-
             # Parse outputs: always a dict
             outputs_dict = self.prepare_outputs(outputs)
-
-            # Parse other parameters
-            amp = amp if amp is not None else self.amp
 
             # Raise error early
             if 'loss' in outputs_dict.values() and targets is None:
                 raise TypeError('`targets` should be explicitly provided to compute `loss`!')
+
+            # Parse inputs and targets: always a list
+            inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
+            if targets is not None:
+                targets = (list(targets) if isinstance(targets, (tuple, list)) else [targets])
+            else:
+                targets = []
+
+            # Parse other parameters
+            amp = amp if amp is not None else self.amp
 
             # Split the data into `microbatch` size chunks
             split_result = self.split_into_microbatches(inputs, targets, microbatch_size,
@@ -1412,6 +1416,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 result = list(result.values())[0]
             elif isinstance(outputs, (tuple, list, set)):
                 result = list(result.values())
+            elif outputs is None:
+                result = None
 
             # Store info about current predict iteration
             self.last_predict_info.update({
@@ -1608,6 +1614,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     def prepare_outputs(self, outputs):
         """ Add the hooks to all outputs that look like a layer id. Also convert outputs to dict. """
         result = OrderedDict()
+
+        if outputs is None:
+            return OrderedDict()
 
         if not isinstance(outputs, dict): # then outputs should be str, callable, list or tuple
             outputs = list(outputs) if isinstance(outputs, (list, tuple)) else [outputs]
