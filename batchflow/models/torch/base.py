@@ -1599,7 +1599,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
                 predictions = predictions[0] if isinstance(predictions, (tuple, list)) else predictions
                 if operation == 'softplus':
-                    result = torch.nn.functional.softplus(predictions)
+                    result = torch.nn.functional.softplus(tensor)
                 elif operation == 'sigmoid':
                     result = torch.sigmoid(predictions)
                 elif operation == 'sigmoid_uint8':
