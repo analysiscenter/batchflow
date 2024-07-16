@@ -1529,7 +1529,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     def aggregate_microbatches(self, outputs_dict, chunked_outputs, chunk_sizes):
         """ Aggregate outputs from microbatches into outputs for the whole batch.
         Scalar values are aggregated by `mean`, array values are concatenated along the first (batch) axis. """
-        result = {}
+        result = OrderedDict()
 
         for output_name in outputs_dict:
             chunked_output = [chunk_outputs[output_name] for chunk_outputs in chunked_outputs]
