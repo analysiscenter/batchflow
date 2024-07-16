@@ -995,15 +995,18 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             If the microbatching is used, individual elements are split along the first axis.
         outputs : str, callable, sequence or dict of them
             Desired outputs of the method.
-            Each string defines a tensor to get and should be one of:
-                - pre-defined tensors, which are `predictions`, `loss`, and `predictions_{i}` for multi-output models.
-                - pre-defined operations, which are `softplus`, `sigmoid`, `sigmoid_uint8`, `sigmoid_int16`, 
-                `proba`, `labels`. Work only with len(predictions) == 1
-                - layer id, which describes how to access the layer through a series of `getattr` and `getitem` calls.
-                Allows to get intermediate activations of a neural network.
-            Each callable defines a function that should be applied to predictions.
-            If outputs are dict, then keys are strings and they are considered as output_names. The values should be
-            either callables, pre-defined tensors, pre-defined operations or layer id.
+            Each element defines a tensor to get and should be one of:
+                - a string, which can be:
+                    - `loss`, `predictions`, and `predictions_{i}` for multi-output models.
+                    - `softplus`, `sigmoid`, `sigmoid_uint8`, `sigmoid_int16`, `proba`, `labels`.
+                    Work only with len(predictions) == 1.
+                    - layer id, which describes how to access the layer through a series of `getattr` and
+                    `getitem` calls.
+                - a callable, which defines a function that should be applied to predictions.
+                - a sequence, where each item is one of the previous types. Result of this method is guaranteed
+                to have the same order of elements.
+                - a dict, where each value is one of the previous types. Result of this method is a dictionary
+                with the same keys and requested tensors as values.
         lock : bool
             If True, then model, loss and gradient update operations are locked, thus allowing for multithreading.
         sync_frequency : int, bool or None
@@ -1150,7 +1153,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             # convert results to tensor or list depending on outputs type. If dict, do nothing
             if isinstance(outputs, str) or callable(outputs):
                 result = list(result.values())[0]
-            elif isinstance(outputs, list):
+            elif isinstance(outputs, (tuple, list, set)):
                 result = list(result.values())
 
             # Store the average value of loss over microbatches
@@ -1238,16 +1241,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self.syncs.append(False)
 
         # Make all possible outputs
-        output_container = self.compute_outputs(predictions=predictions, operations=outputs_dict)
-        if 'predictions' in outputs_dict.values():
-            # in case there are multiple output_names with the same operation == `predictions`. Same for `loss`
-            predictions_names_list = [output_name for output_name, operation in outputs_dict.items() \
-                                      if operation == 'predictions']
-            output_container.update({output_name: predictions for output_name in predictions_names_list})
-        if 'loss' in outputs_dict.values():
-            losses_names_list = [output_name for output_name, operation in outputs_dict.items() \
-                                 if operation == 'loss']
-            output_container.update({output_name: loss for output_name in losses_names_list})
+        output_container = self.compute_outputs(predictions=predictions, operations=outputs_dict, loss=loss)
 
         # Log inner info
         predictions_ = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
@@ -1319,15 +1313,18 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             Optional model targets to calculate loss with. Passed directly to model.
         outputs : str, callable, sequence or dict of them
             Desired outputs of the method.
-            Each string defines a tensor to get and should be one of:
-                - pre-defined tensors, which are `predictions`, `loss`, and `predictions_{i}` for multi-output models.
-                - pre-defined operations, which are `softplus`, `sigmoid`, `sigmoid_uint8`, `sigmoid_int16`, 
-                `proba`, `labels`. Work only with len(predictions) == 1
-                - layer id, which describes how to access the layer through a series of `getattr` and `getitem` calls.
-                Allows to get intermediate activations of a neural network.
-            Each callable defines a function that should be applied to predictions.
-            If outputs are dict, then keys are strings and they are considered as output_names. The values should be 
-            either callables, pre-defined tensors, pre-defined operations or layer id.
+            Each element defines a tensor to get and should be one of:
+                - a string, which can be:
+                    - `loss`, `predictions`, and `predictions_{i}` for multi-output models.
+                    - `softplus`, `sigmoid`, `sigmoid_uint8`, `sigmoid_int16`, `proba`, `labels`.
+                    Work only with len(predictions) == 1.
+                    - layer id, which describes how to access the layer through a series of `getattr` and
+                    `getitem` calls.
+                - a callable, which defines a function that should be applied to predictions.
+                - a sequence, where each item is one of the previous types. Result of this method is guaranteed
+                to have the same order of elements.
+                - a dict, where each value is one of the previous types. Result of this method is a dictionary
+                with the same keys and requested tensors as values.
         lock : bool
             If True, then model and loss computation operations are locked, thus allowing for multithreading.
         microbatch_size : int, bool or None
@@ -1376,8 +1373,6 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
             if targets is not None:
                 targets = (list(targets) if isinstance(targets, (tuple, list)) else [targets])
-            else:
-                targets = []
 
             # Parse outputs: always a dict
             outputs_dict = self.prepare_outputs(outputs)
@@ -1386,7 +1381,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             amp = amp if amp is not None else self.amp
 
             # Raise error early
-            if 'loss' in outputs_dict and targets is None:
+            if 'loss' in outputs_dict.values() and targets is None:
                 raise TypeError('`targets` should be explicitly provided to compute `loss`!')
 
             # Split the data into `microbatch` size chunks
@@ -1418,7 +1413,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             # convert results to tensor or list depending on outputs type. If dict, do nothing
             if isinstance(outputs, str) or callable(outputs):
                 result = list(result.values())[0]
-            elif isinstance(outputs, list):
+            elif isinstance(outputs, (tuple, list, set)):
                 result = list(result.values())
 
             # Store info about current predict iteration
@@ -1440,27 +1435,12 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
         targets = targets[0] if len(targets) == 1 and isinstance(targets, list) else targets
 
-        output_container = OrderedDict()
         with (torch.no_grad() if no_grad else nullcontext()), torch.cuda.amp.autocast(enabled=amp):
             inputs = self.transfer_to_device(inputs)
             predictions = self.model(inputs)
 
-            if 'predictions' in outputs_dict.values():
-                # in case there are multiple output_names with the same operation == `predictions`. Same for `loss`
-                predictions_names_list = [output_name for output_name, operation in outputs_dict.items() \
-                                          if operation == 'predictions']
-                output_container.update({output_name: predictions for output_name in predictions_names_list})
-            if 'loss' in outputs_dict.values():
-                losses_names_list = [output_name for output_name, operation in outputs_dict.items() \
-                                     if operation == 'loss']
-
-                targets = self.transfer_to_device(targets)
-                loss = self.loss(predictions, targets)
-                output_container.update({output_name: loss for output_name in losses_names_list})
-
-        # Make all possible outputs
-        additional_outputs = self.compute_outputs(predictions=predictions, operations=outputs_dict)
-        output_container.update(additional_outputs)
+        # Make all requested outputs
+        output_container = self.compute_outputs(predictions=predictions, operations=outputs_dict, targets=targets)
 
         # Log inner info
         predictions_ = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
@@ -1571,13 +1551,24 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         return result
 
 
-    def compute_outputs(self, predictions, operations):
+    def compute_outputs(self, predictions, operations, targets=None, loss=None):
         """ Produce additional outputs, defined in the outputs parameter of `train` 
         or `predict` functions from predictions.
         """
         result = OrderedDict()
         for name, operation in operations.items():
-            if operation not in ('loss', 'predictions'): # these outputs already taken care of
+            if operation == 'predictions':
+                result[name] = predictions
+            elif operation == 'loss':
+                if loss is not None: # the loss is precomputed, so just store it
+                    result[name] = loss
+                elif targets is not None:
+                    targets = self.transfer_to_device(targets)
+                    loss = self.loss(predictions, targets)
+                    result[name] = loss
+                else:
+                    raise ValueError("`targets` should be explicitly provided to compute `loss`!")
+            else:
                 result[name] = self.apply_output_operation(predictions, operation)
         return result
 
@@ -1592,12 +1583,15 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             elif isinstance(operation, LayerHook):
                 operation.close()
                 result = operation.activation
-            elif isinstance(operation, str) and re.match(r"predictions_[0-9]+", operation):
-                i = int(re.findall(r"\d+", operation)[0]) # get the ordinal number of prediction
+            elif (isinstance(operation, str) and # Check if operation matches `predictions_[0-9]+`
+                  operation.startswith('predictions_') and
+                  operation.split("_")[-1].isdigit()):
+
+                i = int(operation.split("_")[-1])
                 result = predictions[i]
             else:
                 if isinstance(predictions, (tuple, list)) and not len(predictions) == 1:
-                    raise ValueError('Default operations can`t be applicable to multi output predictions.')
+                    raise ValueError('Default operations can`t be applied to multi output predictions.')
 
                 predictions = predictions[0] if isinstance(predictions, (tuple, list)) else predictions
                 if operation == 'softplus':
@@ -1618,17 +1612,15 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     def prepare_outputs(self, outputs):
-        """ Add the hooks to all outputs that look like a layer id. Also convert outputs to dict"""
+        """ Add the hooks to all outputs that look like a layer id. Also convert outputs to dict. """
         result = OrderedDict()
 
         if not isinstance(outputs, dict): # then outputs should be str, callable, list or tuple
             outputs = list(outputs) if isinstance(outputs, (list, tuple)) else [outputs]
             processed_outputs = OrderedDict()
             for output in outputs:
-                if isinstance(output, str):
+                if isinstance(output, str) or callable(output):
                     processed_outputs[output] = output
-                elif callable(output):
-                    processed_outputs[output.__name__] = output
                 else:
                     raise ValueError(f"Expected elements in outputs to be either str or callable, \
                                        but got type {type(output)}!")
