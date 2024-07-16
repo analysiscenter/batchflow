@@ -1248,13 +1248,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.last_train_info['predictions_shapes'] = [get_shape(item) for item in predictions_]
         self.last_train_info['available_outputs'] = list(output_container.keys())
 
-        # Retrieve requested outputs
-        requested_outputs = self.extract_outputs(outputs_dict=outputs_dict, output_container=output_container)
-
         # Transfer only the requested outputs to CPU
         if transfer_from_device:
-            requested_outputs = self.transfer_from_device(requested_outputs, force_float32_dtype=force_float32_dtype)
-        return requested_outputs
+            output_container = self.transfer_from_device(output_container, force_float32_dtype=force_float32_dtype)
+        return output_container
 
     def _train_sam_store_gradients(self):
         """ Store gradients from previous microbatches. """
@@ -1447,13 +1444,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.last_predict_info['predictions_shapes'] = [get_shape(item) for item in predictions_]
         self.last_predict_info['available_outputs'] = list(output_container.keys())
 
-        # Retrieve requested outputs
-        requested_outputs = self.extract_outputs(outputs_dict=outputs_dict, output_container=output_container)
-
         # Transfer only the requested outputs to CPU
         if transfer_from_device:
-            requested_outputs = self.transfer_from_device(requested_outputs, force_float32_dtype=force_float32_dtype)
-        return requested_outputs
+            output_container = self.transfer_from_device(output_container, force_float32_dtype=force_float32_dtype)
+        return output_container
 
 
     def __call__(self, inputs, targets=None, outputs='predictions', lock=True,
@@ -1635,14 +1629,6 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             else:
                 result[output_name] = operation
         return result
-
-    def extract_outputs(self, outputs_dict, output_container):
-        """ Retrieve activation data from hooks, get other requested outputs from container. """
-        requested_outputs = OrderedDict()
-
-        for output_name in outputs_dict:
-            requested_outputs[output_name] = output_container[output_name]
-        return requested_outputs
 
 
     # Store model
