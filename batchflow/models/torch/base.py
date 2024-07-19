@@ -1064,7 +1064,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             targets = list(targets) if isinstance(targets, (tuple, list)) else [targets]
 
             # Parse outputs: always a dict
-            outputs_dict = self.prepare_outputs(outputs)
+            outputs_dict = self.convert_outputs(outputs)
 
             # Parse train parameters
             if sync_frequency is True:
@@ -1243,7 +1243,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self.syncs.append(False)
 
         # Make all possible outputs
-        output_container = self.compute_outputs(predictions=predictions, operations=outputs_dict, loss=loss)
+        output_container = self.compute_outputs(predictions=predictions, outputs_dict=outputs_dict, loss=loss)
 
         # Log inner info
         predictions_ = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
@@ -1369,7 +1369,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self.last_predict_info = {}
 
             # Parse outputs: always a dict
-            outputs_dict = self.prepare_outputs(outputs)
+            outputs_dict = self.convert_outputs(outputs)
 
             # Raise error early
             if 'loss' in outputs_dict.values() and targets is None:
@@ -1442,8 +1442,14 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             inputs = self.transfer_to_device(inputs)
             predictions = self.model(inputs)
 
+            if len(targets) > 0:
+                targets = self.transfer_to_device(targets)
+                loss = self.loss(predictions, targets)
+            else:
+                loss = None
+
         # Make all requested outputs
-        output_container = self.compute_outputs(predictions=predictions, operations=outputs_dict, targets=targets)
+        output_container = self.compute_outputs(predictions=predictions, outputs_dict=outputs_dict, loss=loss)
 
         # Log inner info
         predictions_ = list(predictions) if isinstance(predictions, (tuple, list)) else [predictions]
@@ -1551,25 +1557,18 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         return result
 
 
-    def compute_outputs(self, predictions, operations, targets=None, loss=None):
+    def compute_outputs(self, predictions, outputs_dict, loss=None):
         """ Produce additional outputs, defined in the outputs parameter of `train` 
         or `predict` functions from predictions.
         """
         result = OrderedDict()
-        for name, operation in operations.items():
+        for output_name, operation in outputs_dict.items():
             if operation == 'predictions':
-                result[name] = predictions
+                result[output_name] = predictions
             elif operation == 'loss':
-                if loss is not None: # the loss is precomputed, so just store it
-                    result[name] = loss
-                elif targets is not None:
-                    targets = self.transfer_to_device(targets)
-                    loss = self.loss(predictions, targets)
-                    result[name] = loss
-                else:
-                    raise ValueError("`targets` should be explicitly provided to compute `loss`!")
+                result[output_name] = loss
             else:
-                result[name] = self.apply_output_operation(predictions, operation)
+                result[output_name] = self.apply_output_operation(predictions, operation)
         return result
 
     @staticmethod
@@ -1611,7 +1610,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         return result
 
 
-    def prepare_outputs(self, outputs):
+    def convert_outputs(self, outputs):
         """ Add the hooks to all outputs that look like a layer id. Also convert outputs to dict. """
         result = OrderedDict()
 
