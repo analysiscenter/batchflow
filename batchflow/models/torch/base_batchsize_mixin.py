@@ -145,7 +145,7 @@ class OptimalBatchSizeMixin:
         high = high if high is not None else 2 * start_batch_size - low
 
         # The batch_size_history is used to show current batch_size in notifier.
-        batch_size_history = start_batch_size if isinstance(start_batch_size, list) else list(start_batch_size)
+        batch_size_history = start_batch_size if isinstance(start_batch_size, list) else [start_batch_size]
         batch_size = start_batch_size
 
         if update_method == 'binary':
@@ -190,10 +190,8 @@ class OptimalBatchSizeMixin:
                     raise # some other error not memory related
             finally:
                 next(generator)
-                generator.send(batch_size)
-                batch_size, exit = generator.send(consumed_memory)
+                batch_size, exit = generator.send((batch_size, consumed_memory))
                 batch_size_history.append(batch_size)
-
                 self.garbage_collection_cuda()
 
             if exit or count >= max_iters:
@@ -232,15 +230,14 @@ class OptimalBatchSizeMixin:
                 break
 
         # Make and solve a system of equations for `item_size`, `model_size`
-        matrix = np.ones((len(table), 2))
-        matrix[:, 0] = table.keys()
+        matrix = np.ones((len(table), 2), dtype=np.int16)
+        matrix[:, 0] = list(table.keys())
 
         vector = np.array([value['memory'] for value in table.values()])
         item_size, model_size = np.dot(np.linalg.pinv(matrix), vector)
 
         # Compute the `batch_size` to use up to `max_memory`
-        optimal_batch_size = (max_memory - model_size) // item_size
-
+        optimal_batch_size = int((max_memory - model_size) / item_size)
         return {'batch_size': optimal_batch_size,
                 'item_size': item_size,
                 'model_size': model_size,
