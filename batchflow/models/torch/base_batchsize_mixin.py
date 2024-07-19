@@ -40,9 +40,15 @@ class OptimalBatchSizeMixin:
                                    max_batch_size=1024, max_iters_estimation=2):
         """ Compute the optimal batch size for a model to fit within a specified memory limit.
 
-        This is done in two steps:
-        1. Calculate batch size estimation using `predictive` or `bruteforce` method.
-        2. Calculate exact optimal batch size using binary search.
+        The function determines the optimal batch size in two main steps:
+        1. Batch Size Estimation:
+            - 'predictive' method: This approach runs the model with various batch sizes.
+            It then calculates the optimal batch size by solving a linear system of equations,
+            `measured_memory = batch_size * item_size + model_size + eps`, to find both item_size and model_size.
+            - 'bruteforce' method: This approach runs the model with progressively larger batch sizes
+            until an Out Of Memory (OOM) error occurs.
+        2. Optimal Batch Size Calculation:
+            The exact optimal batch size is determined using a binary search algorithm.
 
         Parameters
         ----------
@@ -138,8 +144,9 @@ class OptimalBatchSizeMixin:
         # if None => make equal distance between low, start_batch_size and high
         high = high if high is not None else 2 * start_batch_size - low
 
-        # The list is used to show current batch_size in notifier. Current value is the last one.
-        batch_size = start_batch_size if isinstance(start_batch_size, list) else [start_batch_size]
+        # The batch_size_history is used to show current batch_size in notifier.
+        batch_size_history = start_batch_size if isinstance(start_batch_size, list) else list(start_batch_size)
+        batch_size = start_batch_size
 
         if update_method == 'binary':
             n_iters = int(np.ceil(np.log2(high - low)))
@@ -152,7 +159,7 @@ class OptimalBatchSizeMixin:
             raise ValueError("Wrong update method! Could be `bruteforce` or `binary`")
 
         notifier = Notifier(n_iters=n_iters, bar=pbar,
-                            monitors=[{'source': batch_size, 'name': 'batch_size'}])
+                            monitors=[{'source': batch_size_history, 'name': 'batch_size'}])
 
         while True:
             consumed_memory = max_memory * 2 # default value in case of an exception
@@ -162,14 +169,14 @@ class OptimalBatchSizeMixin:
 
                 # monitor consumed memory
                 with GPUMemoryMonitor(frequency=frequency) as monitor:
-                    input = inputs or self.make_placeholder_data(batch_size[-1], to_device=False)
+                    input = inputs or self.make_placeholder_data(batch_size, to_device=False)
                     input = list(input) if isinstance(input, (tuple, list)) else [input]
-                    input = [item[:batch_size[-1]] for item in input]
+                    input = [item[:batch_size] for item in input]
 
                     if method == 'train':
                         target = targets or self.predict(inputs=input, outputs='predictions')
                         target = list(target) if isinstance(target, (tuple, list)) else [target]
-                        target = [item[:batch_size[-1]] for item in target]
+                        target = [item[:batch_size] for item in target]
 
                         _ = self.train(inputs=input, targets=target, microbatch_size=False)
                     else:
@@ -183,59 +190,16 @@ class OptimalBatchSizeMixin:
                     raise # some other error not memory related
             finally:
                 next(generator)
-                generator.send(batch_size[-1])
-                new_batch_size, exit = generator.send(consumed_memory)
-                batch_size.append(new_batch_size)
+                generator.send(batch_size)
+                batch_size, exit = generator.send(consumed_memory)
+                batch_size_history.append(batch_size)
 
                 self.garbage_collection_cuda()
 
             if exit or count >= max_iters:
                 break
 
-        return batch_size[-1]
-
-
-    def _bruteforce_batch_size_generator(self, factor, max_memory):
-        """ Calculates next batch size for bruteforce estimation method. If consumed memory is lower
-        than `max_memory`, then batch_size is multiplied by `factor`, otherwise it is divided by `factor`
-
-        Yields
-        ------
-        new_batch_size, exit: tuple(int, bool)
-            New batch size to check, and exit condition whether the optimal
-            batch size computation is finished
-        """
-
-        while True:
-            batch_size, consumed_memory = yield
-
-            if consumed_memory > max_memory:
-                yield batch_size // factor, True
-            else:
-                yield batch_size * factor, False
-
-
-    def _binary_batch_size_generator(self, low, high, max_memory):
-        """ Calculates next batch size for binary search method. If consumed memory is lower
-        than `max_memory`, then lower bound is increased, otherwise the upped bound is decreased.
-
-        Yields
-        ------
-        new_batch_size, exit: tuple(int, bool)
-            New batch size to check, and exit condition whether the optimal
-            batch size computation is finished.
-        """
-        while True:
-            batch_size, consumed_memory = yield
-
-            if consumed_memory > max_memory:
-                high = batch_size
-            else:
-                low = batch_size
-
-            exit = high - low <= 1
-            yield (high + low) // 2, exit
-
+        return batch_size
 
 
     def _compute_optimal_batch_size_predictive(self, method='train', max_memory=90,
@@ -268,7 +232,9 @@ class OptimalBatchSizeMixin:
                 break
 
         # Make and solve a system of equations for `item_size`, `model_size`
-        matrix = np.array([[batch_size, 1] for batch_size in table.keys()])
+        matrix = np.ones((len(table), 2))
+        matrix[:, 0] = table.keys()
+
         vector = np.array([value['memory'] for value in table.values()])
         item_size, model_size = np.dot(np.linalg.pinv(matrix), vector)
 
@@ -325,3 +291,45 @@ class OptimalBatchSizeMixin:
         return self._get_memory_utilization(method=method, inputs=inputs, targets=targets,
                                             n=2*n, frequency=frequency, time_threshold=time_threshold,
                                             tail_size=tail_size, std_threshold=std_threshold)
+
+
+    def _bruteforce_batch_size_generator(self, factor, max_memory):
+        """ Calculates next batch size for bruteforce estimation method. If consumed memory is lower
+        than `max_memory`, then batch_size is multiplied by `factor`, otherwise it is divided by `factor`
+
+        Yields
+        ------
+        new_batch_size, exit: tuple(int, bool)
+            New batch size to check, and exit condition whether the optimal
+            batch size computation is finished
+        """
+
+        while True:
+            batch_size, consumed_memory = yield
+
+            if consumed_memory > max_memory:
+                yield batch_size // factor, True
+            else:
+                yield batch_size * factor, False
+
+
+    def _binary_batch_size_generator(self, low, high, max_memory):
+        """ Calculates next batch size for binary search method. If consumed memory is lower
+        than `max_memory`, then lower bound is increased, otherwise the upped bound is decreased.
+
+        Yields
+        ------
+        new_batch_size, exit: tuple(int, bool)
+            New batch size to check, and exit condition whether the optimal
+            batch size computation is finished.
+        """
+        while True:
+            batch_size, consumed_memory = yield
+
+            if consumed_memory > max_memory:
+                high = batch_size
+            else:
+                low = batch_size
+
+            exit = high - low <= 1
+            yield (high + low) // 2, exit
