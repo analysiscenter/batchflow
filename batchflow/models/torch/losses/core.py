@@ -54,6 +54,9 @@ class CrossEntropyLoss(nn.Module):
                     weight = float(support)
                 elif callable(self.weight):
                     weight = self.weight(support)
+                else:
+                    raise ValueError("weight must be 'dynamic', 'inverse', 'adaptive', 'proportional' or callable " +
+                                     f"but it is {type(weight)}")
                 weights.append(weight)
 
             weights = torch.tensor(weights, device=prediction.device)

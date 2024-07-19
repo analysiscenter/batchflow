@@ -1,4 +1,5 @@
 """ Eager version of TorchModel. """
+# pylint: disable=unnecessary-lambda-assignment
 import os
 import re
 import inspect
@@ -9,16 +10,15 @@ from contextlib import nullcontext
 
 import dill
 import numpy as np
-try:
-    import pandas as pd
-except ImportError:
-    pass
 
 import torch
 from torch import nn
 from torch.optim.swa_utils import AveragedModel, SWALR
 
 from sklearn.decomposition import PCA
+
+from ...utils_import import make_delayed_import
+pd = make_delayed_import('pandas')
 
 try:
     import cupy as cp
@@ -821,6 +821,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 function = lambda grad: torch.clamp(grad, -gradient_clipping, gradient_clipping)
             elif callable(gradient_clipping):
                 function = gradient_clipping
+            else:
+                raise ValueError(f'gradient_clipping must be int, float or callable but it is{type(gradient_clipping)}')
 
             for p in self.model.parameters():
                 hook = p.register_hook(function)
@@ -1118,7 +1120,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             profile = profile or self.profile
             if profile:
                 profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
-                profiler.__enter__()
+                profiler.__enter__() # pylint: disable=unnecessary-dunder-call
 
             # Train on each of the microbatches
             chunked_outputs = []
@@ -1616,7 +1618,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 name = operation.__name__
             else:
                 if operation == 'softplus':
-                    result = torch.nn.functional.softplus(tensor)
+                    result = torch.nn.functional.softplus(tensor) # pylint: disable=not-callable
                 elif operation == 'sigmoid':
                     result = torch.sigmoid(tensor)
                 elif operation == 'sigmoid_uint8':

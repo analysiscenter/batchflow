@@ -9,14 +9,13 @@ from copy import deepcopy
 
 import dill
 import numpy as np
-try:
-    import pandas as pd
-except ImportError:
-    pass
 
 from ..plotter import plot
 from ..plotter.plot import Subplot
 from ..utils import to_list
+
+from ..utils_import import make_delayed_import
+pd = make_delayed_import('pandas')
 
 
 class MultiOut:
@@ -321,6 +320,8 @@ def plot_research(df, variables=None, subplots=None, aggregate=None, aggregate_f
             ncols, nrows = 1, len(index)
         elif layout == 'horizontal':
             ncols, nrows = len(index), 1
+        else:
+            raise ValueError(f'Unknown layout: {layout}')
 
         plot_config = {**plot_config, 'ncols': ncols, 'nrows': nrows, 'ratio': nrows / ncols}
 

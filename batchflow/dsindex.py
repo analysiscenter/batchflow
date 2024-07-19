@@ -1,4 +1,5 @@
 """ DatasetIndex """
+# pylint: disable=arguments-renamed
 import os
 import math
 import glob

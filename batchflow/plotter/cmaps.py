@@ -1,11 +1,11 @@
 """ Custom colormaps. """
-from matplotlib.pyplot import register_cmap
+from matplotlib import colormaps
 from .utils import extend_cmap
 
 
 
 BATCHFLOW_CMAP = extend_cmap('magma', 'white')
 try:
-    register_cmap('batchflow', BATCHFLOW_CMAP)
+    colormaps.register(cmap=BATCHFLOW_CMAP, name='batchflow')
 except ValueError:
     pass

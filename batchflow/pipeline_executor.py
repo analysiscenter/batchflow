@@ -98,7 +98,7 @@ class PipelineExecutor:
                     batch = END_PIPELINE_SIGNAL
             finally:
                 self._prefetch_queue.task_done()
-                self._batch_queue.put(batch, block=True)
+                self._batch_queue.put(batch, block=True) # pylint: disable=used-before-assignment
                 if batch == END_PIPELINE_SIGNAL:
                     self._stop_flag = True
 

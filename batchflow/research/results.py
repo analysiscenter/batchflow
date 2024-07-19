@@ -6,14 +6,13 @@ from collections import OrderedDict
 import glob
 
 import multiprocess as mp
-try:
-    import pandas as pd
-except ImportError:
-    pass
 import numpy as np
 
 from ..utils import to_list
 from .utils import deserialize
+
+from ..utils_import import make_delayed_import
+pd = make_delayed_import('pandas')
 
 class ResearchResults:
     """ Class to collect, load and process research results.

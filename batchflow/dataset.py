@@ -211,7 +211,7 @@ class Dataset(Baseset):
             raise IndexError
         return type(self).from_dataset(self, self.index.create_subset(index))
 
-    def create_batch(self, index, pos=False, *args, **kwargs):
+    def create_batch(self, index, pos=False, *args, **kwargs): # pylint: disable=arguments-renamed
         """ Create a batch from given indices.
 
             Parameters

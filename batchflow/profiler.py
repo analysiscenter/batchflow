@@ -154,7 +154,7 @@ class PipelineProfiler(Profiler):
             result = (profile_info.reset_index().groupby(groupby)[columns].mean(numeric_only=True)
                       .sort_values(['iter', sortby], ascending=[True, False]))
 
-        elif per_iter is True and detailed is True:
+        else: # per_iter is True and detailed is True:
             groupby = groupby or ['iter', 'action', 'id']
             columns = columns or ['ncalls', 'tottime', 'cumtime']
             sortby = sortby or 'tottime'
