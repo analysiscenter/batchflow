@@ -151,12 +151,11 @@ class OptimalBatchSizeMixin:
         if update_method == 'binary':
             n_iters = int(np.ceil(np.log2(high - low)))
             generator = self._binary_batch_size_generator(low=low, high=high, max_memory=max_memory)
-
         elif update_method == 'bruteforce':
             n_iters = None
             generator = self._bruteforce_batch_size_generator(factor=factor, max_memory=max_memory)
         else:
-            raise ValueError("Wrong update method! Could be `bruteforce` or `binary`")
+            raise ValueError(f"Unknown `update_method`: select either `'bruteforce'` or `'binary'`.")
 
         notifier = Notifier(n_iters=n_iters, bar=pbar,
                             monitors=[{'source': batch_size_history, 'name': 'batch_size'}])
