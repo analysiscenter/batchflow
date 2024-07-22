@@ -56,7 +56,7 @@ class TestDataset:
     def test_rshift(self, dataset):
         pipeline_config = {}
         new_pipeline = dataset.pipeline(pipeline_config)
-        train_pipeline = (new_pipeline << dataset)
+        train_pipeline = new_pipeline << dataset
         assert isinstance(train_pipeline, Pipeline)
 
     def test_split_no_validation(self, dataset):

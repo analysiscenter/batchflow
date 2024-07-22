@@ -733,6 +733,7 @@ class Experiment:
             'stderr', self.storage.stderr_file, self.executor.storage.stderr_file
         )
 
+        unit_time = 0
         with context_manager_out, context_manager_err:
             if self.is_alive or name.startswith('__'):
                 if self.profiler:

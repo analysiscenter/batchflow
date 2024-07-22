@@ -881,6 +881,7 @@ class Pipeline:
         batch.iteration = iteration
 
         for action in actions:
+            action_time = 0
             if self._profiler:
                 self._profiler.enable()
 
@@ -893,6 +894,8 @@ class Pipeline:
                         jbatch = pipe.create_batch(batch.index)
                     elif action['mode'] == 'n':
                         jbatch = pipe.next_batch()
+                    else:
+                        raise ValueError(f"Wrong mode value: {action['mode']}")
                     join_batches.append(jbatch)
                 join_batches = tuple(join_batches)
 
