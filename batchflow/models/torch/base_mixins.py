@@ -6,8 +6,6 @@ from pprint import pformat as _pformat
 import numpy as np
 import torch
 
-from ...monitor import GPUMemoryMonitor
-from ...notifier import Notifier
 from ...plotter import plot
 from ...decorators import deprecated
 
@@ -211,89 +209,6 @@ class VisualizationMixin:
     deprecation_msg = "`{}` is deprecated and will be removed in future versions, use `{}` instead."
     show_lr = deprecated(deprecation_msg.format('TorchModel.show_lr', 'TorchModel.plot_lr'))(plot_lr)
     show_loss = deprecated(deprecation_msg.format('TorchModel.show_loss', 'TorchModel.plot_loss'))(plot_loss)
-
-
-class OptimalBatchSizeMixin:
-    """ Compute optimal batch size for training/inference to maximize GPU memory usage.
-    Works by using `train`/`predict` with different batch sizes, and measuring how much memory is taken.
-    Then, we solve the system of `measured_memory = batch_size * item_size + model_size + eps` equations for both
-    `item_size` and `model_size`.
-
-    For stable measurements, we make `n` iterations of `train`/`predict`, until the memory consumption stabilizes.
-    """
-    def compute_optimal_batch_size(self, method='train', max_memory=90, inputs=None, targets=None, pbar='n',
-                                   start_batch_size=4, delta_batch_size=4, max_batch_size=128, max_iters=16,
-                                   n=20, frequency=0.05, time_threshold=3, tail_size=20, std_threshold=0.1):
-        """ Compute memory usage for multiple batch sizes. """
-        #pylint: disable=consider-iterating-dictionary
-        table = {}
-        batch_size = start_batch_size
-        for _ in Notifier(pbar)(range(max_iters)):
-            info = self.get_memory_utilization(batch_size, method=method,
-                                               inputs=inputs, targets=targets, n=n, frequency=frequency,
-                                               time_threshold=time_threshold,
-                                               tail_size=tail_size, std_threshold=std_threshold)
-            table[batch_size] = info
-
-            # Exit condition
-            batch_size += delta_batch_size
-            if info['memory'] > max_memory or batch_size > max_batch_size :
-                break
-
-        # Make and solve a system of equations for `item_size`, `model_size`
-        matrix = np.array([[batch_size, 1] for batch_size in table.keys()])
-        vector = np.array([value['memory'] for value in table.values()])
-        item_size, model_size = np.dot(np.linalg.pinv(matrix), vector)
-
-        # Compute the `batch_size` to use up to `max_memory`
-        optimal_batch_size = (max_memory - model_size) / item_size
-        optimal_batch_size = int(optimal_batch_size)
-
-        return {'batch_size': optimal_batch_size,
-                'item_size': item_size,
-                'model_size': model_size,
-                'table': table}
-
-    def get_memory_utilization(self, batch_size, method='train', inputs=None, targets=None, n=20, frequency=0.05,
-                               time_threshold=3, tail_size=20, std_threshold=0.1):
-        """ For a given `batch_size`, make `inputs` and `targets` and compute memory utilization. """
-        inputs = inputs or self.make_placeholder_data(batch_size)
-        inputs = list(inputs) if isinstance(inputs, (tuple, list)) else [inputs]
-        inputs = [item[:batch_size] for item in inputs]
-
-        targets = targets or self.predict(inputs=inputs, outputs='predictions')
-        targets = list(targets) if isinstance(targets, (tuple, list)) else [targets]
-        targets = [item[:batch_size] for item in targets]
-
-        # Clear the GPU from potential previous runs
-        torch.cuda.empty_cache()
-        return self._get_memory_utilization(method=method, inputs=inputs, targets=targets, n=n, frequency=frequency,
-                                            time_threshold=time_threshold,
-                                            tail_size=tail_size, std_threshold=std_threshold)
-
-    def _get_memory_utilization(self, method, inputs, targets, n, frequency,
-                                time_threshold, tail_size, std_threshold):
-        """ Run method `n` times and make sure that memory measurements are stable. """
-        with GPUMemoryMonitor(frequency=frequency) as monitor:
-            for _ in range(n):
-                if method == 'train':
-                    _ = self.train(inputs=inputs, targets=targets, microbatch_size=False)
-                elif method == 'predict':
-                    _ = self.predict(inputs=inputs, microbatch_size=False)
-
-        # Check if the measurement is stable. If so, return the value and confidence
-        data = monitor.data
-        time = len(data) * frequency # in seconds
-        if time > time_threshold:
-            tail = data[-tail_size:]
-            if np.std(tail) < std_threshold:
-                return {'memory': np.mean(tail), 'n': n, 'monitor': monitor}
-
-        # If the measurement is not stable, run for twice as long
-        return self._get_memory_utilization(method=method, inputs=inputs, targets=targets,
-                                            n=2*n, frequency=frequency, time_threshold=time_threshold,
-                                            tail_size=tail_size, std_threshold=std_threshold)
-
 
 
 class LayerHook:
