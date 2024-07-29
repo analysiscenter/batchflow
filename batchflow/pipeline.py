@@ -334,13 +334,13 @@ class Pipeline:
         self._actions.append({'name': PIPELINE_ID, 'pipeline': pipeline, 'proba': proba, 'repeat': repeat})
 
 
-    LINE_LENGTH = 80
-    ITEM_LENGTH = 40
-    PREFIX = '\033[1m\033[4m'
 
-    def __str__(self):
+    def repr(self, line_length=80, item_length=40, supress_color=False):
         """ Textual representation of a pipeline: list all actions and their keyword parameters. """
         # TODO: with the help of `inspect` and `get_method` method, can match the `args` to their actual names
+        prefix = '' if supress_color else '\033[1m\033[4m'
+        postfix = '' if supress_color else '\033[0m'
+
         msg = []
         for i, action in enumerate(self._actions):
             name = self.get_action_name(action)
@@ -357,22 +357,24 @@ class Pipeline:
             for key, value in kwargs.items():
                 # Control the length of one parameter value
                 value_ = repr(value)
-                value_ = value_ if len(value_) < self.ITEM_LENGTH else '[...]'
+                value_ = value_ if len(value_) < item_length else '[...]'
                 str_kwargs += f'{key}={value_}, '
 
                 # Control the length of current line
-                if len(str_kwargs) + len(indent) > self.LINE_LENGTH:
+                if len(str_kwargs) + len(indent) > line_length:
                     lines_kwargs.append(str_kwargs[:-2])
                     str_kwargs = ''
             if str_kwargs:
                 lines_kwargs.append(str_kwargs[:-2])
             str_kwargs = f'\n{indent}'.join(lines_kwargs)
 
-            action_msg = f'#{i} {self.PREFIX}{name}\033[0m({str_kwargs})'
+            action_msg = f'#{i} {prefix}{name}{postfix}({str_kwargs})'
             msg.append(action_msg)
 
         return '\n'.join(msg)
 
+    def __str__(self):
+        return self.repr()
 
     @property
     def index(self):

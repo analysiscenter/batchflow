@@ -382,5 +382,5 @@ class Config:
         return iter(self.config)
 
     def __repr__(self):
-        lines = ['\n' + 4 * ' ' + line for line in pformat(self.config).split('\n')]
+        lines = ['\n' + 4 * ' ' + line for line in pformat(self.config, sort_dicts=False).split('\n')]
         return f"Config({''.join(lines)})"

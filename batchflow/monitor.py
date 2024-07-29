@@ -1,6 +1,7 @@
 """ Monitoring (memory usage, cpu/gpu utilization) tools. """
 import os
 import time
+from copy import copy
 from ast import literal_eval
 # from multiprocessing import Process, Manager, Queue
 from threading import Thread
@@ -71,6 +72,7 @@ class ResourceMonitor:
         if self.running:
             self.running = False
             self.thread.join()
+            self.thread = None
 
             self.data.append(self.function(**self.kwargs))
             self.ticks.append(time.time())
@@ -134,8 +136,8 @@ class ResourceMonitor:
 
 
 # General system resource monitors: don't need any extra info
-class CPUMonitor(ResourceMonitor):
-    """ Track CPU usage. """
+class TotalCPUMonitor(ResourceMonitor):
+    """ Track total CPU usage. """
     UNIT = '%'
 
     @staticmethod
@@ -144,7 +146,7 @@ class CPUMonitor(ResourceMonitor):
         _ = kwargs
         return psutil.cpu_percent()
 
-class MemoryMonitor(ResourceMonitor):
+class TotalMemoryMonitor(ResourceMonitor):
     """ Track total virtual memory usage. """
     UNIT = 'Gb'
 
@@ -154,27 +156,36 @@ class MemoryMonitor(ResourceMonitor):
         _ = kwargs
         return psutil.virtual_memory().used / (1024 **3)
 
-class DiskMemoryMonitor(ResourceMonitor):
-    """ Track total disk memory usage. """
+class TotalDiskMonitor(ResourceMonitor):
+    """ Track total disk usage. """
     UNIT = 'Gb'
 
     @staticmethod
     def get_usage(**kwargs):
-        """ Track total disk memory usage. """
+        """ Track total disk usage. """
         _ = kwargs
         return psutil.disk_usage('/').used / (1024 **3)
 
 
-# Process resource monitors: pre-initialize instance of `psutil.Process`
+# Process resource monitors: track resources of a given process
 class ProcessResourceMonitor(ResourceMonitor):
-    """ Pre-init `psutil` process.
+    """ Pre-init `psutil` Process instance for the current process or provided `pid`.
     Even though `psutil` keeps cached table of processes, it is still faster to have it in the instance itself.
     """
-    def __init__(self, function=None, frequency=0.1, **kwargs):
+    def __init__(self, function=None, frequency=0.1, pid=None, **kwargs):
         super().__init__(function=function, frequency=frequency, **kwargs)
-
-        self.kwargs['process'] = psutil.Process(os.getpid())
+        self.kwargs['process'] = psutil.Process(pid or os.getpid())
         self.kwargs['start_data'] = self.get_usage(**self.kwargs)
+
+    def __getstate__(self):
+        state = copy(self.__dict__)
+        state['kwargs']['process'] = state['kwargs']['process'].pid
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state
+        self.kwargs['process'] = psutil.Process(self.kwargs['process'])
+
 
 class DiskIOMonitor(ProcessResourceMonitor):
     """ Track disk i/o operations amount. """
@@ -190,8 +201,19 @@ class DiskIOMonitor(ProcessResourceMonitor):
 
         return value - start_data
 
+class CPUMonitor(ProcessResourceMonitor):
+    """ Track process CPU usage. """
+    UNIT = '%'
+
+    @staticmethod
+    def get_usage(process=None, **kwargs):
+        """ Track process CPU usage. """
+        _ = kwargs
+        return process.cpu_percent()
+
+
 class RSSMonitor(ProcessResourceMonitor):
-    """ Track non-swapped physical memory usage. """
+    """ Track process non-swapped physical memory usage. """
     UNIT = 'Gb'
 
     @staticmethod
@@ -201,47 +223,47 @@ class RSSMonitor(ProcessResourceMonitor):
         return process.memory_info().rss / (1024 ** 3) # gbytes
 
 class VMSMonitor(ProcessResourceMonitor):
-    """ Track current process virtual memory usage. """
+    """ Track process virtual memory usage. """
     UNIT = 'Gb'
 
     @staticmethod
     def get_usage(process=None, **kwargs):
-        """ Track current process virtual memory usage. """
+        """ Track process virtual memory usage. """
         _ = kwargs
         return process.memory_info().vms / (1024 ** 3) # gbytes
 
 class SHRMonitor(ProcessResourceMonitor):
-    """ Track current process memory, potentially shared with other processes. """
+    """ Track process memory, potentially shared with other processes. """
     UNIT = 'Gb'
 
     @staticmethod
     def get_usage(process=None, **kwargs):
-        """ Track current process unique virtual memory usage. """
+        """ Track process unique virtual memory usage. """
         _ = kwargs
         return process.memory_info().shared / (1024 ** 3) # gbytes
 
 class CodeMonitor(ProcessResourceMonitor):
-    """ Track current process memory, devoted to executable code. """
+    """ Track process memory, devoted to executable code. """
     UNIT = 'Gb'
 
     @staticmethod
     def get_usage(process=None, **kwargs):
-        """ Track current process unique virtual memory usage. """
+        """ Track process unique virtual memory usage. """
         _ = kwargs
         return process.memory_info().text / (1024 ** 3) # gbytes
 
 class DataMonitor(ProcessResourceMonitor):
-    """ Track current process memory, devoted to anything but executable code. """
+    """ Track process memory, devoted to anything but executable code. """
     UNIT = 'Gb'
 
     @staticmethod
     def get_usage(process=None, **kwargs):
-        """ Track current process unique virtual memory usage. """
+        """ Track process unique virtual memory usage. """
         _ = kwargs
         return process.memory_info().data / (1024 ** 3) # gbytes
 
 class USSMonitor(ProcessResourceMonitor):
-    """ Track current process unique virtual memory usage. """
+    """ Track process unique virtual memory usage. """
     UNIT = 'Gb'
 
     @staticmethod
@@ -249,6 +271,17 @@ class USSMonitor(ProcessResourceMonitor):
         """ Track current process unique virtual memory usage. """
         _ = kwargs
         return process.memory_full_info().uss / (1024 ** 3) # gbytes
+
+class RSSminusSHRMonitor(ProcessResourceMonitor):
+    """ Track non-swapped physical memory usage minus the memory, potentially shared with the other processes. """
+    UNIT = 'Gb'
+
+    @staticmethod
+    def get_usage(process=None, **kwargs):
+        """ Track process unique virtual memory usage. """
+        _ = kwargs
+        info = process.memory_info()
+        return (info.rss - info.shared) / (1024 ** 3) # gbytes
 
 
 # GPU monitors: require list of devices, default to `CUDA_VISIBLE_DEVICES` env variable
@@ -268,6 +301,17 @@ class GPUResourceMonitor(ResourceMonitor):
         nvidia_smi.nvmlInit()
         gpu_handles = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
         self.kwargs.update({'gpu_list': gpu_list, 'gpu_handles': gpu_handles})
+
+    def __getstate__(self):
+        state = copy(self.__dict__)
+        state['kwargs']['gpu_handles'] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state
+
+        nvidia_smi.nvmlInit()
+        self.kwargs['gpu_handles'] = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in self.kwargs['gpu_list']]
 
     def __del__(self):
         super().__del__()
@@ -309,16 +353,23 @@ class GPUMemoryMonitor(GPUResourceMonitor):
 
 
 MONITOR_ALIASES = {
-    MemoryMonitor: ['mmonitor', 'memory', 'memorymonitor'],
-    DiskMemoryMonitor: ['dmonitor', 'disk', 'diskmonitor'],
-    DiskIOMonitor: ['disk_io_monitor', 'disk_io', 'io_disk_monitor', 'io_disk'],
-    CPUMonitor: ['cmonitor', 'cpu', 'cpumonitor'],
+    # System-wide monitors
+    TotalCPUMonitor: ['total_cpu'],
+    TotalMemoryMonitor: ['total_memory', 'total_rss'],
+    TotalDiskMonitor: ['total_disk'],
+
+    # Process monitors
+    DiskIOMonitor: ['disk_io', 'io_disk'],
+    CPUMonitor: ['cpu'],
     RSSMonitor: ['rss'],
     VMSMonitor: ['vms'],
     SHRMonitor: ['shr', 'shared'],
     CodeMonitor: ['code', 'text'],
     DataMonitor: ['data'],
     USSMonitor: ['uss'],
+    RSSminusSHRMonitor: ['rss-shared', 'rss_corrected'],
+
+    # GPU monitors
     GPUMonitor: ['gpu'],
     GPUMemoryMonitor: ['gpu_memory'],
     GPUMemoryUtilizationMonitor: ['gpu_memory_utilization']
@@ -338,15 +389,24 @@ class Monitor(list):
 
         super().__init__(monitors)
 
-
-    def __enter__(self):
+    def start(self):
+        """ Start all of the monitors. """
         for monitor in self:
             monitor.start()
         return self[0] if len(self) == 1 else self
 
-    def __exit__(self, exc_type, exc_value, exc_traceback):
+    def stop(self):
+        """ Stop all of the monitors. """
         for monitor in self:
             monitor.stop()
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.stop()
+
 
     def plot(self, plotter=None, positions=None, savepath=None, **kwargs):
         """ Visualize multiple monitors in a single figure. """
