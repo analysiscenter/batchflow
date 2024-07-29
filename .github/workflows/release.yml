@@ -30,6 +30,9 @@ jobs:
 
   pypi:
     runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
 
     steps:
     - uses: actions/checkout@v3
@@ -42,11 +45,10 @@ jobs:
     - name: Install dependencies
       run: pip install --user --upgrade pip poetry
 
-    - name: Build and publish
-      env:
-        _PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+    - name: Build
       run: |
         poetry install
         poetry build
-        poetry config pypi-token.pypi $_PASSWORD
-        poetry publish
+
+    - name: Publish
+      uses: pypa/gh-action-pypi-publish@release/v1
