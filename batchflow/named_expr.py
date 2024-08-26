@@ -343,12 +343,15 @@ class AlgebraicNamedExpression(NamedExpression):
             a = eval_expr(self.a, _call=False, **kwargs)
         else:
             a = eval_expr(self.a, **kwargs)
-        b = eval_expr(self.b, **kwargs)
-        c = eval_expr(self.c, **kwargs)
+
         if self.op in UNARY_OPS:
             return OPERATIONS[self.op](a)
+
+        b = eval_expr(self.b, **kwargs)
         if self.op in BINARY_OPS:
             return OPERATIONS[self.op](a, b)
+
+        c = eval_expr(self.c, **kwargs)
         return OPERATIONS[self.op](a, b, c)
 
     def assign(self, value, **kwargs):
@@ -399,6 +402,58 @@ class AlgebraicNamedExpression(NamedExpression):
             return repr(self.a) + '(' + args + ')'
 
         return 'Unknown expression'
+
+
+class IF(NamedExpression):
+    """ Select either ``true`` or ``false``, based on ``condition``.
+    Useful for simple variables that change along the run of a pipeline.
+
+    Examples
+    --------
+    Select model mode based on the current pipeline iteration::
+        mode = IF(condition=I.current<450, true='train', false='eval')
+
+    Train the last 20% with larger batch size::
+        batch_size = IF(condition=I.ratio > 0.8, true=256, false=128)
+
+    Notes
+    -----
+    An alternative to this named expression is to use ``F``::
+        def select_batch_size(ratio):
+            return 256 if ratio > 0.8 else 128
+
+        batch_size = F(select_batch_size)(ratio=I.ratio)
+
+    Or, with a lambda::
+        batch_size = F(lambda ratio: 256 if ratio > 0.8 else 128)(ratio=I.ratio)
+
+    ``F`` is recommended where more flexibility is needed, and ``IF`` can be used for simple binary choices.
+    """
+    def __init__(self, condition, true, false, mode='w', **kwargs):
+        super().__init__('#!__if__', mode=mode, **kwargs)
+        self.condition = condition
+        self.true = true
+        self.false = false
+
+    def get(self, **kwargs):
+        """ Select based on condition. """
+        condition = eval_expr(self.condition, **kwargs)
+
+        if bool(condition):
+            return eval_expr(self.true, **kwargs)
+        return eval_expr(self.false, **kwargs)
+
+
+    def assign(self, value, **kwargs):
+        """ Assign a value to a named expression, based on condition. """
+        _, kwargs = self._get_params(**kwargs)
+
+        condition = eval_expr(self.condition, **kwargs)
+
+        if bool(condition):
+            self.true.assign(value, **kwargs)
+        else:
+            self.false.assign(value, **kwargs)
 
 
 class B(NamedExpression):

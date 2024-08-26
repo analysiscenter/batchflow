@@ -93,6 +93,7 @@ class Notifier:
         If str, then either registered monitor identifiers or names of pipeline variables.
         Named expressions are evaluated with the pipeline.
         If callable, then it is used to retrieve the container with data.
+        Should accept variable named arguments in the signature and may return ``None`` value to disable its plotting.
         If sequence, then it is used as the container with data.
         If dict, then 'source' key should be one of the above to identify container.
         Other available keys:
@@ -181,7 +182,7 @@ class Notifier:
                 elif isinstance(source, str):
                     container['name'] = source
                 elif callable(source):
-                    container['name'] = '<unknown_callable>'
+                    container['name'] = source.__name__
                 else:
                     container['name'] = '<unknown_container>'
 
@@ -364,7 +365,7 @@ class Notifier:
                 container['data'] = value
 
             elif callable(source):
-                container['data'] = source()
+                container['data'] = source(container=container, notifier=self, pipeline=pipeline, batch=batch)
 
             else:
                 raise TypeError(f'Unknown type of `source`, {type(source)}!')
@@ -382,7 +383,7 @@ class Notifier:
         """ Make canvas for plotting graphs. """
         from .plotter import plot
         if num_graphs is None:
-            num_graphs = len(self.data_containers)
+            num_graphs = sum(container['data'] is not None for container in self.data_containers)
 
         if ncols is None and nrows is None:
             if layout in ['h', 'horizontal']:
@@ -430,7 +431,8 @@ class Notifier:
             self.plotter.config['suptitle'] = self.bar.format_meter(**fmt)
             self.plotter.annotate()
 
-        for i, container in enumerate(self.data_containers):
+        data_containers = [container for container in self.data_containers if container['data'] is not None]
+        for i, container in enumerate(data_containers):
             if i >= index:
                 subplot_index = i - index
                 subplot_config = plot_config.maybe_index(subplot_index)
@@ -461,7 +463,7 @@ class Notifier:
         plot_config = container.get('plot_config', {})
         plot_config = {**plot_config, **kwargs}
 
-        x = np.arange(len(data))
+        x = np.arange(len(data)) if hasattr(data, '__len__') else None
         y = data
         if self.slice not in [None, slice(None)]:
             x = np.array(x)[self.slice]
@@ -471,6 +473,8 @@ class Notifier:
             plot_function(ax=subplot.ax, index=index, x=x, y=y, container=container, notifier=self, **plot_config)
         elif isinstance(source, ResourceMonitor):
             source.plot(plotter=self.plotter, positions=index, **plot_config)
+        elif data is None:
+            pass
         else:
             source_defaults = {'title': name}
             if isinstance(data, (tuple, list)) or (isinstance(data, np.ndarray) and data.ndim == 1):
