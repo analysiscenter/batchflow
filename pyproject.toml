@@ -73,7 +73,7 @@ urllib3 = { version = "^1.25", optional = true }
 
 [tool.poetry.extras]
 image = ["pillow", "matplotlib"]
-nn = ["torch", "torchvision", "einops", "ptflops", "nvidia_smi", "psutil"]
+nn = ["torch", "torchvision", "einops", "ptflops", "psutil"]
 datasets = ["requests"]
 profile = ["pandas", "psutil", "nvidia_smi", "matplotlib"]
 jupyter = ["requests", "ipykernel", "ipython", "notebook", "nbconvert", "nbformat", "jupyter_client", "jupyter_server", "matplotlib"]
