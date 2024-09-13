@@ -189,7 +189,7 @@ class DirDiskMonitor(ResourceMonitor):
     @staticmethod
     def get_usage(**kwargs):
         """ Track disk usage in the provided dir. """
-        dir_path = kwargs.get('track_dir_path', None)
+        dir_path = kwargs.get('dir_path', None)
 
         if dir_path is None:
             return None
