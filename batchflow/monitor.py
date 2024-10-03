@@ -166,6 +166,36 @@ class TotalDiskMonitor(ResourceMonitor):
         _ = kwargs
         return psutil.disk_usage('/').used / (1024 **3)
 
+class DirDiskMonitor(ResourceMonitor):
+    """ Track disk usage in the provided dir. """
+    UNIT = 'Mb'
+
+    @staticmethod
+    def get_size(path):
+        """ Get disk usage in the directory.
+
+        Under the hood, we recursively evaluate filesizes in all nested directories.
+        """
+        size = 0
+
+        for dir_or_file in os.scandir(path):
+            if os.path.isfile(dir_or_file):
+                size += os.path.getsize(dir_or_file)
+            else:
+                size += DirDiskMonitor.get_size(dir_or_file)
+
+        return size
+
+    @staticmethod
+    def get_usage(**kwargs):
+        """ Track disk usage in the provided dir. """
+        dir_path = kwargs.get('dir_path', None)
+
+        if dir_path is None:
+            return None
+
+        return DirDiskMonitor.get_size(path=dir_path) / (1024 **2)
+
 
 # Process resource monitors: track resources of a given process
 class ProcessResourceMonitor(ResourceMonitor):
@@ -356,6 +386,7 @@ MONITOR_ALIASES = {
     # System-wide monitors
     TotalCPUMonitor: ['total_cpu'],
     TotalMemoryMonitor: ['total_memory', 'total_rss'],
+    DirDiskMonitor: ['dir_disk'],
     TotalDiskMonitor: ['total_disk'],
 
     # Process monitors

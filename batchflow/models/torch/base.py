@@ -16,6 +16,7 @@ import torch
 from torch import nn
 from torch.optim.swa_utils import AveragedModel, SWALR
 
+
 from sklearn.decomposition import PCA
 
 from ...utils_import import make_delayed_import
@@ -417,6 +418,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.model = None
         self._model_cpu_backup = None
         self._loaded_from_onnx = None
+        self._loaded_from_openvino = None
 
         # Leading device and list of all devices to use
         self.device = None
@@ -986,9 +988,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         model = model if model is not None else self.model
 
         if len(self.devices) > 1:
-            self.model = nn.DataParallel(self.model, self.devices)
+            model = nn.DataParallel(model, self.devices)
         else:
-            self.model.to(self.device)
+            model = model.to(self.device)
 
 
     # Apply model to train/predict on given data
@@ -1379,7 +1381,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         >>> batchflow_model.predict(inputs=B.images, outputs='model.body.encoder["block-0"]')
         """
-        if self._loaded_from_onnx:
+        if self._loaded_from_onnx or self._loaded_from_openvino:
             microbatch_size = self.microbatch_size
             microbatch_pad_last = True
 
@@ -1665,8 +1667,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Store model
-    def save(self, path, use_onnx=False, path_onnx=None, batch_size=None, opset_version=13,
-             pickle_module=dill, **kwargs):
+    def save(self, path, use_onnx=False, path_onnx=None, use_openvino=False, path_openvino=None,
+             batch_size=None, opset_version=13, pickle_module=dill, **kwargs):
         """ Save underlying PyTorch model along with meta parameters (config, device spec, etc).
 
         If `use_onnx` is set to True, then the model is converted to ONNX format and stored in a separate file.
@@ -1682,7 +1684,13 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             Whether to store model in ONNX format.
         path_onnx : str, optional
             Used only if `use_onnx` is True.
-            If provided, then path to store the ONNX model; default `path_onnx` is `path` with added '_onnx' postfix.
+            If provided, then path to store the ONNX model; default `path_onnx` is `path` with '_onnx' postfix.
+        use_openvino: bool
+            Whether to store model as openvino xml file.
+        path_openvino : str, optional
+            Used only if `use_openvino` is True.
+            If provided, then path to store the openvino model; default `path_openvino` is `path` with '_openvino'
+            postfix.
         batch_size : int, optional
             Used only if `use_onnx` is True.
             Fixed batch size of the ONNX module. This is the only viable batch size for this model after loading.
@@ -1715,6 +1723,29 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             preserved_dict = {item: getattr(self, item) for item in preserved}
             torch.save({'onnx': True, 'path_onnx': path_onnx, 'onnx_batch_size': batch_size, **preserved_dict},
                        path, pickle_module=pickle_module, **kwargs)
+
+        elif use_openvino:
+            import openvino as ov
+
+            path_openvino = path_openvino or (path + '_openvino')
+            if os.path.splitext(path_openvino)[-1] == '':
+                path_openvino = f'{path_openvino}.xml'
+
+            # Save model
+            model = self.model.eval()
+
+            if not isinstance(self.model, ov.Model):
+                inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
+                model = ov.convert_model(model, example_input=inputs)
+
+            ov.save_model(model, output_model=path_openvino)
+
+            # Save the rest of parameters
+            preserved = set(self.PRESERVE) - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
+            preserved_dict = {item: getattr(self, item) for item in preserved}
+            torch.save({'openvino': True, 'path_openvino': path_openvino, **preserved_dict},
+                       path, pickle_module=pickle_module, **kwargs)
+
         else:
             torch.save({item: getattr(self, item) for item in self.PRESERVE},
                        path, pickle_module=pickle_module, **kwargs)
@@ -1729,19 +1760,28 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         ----------
         file : str, PathLike, io.Bytes
             a file where a model is stored.
-        eval_mode : bool
-            Whether to switch the model to eval mode.
         make_infrastructure : bool
             Whether to re-create model loss, optimizer, scaler and decay.
+        mode : str
+            Model mode.
         pickle_module : module
             Module to use for pickling.
         kwargs : dict
             Other keyword arguments, passed directly to :func:`torch.save`.
         """
-        self._parse_devices()
-        if self.device:
-            kwargs['map_location'] = self.device
-        kwargs['map_location'] = 'cpu'
+        model_load_kwargs = kwargs.pop('model_load_kwargs', {})
+
+        device = kwargs.pop('device', None)
+
+        if device is not None:
+            self.device = device
+
+            if (self.device == 'cpu') or ((not isinstance(self.device, str)) and (self.device.type == 'cpu')):
+                self.amp = False
+        else:
+            self._parse_devices()
+
+        kwargs['map_location'] = self.device
 
         # Load items from disk storage and set them as insance attributes
         checkpoint = torch.load(file, pickle_module=pickle_module, **kwargs)
@@ -1754,24 +1794,34 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             setattr(self, key, value)
         self.config = self.config + load_config
 
-        # Load model from onnx, if needed
-        if 'onnx' in checkpoint:
-            try:
-                from onnx2torch import convert #pylint: disable=import-outside-toplevel
-            except ImportError as e:
-                raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
-
-            model = convert(checkpoint['path_onnx']).eval()
+        if 'openvino' in checkpoint:
+            # Load openvino model
+            model = OVModel(model_path=checkpoint['path_openvino'], **model_load_kwargs)
             self.model = model
-            self.microbatch_size = checkpoint['onnx_batch_size']
-            self._loaded_from_onnx = True
+
+            self._loaded_from_openvino = True
             self.disable_training = True
 
-        self.model_to_device()
-        if make_infrastructure:
-            self.make_infrastructure()
+        else:
+            # Load model from onnx, if needed
+            if 'onnx' in checkpoint:
+                try:
+                    from onnx2torch import convert #pylint: disable=import-outside-toplevel
+                except ImportError as e:
+                    raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
 
-        self.set_model_mode(mode)
+                model = convert(checkpoint['path_onnx']).eval()
+                self.model = model
+                self.microbatch_size = checkpoint['onnx_batch_size']
+                self._loaded_from_onnx = True
+                self.disable_training = True
+
+            self.model_to_device()
+
+            if make_infrastructure:
+                self.make_infrastructure()
+
+            self.set_model_mode(mode)
 
 
     # Utilities to use when working with TorchModel
@@ -1914,8 +1964,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         """
         array = array.transpose(0, 2, 3, 1)
         pca_instance = PCA(n_components=n_components)
-
-        compressed_array= pca_instance.fit_transform(array.reshape(-1, array.shape[-1]))
+        compressed_array = pca_instance.fit_transform(array.reshape(-1, array.shape[-1]))
         compressed_array = compressed_array.reshape(*array.shape[:3], n_components)
         if normalize:
             normalizer = Normalizer(mode='minmax')
@@ -1924,3 +1973,50 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         explained_variance_ratio = pca_instance.explained_variance_ratio_
 
         return compressed_array, explained_variance_ratio
+
+class OVModel:
+    """ Class-wrapper for openvino models to interact with them through :class:`~.TorchModel` interface.
+
+    Note, openvino models are loaded on 'cpu' only.
+
+    Parameters
+    ----------
+    model_path : str
+        Path to compiled openvino model.
+    core_config : tuple or dict, optional
+        Openvino core properties.
+        If you want set properties globally provide them as tuple: `('CPU', {name: value})`.
+        For local properties just provide `{name: value}` dict.
+        For more, read the documentation:
+        https://docs.openvino.ai/2023.3/openvino_docs_OV_UG_query_api.html#setting-properties-globally
+    compile_config : dict, optional
+        Openvino model compilation config.
+    """
+    def __init__(self, model_path, core_config=None, compile_config=None):
+        import openvino as ov
+
+        core = ov.Core()
+
+        if core_config is not None:
+            if isinstance(core_config, tuple):
+                core.set_property(core_config[0], core_config[1])
+            else:
+                core.set_property(core_config)
+
+        self.model = core.read_model(model=model_path)
+
+        if compile_config is None:
+            compile_config = {}
+
+        self.model = core.compile_model(self.model, 'CPU', config=compile_config)
+
+    def eval(self):
+        """ Placeholder for compatibility with :class:`~TorchModel` methods."""
+        pass
+
+    def __call__(self, input_tensor):
+        """ Evaluate model on the provided data. """
+        results = self.model(input_tensor)
+
+        results = torch.from_numpy(results[self.model.output(0)])
+        return results
