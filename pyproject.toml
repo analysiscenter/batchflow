@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "batchflow"
-version = "0.8.8"
+version = "0.8.10"
 description = "ML pipelines, model configuration and batch management"
 authors = ["Roman Kh <rhudor@gmail.com>"]
 license = "Apache License 2.0"
