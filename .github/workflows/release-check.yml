@@ -27,7 +27,6 @@ jobs:
 
     - name: Build
       run: |
-        poetry lock --no-update
         poetry install
         poetry build
 
