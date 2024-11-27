@@ -350,7 +350,7 @@ class ImagesBatch(BaseImagesBatch):
         return np.asarray(origin, dtype=np.int64)
 
     @apply_parallel
-    def scale(self, image, factor, preserve_shape=False, origin='center', resample=0):
+    def scale(self, image, factor, preserve_shape=False, origin='center', resample=0, src=None, dst=None):
         """ Scale the content of each image in the batch.
 
         Resulting shape is obtained as original_shape * factor.
@@ -409,6 +409,8 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
+        _ = src, dst
+
         original_shape = self._get_image_shape(image)
         rescaled_shape = list(np.int32(np.ceil(np.asarray(original_shape)*factor)))
         rescaled_image = image.resize(rescaled_shape, resample=resample)
