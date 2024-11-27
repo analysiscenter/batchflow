@@ -409,6 +409,8 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
+        _ = src, dst
+
         original_shape = self._get_image_shape(image)
         rescaled_shape = list(np.int32(np.ceil(np.asarray(original_shape)*factor)))
         rescaled_image = image.resize(rescaled_shape, resample=resample)
