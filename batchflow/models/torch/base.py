@@ -1724,7 +1724,6 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
             path_onnx = path_onnx or (path + '_onnx')
             torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
-
             # Save the rest of parameters
             preserved = set(self.PRESERVE) - set(ignore_attributes) - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
             preserved_dict = {item: getattr(self, item) for item in preserved}
@@ -1755,7 +1754,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         else:
             preserved = set(self.PRESERVE) - set(ignore_attributes)
-            torch.save({item: getattr(self, item) for item in self.PRESERVE},
+            torch.save({item: getattr(self, item) for item in preserved},
                        path, pickle_module=pickle_module, **kwargs)
 
     def load(self, file, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
