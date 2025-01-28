@@ -1755,7 +1755,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         else:
             preserved = set(self.PRESERVE) - set(ignore_attributes)
-            torch.save({item: getattr(self, item) for item in self.PRESERVE},
+            torch.save({item: getattr(self, item) for item in preserved},
                        path, pickle_module=pickle_module, **kwargs)
 
     def load(self, file, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
