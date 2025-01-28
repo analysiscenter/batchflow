@@ -1726,7 +1726,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
 
             # Save the rest of parameters
-            preserved = set(self.PRESERVE) - set(ignore_attributes) - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
+            ignore_attributes = set(ignore_attributes) + set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
+            preserved = set(self.PRESERVE) - ignore_attributes
+
             preserved_dict = {item: getattr(self, item) for item in preserved}
             torch.save({'onnx': True, 'path_onnx': path_onnx, 'onnx_batch_size': batch_size, **preserved_dict},
                        path, pickle_module=pickle_module, **kwargs)
@@ -1748,7 +1750,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             ov.save_model(model, output_model=path_openvino)
 
             # Save the rest of parameters
-            preserved = set(self.PRESERVE) - set(ignore_attributes) - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
+            ignore_attributes = set(ignore_attributes) + set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
+            preserved = set(self.PRESERVE) - ignore_attributes
             preserved_dict = {item: getattr(self, item) for item in preserved}
             torch.save({'openvino': True, 'path_openvino': path_openvino, **preserved_dict},
                        path, pickle_module=pickle_module, **kwargs)
