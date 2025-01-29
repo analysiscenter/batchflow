@@ -1702,7 +1702,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             Version of export standard to use.
         pickle_module : module
             Module to use for pickling.
-        ignore_attributes : str ot list, optional
+        ignore_attributes : str or iterable, optional
             List of attributes to ignore when pickling (e.g. 'optimizer')
         kwargs : dict
             Other keyword arguments, passed directly to :func:`torch.save`.
