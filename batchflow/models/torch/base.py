@@ -389,7 +389,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         'microbatch_size': 16,                                     # size of microbatches at training
     }
     """
-    PRESERVE = [
+    PRESERVE = set([
         'full_config', 'config', 'model',
         'inputs_shapes', 'targets_shapes', 'classes',
         'loss', 'optimizer', 'scaler', 'decay', 'decay_step',
@@ -397,7 +397,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         'iteration', 'last_train_info', 'last_predict_info',
         'lr_list', 'syncs', 'decay_iters',
         '_loss_list', 'loss_list', 'operations'
-    ]
+    ])
+
+    PRESERVE_ONNX = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
+    PRESERVE_OPENVINO = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
 
     def __init__(self, config=None):
         if not isinstance(config, (dict, Config)):
@@ -1716,6 +1719,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             ignore_attributes = [ignore_attributes]
         elif ignore_attributes is None:
             ignore_attributes = []
+        ignore_attributes = set(ignore_attributes)
 
         if use_onnx:
             if batch_size is None:
@@ -1726,8 +1730,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
 
             # Save the rest of parameters
-            ignore_attributes = set(ignore_attributes) + set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
-            preserved = set(self.PRESERVE) - ignore_attributes
+            preserved = self.PRESERVE_ONNX - ignore_attributes
 
             preserved_dict = {item: getattr(self, item) for item in preserved}
             torch.save({'onnx': True, 'path_onnx': path_onnx, 'onnx_batch_size': batch_size, **preserved_dict},
@@ -1750,8 +1753,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             ov.save_model(model, output_model=path_openvino)
 
             # Save the rest of parameters
-            ignore_attributes = set(ignore_attributes) + set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
-            preserved = set(self.PRESERVE) - ignore_attributes
+            preserved = self.PRESERVE_OPENVINO - ignore_attributes
             preserved_dict = {item: getattr(self, item) for item in preserved}
             torch.save({'openvino': True, 'path_openvino': path_openvino, **preserved_dict},
                        path, pickle_module=pickle_module, **kwargs)
