@@ -1209,7 +1209,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         targets = self.transfer_to_device(targets, non_blocking=True)
 
         # Compute predictions; store shapes for introspection
-        with torch.cuda.amp.autocast(enabled=self.amp):
+        with torch.amp.autocast('cuda', enabled=self.amp):
             predictions = self.model(inputs)
 
         # SAM: store grads from previous microbatches
@@ -1217,7 +1217,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self._train_sam_store_gradients()
 
         # Compute loss and gradients; store loss value for every microbatch
-        with torch.cuda.amp.autocast(enabled=self.amp):
+        with torch.amp.autocast('cuda', enabled=self.amp):
             loss = self.loss(predictions, targets)
             loss_ = loss / sync_frequency
 
@@ -1308,7 +1308,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         params_with_grads = [p + eps for p, eps in zip(params_with_grads, epsilons)]
 
         # Compute new gradients: direction to move to minimize the local maxima
-        with torch.cuda.amp.autocast(enabled=self.amp):
+        with torch.amp.autocast('cuda', enabled=self.amp):
             predictions_inner = self.model(inputs)
             loss_inner = self.loss(predictions_inner, targets) / sync_frequency
         (self.scaler.scale(loss_inner) if self.amp else loss_inner).backward()
@@ -1464,7 +1464,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
         targets = targets[0] if len(targets) == 1 and isinstance(targets, list) else targets
 
-        with (torch.no_grad() if no_grad else nullcontext()), torch.cuda.amp.autocast(enabled=amp):
+        with (torch.no_grad() if no_grad else nullcontext()), torch.amp.autocast('cuda', enabled=amp):
             inputs = self.transfer_to_device(inputs)
             predictions = self.model(inputs)
 
