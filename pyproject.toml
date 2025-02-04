@@ -67,6 +67,7 @@ other = [
 [dependency-groups]
 dev = [
     'ruff',
+    'pytest >=5.3.1',
 ]
 
 #--------------------------------
