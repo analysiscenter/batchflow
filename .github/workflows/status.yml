@@ -18,6 +18,7 @@ jobs:
       run: |
         pip install uv
         uv sync --group dev
+        uv run pip install .[nn]
 
     - name: Linting
       run: uv run ruff check batchflow
