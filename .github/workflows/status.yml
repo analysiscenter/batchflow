@@ -25,4 +25,4 @@ jobs:
     - name: Run tests
       if: always()
       run:
-        pytest -m "not slow" --disable-pytest-warnings -v
+        uv run pytest -m "not slow" --disable-pytest-warnings -v
