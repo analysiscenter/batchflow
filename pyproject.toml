@@ -44,7 +44,7 @@ py-nbtools = { version = "*", optional = true }
 
 # [tool.poetry.group.monitor.dependencies]
 psutil = { version = "*", optional = true }
-nvidia_smi = { version = "*", optional = true }
+pynvml = { version = "*", optional = true }
 
 # [tool.poetry.group.nn.dependencies]
 torch = { version = ">=1.13", optional = true }
