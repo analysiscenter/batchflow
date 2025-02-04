@@ -1,5 +1,7 @@
 """ Contains Imagenette and Imagewoof datasets """
 
+# ruff: noqa: N801
+
 import os
 from os.path import dirname, basename
 import tempfile

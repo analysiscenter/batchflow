@@ -151,4 +151,3 @@ class RegressionMetrics(Metrics):
             The maximum difference between pred and true values to classify sample as correct.
          """
         return (np.abs(self.predictions - self.targets) < gap).sum(axis=0) / self.targets.shape[0]
-    

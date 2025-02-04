@@ -1,9 +1,11 @@
 """ Hamburger layer.
 Zhengyang Geng et al. "`Is attention better than matrix decomposition? <https://arxiv.org/abs/2109.04553>`_"
 """
+# ruff: noqa: N803, N806
+
 import torch
 from torch import nn
-import torch.nn.functional as F
+import torch.nn.functional as F # noqa: N812
 
 
 

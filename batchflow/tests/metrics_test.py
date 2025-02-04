@@ -11,7 +11,9 @@ Structurally, file consists of four classes, which respectively check:
 Test data is pre-defined, it's shape and contents were chosen for reasons
 of balance between visual simplicity and test coverage diversity.
 """
-# pylint: disable=import-error, no-name-in-module, invalid-name, protected-access
+
+# ruff : noqa : E741, N803
+
 import numpy as np
 import pytest
 

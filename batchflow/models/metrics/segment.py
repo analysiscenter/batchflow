@@ -1,4 +1,6 @@
 """ Contains metrics for segmentation """
+# ruff : noqa : E741
+
 import numpy as np
 
 from . import ClassificationMetrics, get_components

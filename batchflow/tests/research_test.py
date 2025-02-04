@@ -3,14 +3,14 @@
 import os
 import sys
 import glob
-from contextlib import ExitStack as does_not_raise
+from contextlib import ExitStack as does_not_raise # noqa: N813
 import pytest
 import psutil
 
 import numpy as np
 
 from batchflow import Dataset, Pipeline, B, V, C
-from batchflow import NumpySampler as NS
+from batchflow import NumpySampler as NS # noqa: N817
 from batchflow.models.torch import ResNet
 from batchflow.opensets import CIFAR10
 from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, S, ResearchResults, Alias
@@ -100,8 +100,8 @@ class TestDomain:
     @pytest.mark.parametrize('b', [[2, 3, 4]])
     @pytest.mark.parametrize('n_reps', [1, 2])
     def test_operations(self, op, a, b, n_reps):
-        option_1 = Domain({'a': a}) #pylint:disable=unused-variable
-        option_2 = Domain(b=b) #pylint:disable=unused-variable
+        option_1 = Domain({'a': a}) # noqa: F841
+        option_2 = Domain(b=b) # noqa: F841
 
         if not (op == '@' and len(a) != len(b)):
             domain = eval(f'option_1 {op} option_2') # pylint:disable=eval-used

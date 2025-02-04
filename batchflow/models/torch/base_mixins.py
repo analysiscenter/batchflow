@@ -192,7 +192,7 @@ class VisualizationMixin:
 
         if overlay_lr:
             data = (self.loss_list[slc],
-                    [l[0] for l in self.lr_list][slc])
+                    [lr[0] for lr in self.lr_list][slc])
         else:
             data = (self.loss_list[slc], None)
 

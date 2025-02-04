@@ -687,7 +687,7 @@ class M(PipelineNamedExpression):
         raise ValueError('Assigning a value to a model is not possible.')
 
 
-class I(PipelineNamedExpression):
+class I(PipelineNamedExpression): # noqa : E741
     """ Iteration counter
 
     Parameters

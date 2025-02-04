@@ -6,7 +6,7 @@ Heavily based on author's implementation: https://github.com/bermanmaxim/LovaszS
 """
 import torch
 from torch import nn
-import torch.nn.functional as F
+import torch.nn.functional as F # noqa: N812
 from torch.autograd import Variable
 
 
@@ -97,7 +97,7 @@ class LovaszLoss(nn.Module):
             probas = probas.unsqueeze(1)
 
         # Flatten
-        C = probas.size(1)
+        C = probas.size(1) # noqa: N806
         probas = probas.permute(0, 2, 3, 1).contiguous().view(-1, C)  # B * H * W, C
         labels = labels.view(-1) # => B * H * W
 
@@ -114,7 +114,7 @@ class LovaszLoss(nn.Module):
             # only void pixels, the gradients should be 0
             return probas * 0.0
 
-        C = probas.size(1)
+        C = probas.size(1) # noqa: N806
 
         per_class_losses = []
         for c in range(C):

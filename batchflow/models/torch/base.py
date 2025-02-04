@@ -1588,7 +1588,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     def compute_outputs(self, predictions, outputs_dict, loss=None):
-        """ Produce additional outputs, defined in the outputs parameter of `train` 
+        """ Produce additional outputs, defined in the outputs parameter of `train`
         or `predict` functions from predictions.
         """
         result = OrderedDict()

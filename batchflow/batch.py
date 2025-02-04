@@ -36,12 +36,12 @@ class MethodsTransformingMeta(type):
            is necessary in order to allow inner calls of untransformed versions
            (e.g. `ImagesBatch.scale` calls `ImagesBatch.crop` under the hood).
     """
-    def __new__(mcs, name, bases, namespace):
+    def __new__(cls, name, bases, namespace):
         namespace_ = namespace.copy()
         for object_name, object_ in namespace.items():
             transform_kwargs = getattr(object_, 'apply_kwargs', None)
             if transform_kwargs is not None:
-                namespace_[object_name] = mcs.use_apply_parallel(object_, **transform_kwargs)
+                namespace_[object_name] = cls.use_apply_parallel(object_, **transform_kwargs)
 
                 disclaimer = f"This is an untransformed version of `{object_.__qualname__}`.\n\n"
                 object_.__doc__ = disclaimer + (object_.__doc__ or '')
@@ -49,10 +49,10 @@ class MethodsTransformingMeta(type):
                 object_.__qualname__ = '.'.join(object_.__qualname__.split('.')[:-1] + [object_.__name__])
                 namespace_[object_.__name__] = object_
 
-        return super().__new__(mcs, name, bases, namespace_)
+        return super().__new__(cls, name, bases, namespace_)
 
     @classmethod
-    def use_apply_parallel(mcs, method, **apply_kwargs):
+    def use_apply_parallel(cls, method, **apply_kwargs):
         """ Wrap passed `method` in accordance with `all` arg value """
         @functools.wraps(method)
         def apply_parallel_wrapper(self, *args, **kwargs):

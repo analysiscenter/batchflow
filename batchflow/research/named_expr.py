@@ -71,7 +71,7 @@ class EC(E):
             return config
         return {key: config[key] for key in config if key not in ['device', 'repetition', 'updates']}
 
-class O(E):
+class O(E):  # noqa : E741
     """ NamedExpression for ExecutableUnit output.
 
     Parameters

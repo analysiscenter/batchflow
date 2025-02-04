@@ -6,7 +6,7 @@ from math import exp
 
 import torch
 from torch import nn
-import torch.nn.functional as F
+import torch.nn.functional as F # noqa: N812
 
 # pylint: disable=not-callable
 # By some reason pylint think that F.conv2d is not callable

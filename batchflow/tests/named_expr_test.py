@@ -1,6 +1,6 @@
 # pylint: disable=redefined-outer-name, missing-docstring
 import sys
-from contextlib import ExitStack as does_not_raise
+from contextlib import ExitStack as does_not_raise  # noqa: N813
 
 import pytest
 import numpy as np

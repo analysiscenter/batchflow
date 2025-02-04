@@ -1,0 +1,9 @@
+line-length = 120
+
+[lint]
+select = ["F", "E", "W", "N", "RET"] # "D", "NPY"
+ignore = ["E402", "E731", "F403", "F405", "D105", "D107", "D205", "D203", "D213", "D400", "D401", "D415", "D417", "RET504", "NPY002"]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"utils_notebook.py" = ["F401"]

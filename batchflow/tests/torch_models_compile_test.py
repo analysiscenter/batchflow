@@ -7,7 +7,7 @@ from batchflow.models.torch import ResNet18, ResNet34, ResNet50, ResNet101, ResN
                                    ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152, \
                                    SEResNet18, SEResNet34, SEResNet50, SEResNet101, SEResNet152, \
                                    SEResNeXt18, SEResNeXt34, SEResNeXt50, SEResNeXt101, SEResNeXt152
-from batchflow.models.torch import DenseNet121, DenseNet169, DenseNet201, DenseNet264
+from batchflow.models.torch import DenseNet121
 
 from batchflow.models.torch import UNet, ResUNet, DenseUNet
 

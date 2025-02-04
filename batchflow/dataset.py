@@ -282,7 +282,7 @@ class Dataset(Baseset):
             raise ValueError(f"The dataset has been split into fewer splits than {n}")
         return  getattr(self, 'cv' + str(n))
 
-    def CV(self, expr):
+    def CV(self, expr): # noqa: N802
         """ Return a dataset which corresponds to the fold defined as NamedExpression """
         return  F(self.cv)(expr)
 

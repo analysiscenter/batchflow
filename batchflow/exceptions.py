@@ -1,7 +1,7 @@
 """ Contains specific Exceptions """
 
 
-class BatchFlowException(Exception):
+class BatchFlowException(Exception): # noqa: N818
     """ Base exception class """
 
 class SkipBatchException(BatchFlowException):

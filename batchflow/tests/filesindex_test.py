@@ -5,7 +5,7 @@
 import os
 import shutil
 
-from contextlib import ExitStack as does_not_raise
+from contextlib import ExitStack as does_not_raise  # noqa: N813
 
 import pytest
 import numpy as np
