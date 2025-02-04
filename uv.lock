@@ -178,6 +178,7 @@ research = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "pytest" },
     { name = "ruff" },
 ]
 
@@ -215,7 +216,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "ruff" }]
+dev = [
+    { name = "pytest", specifier = ">=5.3.1" },
+    { name = "ruff" },
+]
 
 [[package]]
 name = "beautifulsoup4"
