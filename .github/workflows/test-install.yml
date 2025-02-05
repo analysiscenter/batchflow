@@ -145,7 +145,7 @@ jobs:
 # -----------------------------------------
 #    Install with uv
 # -----------------------------------------
-  install_with_poetry:
+  install_with_uv:
 
     strategy:
       fail-fast: false
