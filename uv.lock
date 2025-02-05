@@ -197,7 +197,7 @@ requires-dist = [
     { name = "pillow", marker = "extra == 'image'", specifier = ">=9.4,<11.0" },
     { name = "psutil", marker = "extra == 'monitor'" },
     { name = "ptflops", marker = "extra == 'nn'", specifier = ">=0.6" },
-    { name = "py-nbtools", marker = "extra == 'research'" },
+    { name = "py-nbtools", marker = "extra == 'research'", specifier = ">=0.9.14" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=2.16" },
     { name = "pynvml", marker = "extra == 'monitor'" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },

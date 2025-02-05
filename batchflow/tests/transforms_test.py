@@ -122,7 +122,8 @@ class TestQuantizer:
 
         quantizer = Quantizer(ranges=ranges, clip=clip, dtype=dtype)
 
-        assert quantizer.quantize(np.array([0], dtype='float32')) == [np.iinfo(dtype).max - (np.iinfo(dtype).max - np.iinfo(dtype).min) // 2]
+        array = np.array([0], dtype='float32')
+        assert quantizer.quantize(array) == [np.iinfo(dtype).max - (np.iinfo(dtype).max - np.iinfo(dtype).min) // 2]
 
     @pytest.mark.parametrize('clip', [False, True])
     @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.uint8, np.uint16])
@@ -131,4 +132,5 @@ class TestQuantizer:
 
         quantizer = Quantizer(ranges=ranges, clip=clip, dtype=dtype)
 
-        assert (quantizer.quantize(np.array([ranges[0]-1, ranges[1]+1])) == [np.iinfo(dtype).min+clip, np.iinfo(dtype).max]).all()
+        array = np.array([ranges[0]-1, ranges[1]+1])
+        assert (quantizer.quantize(array) == [np.iinfo(dtype).min+clip, np.iinfo(dtype).max]).all()
