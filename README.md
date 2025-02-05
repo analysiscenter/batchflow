@@ -101,20 +101,20 @@ pip3 install batchflow
 
 With [uv](https://docs.astral.sh/uv/)
 ```
-git clone --branch packages https://github.com/analysiscenter/batchflow
+git clone --branch my_branch https://github.com/analysiscenter/batchflow
 uv add --editable ./batchflow
 ```
 
-You also can use any other branch instad of `master`
+You can skip `--branch` if you need `master`.
 
 With [poetry](https://python-poetry.org/)
 ```
-poetry add --editable git+https://github.com/analysiscenter/batchflow#master
+poetry add --editable git+https://github.com/analysiscenter/batchflow#my_branch
 ```
 
 With old-fashioned [pip](https://pip.pypa.io/en/stable/)
 ```
-git clone --branch packages https://github.com/analysiscenter/batchflow
+git clone --branch my_branch https://github.com/analysiscenter/batchflow
 pip install --editable ./batchflow
 ```
 
