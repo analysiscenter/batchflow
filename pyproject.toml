@@ -16,6 +16,9 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Topic :: Scientific/Engineering"
 ]
+
+requires-python = ">=3.9"
+
 dependencies = [
     "dill>=0.3",
     "numpy>=1.26",
@@ -26,18 +29,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+
 image = [
     "pillow>=9.4,<11.0",
     "matplotlib>=3.7"
 ]
+
 research = [
     "multiprocess>=0.70",
     "py-nbtools>=0.9.14"
 ]
+
 monitor = [
     "psutil",
     "pynvml"
 ]
+
 nn = [
     "torch>=1.13",
     "torchvision>=0.14",
@@ -45,12 +52,14 @@ nn = [
     "ptflops>=0.6",
     "scikit-learn>=0.21.3"
 ]
+
 dev = [
     "pandas>=0.24",
     "pytest>=7.0",
     "pylint>=2.16",
     "ruff"
 ]
+
 jupyter = [
     "nbformat",
     "nbconvert",
@@ -61,6 +70,7 @@ jupyter = [
     "jupyter_server",
     "requests"
 ]
+
 other = [
     "urllib3>=1.25"
 ]
