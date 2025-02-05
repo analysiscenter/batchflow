@@ -56,7 +56,6 @@ nn = [
 dev = [
     "pandas>=0.24",
     "pytest>=7.0",
-    "pylint>=2.16",
     "ruff"
 ]
 

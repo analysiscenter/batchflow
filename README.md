@@ -1,5 +1,5 @@
 [![License](https://img.shields.io/github/license/analysiscenter/batchflow.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-[![Python](https://img.shields.io/badge/python-3.8-blue.svg)](https://python.org)
+[![Python](https://img.shields.io/badge/python-3.9-blue.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0-orange.svg)](https://pytorch.org)
 [![codecov](https://codecov.io/gh/analysiscenter/batchflow/branch/master/graph/badge.svg)](https://codecov.io/gh/analysiscenter/batchflow)
 [![PyPI](https://badge.fury.io/py/batchflow.svg)](https://badge.fury.io/py/batchflow)
@@ -78,9 +78,14 @@ For more advanced cases and detailed API see [the documentation](https://analysi
 
 > `BatchFlow` module is in the beta stage. Your suggestions and improvements are very welcome.
 
-> `BatchFlow` supports python 3.6 or higher.
+> `BatchFlow` supports Python 3.9 or higher.
 
 ### Stable python package
+
+With [poetry](https://docs.astral.sh/uv/)
+```
+uv add batchflow
+```
 
 With [poetry](https://python-poetry.org/)
 ```
@@ -96,7 +101,7 @@ pip3 install batchflow
 
 With [poetry](https://python-poetry.org/)
 ```
-poetry add --editable git+https://github.com/analysiscenter/batchflow
+poetry add --editable git+https://github.com/analysiscenter/batchflow#master
 ```
 
 With old-fashioned [pip](https://pip.pypa.io/en/stable/)
