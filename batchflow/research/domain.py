@@ -364,7 +364,7 @@ class Domain:
             lengthes = [len(values) for _, values in cube if isinstance(values, (list, tuple, np.ndarray))]
             if len(lengthes) == 0:
                 return None
-            size += np.product(lengthes)
+            size += np.prod(lengthes)
         return size
 
     def __len__(self):

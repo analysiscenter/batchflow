@@ -142,6 +142,7 @@ dev = [
     { name = "pandas" },
     { name = "pylint" },
     { name = "pytest" },
+    { name = "ruff" },
 ]
 image = [
     { name = "matplotlib" },
@@ -176,12 +177,6 @@ research = [
     { name = "py-nbtools" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "dill", specifier = ">=0.3" },
@@ -197,7 +192,7 @@ requires-dist = [
     { name = "nbformat", marker = "extra == 'jupyter'" },
     { name = "notebook", marker = "extra == 'jupyter'" },
     { name = "numba", specifier = ">=0.56" },
-    { name = "numpy", specifier = ">=1.18" },
+    { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=9.4,<11.0" },
     { name = "psutil", marker = "extra == 'monitor'" },
@@ -207,6 +202,7 @@ requires-dist = [
     { name = "pynvml", marker = "extra == 'monitor'" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "requests", marker = "extra == 'jupyter'" },
+    { name = "ruff", marker = "extra == 'dev'" },
     { name = "scikit-learn", marker = "extra == 'nn'", specifier = ">=0.21.3" },
     { name = "scipy", specifier = ">=1.9" },
     { name = "torch", marker = "extra == 'nn'", specifier = ">=1.13" },
@@ -215,23 +211,17 @@ requires-dist = [
     { name = "urllib3", marker = "extra == 'other'", specifier = ">=1.25" },
 ]
 
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=5.3.1" },
-    { name = "ruff" },
-]
-
 [[package]]
 name = "beautifulsoup4"
-version = "4.13.1"
+version = "4.13.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "soupsieve" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/58/f3/d90227cc52f7b8fcd0f2af804f56e55edf8dd07036b681a2809e3245318b/beautifulsoup4-4.13.1.tar.gz", hash = "sha256:741c8b6903a1e4ae8ba32b9c9ae7510dab7a197fdbadcf9fcdeb0891ef5ec66a", size = 618295 }
+sdist = { url = "https://files.pythonhosted.org/packages/f0/3c/adaf39ce1fb4afdd21b611e3d530b183bb7759c9b673d60db0e347fd4439/beautifulsoup4-4.13.3.tar.gz", hash = "sha256:1bd32405dacc920b42b83ba01644747ed77456a65760e285fbc47633ceddaf8b", size = 619516 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/18/75/899bf9b6270b2ce5e8f01b8da121b29e4b88256feb2cf6c6418d4cc42130/beautifulsoup4-4.13.1-py3-none-any.whl", hash = "sha256:72465267014897bb10ca749bb632bde6c2d20f3254afd5458544bd74e6c2e6d8", size = 185056 },
+    { url = "https://files.pythonhosted.org/packages/f9/49/6abb616eb3cbab6a7cca303dc02fdf3836de2e0b834bf966a7f5271a34d8/beautifulsoup4-4.13.3-py3-none-any.whl", hash = "sha256:99045d7d3f08f91f0d656bc9b7efbae189426cd913d830294a15eefa0ea4df16", size = 186015 },
 ]
 
 [[package]]

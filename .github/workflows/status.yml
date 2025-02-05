@@ -17,8 +17,7 @@ jobs:
     - name: Install from local source
       run: |
         pip install uv
-        uv sync --group dev
-        uv run pip install .[nn]
+        uv sync --all-extras
 
     - name: Linting
       run: uv run ruff check batchflow
