@@ -82,7 +82,7 @@ For more advanced cases and detailed API see [the documentation](https://analysi
 
 ### Stable python package
 
-With [poetry](https://docs.astral.sh/uv/)
+With [uv](https://docs.astral.sh/uv/)
 ```
 uv add batchflow
 ```
@@ -99,6 +99,14 @@ pip3 install batchflow
 
 ### Development version
 
+With [uv](https://docs.astral.sh/uv/)
+```
+git clone --branch packages https://github.com/analysiscenter/batchflow
+uv add --editable ./batchflow
+```
+
+You also can use any other branch instad of `master`
+
 With [poetry](https://python-poetry.org/)
 ```
 poetry add --editable git+https://github.com/analysiscenter/batchflow#master
@@ -106,7 +114,8 @@ poetry add --editable git+https://github.com/analysiscenter/batchflow#master
 
 With old-fashioned [pip](https://pip.pypa.io/en/stable/)
 ```
-pip install --editable git+https://github.com/analysiscenter/batchflow
+git clone --branch packages https://github.com/analysiscenter/batchflow
+pip install --editable ./batchflow
 ```
 
 ### Extras
