@@ -37,18 +37,20 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Set up Python 3.8
+    - name: Set up Python 3.9
       uses: actions/setup-python@v4
       with:
-        python-version: 3.8
+        python-version: 3.9
 
     - name: Install dependencies
-      run: pip install --user --upgrade pip poetry
+      run: |
+        pip install --user -U pip uv
+        uv sync
 
     - name: Build
       run: |
-        poetry install
-        poetry build
+        uv pip install build
+        uv python -m build
 
     - name: Publish
       uses: pypa/gh-action-pypi-publish@release/v1
