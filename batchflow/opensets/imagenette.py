@@ -1,6 +1,7 @@
 """ Contains Imagenette and Imagewoof datasets """
 
 # ruff: noqa: N801; invalid-class-name
+# ruff: noqa: S310; suspicious-url-open-usage
 
 import os
 from os.path import dirname, basename

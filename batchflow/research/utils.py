@@ -134,7 +134,7 @@ def parse_name(name):
 def generate_id(config, random, create_prefix=False):
     """ Generate id for experiment. """
     name = config.alias()['_prefix'] if create_prefix else ''
-    name += hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8]
+    name += hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8] # noqa: S324; hashlib-insecure-hash-function
     name += ''.join(str(i) for i in random.integers(10, size=8))
     return name
 

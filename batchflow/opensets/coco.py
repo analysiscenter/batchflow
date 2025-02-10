@@ -93,7 +93,7 @@ class COCOSegmentation(BaseCOCO):
     def _post_fn(self, all_res, *args, **kwargs):
         _ = args, kwargs
         if any_action_failed(all_res):
-            raise IOError('Could not download files:', all_res)
+            raise OSError('Could not download files:', all_res)
 
         if self.drop_grayscale:
             train_index = FilesIndex(path=self._rgb_images_paths(all_res[0]), no_ext=True)

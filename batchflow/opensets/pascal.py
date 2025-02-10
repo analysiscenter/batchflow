@@ -1,4 +1,5 @@
 """ Contains PascalVOC dataset and labels for different tasks """
+# ruff : noqa : S310; suspicious-url-open-usage
 
 import os
 from os.path import dirname, basename
@@ -41,7 +42,7 @@ class BasePascal(ImagesOpenset):
         super().__init__(*args, preloaded=preloaded, train_test=train_test, **kwargs)
         if unpack:
             with tarfile.open((self.localname), "r") as archive:
-                archive.extractall(dirname(self.localname))
+                archive.extractall(dirname(self.localname)) # noqa: S202; tarfile-unsafe-members
 
     def download_archive(self, path=None):
         """ Download archive"""

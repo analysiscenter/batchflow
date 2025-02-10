@@ -1,5 +1,4 @@
 """ Contains mixin for :class:`~.torch.TorchModel` to provide textual and graphical visualizations. """
-import sys
 from ast import literal_eval
 from pprint import pformat as _pformat
 
@@ -15,11 +14,7 @@ from ...decorators import deprecated
 def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts=True, underscore_numbers=False):
     """ Backwards compatible version of pformat. """
     _ = underscore_numbers
-    if sys.version_info.minor < 8:
-        result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact)
-    else:
-        result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact,
-                          sort_dicts=sort_dicts)
+    result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact, sort_dicts=sort_dicts)
     return result
 
 

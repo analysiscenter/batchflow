@@ -3,8 +3,8 @@ import sys
 import os
 import re
 
-if sys.version_info < (3, 8):
-    raise ImportError("BatchFlow module requires Python 3.8 or higher")
+if sys.version_info < (3, 9): # noqa: UP036; outdated-version-block
+    raise ImportError("BatchFlow module requires Python 3.9 or higher")
 
 from importlib.metadata import version, PackageNotFoundError
 

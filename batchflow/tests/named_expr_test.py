@@ -203,7 +203,7 @@ class DummyObject:
         self.func_args = args
         self.func_kwargs = kwargs
 
-class DummyChild():
+class DummyChild:
     """Another dummy class for L expression test"""
     def __init__(self):
         self.attr_one = -1

@@ -1,4 +1,6 @@
 """ Contains CIFAR datasets """
+# ruff : noqa : S310; suspicious-url-open-usage
+
 
 import os
 import tempfile

@@ -386,7 +386,7 @@ class BaseResearchStorage:
                 else:
                     raise ValueError(f'Unknown env: {command}')
             else:
-                process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, cwd=cwd)
+                process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, cwd=cwd) # noqa: S603; subprocess-without-shell-equals-true
                 output, _ = process.communicate()
                 result = output.decode('utf')
             if replace is not None:

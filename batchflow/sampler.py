@@ -75,7 +75,7 @@ def arithmetize(cls):
     return cls
 
 @arithmetize
-class Sampler():
+class Sampler:
     """ Base class Sampler that implements algebra of Samplers.
 
     Attributes
