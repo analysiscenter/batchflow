@@ -129,7 +129,7 @@ In order to use that functionality you might need to install `batchflow` with ex
 - jupyter - utility functions for notebooks
 - research - multiprocess research
 - telegram - for monitoring pipelines via a telegram bot
-- dev - batchflow development (pylint, pytest, ...)
+- dev - batchflow development (ruff, pytest, ...)
 
 You can install several extras at once, like `batchflow[image,nn,research]`.
 

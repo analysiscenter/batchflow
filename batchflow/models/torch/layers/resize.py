@@ -1,6 +1,6 @@
 """ Resizing Torch layers. """
 from torch import nn
-import torch.nn.functional as F # noqa: N812
+import torch.nn.functional as F # noqa: N812; lowercase-imported-as-non-lowercase
 from torchvision.transforms.functional import center_crop
 
 from ..utils import get_shape

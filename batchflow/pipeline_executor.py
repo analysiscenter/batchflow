@@ -89,7 +89,7 @@ class PipelineExecutor:
             except StopPipeline:
                 batch = END_PIPELINE_SIGNAL
                 break
-            except Exception as exc:   # pylint: disable=broad-except
+            except Exception as exc: # noqa: BLE001, blind-except
                 print("Exception:", exc)
                 traceback.print_tb(exc.__traceback__)
                 if ignore_exceptions:
@@ -98,7 +98,7 @@ class PipelineExecutor:
                     batch = END_PIPELINE_SIGNAL
             finally:
                 self._prefetch_queue.task_done()
-                self._batch_queue.put(batch, block=True) # pylint: disable=used-before-assignment
+                self._batch_queue.put(batch, block=True)
                 if batch == END_PIPELINE_SIGNAL:
                     self._stop_flag = True
 
@@ -232,7 +232,7 @@ class PipelineExecutor:
                 except KeyboardInterrupt:
                     notifier.close(success=False)
                     raise
-                except Exception as exc:  # pylint:disable=broad-except
+                except Exception as exc: # noqa: BLE001, blind-except
                     if ignore_exceptions:
                         print("Exception:", exc)
                         traceback.print_tb(exc.__traceback__)

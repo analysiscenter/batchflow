@@ -1,5 +1,4 @@
 """ Test :meth:`.Batch._assemble` """
-# pylint: disable=protected-access
 import numpy as np
 
 import pytest

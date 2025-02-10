@@ -135,7 +135,6 @@ class AvgPoolConvInit:
     """ Common mixin for convolutions, initialized with average pooling kernels. """
     def reset_parameters(self):
         """Reset the weight and bias."""
-        #pylint: disable=protected-access
         nn.init.constant_(self.weight, 0)
         denominator = prod(self.weight.shape[2:])
 
@@ -191,7 +190,6 @@ class BilinearConvTransposeInit:
     """ Common mixin for convolutions, initialized with bilinear upsampling kernels. """
     def reset_parameters(self):
         """ Set the weight of the first filters to be identical to bilinear upsampling operation. """
-        #pylint: disable=protected-access
         nn.init.constant_(self.weight, 0)
         bilinear_kernel = self.bilinear_kernel(self.kernel_size, self.stride, self.N_DIMS)
         for i in range(self.in_channels):

@@ -386,7 +386,6 @@ class BaseResearchStorage:
                 else:
                     raise ValueError(f'Unknown env: {command}')
             else:
-                #pylint: disable=consider-using-with
                 process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, cwd=cwd)
                 output, _ = process.communicate()
                 result = output.decode('utf')

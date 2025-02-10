@@ -1,4 +1,3 @@
-# pylint: disable=too-few-public-methods, method-hidden
 """ Contains Sampler-classes. """
 
 import warnings

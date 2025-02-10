@@ -2,8 +2,7 @@
 If possible, methods are tested against DatasetIndex with length of 5.
 When random values are needed, 'random_seed' is fixed to be 13.
 """
-# pylint: disable=missing-docstring
-# pylint: disable=protected-access
+
 import pytest
 import numpy as np
 
@@ -40,7 +39,6 @@ def test_build_index_multidimensional():
 def test_create_batch_child():
     """ Method 'create_batch' must be type-preserving. """
     class ChildSet(DatasetIndex):
-        # pylint: disable=too-few-public-methods
         pass
     dsi = ChildSet(5)
     assert isinstance(dsi.create_batch(range(5)), ChildSet)

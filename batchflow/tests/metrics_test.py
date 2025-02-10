@@ -12,7 +12,9 @@ Test data is pre-defined, it's shape and contents were chosen for reasons
 of balance between visual simplicity and test coverage diversity.
 """
 
-# ruff : noqa : E741, N803
+# ruff : noqa: E741; ambiguous-variable-name
+# ruff : noqa: N803; invalid-argument-name
+
 
 import numpy as np
 import pytest

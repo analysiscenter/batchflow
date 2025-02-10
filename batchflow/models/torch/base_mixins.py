@@ -14,7 +14,6 @@ from ...decorators import deprecated
 
 def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts=True, underscore_numbers=False):
     """ Backwards compatible version of pformat. """
-    # pylint: disable=unexpected-keyword-arg
     _ = underscore_numbers
     if sys.version_info.minor < 8:
         result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact)
@@ -301,7 +300,6 @@ class ExtractionMixin:
         -------
         Intermediate activations in the same structure, as `layers`.
         """
-        #pylint: disable=unnecessary-comprehension
         if layers is None:
             raise TypeError('get_intermediate_activations() missing 1 required argument: `layers`')
 

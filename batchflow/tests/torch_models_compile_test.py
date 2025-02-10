@@ -1,5 +1,4 @@
 """ Test that all Torch can be constructed """
-# pylint: disable=import-error, no-name-in-module, redefined-outer-name, unused-import
 import pytest
 
 from batchflow.models.torch import VGG7, VGG16, VGG19

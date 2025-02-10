@@ -1,5 +1,5 @@
 """ Convolutional layers. """
-#pylint: disable=not-callable
+
 from torch import nn
 
 from .utils import compute_padding

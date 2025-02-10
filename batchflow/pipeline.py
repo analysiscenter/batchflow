@@ -1,5 +1,4 @@
 """ Contains pipeline class """
-# pylint:disable=undefined-variable
 import sys
 import time
 from functools import partial
@@ -21,7 +20,7 @@ from .variables import VariableDirectory
 from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
                              SegmentationMetricsByInstances, RegressionMetrics, Loss)
 
-from ._const import *       # pylint:disable=wildcard-import
+from ._const import *
 from .utils import save_data_to
 from .utils_random import make_rng
 from .pipeline_executor import PipelineExecutor
@@ -55,8 +54,6 @@ def hashable(x):
 class Pipeline:
     """ Pipeline """
     def __init__(self, dataset=None, config=None, pipeline=None, actions=None, strict=False, proba=None, repeat=None):
-        # pylint: disable=protected-access
-
         if pipeline is None:
             self.dataset = dataset
             self.config = config or {}
@@ -166,7 +163,6 @@ class Pipeline:
     @classmethod
     def concat(cls, pipe1, pipe2):
         """ Create a new pipeline concatenating two given pipelines """
-        # pylint: disable=protected-access
         new_p1 = cls.from_pipeline(pipe1)
         new_p1._actions += pipe2._actions[:]
         new_p1.config.update(pipe2.config)
@@ -870,7 +866,7 @@ class Pipeline:
         if self._needs_exec(batch, action):
             repeat = self._eval_expr(action['repeat'], batch=batch) or 1
             for _ in range(repeat):
-                batch = self._exec_all_actions(batch, action['pipeline']._actions)  # pylint: disable=protected-access
+                batch = self._exec_all_actions(batch, action['pipeline']._actions)
         return batch
 
     def _exec_all_actions(self, batch, actions=None, iteration=None):
@@ -889,7 +885,7 @@ class Pipeline:
                 pass
             elif action['name'] in [JOIN_ID, MERGE_ID]:
                 join_batches = []
-                for pipe in action['pipelines']:   # pylint: disable=not-an-iterable
+                for pipe in action['pipelines']:
                     if action['mode'] == 'i':
                         jbatch = pipe.create_batch(batch.index)
                     elif action['mode'] == 'n':
@@ -1390,7 +1386,6 @@ class Pipeline:
 
     def rebatch(self, batch_size, merge=None, components=None, batch_class=None):
         """ Set the output batch size """
-        # pylint:disable=protected-access
         new_p = type(self)(self.dataset)
         return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, merge=merge,
                                                         components=components, batch_class=batch_class))

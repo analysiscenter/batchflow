@@ -26,7 +26,6 @@ from .utils_telegram import TelegramMessage
 
 class DummyBar:
     """ Progress tracker without visual representation. """
-    #pylint: disable=invalid-name
     def __init__(self, total, *args, **kwargs):
         self.total = total
         self.args, self.kwargs = args, kwargs
@@ -128,7 +127,6 @@ class Notifier:
     *args, **kwargs
         Positional and keyword arguments that are used to create underlying progress bar.
     """
-    #pylint: disable=too-many-arguments
     COLOUR_RUNNING = '#2196f3'
     COLOUR_SUCCESS = '#4caf50'
     COLOUR_FAILURE = '#f44336'
@@ -251,7 +249,6 @@ class Notifier:
         self.make_bar()
 
         # Prepare plot params
-        #pylint: disable=invalid-unary-operand-type
         self.slice = slice(-window, None, None) if isinstance(window, int) else slice(None)
         self.savepath = savepath
 
@@ -549,7 +546,7 @@ class Notifier:
                 yield item
                 self.update()
             self.close(success=True)
-        except: #pylint: disable=bare-except
+        except:
             self.close(success=False)
             raise
 
@@ -562,7 +559,6 @@ class Notifier:
 
     def close(self, success=True):
         """ Close the underlying progress bar. """
-        #pylint: disable=attribute-defined-outside-init
         if not success:
             self.bar.colour = self.COLOUR_FAILURE
 
@@ -633,7 +629,6 @@ class Notifier:
     @staticmethod
     def clear():
         """ Clear all the instances. Can help fix tqdm behaviour. """
-        # pylint: disable=protected-access
         tqdm._instances.clear()
 
 

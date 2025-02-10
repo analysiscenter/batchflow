@@ -103,7 +103,6 @@ class Layer:
 
     def dilate(self, data):
         """ Apply dilation to array. """
-        # pylint: disable=import-outside-toplevel
         import cv2
         dilation_config = self.config.get('dilate', False)
 
@@ -546,7 +545,6 @@ class Subplot:
     # Annotation methods
     def annotate(self, mode):
         """ Apply requested annotation functions to subplot with parameters from subplot config. """
-        # pylint: disable=too-many-branches
         annotations = {}
 
         if not self.ax.axison:

@@ -1,6 +1,6 @@
 """ Contains Imagenette and Imagewoof datasets """
 
-# ruff: noqa: N801
+# ruff: noqa: N801; invalid-class-name
 
 import os
 from os.path import dirname, basename

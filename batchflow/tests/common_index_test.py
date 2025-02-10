@@ -1,8 +1,5 @@
 """Tests for common methods of DataseIndex and FilesIndex classes.
 """
-# pylint: disable=missing-docstring
-# pylint: disable=protected-access
-# pylint: disable=redefined-outer-name
 import os
 import shutil
 

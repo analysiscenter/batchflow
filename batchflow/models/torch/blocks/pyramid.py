@@ -136,7 +136,6 @@ class KSAC(nn.Module):
         and 2x2x2=8 features per 3d item.
         Tuple allows to define several image level features, e.g (2, 3, 4).
     """
-    #pylint: disable=not-callable
     LAYERS = {
         1: nn.functional.conv1d,
         2: nn.functional.conv2d,

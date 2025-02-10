@@ -485,7 +485,7 @@ class Domain:
                 else:
                     additional = ConfigAlias()
                 while self.n_items is None or i < self.n_items:
-                    res = next(iterator) + additional # pylint: disable=stop-iteration-return
+                    res = next(iterator) + additional
                     if self.create_id_prefix:
                         res.set_prefix(keys, n_digits=int(self.create_id_prefix))
                     yield res

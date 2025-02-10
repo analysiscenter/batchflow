@@ -140,7 +140,6 @@ def generate_id(config, random, create_prefix=False):
 
 def create_output_stream(redirect, dump=False, filename=None, path=None, common=True):
     """ Create stream to redirect stdout/stderr. """
-    #pylint: disable=consider-using-with
     if bool(redirect):
         values = [1, 3] if common else [2, 3]
         if redirect in values:

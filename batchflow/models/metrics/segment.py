@@ -1,5 +1,5 @@
 """ Contains metrics for segmentation """
-# ruff : noqa : E741
+# ruff : noqa: E741; ambiguous-variable-name
 
 import numpy as np
 

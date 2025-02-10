@@ -1,4 +1,3 @@
-#pylint:disable=logging-fstring-interpolation
 """ Experiment and corresponding classes. """
 
 import os
@@ -356,7 +355,7 @@ class Experiment:
         self.dump_results = None
         self.loglevel = None
         self.monitor = None
-        self.id = None #pylint:disable=invalid-name
+        self.id = None
         self.index = None
         self.config_alias = None
         self.config = None
@@ -584,7 +583,7 @@ class Experiment:
             return None
         return _explicit_call(method, name, self)
 
-    def save(self, src, dst, when=1, save_output_dict=False, copy=False): #pylint:disable=redefined-outer-name
+    def save(self, src, dst, when=1, save_output_dict=False, copy=False):
         """ Save something to research results.
 
         Parameters
@@ -745,7 +744,7 @@ class Experiment:
                 exception = (StopIteration, KeyboardInterrupt) if self.debug else Exception
                 try:
                     self.outputs[name], unit_time = self.actions[name](iteration, n_iters, last=self.last)
-                except exception as e: #pylint:disable=broad-except
+                except exception as e:
                     self.is_failed = True
                     self.last = True
                     if isinstance(e, StopIteration):
@@ -915,7 +914,7 @@ class Executor:
                     if unit.root or len(self.experiments) == 1:
                         self.call_root(iteration, unit_name)
                     else:
-                        self.parallel_call(iteration, unit_name, target=self.target, debug=self.debug) #pylint:disable=unexpected-keyword-arg
+                        self.parallel_call(iteration, unit_name, target=self.target, debug=self.debug)
                 if not any(experiment.is_alive for experiment in self.experiments):
                     break
                 if self.research:
@@ -986,7 +985,7 @@ def _create_instance(experiments, item_name):
     for e in experiments:
         e.instances[item_name] = instance
 
-def _get_input(x, copy, *args, **kwargs): #pylint:disable=redefined-outer-name
+def _get_input(x, copy, *args, **kwargs):
     _ = args, kwargs
     return deepcopy(x) if copy else x
 

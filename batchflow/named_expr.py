@@ -573,7 +573,6 @@ class L(B):
 
 
 class PipelineNamedExpression(NamedExpression):
-    #pylint: disable=abstract-method
     """ Base class for pipeline expressions """
     def _get_params(self, **kwargs):
         name, kwargs = super()._get_params(**kwargs)
@@ -687,7 +686,7 @@ class M(PipelineNamedExpression):
         raise ValueError('Assigning a value to a model is not possible.')
 
 
-class I(PipelineNamedExpression): # noqa : E741
+class I(PipelineNamedExpression): # noqa: E742; ambiguous-class-name
     """ Iteration counter
 
     Parameters
@@ -718,7 +717,6 @@ class I(PipelineNamedExpression): # noqa : E741
         super().__init__(name, mode=None, **kwargs)
 
     def get(self, **kwargs):
-        # pylint:disable=protected-access
         """ Return current or maximum iteration number or their ratio """
         name, pipeline, kwargs = self._get_params(**kwargs)
 
@@ -958,7 +956,7 @@ class W(NamedExpression):
     def assign(self, value, **kwargs):
         """ Assign a value """
         _ = kwargs
-        self.name = value # pylint: disable=attribute-defined-outside-init
+        self.name = value
 
 
 class P(W):
@@ -1003,7 +1001,7 @@ class P(W):
     def _get_name(self, **kwargs):
         return self.name
 
-    def get(self, *args, parallel=False, **kwargs):   # pylint:disable=arguments-differ
+    def get(self, *args, parallel=False, **kwargs):
         """ Calculate and return a value of the expression """
         _ = args
 
@@ -1035,7 +1033,7 @@ class P(W):
     def assign(self, value, **kwargs):
         """ Assign a value """
         _ = kwargs
-        self.name = value # pylint: disable=attribute-defined-outside-init
+        self.name = value
 
 
 class PP(P):
@@ -1073,7 +1071,7 @@ class PP(P):
     :class:`~.P`
     """
 
-    def get(self, *_, **kwargs):   # pylint:disable=arguments-differ
+    def get(self, *_, **kwargs):
         """ Calculate and return a value of the expression """
 
         name, kwargs = self._get_params(**kwargs)

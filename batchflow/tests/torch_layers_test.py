@@ -1,6 +1,5 @@
 """ Test torch layers """
 from contextlib import nullcontext
-# pylint: disable=import-error, no-name-in-module
 import pytest
 
 import torch

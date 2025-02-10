@@ -89,7 +89,6 @@ class ResourceMonitor:
 
     def plot(self, plotter=None, positions=None, slice=None, **kwargs):
         """ Simple plots of collected data-points. """
-        #pylint: disable=invalid-name
         x = np.array(self.ticks) - self.ticks[0]
         y = np.array(self.data)[:len(x)].reshape(len(x), -1)
 

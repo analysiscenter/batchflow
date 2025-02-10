@@ -1,4 +1,3 @@
-#pylint: disable=super-init-not-called
 """ Research profilers. """
 
 import os

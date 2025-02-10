@@ -1,9 +1,30 @@
 line-length = 120
 
 [lint]
-select = ["F", "E", "W", "N", "RET"] # "D", "NPY"
-ignore = ["E402", "E731", "F403", "F405", "D105", "D107", "D205", "D203", "D213", "D400", "D401", "D415", "D417", "RET504", "NPY002"]
+select = [
+    "F",       # Pyflakes 
+    "E",       # pycodestyle (Error)
+    "W",       # pycodestyle (Warning)
+    "N",       # pep8-naming
+    "RET",     # flake8-return
+    "S307",
+    #"SLF",
+    "BLE",
 
-[lint.per-file-ignores]
-"__init__.py" = ["F401"]
-"utils_notebook.py" = ["F401"]
+    # TODO: 
+    # "D",     # pydocstyle
+    # "NPY"    # NumPy-specific rules
+]
+
+ignore = [
+    "E402",    # module-import-not-at-top-of-file
+    "E731",    # lambda-assignment
+    "F403",    # undefined-local-with-import-star
+    "F405",    # undefined-local-with-import-star-usage
+    "RET504",  # unnecessary-assign
+    "NPY002"   # numpy-legacy-random
+]
+
+[lint.per-file-ignores] 
+"__init__.py" = ["F401"]        # unused-import
+"utils_notebook.py" = ["F401"]  # unused-import

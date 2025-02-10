@@ -213,7 +213,6 @@ class OptimalBatchSizeMixin:
 
         For stable measurements, we make `n` iterations of `train`/`predict`, until the memory consumption stabilizes.
         """
-        #pylint: disable=consider-iterating-dictionary
         table = {}
         batch_size = start_batch_size
         for _ in Notifier(pbar)(range(max_iters)):

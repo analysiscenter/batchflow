@@ -1,5 +1,4 @@
 """ Eager version of TorchModel. """
-# pylint: disable=unnecessary-lambda-assignment
 import os
 import re
 import inspect
@@ -1078,7 +1077,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         # Lock the entire method; release in any case
         try:
             if lock:
-                self.model_lock.acquire() #pylint: disable=consider-using-with
+                self.model_lock.acquire()
             self.last_train_info = {}
 
             # Parse inputs and targets: always a list
@@ -1131,7 +1130,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             profile = profile or self.profile
             if profile:
                 profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
-                profiler.__enter__() # pylint: disable=unnecessary-dunder-call
+                profiler.__enter__()
 
             # Train on each of the microbatches
             chunked_outputs = []
@@ -1391,7 +1390,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         # Acquire lock; release in any case
         try:
             if lock:
-                self.model_lock.acquire() #pylint: disable=consider-using-with
+                self.model_lock.acquire()
             self.last_predict_info = {}
 
             # Parse outputs: always a dict
@@ -1624,7 +1623,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
                 predictions = predictions[0] if isinstance(predictions, (tuple, list)) else predictions
                 if operation == 'softplus':
-                    result = torch.nn.functional.softplus(predictions) # pylint: disable=not-callable
+                    result = torch.nn.functional.softplus(predictions)
                 elif operation == 'sigmoid':
                     result = torch.sigmoid(predictions)
                 elif operation == 'sigmoid_uint8':
@@ -1819,7 +1818,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             # Load model from onnx, if needed
             if 'onnx' in checkpoint:
                 try:
-                    from onnx2torch import convert #pylint: disable=import-outside-toplevel
+                    from onnx2torch import convert
                 except ImportError as e:
                     raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
 

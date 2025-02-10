@@ -1,4 +1,3 @@
-# pylint: disable=missing-docstring, redefined-outer-name, import-error, no-name-in-module
 import sys
 import pytest
 import numpy as np

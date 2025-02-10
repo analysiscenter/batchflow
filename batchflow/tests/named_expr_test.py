@@ -1,6 +1,5 @@
-# pylint: disable=redefined-outer-name, missing-docstring
 import sys
-from contextlib import ExitStack as does_not_raise  # noqa: N813
+from contextlib import ExitStack as does_not_raise  # noqa: N813; camelcase-imported-as-lowercase
 
 import pytest
 import numpy as np

@@ -22,7 +22,6 @@ def test_run_notebooks(path):
     path : str
         Location of notebook to run.
     """
-    # pylint: disable=exec-used
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         from nbconvert import PythonExporter

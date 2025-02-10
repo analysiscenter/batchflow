@@ -1,5 +1,5 @@
 """ Contains two class classification metrics """
-# ruff : noqa : E741
+# ruff : noqa: E741; ambiguous-variable-name
 
 from copy import copy
 from functools import partial
@@ -225,19 +225,16 @@ class ClassificationMetrics(Metrics):
 
     def append(self, metrics):
         """ Append confusion matrix with data from another metrics"""
-        # pylint: disable=protected-access
         self._confusion_matrix = np.concatenate((self._confusion_matrix, metrics._confusion_matrix), axis=0)
 
     def update(self, metrics):
         """ Update confusion matrix with data from another metrics"""
-        # pylint: disable=protected-access
         if self._no_zero_axis:
             self._confusion_matrix = self._confusion_matrix + metrics._confusion_matrix
         else:
             self._confusion_matrix = np.concatenate((self._confusion_matrix, metrics._confusion_matrix), axis=0)
 
     def __getitem__(self, item):
-        # pylint: disable=protected-access
         metrics = self.copy()
         metrics._confusion_matrix = metrics._confusion_matrix[item]
         return metrics

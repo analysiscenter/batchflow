@@ -44,7 +44,7 @@ def make_function(method, is_global=False):
     source = '\n'.join(source[start:])
 
     globs = globals() if is_global else method.__globals__.copy()
-    exec(source, globs)    # pylint:disable=exec-used
+    exec(source, globs)
 
     # Method with the same name might exist in various classes or modules
     # so a global function should have a unique name
@@ -63,7 +63,7 @@ def _workers_count():
     return cpu_count * 4
 
 
-def _make_action_wrapper_with_args(use_lock=None, no_eval=None):    # pylint: disable=redefined-outer-name
+def _make_action_wrapper_with_args(use_lock=None, no_eval=None):
     return functools.partial(_make_action_wrapper, use_lock=use_lock, no_eval=no_eval)
 
 def _make_action_wrapper(action_method, use_lock=None, no_eval=None):
@@ -213,7 +213,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
         if target in {'mpc', 'm'} and use_self:
             try:
                 mpc_method = make_function(method, is_global=True)
-            except Exception:  # pylint:disable=broad-except
+            except Exception: # noqa: BLE001, blind-except
                 mpc_method = None
 
         def _check_functions(self):
@@ -257,7 +257,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
                         result = future.result()
                     else:
                         result = future
-                except Exception as exce:  # pylint: disable=broad-except
+                except Exception as exce: # noqa: BLE001, blind-except
                     result = exce
                 finally:
                     all_results += [result]
@@ -413,7 +413,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, debug=Fa
                 else:
                     try:
                         one_ft = method(*margs, **mkwargs)
-                    except Exception as e:   # pylint: disable=broad-except
+                    except Exception as e: # noqa: BLE001, blind-except
                         one_ft = e
                 futures.append(one_ft)
 
@@ -458,7 +458,7 @@ def parallel(*args, use_self=None, **kwargs):
     return inbatch_parallel(*args, _use_self=use_self, **kwargs)
 
 
-def njit(nogil=True, parallel=True):  # pylint: disable=redefined-outer-name
+def njit(nogil=True, parallel=True):
     """ Fake njit decorator to use when numba is not installed """
     _, _ = nogil, parallel
     def njit_fake_decorator(method):
@@ -485,7 +485,7 @@ def mjit(*args, nopython=True, nogil=True, **kwargs):
             try:
                 func = make_function(method)
                 func = jit(*args, nopython=nopython, nogil=nogil, **kwargs)(func)
-            except Exception:   # pylint:disable=broad-except
+            except Exception: # noqa: BLE001, blind-except
                 # the source is not available or not compilable
                 func = method
                 logging.warning('The method cannot be compiled because the source code is not available. '

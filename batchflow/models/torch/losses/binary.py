@@ -3,7 +3,7 @@ import numpy as np
 
 import torch
 from torch import nn
-import torch.nn.functional as F # noqa: N812
+import torch.nn.functional as F # noqa: N812; lowercase-imported-as-non-lowercase
 
 
 
