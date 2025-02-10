@@ -70,7 +70,7 @@ class Pipeline:
             config = config or {}
             _config = pipeline.config or {}
             self.config = {**config, **_config}
-            self._actions = actions or pipeline._actions[:]
+            self._actions = actions or pipeline._actions[:]  # noqa: SLF001; private-member-access
             if self.num_actions == 1:
                 if proba is not None:
                     if self.get_last_action_repeat() is None:
@@ -78,11 +78,11 @@ class Pipeline:
                 elif repeat is not None:
                     if self.get_last_action_proba() is None:
                         self._actions[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
-            self._lazy_run = pipeline._lazy_run
+            self._lazy_run = pipeline._lazy_run  # noqa: SLF001; private-member-access
             self.variables = pipeline.variables.copy()
             self.strict = pipeline.strict
             self.models = pipeline.models.copy()
-            self._namespaces = pipeline._namespaces
+            self._namespaces = pipeline._namespaces  # noqa: SLF001; private-member-access
             self.before = pipeline.before.copy()
             self.before.pipeline = self
             self.after = pipeline.after.copy()
@@ -164,13 +164,13 @@ class Pipeline:
     def concat(cls, pipe1, pipe2):
         """ Create a new pipeline concatenating two given pipelines """
         new_p1 = cls.from_pipeline(pipe1)
-        new_p1._actions += pipe2._actions[:]
+        new_p1._actions += pipe2._actions[:]  # noqa: SLF001; private-member-access
         new_p1.config.update(pipe2.config)
         new_p1.variables += pipe2.variables
         new_p1.models += pipe2.models
         if new_p1.dataset is None:
             new_p1.dataset = pipe2.dataset
-        new_p1._lazy_run = new_p1._lazy_run or pipe2._lazy_run
+        new_p1._lazy_run = new_p1._lazy_run or pipe2._lazy_run  # noqa: SLF001; private-member-access
         new_p1.before = pipe1.before.concat(pipe1.before, pipe2.before)
         new_p1.before.pipeline = new_p1
         new_p1.after = pipe1.after.concat(pipe1.after, pipe2.after)
@@ -866,7 +866,7 @@ class Pipeline:
         if self._needs_exec(batch, action):
             repeat = self._eval_expr(action['repeat'], batch=batch) or 1
             for _ in range(repeat):
-                batch = self._exec_all_actions(batch, action['pipeline']._actions)
+                batch = self._exec_all_actions(batch, action['pipeline']._actions)  # noqa: SLF001; private-member-access
         return batch
 
     def _exec_all_actions(self, batch, actions=None, iteration=None):
@@ -1387,7 +1387,7 @@ class Pipeline:
     def rebatch(self, batch_size, merge=None, components=None, batch_class=None):
         """ Set the output batch size """
         new_p = type(self)(self.dataset)
-        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, merge=merge,
+        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, merge=merge,  # noqa: SLF001; private-member-access
                                                         components=components, batch_class=batch_class))
 
     def reset(self, *args, profile=False, seed=None):

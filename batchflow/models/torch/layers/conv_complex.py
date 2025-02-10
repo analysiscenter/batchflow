@@ -153,7 +153,7 @@ class AvgPoolConvInit:
             nn.init.kaiming_uniform_(self.weight[self.in_channels:], a=sqrt(5))
 
             if self.bias is not None:
-                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[self.in_channels:])
+                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[self.in_channels:])  # noqa: SLF001; private-member-access
                 bound = 1 / sqrt(fan_in)
                 nn.init.uniform_(self.bias, -bound, bound)
 
@@ -207,7 +207,7 @@ class BilinearConvTransposeInit:
             nn.init.kaiming_uniform_(self.weight[:, self.in_channels:], a=sqrt(5))
 
             if self.bias is not None:
-                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[:, self.in_channels:])
+                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[:, self.in_channels:])  # noqa: SLF001; private-member-access
                 bound = 1 / sqrt(fan_in)
                 nn.init.uniform_(self.bias, -bound, bound)
 

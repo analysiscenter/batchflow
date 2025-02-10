@@ -626,7 +626,7 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         # Compute result. Unbind the method to pass self explicitly
         parallel = inbatch_parallel(init=init, post=post, target=target, src=src, dst=dst)
-        transform = parallel(type(self)._apply_once)
+        transform = parallel(type(self)._apply_once)  # noqa: SLF001; private-member-access
         result = transform(self, *args, func=func, p=p, src=src, dst=dst,
                            apply_parallel_id=worker_ids, apply_parallel_seeds=rng_seeds, **kwargs)
         return result

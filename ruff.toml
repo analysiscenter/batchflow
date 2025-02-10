@@ -7,9 +7,9 @@ select = [
     "W",       # pycodestyle (Warning)
     "N",       # pep8-naming
     "RET",     # flake8-return
-    "S307",
-    #"SLF",
-    "BLE",
+    "S307",    # suspicious-eval-usage
+    "SLF",     # flake8-self
+    "BLE",     # flake8-blind-except
 
     # TODO: 
     # "D",     # pydocstyle

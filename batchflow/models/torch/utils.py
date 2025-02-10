@@ -102,7 +102,7 @@ def make_shallow_dict(module):
         return {None : module}
 
     result = {}
-    for key, value in module._modules.items():
+    for key, value in module._modules.items():  # noqa: SLF001; private-member-access
         subdict = make_shallow_dict(value)
         for subkey, subvalue in subdict.items():
             store_key = f'{key}/{subkey}' if subkey is not None else key

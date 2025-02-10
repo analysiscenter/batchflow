@@ -168,7 +168,7 @@ class TestAssembly:
             A class axis
         """
         metric = SegmentationMetrics(TARGETS, predictions, fmt, NUM_CLASSES, axis)
-        res_matrix = metric._confusion_matrix
+        res_matrix = metric._confusion_matrix  # noqa: SLF001; private-member-access
         assert np.array_equal(res_matrix, exp_matrix)
 
 class TestShape:

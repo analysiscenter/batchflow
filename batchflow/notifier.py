@@ -629,7 +629,7 @@ class Notifier:
     @staticmethod
     def clear():
         """ Clear all the instances. Can help fix tqdm behaviour. """
-        tqdm._instances.clear()
+        tqdm._instances.clear()  # noqa: SLF001; private-member-access
 
 
 def notifier(iterable, *args, bar='a', **kwargs):

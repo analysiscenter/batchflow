@@ -22,8 +22,8 @@ class OncePipeline:
     def concat(cls, pipe1, pipe2):
         """ Concatenate two pipelines """
         new_p = OncePipeline(pipe1.pipeline)
-        new_p._actions = pipe1._actions + pipe2._actions
-        new_p._namespaces = pipe1._namespaces + [a for a in pipe2._namespaces if a not in pipe1._namespaces]
+        new_p._actions = pipe1._actions + pipe2._actions  # noqa: SLF001; private-member-access
+        new_p._namespaces = pipe1._namespaces + [a for a in pipe2._namespaces if a not in pipe1._namespaces]  # noqa: SLF001; private-member-access
         return new_p
 
     def __getstate__(self):
@@ -210,14 +210,14 @@ class OncePipeline:
         return self._add_action(IMPORT_MODEL_ID, _args=dict(source=source, model_name=name))
 
     def _exec_import_model(self, action):
-        self.pipeline._exec_import_model(None, action)
+        self.pipeline._exec_import_model(None, action)  # noqa: SLF001; private-member-access
 
     def save_model(self, name, *args, **kwargs):
         """ Save a model """
-        return self._add_action(SAVE_MODEL_ID, *args, _args=dict(model_name=name), **kwargs)
+        return self._add_action(SAVE_MODEL_ID, *args, _args=dict(model_name=name), **kwargs)  # noqa: SLF001; private-member-access
 
     def _exec_save_model(self, action):
-        self.pipeline._exec_save_model(None, action)
+        self.pipeline._exec_save_model(None, action)  # noqa: SLF001; private-member-access
 
 
     def load_model(self, name, model_class=None, mode='dynamic', *args, **kwargs):
@@ -230,7 +230,7 @@ class OncePipeline:
                                 **kwargs)
 
     def _exec_load_model(self, action):
-        self.pipeline._exec_load_model(None, action)
+        self.pipeline._exec_load_model(None, action)  # noqa: SLF001; private-member-access
 
 
     def save_to(self, dst, value=None):

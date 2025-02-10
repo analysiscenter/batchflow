@@ -59,7 +59,7 @@ class ConfigAlias:
     """
     def __init__(self, config=None):
         if isinstance(config, ConfigAlias):
-            _config = config._config
+            _config = config._config  # noqa: SLF001; private-member-access
         else:
             _config = []
             if isinstance(config, (dict, Config)):
