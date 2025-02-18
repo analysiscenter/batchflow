@@ -182,6 +182,9 @@ research = [
     { name = "multiprocess" },
     { name = "py-nbtools" },
 ]
+telegram = [
+    { name = "pillow" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -201,6 +204,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=9.4,<11.0" },
+    { name = "pillow", marker = "extra == 'telegram'", specifier = ">=9.4,<11.0" },
     { name = "psutil", marker = "extra == 'monitor'" },
     { name = "ptflops", marker = "extra == 'nn'", specifier = ">=0.6" },
     { name = "py-nbtools", marker = "extra == 'research'", specifier = ">=0.9.14" },
