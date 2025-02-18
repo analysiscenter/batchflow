@@ -1,7 +1,6 @@
 """ A class to send updateable content messages to Telegram. """
 import os
 import json
-import imghdr
 from uuid import uuid4
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
@@ -148,6 +147,8 @@ class TelegramMessage:
     def content_to_dict(content, group=True, **kwargs):
         """ Convert a content (either a path to photo or matplotlib figure) to a telegram-acceptable dictionary. """
         # Convert content to a bytestring
+        from PIL import Image
+
         if isinstance(content, str):
             bytes_ = TelegramMessage.path_to_bytes(content)
         else:
@@ -155,7 +156,8 @@ class TelegramMessage:
 
         # Create unique id of attachment, pack entities in json
         attach_id = f'attached{uuid4().hex}'
-        attach_fmt = imghdr.what(None, bytes_)
+        image = Image.open(BytesIO(bytes_))
+        attach_fmt = image.format.lower()
 
         media_dict = {'media': f'attach://{attach_id}', 'type': 'photo'}
         media_dict = [media_dict] if group else media_dict

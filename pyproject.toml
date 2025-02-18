@@ -70,6 +70,10 @@ jupyter = [
     "requests"
 ]
 
+telegram = [
+    "pillow>=9.4,<11.0",
+]
+
 other = [
     "urllib3>=1.25"
 ]

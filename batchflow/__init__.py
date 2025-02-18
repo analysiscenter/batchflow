@@ -23,7 +23,6 @@ from .exceptions import SkipBatchException, EmptyBatchSequence, StopPipeline
 from .sampler import Sampler, ConstantSampler, NumpySampler, HistoSampler, ScipySampler
 from .utils import save_data_to, read_data_from
 from .utils_random import make_rng, make_seed_sequence, spawn_seed_sequence
-from .utils_telegram import TelegramMessage
 from .utils_transforms import Normalizer, Quantizer
 
 
@@ -34,7 +33,7 @@ plot = try_import(module='.plotter', package=__name__, attribute='plot',
 pylint_notebook = make_delayed_import(module='.utils_notebook', package=__name__, attribute='pylint_notebook')
 get_available_gpus = make_delayed_import(module='.utils_notebook', package=__name__, attribute='get_available_gpus')
 set_gpus = make_delayed_import(module='.utils_notebook', package=__name__, attribute='set_gpus')
-
+TelegramMessage = make_delayed_import(module='.utils_telegram', package=__name__, attribute='TelegramMessage')
 
 try:
     __version__ = version('batchflow')
