@@ -90,7 +90,6 @@ class ModuleDictReprMixin(LayerReprMixin):
         Changes the first dimension (batch) to `?`.
         Makes multiple lines for lists of shapes with provided indentation.
         """
-        #pylint: disable=redefined-outer-name
         if isinstance(shape, tuple):
             msg = ', '.join([f'{item:>3}' for item in shape[1:]])
             return f' (?, {msg}) '

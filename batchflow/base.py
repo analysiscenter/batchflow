@@ -86,7 +86,7 @@ class Baseset:
         """
         _shares = [shares] if isinstance(shares, (int, float)) else shares
         _shares = _shares if len(_shares) > 2 else _shares + [.0]
-        _shares = np.array(_shares).ravel()         # pylint: disable=no-member
+        _shares = np.array(_shares).ravel()
         n_items = len(self)
 
         if _shares.shape[0] > 3:

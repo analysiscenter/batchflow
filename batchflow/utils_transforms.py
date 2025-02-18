@@ -208,7 +208,7 @@ class Quantizer:
         if self.center:
             array -= self.mean
         if self.clip:
-            array = np.clip(array, *self.ranges)
+            np.clip(array, *self.ranges, out=array)
 
         array = np.digitize(array, self.bins, right=False) + np.iinfo(self.dtype).min
         if not self.clip:

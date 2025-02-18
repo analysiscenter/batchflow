@@ -1,5 +1,5 @@
 """ Pooling layers. """
-#pylint: disable=not-callable, invalid-name
+
 import torch
 from torch import nn
 

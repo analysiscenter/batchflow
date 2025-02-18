@@ -135,7 +135,6 @@ class AvgPoolConvInit:
     """ Common mixin for convolutions, initialized with average pooling kernels. """
     def reset_parameters(self):
         """Reset the weight and bias."""
-        #pylint: disable=protected-access
         nn.init.constant_(self.weight, 0)
         denominator = prod(self.weight.shape[2:])
 
@@ -154,7 +153,7 @@ class AvgPoolConvInit:
             nn.init.kaiming_uniform_(self.weight[self.in_channels:], a=sqrt(5))
 
             if self.bias is not None:
-                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[self.in_channels:])
+                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[self.in_channels:])  # noqa: SLF001; private-member-access
                 bound = 1 / sqrt(fan_in)
                 nn.init.uniform_(self.bias, -bound, bound)
 
@@ -191,7 +190,6 @@ class BilinearConvTransposeInit:
     """ Common mixin for convolutions, initialized with bilinear upsampling kernels. """
     def reset_parameters(self):
         """ Set the weight of the first filters to be identical to bilinear upsampling operation. """
-        #pylint: disable=protected-access
         nn.init.constant_(self.weight, 0)
         bilinear_kernel = self.bilinear_kernel(self.kernel_size, self.stride, self.N_DIMS)
         for i in range(self.in_channels):
@@ -209,7 +207,7 @@ class BilinearConvTransposeInit:
             nn.init.kaiming_uniform_(self.weight[:, self.in_channels:], a=sqrt(5))
 
             if self.bias is not None:
-                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[:, self.in_channels:])
+                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[:, self.in_channels:])  # noqa: SLF001; private-member-access
                 bound = 1 / sqrt(fan_in)
                 nn.init.uniform_(self.bias, -bound, bound)
 

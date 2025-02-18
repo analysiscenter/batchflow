@@ -3,7 +3,6 @@
 Mingxing Tan, Quoc V. Le "`EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks
 <https://arxiv.org/abs/1905.11946>`_"
 """
-#pylint: disable=too-many-ancestors
 from math import ceil
 
 import torch

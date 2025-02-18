@@ -1,4 +1,3 @@
-#pylint:disable=logging-fstring-interpolation, too-many-arguments
 """ Research class for muliple parallel experiments. """
 
 import time
@@ -472,7 +471,6 @@ class Research:
         self.terminate(force=True)
 
 class ResearchMonitor:
-    #pylint:disable=attribute-defined-outside-init
     """ Class to get signals from experiment and other objects and store all states.
 
     Parameters
@@ -496,7 +494,7 @@ class ResearchMonitor:
         self.exceptions = self._manager.list()
         self.shared_values = self._manager.dict()
         self.current_iterations = self._manager.dict()
-        self.processes = self._manager.dict({self._manager._process.pid: "MANAGER"})
+        self.processes = self._manager.dict({self._manager._process.pid: "MANAGER"})  # noqa: SLF001; private-member-access
 
         self.research = research
         self.bar = tqdm.tqdm(disable=(not bar), position=0, leave=True) if isinstance(bar, bool) else bar
@@ -622,7 +620,7 @@ class ResearchMonitor:
             if wait:
                 self.stop_signal.get()
             self.stopped = True
-        tqdm.tqdm._instances.clear() #pylint:disable=protected-access
+        tqdm.tqdm._instances.clear()  # noqa: SLF001; private-member-access
 
     def close(self):
         """ Close manager. """

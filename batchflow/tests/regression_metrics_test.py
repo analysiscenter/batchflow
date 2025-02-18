@@ -5,8 +5,6 @@ Verifies the correctness of evaluated metrics for the cases:
     - targets and predictions are border values, i.e. zeros, equal values.
     - targets and predictions are single values.
 """
-# pylint: disable=import-error, no-name-in-module
-# pylint: disable=missing-docstring
 import pytest
 import numpy as np
 np.seterr(divide='ignore', invalid='ignore')

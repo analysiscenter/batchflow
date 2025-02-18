@@ -62,7 +62,6 @@ class DelayedImport:
         return super().__getattr__(name)
 
     def __call__(self, *args, **kwargs):
-        #pylint: disable=not-callable
         return self.loaded_module(*args, **kwargs)
 
     def __getitem__(self, key):

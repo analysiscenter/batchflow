@@ -59,7 +59,7 @@ class ConfigAlias:
     """
     def __init__(self, config=None):
         if isinstance(config, ConfigAlias):
-            _config = config._config
+            _config = config._config  # noqa: SLF001; private-member-access
         else:
             _config = []
             if isinstance(config, (dict, Config)):
@@ -364,7 +364,7 @@ class Domain:
             lengthes = [len(values) for _, values in cube if isinstance(values, (list, tuple, np.ndarray))]
             if len(lengthes) == 0:
                 return None
-            size += np.product(lengthes)
+            size += np.prod(lengthes)
         return size
 
     def __len__(self):
@@ -485,7 +485,7 @@ class Domain:
                 else:
                     additional = ConfigAlias()
                 while self.n_items is None or i < self.n_items:
-                    res = next(iterator) + additional # pylint: disable=stop-iteration-return
+                    res = next(iterator) + additional
                     if self.create_id_prefix:
                         res.set_prefix(keys, n_digits=int(self.create_id_prefix))
                     yield res

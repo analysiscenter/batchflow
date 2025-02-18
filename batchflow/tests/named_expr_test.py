@@ -1,6 +1,5 @@
-# pylint: disable=redefined-outer-name, missing-docstring
 import sys
-from contextlib import ExitStack as does_not_raise
+from contextlib import ExitStack as does_not_raise  # noqa: N813; camelcase-imported-as-lowercase
 
 import pytest
 import numpy as np
@@ -204,7 +203,7 @@ class DummyObject:
         self.func_args = args
         self.func_kwargs = kwargs
 
-class DummyChild():
+class DummyChild:
     """Another dummy class for L expression test"""
     def __init__(self):
         self.attr_one = -1

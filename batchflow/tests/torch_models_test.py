@@ -1,8 +1,4 @@
 """ Test for creation and running torch models. """
-# pylint: disable=import-error, no-name-in-module
-# pylint: disable=redefined-outer-name
-# pylint: disable=possibly-used-before-assignment
-
 import pytest
 
 import numpy as np

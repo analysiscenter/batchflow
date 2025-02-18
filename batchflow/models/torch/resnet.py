@@ -14,7 +14,6 @@ Xie S. et al. "`Aggregated Residual Transformations for Deep Neural Networks
 Jie Hu. et al. "`Squeeze-and-Excitation Networks
 <https://arxiv.org/abs/1709.01507>`_"
 """
-#pylint: disable=too-many-ancestors
 from .base import TorchModel
 from .blocks import ResBlock, BottleneckBlock
 

@@ -71,7 +71,7 @@ class EC(E):
             return config
         return {key: config[key] for key in config if key not in ['device', 'repetition', 'updates']}
 
-class O(E):
+class O(E):  # noqa: E742; ambiguous-class-name
     """ NamedExpression for ExecutableUnit output.
 
     Parameters
@@ -100,7 +100,7 @@ class R(E):
         research = self._get(**kwargs)
         return research.results
 
-class S(E): # pylint: disable=invalid-name
+class S(E):
     """ Research storage. """
     def _transform(self, experiments):
         return [exp.storage for exp in experiments]

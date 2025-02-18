@@ -2,7 +2,7 @@
 import numpy as np
 import torch
 from torch import nn
-import torch.nn.functional as F
+import torch.nn.functional as F # noqa: N812; lowercase-imported-as-non-lowercase
 
 
 def to_n_tuple(value, n):
@@ -31,9 +31,8 @@ def safe_eval(expression, value, names=None):
     Increase number of channels of tensor by the factor of two::
     new_channels = safe_eval('same * 2', old_channels)
     """
-    #pylint: disable=eval-used
     names = names or ['S', 'same']
-    return eval(expression, {}, {name: value for name in names})
+    return eval(expression, {}, {name: value for name in names})  # noqa: S307; suspicious-eval-usage
 
 
 def make_initialization_inputs(inputs, device=None):
@@ -99,12 +98,11 @@ def make_shallow_dict(module):
         - keys are valid attribute names for each children
         - values are submodules themselves, directly contained in torch.nn, e.g. nn.Conv2d, nn.Linear
     """
-    #pylint: disable=protected-access
     if module.__class__ is getattr(nn, module.__class__.__name__, None):
         return {None : module}
 
     result = {}
-    for key, value in module._modules.items():
+    for key, value in module._modules.items():  # noqa: SLF001; private-member-access
         subdict = make_shallow_dict(value)
         for subkey, subvalue in subdict.items():
             store_key = f'{key}/{subkey}' if subkey is not None else key
@@ -118,7 +116,7 @@ def pad(inputs, spatial_shape, target_shape):
     for dim in pad_dims:
         pad_values[dim * 2] = (target_shape[dim] - spatial_shape[dim]) // 2
         pad_values[dim * 2 + 1] = (target_shape[dim] - spatial_shape[dim] + 1) // 2
-    padded_inputs = F.pad(inputs, pad_values[::-1]) # pylint: disable=not-callable
+    padded_inputs = F.pad(inputs, pad_values[::-1])
     return padded_inputs
 
 def center_crop(inputs, target_shape, dims):

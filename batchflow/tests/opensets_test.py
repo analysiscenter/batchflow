@@ -1,5 +1,3 @@
-# pylint: disable=missing-docstring, redefined-outer-name
-
 import sys
 import pytest
 

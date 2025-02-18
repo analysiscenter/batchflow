@@ -1,5 +1,4 @@
 """ Test for model saving and loading """
-# pylint: disable=import-error, no-name-in-module
 
 import pickle
 

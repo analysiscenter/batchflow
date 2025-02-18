@@ -1,5 +1,4 @@
 """ Pytest configuration. """
-# pylint: disable=invalid-name, unused-import
 import pytest
 import numpy as np
 

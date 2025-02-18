@@ -1,11 +1,9 @@
 """ Tests for FilesIndex class. """
-# pylint: disable=missing-docstring
-# pylint: disable=protected-access
-# pylint: disable=redefined-outer-name
+
 import os
 import shutil
 
-from contextlib import ExitStack as does_not_raise
+from contextlib import ExitStack as does_not_raise  # noqa: N813; camelcase-imported-as-lowercase
 
 import pytest
 import numpy as np

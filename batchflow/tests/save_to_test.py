@@ -1,4 +1,3 @@
-# pylint: disable=missing-docstring
 """
 Test save_to function
 """

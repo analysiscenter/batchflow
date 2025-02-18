@@ -1,5 +1,4 @@
 """ Run multiple notebooks. """
-# pylint: disable=import-error
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "6"
@@ -69,7 +68,6 @@ def test_run_notebooks(path, microbatch, device):
     -----
     `device` is moved to separate parameter in order to work properly with `parametrize`.
     """
-    # pylint: disable=exec-used
     if path.startswith(TUTORIALS_DIR) and 'CPU' not in device:
         pytest.skip("Tutorials don't utilize device config.")
 

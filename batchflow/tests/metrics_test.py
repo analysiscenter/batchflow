@@ -11,7 +11,11 @@ Structurally, file consists of four classes, which respectively check:
 Test data is pre-defined, it's shape and contents were chosen for reasons
 of balance between visual simplicity and test coverage diversity.
 """
-# pylint: disable=import-error, no-name-in-module, invalid-name, protected-access
+
+# ruff : noqa: E741; ambiguous-variable-name
+# ruff : noqa: N803; invalid-argument-name
+
+
 import numpy as np
 import pytest
 
@@ -164,7 +168,7 @@ class TestAssembly:
             A class axis
         """
         metric = SegmentationMetrics(TARGETS, predictions, fmt, NUM_CLASSES, axis)
-        res_matrix = metric._confusion_matrix
+        res_matrix = metric._confusion_matrix  # noqa: SLF001; private-member-access
         assert np.array_equal(res_matrix, exp_matrix)
 
 class TestShape:

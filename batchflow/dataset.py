@@ -211,7 +211,7 @@ class Dataset(Baseset):
             raise IndexError
         return type(self).from_dataset(self, self.index.create_subset(index))
 
-    def create_batch(self, index, pos=False, *args, **kwargs): # pylint: disable=arguments-renamed
+    def create_batch(self, index, pos=False, *args, **kwargs):
         """ Create a batch from given indices.
 
             Parameters
@@ -282,7 +282,7 @@ class Dataset(Baseset):
             raise ValueError(f"The dataset has been split into fewer splits than {n}")
         return  getattr(self, 'cv' + str(n))
 
-    def CV(self, expr):
+    def CV(self, expr): # noqa: N802; invalid-function-name
         """ Return a dataset which corresponds to the fold defined as NamedExpression """
         return  F(self.cv)(expr)
 
@@ -321,7 +321,6 @@ class Dataset(Baseset):
             print(dataset.test.cv1.indices) # [4, 5, 6]
             print(dataset.test.cv2.indices) # [7, 8, 9]
         """
-        # pylint: disable=access-member-before-definition
         if self.n_splits is not None:
             for i in range(self.n_splits):
                 cv_attr = 'cv'+str(i)

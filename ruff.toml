@@ -1,0 +1,43 @@
+line-length = 120
+
+[lint]
+select = [
+    "F",       # Pyflakes 
+    "E",       # pycodestyle (Error)
+    "W",       # pycodestyle (Warning)
+    "N",       # pep8-naming
+    "RET",     # flake8-return
+    "S",       # flake8-bandit
+    "SLF",     # flake8-self
+    "BLE",     # flake8-blind-except
+    "UP",      # pyupgrade
+    "YTT",     # flake8-2020
+
+    # TODO: 
+    # "I",
+    # "D",     # pydocstyle
+    # "B",     # flake8-bugbear
+    # "A",     # flake8-builtins
+    # "NPY"    # NumPy-specific rules
+]
+
+ignore = [
+    # Groups of rules
+    "FBT",     # flake8-boolean-trap
+
+    # Single rules
+    "E402",    # module-import-not-at-top-of-file
+    "E731",    # lambda-assignment
+    "F403",    # undefined-local-with-import-star
+    "F405",    # undefined-local-with-import-star-usage
+    "UP015",   # redundant-open-modes
+    "RET504",  # unnecessary-assign
+    "NPY002",   # numpy-legacy-random
+    "S101",
+    "S301",
+    "S102",
+]
+
+[lint.per-file-ignores] 
+"__init__.py" = ["F401"]        # unused-import
+"utils_notebook.py" = ["F401"]  # unused-import

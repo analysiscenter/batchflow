@@ -68,7 +68,7 @@ class TelegramMessage:
         try:
             waiting = self.pool.submit(function, *args, **kwargs)
             self.queue.append(waiting)
-        except Exception as e: #pylint: disable=broad-except
+        except Exception as e: # noqa: BLE001, blind-except
             print(e)
 
 

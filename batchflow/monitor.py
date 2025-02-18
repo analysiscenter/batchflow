@@ -12,10 +12,10 @@ try:
 except ImportError:
     pass
 try:
-    import nvidia_smi
+    import pynvml
 except ImportError:
     # Use this value to raise ImportError later
-    nvidia_smi = None
+    pynvml = None
 
 from .decorators import deprecated
 
@@ -89,7 +89,6 @@ class ResourceMonitor:
 
     def plot(self, plotter=None, positions=None, slice=None, **kwargs):
         """ Simple plots of collected data-points. """
-        #pylint: disable=invalid-name
         x = np.array(self.ticks) - self.ticks[0]
         y = np.array(self.data)[:len(x)].reshape(len(x), -1)
 
@@ -318,8 +317,8 @@ class RSSminusSHRMonitor(ProcessResourceMonitor):
 class GPUResourceMonitor(ResourceMonitor):
     """ If the `CUDA_VISIBLE_DEVICES` is set, check it and return device numbers. Otherwise, return [0]. """
     def __init__(self, function=None, frequency=0.1, gpu_list=None, **kwargs):
-        if nvidia_smi is None:
-            raise ImportError('Install Python interface for nvidia_smi')
+        if pynvml is None:
+            raise ImportError('Install Python interface for pynvml')
         super().__init__(function=function, frequency=frequency, **kwargs)
 
         # Fallback to env variable
@@ -328,8 +327,8 @@ class GPUResourceMonitor(ResourceMonitor):
             env_variable = literal_eval(env_variable)
             gpu_list = list(env_variable) if isinstance(env_variable, tuple) else [env_variable]
 
-        nvidia_smi.nvmlInit()
-        gpu_handles = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
+        pynvml.nvmlInit()
+        gpu_handles = [pynvml.nvmlDeviceGetHandleByIndex(i) for i in gpu_list]
         self.kwargs.update({'gpu_list': gpu_list, 'gpu_handles': gpu_handles})
 
     def __getstate__(self):
@@ -340,12 +339,12 @@ class GPUResourceMonitor(ResourceMonitor):
     def __setstate__(self, state):
         self.__dict__ = state
 
-        nvidia_smi.nvmlInit()
-        self.kwargs['gpu_handles'] = [nvidia_smi.nvmlDeviceGetHandleByIndex(i) for i in self.kwargs['gpu_list']]
+        pynvml.nvmlInit()
+        self.kwargs['gpu_handles'] = [pynvml.nvmlDeviceGetHandleByIndex(i) for i in self.kwargs['gpu_list']]
 
     def __del__(self):
         super().__del__()
-        nvidia_smi.nvmlShutdown()
+        pynvml.nvmlShutdown()
 
 
 class GPUMonitor(GPUResourceMonitor):
@@ -356,7 +355,7 @@ class GPUMonitor(GPUResourceMonitor):
     def get_usage(gpu_handles=None, **kwargs):
         """ Track GPU usage. """
         _ = kwargs
-        return [nvidia_smi.nvmlDeviceGetUtilizationRates(item).gpu for item in gpu_handles]
+        return [pynvml.nvmlDeviceGetUtilizationRates(item).gpu for item in gpu_handles]
 
 class GPUMemoryUtilizationMonitor(GPUResourceMonitor):
     """ Track GPU memory utilization. """
@@ -366,7 +365,7 @@ class GPUMemoryUtilizationMonitor(GPUResourceMonitor):
     def get_usage(gpu_handles=None, **kwargs):
         """ Track GPU memory utilization. """
         _ = kwargs
-        return [nvidia_smi.nvmlDeviceGetUtilizationRates(item).memory for item in gpu_handles]
+        return [pynvml.nvmlDeviceGetUtilizationRates(item).memory for item in gpu_handles]
 
 class GPUMemoryMonitor(GPUResourceMonitor):
     """ Track GPU memory usage. """
@@ -376,7 +375,7 @@ class GPUMemoryMonitor(GPUResourceMonitor):
     def get_usage(gpu_handles=None, **kwargs):
         """ Track GPU memory usage. """
         _ = kwargs
-        result = [nvidia_smi.nvmlDeviceGetMemoryInfo(item) for item in gpu_handles]
+        result = [pynvml.nvmlDeviceGetMemoryInfo(item) for item in gpu_handles]
         result = [100 * item.used / item.total for item in result]
         return result
 

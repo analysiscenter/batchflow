@@ -1,16 +1,15 @@
 """ Tests for Research and correspong classes. """
-# pylint: disable=no-name-in-module, missing-docstring, redefined-outer-name
 import os
 import sys
 import glob
-from contextlib import ExitStack as does_not_raise
+from contextlib import ExitStack as does_not_raise # noqa: N813; camelcase-imported-as-lowercase
 import pytest
 import psutil
 
 import numpy as np
 
 from batchflow import Dataset, Pipeline, B, V, C
-from batchflow import NumpySampler as NS
+from batchflow import NumpySampler as NS # noqa: N817; camelcase-imported-as-acronym
 from batchflow.models.torch import ResNet
 from batchflow.opensets import CIFAR10
 from batchflow.research import Experiment, Executor, Domain, Option, Research, E, EC, O, S, ResearchResults, Alias
@@ -100,11 +99,11 @@ class TestDomain:
     @pytest.mark.parametrize('b', [[2, 3, 4]])
     @pytest.mark.parametrize('n_reps', [1, 2])
     def test_operations(self, op, a, b, n_reps):
-        option_1 = Domain({'a': a}) #pylint:disable=unused-variable
-        option_2 = Domain(b=b) #pylint:disable=unused-variable
+        option_1 = Domain({'a': a}) # noqa: F841; unused-variable
+        option_2 = Domain(b=b) # noqa: F841; unused-variable
 
         if not (op == '@' and len(a) != len(b)):
-            domain = eval(f'option_1 {op} option_2') # pylint:disable=eval-used
+            domain = eval(f'option_1 {op} option_2') # noqa: S307; suspicious-eval-usage
             domain.set_iter_params(n_reps=n_reps)
 
             configs = list(domain.iterator)
@@ -197,7 +196,7 @@ class TestExecutor:
 
         assert executor.experiments[0].results['sum'][0] == sum(range(10))
 
-    def test_direct_generator(self, generator): #pylint: disable=unused-argument
+    def test_direct_generator(self, generator):
         experiment = (Experiment()
             .add_namespace(locals())
             .generator(10, mode='generator')

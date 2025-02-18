@@ -1,5 +1,4 @@
 """ Test :meth:`.Batch._assemble` """
-# pylint: disable=protected-access
 import numpy as np
 
 import pytest
@@ -20,7 +19,7 @@ def test_handle_exceptions():
     batch = FakeBatch(np.arange(2))
 
     with pytest.raises(RuntimeError) as err:
-        batch._assemble(np.asarray([Exception('Fake exception'), 0]))
+        batch._assemble(np.asarray([Exception('Fake exception'), 0]))  # noqa: SLF001; private-member-access
 
     assert 'Could not assemble the batch' in str(err.value)
 
@@ -36,7 +35,7 @@ def test_handle_exceptions():
 def test_assemble(all_results, kwargs, res):
     """ ensure that values from `all_results` are put into components properly """
     batch = FakeBatch(np.arange(2))
-    batch._assemble(np.asarray(all_results), **kwargs)
+    batch._assemble(np.asarray(all_results), **kwargs)  # noqa: SLF001; private-member-access
 
     assert_arrays_equal(batch.c1, res['c1'])
     assert_arrays_equal(batch.c2, res['c2'])

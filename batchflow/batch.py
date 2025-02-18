@@ -1,5 +1,4 @@
 """ Contains basic Batch classes """
-# pylint: disable=ungrouped-imports
 import os
 import traceback
 import threading
@@ -36,12 +35,12 @@ class MethodsTransformingMeta(type):
            is necessary in order to allow inner calls of untransformed versions
            (e.g. `ImagesBatch.scale` calls `ImagesBatch.crop` under the hood).
     """
-    def __new__(mcs, name, bases, namespace):
+    def __new__(cls, name, bases, namespace):
         namespace_ = namespace.copy()
         for object_name, object_ in namespace.items():
             transform_kwargs = getattr(object_, 'apply_kwargs', None)
             if transform_kwargs is not None:
-                namespace_[object_name] = mcs.use_apply_parallel(object_, **transform_kwargs)
+                namespace_[object_name] = cls.use_apply_parallel(object_, **transform_kwargs)
 
                 disclaimer = f"This is an untransformed version of `{object_.__qualname__}`.\n\n"
                 object_.__doc__ = disclaimer + (object_.__doc__ or '')
@@ -49,17 +48,17 @@ class MethodsTransformingMeta(type):
                 object_.__qualname__ = '.'.join(object_.__qualname__.split('.')[:-1] + [object_.__name__])
                 namespace_[object_.__name__] = object_
 
-        return super().__new__(mcs, name, bases, namespace_)
+        return super().__new__(cls, name, bases, namespace_)
 
     @classmethod
-    def use_apply_parallel(mcs, method, **apply_kwargs):
+    def use_apply_parallel(cls, method, **apply_kwargs):
         """ Wrap passed `method` in accordance with `all` arg value """
         @functools.wraps(method)
         def apply_parallel_wrapper(self, *args, **kwargs):
             transform = self.apply_parallel
 
             # Bound method to class:
-            method_ = method.__get__(self, type(self)) # pylint: disable=unnecessary-dunder-call
+            method_ = method.__get__(self, type(self))
 
             kwargs_full = {**self.apply_defaults, **apply_kwargs, **kwargs}
             return transform(method_, *args, **kwargs_full)
@@ -122,7 +121,7 @@ class Batch(metaclass=MethodsTransformingMeta):
                     if self._data is None and self._preloaded is not None:
                         self.load(src=self._preloaded)
             res = self._data if self.components is None else self._data_named
-        except Exception as exc:
+        except Exception as exc: # noqa: BLE001, blind-except
             print("Exception:", exc)
             traceback.print_tb(exc.__traceback__)
             raise
@@ -200,7 +199,7 @@ class Batch(metaclass=MethodsTransformingMeta):
 
     def deepcopy(self):
         """ Return a deep copy of the batch. """
-        return self.__copy__() # pylint: disable=unnecessary-dunder-call
+        return self.__copy__()
 
     @classmethod
     def from_data(cls, index=None, data=None):
@@ -390,7 +389,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         return self
 
     def __getattr__(self, name):
-        if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
+        if self.components is not None and name in self.components:
             return getattr(self.data, name, None)
         raise AttributeError(f"{name} not found in class {self.__class__.__name__}")
 
@@ -404,7 +403,7 @@ class Batch(metaclass=MethodsTransformingMeta):
                     else:
                         self._data_named = create_item_class(self.components, self._data)
                 return
-            if name in self.components:    # pylint: disable=unsupported-membership-test
+            if name in self.components:
                 # preload data if needed
                 _ = self.data
                 if self._data_named is None or self._data_named.components != self.components:
@@ -585,7 +584,6 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         TODO: move logic of applying `post` function from `inbatch_parallel` here, as well as remove `use_self` arg.
         """
-        #pylint: disable=keyword-arg-before-vararg
         # Parse parameters: fill with class-wide defaults
         init = init or self.apply_defaults.get('init', None)
         post = post or self.apply_defaults.get('post', None)
@@ -628,7 +626,7 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         # Compute result. Unbind the method to pass self explicitly
         parallel = inbatch_parallel(init=init, post=post, target=target, src=src, dst=dst)
-        transform = parallel(type(self)._apply_once)
+        transform = parallel(type(self)._apply_once)  # noqa: SLF001; private-member-access
         result = transform(self, *args, func=func, p=p, src=src, dst=dst,
                            apply_parallel_id=worker_ids, apply_parallel_seeds=rng_seeds, **kwargs)
         return result
@@ -811,7 +809,7 @@ class Batch(metaclass=MethodsTransformingMeta):
             components = tuple(dst or self.components)
             try:
                 item = tuple(data[i] for i in components)
-            except Exception as e:
+            except Exception as e: # noqa: BLE001, blind-except
                 raise KeyError('Cannot find components in corresponfig file', file_name) from e
         return item
 
@@ -882,9 +880,9 @@ class Batch(metaclass=MethodsTransformingMeta):
         if fmt == 'feather':
             feather.write_dataframe(_data, filename, *args, **kwargs)
         elif fmt == 'hdf5':
-            _data.to_hdf(filename, *args, **kwargs)   # pylint:disable=no-member
+            _data.to_hdf(filename, *args, **kwargs)
         elif fmt == 'csv':
-            _data.to_csv(filename, *args, **kwargs)   # pylint:disable=no-member
+            _data.to_csv(filename, *args, **kwargs)
         else:
             raise ValueError(f'Unknown format {fmt}')
 

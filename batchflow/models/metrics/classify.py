@@ -1,5 +1,6 @@
 """ Contains two class classification metrics """
-# pylint: disable=superfluous-parens, unnecessary-lambda-assignment
+# ruff : noqa: E741; ambiguous-variable-name
+
 from copy import copy
 from functools import partial
 
@@ -224,21 +225,18 @@ class ClassificationMetrics(Metrics):
 
     def append(self, metrics):
         """ Append confusion matrix with data from another metrics"""
-        # pylint: disable=protected-access
-        self._confusion_matrix = np.concatenate((self._confusion_matrix, metrics._confusion_matrix), axis=0)
+        self._confusion_matrix = np.concatenate((self._confusion_matrix, metrics._confusion_matrix), axis=0)  # noqa: SLF001; private-member-access
 
     def update(self, metrics):
         """ Update confusion matrix with data from another metrics"""
-        # pylint: disable=protected-access
         if self._no_zero_axis:
-            self._confusion_matrix = self._confusion_matrix + metrics._confusion_matrix
+            self._confusion_matrix = self._confusion_matrix + metrics._confusion_matrix  # noqa: SLF001; private-member-access
         else:
-            self._confusion_matrix = np.concatenate((self._confusion_matrix, metrics._confusion_matrix), axis=0)
+            self._confusion_matrix = np.concatenate((self._confusion_matrix, metrics._confusion_matrix), axis=0)  # noqa: SLF001; private-member-access
 
     def __getitem__(self, item):
-        # pylint: disable=protected-access
         metrics = self.copy()
-        metrics._confusion_matrix = metrics._confusion_matrix[item]
+        metrics._confusion_matrix = metrics._confusion_matrix[item]  # noqa: SLF001; private-member-access
         return metrics
 
     def _calc(self):

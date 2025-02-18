@@ -34,7 +34,6 @@ class CrossEntropyLoss(nn.Module):
         self.dynamic = isinstance(weight, str) or callable(weight)
 
     def forward(self, prediction, target):
-        # pylint: disable=not-callable
         kwargs = dict(self.kwargs)
         target = target.to(dtype=torch.long)
 

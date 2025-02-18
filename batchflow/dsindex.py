@@ -1,5 +1,4 @@
 """ DatasetIndex """
-# pylint: disable=arguments-renamed
 import os
 import math
 import glob
@@ -224,7 +223,6 @@ class DatasetIndex(Baseset):
 
         order = self.shuffle(shuffle)
 
-        # pylint: disable=attribute-defined-outside-init
         if valid_share > 0:
             validation_pos = order[:valid_share]
             self.validation = self.create_subset(self.subset_by_pos(validation_pos))

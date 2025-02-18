@@ -1,4 +1,6 @@
 """ Contains MNIST dataset """
+# ruff : noqa : S310; suspicious-url-open-usage
+
 import os
 import logging
 import tempfile
@@ -57,7 +59,7 @@ class MNIST(ImagesOpenset):
     def _gather_data(self, all_res, *args, **kwargs):
         _ = args, kwargs
         if any_action_failed(all_res):
-            raise IOError('Could not download files:', all_res)
+            raise OSError('Could not download files:', all_res)
 
         images = np.concatenate([all_res[0], all_res[2]])
         labels = np.concatenate([all_res[1], all_res[3]])

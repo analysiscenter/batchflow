@@ -1,4 +1,3 @@
-# pylint: disable=too-few-public-methods, method-hidden
 """ Contains Sampler-classes. """
 
 import warnings
@@ -76,7 +75,7 @@ def arithmetize(cls):
     return cls
 
 @arithmetize
-class Sampler():
+class Sampler:
     """ Base class Sampler that implements algebra of Samplers.
 
     Attributes

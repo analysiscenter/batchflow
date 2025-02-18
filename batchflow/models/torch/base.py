@@ -1,5 +1,4 @@
 """ Eager version of TorchModel. """
-# pylint: disable=unnecessary-lambda-assignment
 import os
 import re
 import inspect
@@ -1078,7 +1077,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         # Lock the entire method; release in any case
         try:
             if lock:
-                self.model_lock.acquire() #pylint: disable=consider-using-with
+                self.model_lock.acquire()
             self.last_train_info = {}
 
             # Parse inputs and targets: always a list
@@ -1131,7 +1130,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             profile = profile or self.profile
             if profile:
                 profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
-                profiler.__enter__() # pylint: disable=unnecessary-dunder-call
+                profiler.__enter__()
 
             # Train on each of the microbatches
             chunked_outputs = []
@@ -1209,7 +1208,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         targets = self.transfer_to_device(targets, non_blocking=True)
 
         # Compute predictions; store shapes for introspection
-        with torch.cuda.amp.autocast(enabled=self.amp):
+        with torch.amp.autocast('cuda', enabled=self.amp):
             predictions = self.model(inputs)
 
         # SAM: store grads from previous microbatches
@@ -1217,7 +1216,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self._train_sam_store_gradients()
 
         # Compute loss and gradients; store loss value for every microbatch
-        with torch.cuda.amp.autocast(enabled=self.amp):
+        with torch.amp.autocast('cuda', enabled=self.amp):
             loss = self.loss(predictions, targets)
             loss_ = loss / sync_frequency
 
@@ -1308,7 +1307,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         params_with_grads = [p + eps for p, eps in zip(params_with_grads, epsilons)]
 
         # Compute new gradients: direction to move to minimize the local maxima
-        with torch.cuda.amp.autocast(enabled=self.amp):
+        with torch.amp.autocast('cuda', enabled=self.amp):
             predictions_inner = self.model(inputs)
             loss_inner = self.loss(predictions_inner, targets) / sync_frequency
         (self.scaler.scale(loss_inner) if self.amp else loss_inner).backward()
@@ -1391,7 +1390,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         # Acquire lock; release in any case
         try:
             if lock:
-                self.model_lock.acquire() #pylint: disable=consider-using-with
+                self.model_lock.acquire()
             self.last_predict_info = {}
 
             # Parse outputs: always a dict
@@ -1464,7 +1463,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
         targets = targets[0] if len(targets) == 1 and isinstance(targets, list) else targets
 
-        with (torch.no_grad() if no_grad else nullcontext()), torch.cuda.amp.autocast(enabled=amp):
+        with (torch.no_grad() if no_grad else nullcontext()), torch.amp.autocast('cuda', enabled=amp):
             inputs = self.transfer_to_device(inputs)
             predictions = self.model(inputs)
 
@@ -1588,7 +1587,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     def compute_outputs(self, predictions, outputs_dict, loss=None):
-        """ Produce additional outputs, defined in the outputs parameter of `train` 
+        """ Produce additional outputs, defined in the outputs parameter of `train`
         or `predict` functions from predictions.
         """
         result = OrderedDict()
@@ -1624,7 +1623,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
                 predictions = predictions[0] if isinstance(predictions, (tuple, list)) else predictions
                 if operation == 'softplus':
-                    result = torch.nn.functional.softplus(predictions) # pylint: disable=not-callable
+                    result = torch.nn.functional.softplus(predictions)
                 elif operation == 'sigmoid':
                     result = torch.sigmoid(predictions)
                 elif operation == 'sigmoid_uint8':
@@ -1819,7 +1818,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             # Load model from onnx, if needed
             if 'onnx' in checkpoint:
                 try:
-                    from onnx2torch import convert #pylint: disable=import-outside-toplevel
+                    from onnx2torch import convert
                 except ImportError as e:
                     raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
 

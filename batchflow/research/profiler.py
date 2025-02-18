@@ -1,4 +1,3 @@
-#pylint: disable=super-init-not-called
 """ Research profilers. """
 
 import os
@@ -90,8 +89,8 @@ class ExperimentProfiler(Profiler):
 class ExecutorProfiler(ExperimentProfiler):
     """ Profiler for Executor experiments. """
     def __init__(self, experiments):
-        self.profilers = [experiment._profiler for experiment in experiments]
-        self.detailed = experiments[0]._profiler.detailed
+        self.profilers = [experiment._profiler for experiment in experiments]  # noqa: SLF001; private-member-access
+        self.detailed = experiments[0]._profiler.detailed  # noqa: SLF001; private-member-access
 
     @property
     def profile_info(self):

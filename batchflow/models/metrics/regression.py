@@ -121,7 +121,6 @@ class RegressionMetrics(Metrics):
         return np.sqrt(self.mean_squared_error())
 
     def r2_score(self):
-        # pylint: disable=missing-docstring
         if self.weights is not None:
             weight = self.weights[:, np.newaxis]
         else:
@@ -133,7 +132,6 @@ class RegressionMetrics(Metrics):
         return 1 - (numerator / denominator)
 
     def explained_variance_ratio(self):
-        # pylint: disable=missing-docstring
         diff_avg = np.average(self.predictions - self.targets, axis=0, weights=self.weights)
         numerator = np.average((self.predictions - self.targets - diff_avg) ** 2, axis=0, weights=self.weights)
 
@@ -151,4 +149,3 @@ class RegressionMetrics(Metrics):
             The maximum difference between pred and true values to classify sample as correct.
          """
         return (np.abs(self.predictions - self.targets) < gap).sum(axis=0) / self.targets.shape[0]
-    

@@ -134,13 +134,12 @@ def parse_name(name):
 def generate_id(config, random, create_prefix=False):
     """ Generate id for experiment. """
     name = config.alias()['_prefix'] if create_prefix else ''
-    name += hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8]
+    name += hashlib.md5(config.alias(as_string=True).encode('utf-8')).hexdigest()[:8] # noqa: S324; hashlib-insecure-hash-function
     name += ''.join(str(i) for i in random.integers(10, size=8))
     return name
 
 def create_output_stream(redirect, dump=False, filename=None, path=None, common=True):
     """ Create stream to redirect stdout/stderr. """
-    #pylint: disable=consider-using-with
     if bool(redirect):
         values = [1, 3] if common else [2, 3]
         if redirect in values:

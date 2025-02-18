@@ -1,5 +1,4 @@
 """ Contains mixin for :class:`~.torch.TorchModel` to provide textual and graphical visualizations. """
-import sys
 from ast import literal_eval
 from pprint import pformat as _pformat
 
@@ -14,13 +13,8 @@ from ...decorators import deprecated
 
 def pformat(object, indent=1, width=80, depth=None, *, compact=False, sort_dicts=True, underscore_numbers=False):
     """ Backwards compatible version of pformat. """
-    # pylint: disable=unexpected-keyword-arg
     _ = underscore_numbers
-    if sys.version_info.minor < 8:
-        result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact)
-    else:
-        result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact,
-                          sort_dicts=sort_dicts)
+    result = _pformat(object=object, indent=indent, width=width, depth=depth, compact=compact, sort_dicts=sort_dicts)
     return result
 
 
@@ -192,7 +186,7 @@ class VisualizationMixin:
 
         if overlay_lr:
             data = (self.loss_list[slc],
-                    [l[0] for l in self.lr_list][slc])
+                    [lr[0] for lr in self.lr_list][slc])
         else:
             data = (self.loss_list[slc], None)
 
@@ -301,7 +295,6 @@ class ExtractionMixin:
         -------
         Intermediate activations in the same structure, as `layers`.
         """
-        #pylint: disable=unnecessary-comprehension
         if layers is None:
             raise TypeError('get_intermediate_activations() missing 1 required argument: `layers`')
 

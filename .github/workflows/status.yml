@@ -11,19 +11,18 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    container:
-      image: analysiscenter1/ds-py3:3.8
-      options: --entrypoint ""
-
     steps:
     - uses: actions/checkout@v3
 
-    - name: Update pylint
-      run: pip3 install -U pylint>=3.2
+    - name: Install from local source
+      run: |
+        pip install uv
+        uv sync --all-extras
 
-    - name: Check pylint
-      run: pylint -rn --rcfile pylintrc batchflow
+    - name: Linting
+      run: uv run ruff check batchflow
 
     - name: Run tests
       if: always()
-      run: pytest -m "not slow" --disable-pytest-warnings -v
+      run:
+        uv run pytest -m "not slow" --disable-pytest-warnings -v

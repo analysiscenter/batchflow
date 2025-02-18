@@ -138,7 +138,7 @@ class OptimalBatchSizeMixin:
                                     tail_size=20, update_method='bruteforce',
                                     factor=2):
         """ This method dynamically adjusts the batch size to maximize the utilization of available GPU memory
-        without exceeding it, based on either a binary search or a bruteforce approach. 
+        without exceeding it, based on either a binary search or a bruteforce approach.
         """
         count = 0
         # if None => make equal distance between low, start_batch_size and high
@@ -213,7 +213,6 @@ class OptimalBatchSizeMixin:
 
         For stable measurements, we make `n` iterations of `train`/`predict`, until the memory consumption stabilizes.
         """
-        #pylint: disable=consider-iterating-dictionary
         table = {}
         batch_size = start_batch_size
         for _ in Notifier(pbar)(range(max_iters)):
@@ -262,8 +261,8 @@ class OptimalBatchSizeMixin:
 
     def _get_memory_utilization(self, method, inputs, targets, n, frequency,
                                 time_threshold, tail_size, std_threshold):
-        """ Ensure stable GPU memory utilization measurements for a given batch by running 
-        the specified method `n` times. 
+        """ Ensure stable GPU memory utilization measurements for a given batch by running
+        the specified method `n` times.
         """
         with GPUMemoryMonitor(frequency=frequency) as monitor:
             for _ in range(n):

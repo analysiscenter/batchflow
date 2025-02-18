@@ -27,7 +27,6 @@ class Combine(nn.Module):
         If 'drop_path', then inputs are summed with probability:
         for each batch item, there is a chance to not add anything.
     """
-    #pylint: disable=attribute-defined-outside-init
     OPS = {
         'concat': ['concat', 'cat', '|'],
         'sum': ['sum', 'plus', '+'],

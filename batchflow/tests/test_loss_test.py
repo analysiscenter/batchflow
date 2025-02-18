@@ -1,5 +1,4 @@
 """ Test for test loss as metric """
-# pylint: disable=import-error, no-name-in-module
 
 import numpy as np
 import pytest
