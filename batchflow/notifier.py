@@ -19,7 +19,6 @@ except ImportError:
 
 from .named_expr import NamedExpression, eval_expr
 from .monitor import ResourceMonitor, MONITOR_ALIASES
-from .utils_telegram import TelegramMessage
 
 
 
@@ -255,6 +254,8 @@ class Notifier:
         # Prepare Telegram notifications
         self.telegram = telegram
         if self.telegram or initialize_telegram:
+            from .utils_telegram import TelegramMessage
+
             self.telegram_text = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
             self.telegram_media = TelegramMessage(token=token, chat_id=chat_id, silent=silent)
 
