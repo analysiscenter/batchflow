@@ -28,6 +28,7 @@ jobs:
         git reset
         git clean -fdx
         git checkout ${{ github.sha }} -- batchflow docs
+        pip install .
         cd docs
         make html
 
