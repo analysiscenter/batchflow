@@ -22,13 +22,13 @@ jobs:
         export LC_ALL="C"
         pip3 install sphinx
         pip3 install sphinx-rtd-theme
+        pip3 install .
         git checkout --orphan gh-pages
         rm -rf *
         git fetch
         git reset
         git clean -fdx
         git checkout ${{ github.sha }} -- batchflow docs
-        pip install .
         cd docs
         make html
 
