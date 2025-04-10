@@ -10,22 +10,25 @@ jobs:
   codecov:
     runs-on: ubuntu-latest
 
-    container:
-      image: analysiscenter1/ds-py3:3.8
-      options: --entrypoint ""
-
     steps:
     - uses: actions/checkout@v3
 
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.9
+
     - name: Generate coverage report
       run: |
-        pip3 install -U pytest-cov
-        pytest -m "not slow" --cov=./ --cov-report=xml
+        pip install uv
+        uv sync --all-extras
+        uv pip install -U pytest-cov
+        uv run pytest -m "not slow" --cov=./ --cov-report=xml
 
     - name: Upload coverage to Codecov
       run: |
-        pip3 install -U codecov
-        codecov -t ${{ secrets.CODECOV_TOKEN }}
+        uv pip install -U codecov
+        uv run codecov -t ${{ secrets.CODECOV_TOKEN }}
 
 
   pypi:
@@ -50,7 +53,7 @@ jobs:
     - name: Build
       run: |
         uv pip install build
-        uv python -m build
+        uv run python -m build
 
     - name: Publish
       uses: pypa/gh-action-pypi-publish@release/v1
