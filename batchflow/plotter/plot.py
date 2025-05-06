@@ -855,10 +855,10 @@ class Subplot:
 
         self.annotations = {}
 
-        self.ax.clear()
         for layer in self.layers:
             for obj in layer.objects:
                 obj.remove()
+        self.ax.clear()
         self.layers = []
 
 
