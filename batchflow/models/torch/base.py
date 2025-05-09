@@ -683,7 +683,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.make_loss()
         self.make_optimizer()
         self.make_decay()
-        self.scaler = torch.cuda.amp.GradScaler()
+        self.scaler = torch.GradScaler("cuda")
 
         self.setup_gradient_clipping()
         self.setup_weights_averaging()
