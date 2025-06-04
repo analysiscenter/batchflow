@@ -91,11 +91,11 @@ add_module_names = False
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
-    'numpy': ('http://docs.scipy.org/doc/numpy/', None),
-    'scipy': ('http://docs.scipy.org/doc/scipy/reference/', None),
-    'pandas': ('http://pandas-docs.github.io/pandas-docs-travis/', None),
+    'numpy': ('https://numpy.org/doc/stable/', None),
+    'scipy': ('https://docs.scipy.org/doc/scipy/', None),
+    'pandas': ('http://pandas.pydata.org/pandas-docs/stable/', None),
 }
-autodoc_mock_imports = ['torch']
+autodoc_mock_imports = ['torch', 'torchvision']
 viewcode_follow_imported_members = True
 
 # Output file base name for HTML help builder.
