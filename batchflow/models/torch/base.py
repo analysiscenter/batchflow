@@ -1812,6 +1812,21 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self.set_model_mode(mode)
 
             return
+        elif isinstance(file, str) and file.endswith(".onnx"):
+            try:
+                from onnx2torch import convert
+            except ImportError as e:
+                raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
+
+            model = convert(file).eval()
+            self.model = model
+
+            self.model_to_device()
+
+            if make_infrastructure:
+                self.make_infrastructure()
+
+            self.set_model_mode(mode)
 
         kwargs['map_location'] = self.device
 
