@@ -15,7 +15,6 @@ import torch
 from torch import nn
 from torch.optim.swa_utils import AveragedModel, SWALR
 
-
 from sklearn.decomposition import PCA
 
 from ...utils_import import make_delayed_import
@@ -1669,7 +1668,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Store model
-    def save(self, path, use_onnx=False, path_onnx=None, use_openvino=False, path_openvino=None,
+    def save(self, path, use_onnx=False, path_onnx=None, use_openvino=False, use_safetensors=False, path_openvino=None,
              batch_size=None, opset_version=13, pickle_module=dill, ignore_attributes=None, **kwargs):
         """ Save underlying PyTorch model along with meta parameters (config, device spec, etc).
 
@@ -1689,6 +1688,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             If provided, then path to store the ONNX model; default `path_onnx` is `path` with '_onnx' postfix.
         use_openvino: bool
             Whether to store model as openvino xml file.
+        use_safetensors: bool
+            Whether to store model as safetensors file.
         path_openvino : str, optional
             Used only if `use_openvino` is True.
             If provided, then path to store the openvino model; default `path_openvino` is `path` with '_openvino'
@@ -1756,6 +1757,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             preserved_dict = {item: getattr(self, item) for item in preserved}
             torch.save({'openvino': True, 'path_openvino': path_openvino, **preserved_dict},
                        path, pickle_module=pickle_module, **kwargs)
+
+        elif use_safetensors:
+            from safetensors.torch import save_file
+            state_dict = self.model.state_dict()
+            save_file(state_dict, path)
 
         else:
             preserved = set(self.PRESERVE) - set(ignore_attributes)
