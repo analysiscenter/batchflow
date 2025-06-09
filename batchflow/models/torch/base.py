@@ -1799,6 +1799,20 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         else:
             self._parse_devices()
 
+        if isinstance(file, str) and file.endswith(".safetensors"):
+            from safetensors.torch import load_file
+            state_dict = load_file(file, device=device)
+            self.model.load_state_dict(state_dict)
+
+            self.model_to_device()
+
+            if make_infrastructure:
+                self.make_infrastructure()
+
+            self.set_model_mode(mode)
+
+            return
+
         kwargs['map_location'] = self.device
 
         # Load items from disk storage and set them as insance attributes
