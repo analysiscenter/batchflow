@@ -1668,7 +1668,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Store model
-    def save(self, path, use_onnx=False, path_onnx=None, use_openvino=False, use_safetensors=False, path_openvino=None,
+    def save(self, path, use_onnx=False, path_onnx=None, use_openvino=False, path_openvino=None,
+             use_safetensors=False, path_safetensors=None,
              batch_size=None, opset_version=13, pickle_module=dill, ignore_attributes=None, **kwargs):
         """ Save underlying PyTorch model along with meta parameters (config, device spec, etc).
 
@@ -1761,7 +1762,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         elif use_safetensors:
             from safetensors.torch import save_file
             state_dict = self.model.state_dict()
-            save_file(state_dict, path)
+
+            path_safetensors = path_safetensors or (path + "safetensors")
+            save_file(state_dict, path_safetensors)
+            torch.save({'safetensors': True, 'path_safetensors': path_safetensors, **preserved_dict},
+                       path, pickle_module=pickle_module, **kwargs)
 
         else:
             preserved = set(self.PRESERVE) - set(ignore_attributes)
