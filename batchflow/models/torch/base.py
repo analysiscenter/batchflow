@@ -1833,7 +1833,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.set_model_mode(mode)
 
                 return
-            elif file.endswith(".onnx"):
+
+            if file.endswith(".onnx"):
                 try:
                     from onnx2torch import convert
                 except ImportError as e:
@@ -1850,7 +1851,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.set_model_mode(mode)
 
                 return
-            elif file.endswith(".openvino"):
+
+            if file.endswith(".openvino"):
                 model = OVModel(model_path=file, **model_load_kwargs)
                 self.model = model
 
