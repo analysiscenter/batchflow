@@ -399,6 +399,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     PRESERVE_ONNX = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
     PRESERVE_OPENVINO = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
+    PRESERVE_SAFETENSORS = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
 
     def __init__(self, config=None):
         if not isinstance(config, (dict, Config)):
@@ -1767,6 +1768,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             path_safetensors = path_safetensors or (path + "safetensors")
             save_file(state_dict, path_safetensors)
+
+            preserved = self.PRESERVE_SAFETENSORS - ignore_attributes
+            preserved_dict = {item: getattr(self, item) for item in preserved}
 
             if pickle_metadata:
                 torch.save({'safetensors': True, 'path_safetensors': path_safetensors, **preserved_dict},
