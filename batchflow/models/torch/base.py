@@ -1837,6 +1837,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                     self.make_infrastructure()
 
                 self.set_model_mode(mode)
+
+                return
             elif file.endswith(".openvino"):
                 model = OVModel(model_path=file, **model_load_kwargs)
                 self.model = model
