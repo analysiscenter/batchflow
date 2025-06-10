@@ -1669,7 +1669,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Store model
-    def save(self, path, use_onnx=False, path_onnx=None, use_openvino=False, path_openvino=None,
+    def save(self, path=None, use_onnx=False, path_onnx=None, use_openvino=False, path_openvino=None,
              use_safetensors=False, path_safetensors=None, pickle_metadata=False,
              batch_size=None, opset_version=13, pickle_module=dill, ignore_attributes=None, **kwargs):
         """ Save underlying PyTorch model along with meta parameters (config, device spec, etc).
@@ -1681,7 +1681,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         Parameters
         ----------
-        path : str
+        path : Optional[str]
             Path to a file where the model data will be stored.
         use_onnx: bool
             Whether to store model in ONNX format.
@@ -1709,9 +1709,14 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         kwargs : dict
             Other keyword arguments, passed directly to :func:`torch.save`.
         """
-        dirname = os.path.dirname(path)
-        if dirname and not os.path.exists(dirname):
-            os.makedirs(dirname)
+
+        if path is None:
+            dirname = os.getcwd()
+            path = os.path.join(dirname, "model.pt")
+        else:
+            dirname = os.path.dirname(path)
+            if dirname and not os.path.exists(dirname):
+                os.makedirs(dirname)
 
         # Unwrap DDP model
         if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
@@ -1728,7 +1733,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 raise ValueError('Specify valid `batch_size`, used for model inference!')
 
             inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
-            path_onnx = path_onnx or (path + '.onnx')
+            path_onnx = path_onnx or os.path.join(dirname, "model.onnx")
             torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
 
             if pickle_metadata:
@@ -1742,7 +1747,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         elif use_openvino:
             import openvino as ov
 
-            path_openvino = path_openvino or (path + '.openvino')
+            path_openvino = path_openvino or os.path.join(dirname, "model.openvino")
             if os.path.splitext(path_openvino)[-1] == '':
                 path_openvino = f'{path_openvino}.xml'
 
@@ -1766,7 +1771,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             from safetensors.torch import save_file
             state_dict = self.model.state_dict()
 
-            path_safetensors = path_safetensors or (path + '.safetensors')
+            path_safetensors = path_safetensors or os.path.join(dirname, "model.safetensors")
             save_file(state_dict, path_safetensors)
 
             preserved = self.PRESERVE_SAFETENSORS - ignore_attributes
