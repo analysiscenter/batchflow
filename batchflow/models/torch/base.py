@@ -1817,9 +1817,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 from safetensors.torch import load_file
                 state_dict = load_file(file, device=device)
 
-                with torch.no_grad():
-                    self.model = Network(inputs=None, config=self.config, device=self.device)
-                    self.model.load_state_dict(state_dict)
+                self.initialize()
+                self.model.load_state_dict(state_dict)
 
                 self.model_to_device()
 
