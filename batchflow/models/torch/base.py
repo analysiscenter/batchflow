@@ -1766,7 +1766,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             from safetensors.torch import save_file
             state_dict = self.model.state_dict()
 
-            path_safetensors = path_safetensors or (path + "safetensors")
+            path_safetensors = path_safetensors or (path + '_safetensors.safetensors')
             save_file(state_dict, path_safetensors)
 
             preserved = self.PRESERVE_SAFETENSORS - ignore_attributes
