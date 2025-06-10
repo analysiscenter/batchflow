@@ -1669,7 +1669,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     # Store model
     def save(self, path, use_onnx=False, path_onnx=None, use_openvino=False, path_openvino=None,
-             use_safetensors=False, path_safetensors=None,
+             use_safetensors=False, path_safetensors=None, pickle_metadata=False,
              batch_size=None, opset_version=13, pickle_module=dill, ignore_attributes=None, **kwargs):
         """ Save underlying PyTorch model along with meta parameters (config, device spec, etc).
 
@@ -1730,12 +1730,13 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             path_onnx = path_onnx or (path + '_onnx')
             torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
 
-            # Save the rest of parameters
-            preserved = self.PRESERVE_ONNX - ignore_attributes
+            if pickle_metadata:
+                # Save the rest of parameters
+                preserved = self.PRESERVE_ONNX - ignore_attributes
 
-            preserved_dict = {item: getattr(self, item) for item in preserved}
-            torch.save({'onnx': True, 'path_onnx': path_onnx, 'onnx_batch_size': batch_size, **preserved_dict},
-                       path, pickle_module=pickle_module, **kwargs)
+                preserved_dict = {item: getattr(self, item) for item in preserved}
+                torch.save({'onnx': True, 'path_onnx': path_onnx, 'onnx_batch_size': batch_size, **preserved_dict},
+                        path, pickle_module=pickle_module, **kwargs)
 
         elif use_openvino:
             import openvino as ov
@@ -1753,11 +1754,12 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             ov.save_model(model, output_model=path_openvino)
 
-            # Save the rest of parameters
-            preserved = self.PRESERVE_OPENVINO - ignore_attributes
-            preserved_dict = {item: getattr(self, item) for item in preserved}
-            torch.save({'openvino': True, 'path_openvino': path_openvino, **preserved_dict},
-                       path, pickle_module=pickle_module, **kwargs)
+            if pickle_metadata:
+                # Save the rest of parameters
+                preserved = self.PRESERVE_OPENVINO - ignore_attributes
+                preserved_dict = {item: getattr(self, item) for item in preserved}
+                torch.save({'openvino': True, 'path_openvino': path_openvino, **preserved_dict},
+                        path, pickle_module=pickle_module, **kwargs)
 
         elif use_safetensors:
             from safetensors.torch import save_file
@@ -1765,8 +1767,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             path_safetensors = path_safetensors or (path + "safetensors")
             save_file(state_dict, path_safetensors)
-            torch.save({'safetensors': True, 'path_safetensors': path_safetensors, **preserved_dict},
-                       path, pickle_module=pickle_module, **kwargs)
+
+            if pickle_metadata:
+                torch.save({'safetensors': True, 'path_safetensors': path_safetensors, **preserved_dict},
+                        path, pickle_module=pickle_module, **kwargs)
 
         else:
             preserved = set(self.PRESERVE) - set(ignore_attributes)
