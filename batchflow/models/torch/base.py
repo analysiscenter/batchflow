@@ -1799,34 +1799,43 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         else:
             self._parse_devices()
 
-        if isinstance(file, str) and file.endswith(".safetensors"):
-            from safetensors.torch import load_file
-            state_dict = load_file(file, device=device)
-            self.model.load_state_dict(state_dict)
+        if isinstance(file, str):
+            if file.endswith(".safetensors"):
+                from safetensors.torch import load_file
+                state_dict = load_file(file, device=device)
+                self.model.load_state_dict(state_dict)
 
-            self.model_to_device()
+                self.model_to_device()
 
-            if make_infrastructure:
-                self.make_infrastructure()
+                if make_infrastructure:
+                    self.make_infrastructure()
 
-            self.set_model_mode(mode)
+                self.set_model_mode(mode)
 
-            return
-        elif isinstance(file, str) and file.endswith(".onnx"):
-            try:
-                from onnx2torch import convert
-            except ImportError as e:
-                raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
+                return
+            elif file.endswith(".onnx"):
+                try:
+                    from onnx2torch import convert
+                except ImportError as e:
+                    raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
 
-            model = convert(file).eval()
-            self.model = model
+                model = convert(file).eval()
+                self.model = model
 
-            self.model_to_device()
+                self.model_to_device()
 
-            if make_infrastructure:
-                self.make_infrastructure()
+                if make_infrastructure:
+                    self.make_infrastructure()
 
-            self.set_model_mode(mode)
+                self.set_model_mode(mode)
+            elif file.endswith(".openvino"):
+                model = OVModel(model_path=file, **model_load_kwargs)
+                self.model = model
+
+                self._loaded_from_openvino = True
+                self.disable_training = True
+
+                return
 
         kwargs['map_location'] = self.device
 
@@ -1862,6 +1871,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.microbatch_size = checkpoint['onnx_batch_size']
                 self._loaded_from_onnx = True
                 self.disable_training = True
+
+            if "safetensors" in checkpoint:
+                from safetensors.torch import load_file
+                state_dict = load_file(checkpoint['path_safetensors'], device=device)
+                self.model.load_state_dict(state_dict)
 
             self.model_to_device()
 
