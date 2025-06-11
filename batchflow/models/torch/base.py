@@ -1709,7 +1709,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             Other keyword arguments, passed directly to :func:`torch.save`.
         """
         available_formats = ("pt", "onnx", "openvino", "safetensors")
-        assert format in available_formats, f"Format must be in {available_formats}"
+
+        if format not in available_formats:
+            raise ValueError(f"Format must be in {available_formats}")
+
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
