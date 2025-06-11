@@ -1721,7 +1721,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 raise ValueError('Specify valid `batch_size`, used for model inference!')
 
             inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
-            path_onnx = path if path.endswith(".onnx") else os.path.join(dirname, "model.onnx")
+
+            path_onnx = path if not pickle_metadata else os.path.splitext(path)[0] + ".onnx"
             torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
 
             if pickle_metadata:
@@ -1735,7 +1736,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         elif fmt == "openvino":
             import openvino as ov
 
-            path_openvino = path if path.endswith(".openvino") else os.path.join(dirname, "model.openvino")
+            path_openvino = path if not pickle_metadata else os.path.splitext(path)[0] + ".openvino"
             if os.path.splitext(path_openvino)[-1] == '':
                 path_openvino = f'{path_openvino}.xml'
 
@@ -1759,7 +1760,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             from safetensors.torch import save_file
             state_dict = self.model.state_dict()
 
-            path_safetensors = path if path.endswith(".safetensors") else os.path.join(dirname, "model.safetensors")
+            path_safetensors = path if not pickle_metadata else os.path.splitext(path)[0] + ".safetensors"
             save_file(state_dict, path_safetensors)
 
             preserved = self.PRESERVE_SAFETENSORS - ignore_attributes
