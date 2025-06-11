@@ -3,7 +3,8 @@ name: Test installation
 on:
   pull_request:
     branches:
-    - master
+      - master
+  workflow_dispatch:
 
 jobs:
 
@@ -11,15 +12,12 @@ jobs:
 #    Use a module from local source
 # -----------------------------------------
   use_as_local_module:
-
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJson('["ubuntu-latest","macos-latest","windows-latest"]') || fromJson('["ubuntu-latest"]') }}
         python-version: [3.9, '3.10', 3.11, 3.12, 3.13]
-
     runs-on: ${{ matrix.os }}
-
     steps:
     - uses: actions/checkout@v4
 
@@ -47,15 +45,12 @@ jobs:
 #    Install with pip
 # -----------------------------------------
   install_with_pip:
-
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJson('["ubuntu-latest","macos-latest","windows-latest"]') || fromJson('["ubuntu-latest"]') }}
         python-version: [3.9, '3.10', 3.11, 3.12, 3.13]
-
     runs-on: ${{ matrix.os }}
-
     steps:
     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
       uses: actions/setup-python@v4
@@ -82,15 +77,12 @@ jobs:
 #    Install with poetry
 # -----------------------------------------
   install_with_poetry:
-
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJson('["ubuntu-latest","macos-latest","windows-latest"]') || fromJson('["ubuntu-latest"]') }}
         python-version: [3.9, '3.10', 3.11, 3.12, 3.13]
-
     runs-on: ${{ matrix.os }}
-
     steps:
     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
       uses: actions/setup-python@v4
@@ -146,15 +138,12 @@ jobs:
 #    Install with uv
 # -----------------------------------------
   install_with_uv:
-
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJson('["ubuntu-latest","macos-latest","windows-latest"]') || fromJson('["ubuntu-latest"]') }}
         python-version: [3.9, '3.10', 3.11, 3.12, 3.13]
-
     runs-on: ${{ matrix.os }}
-
     steps:
     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
       uses: actions/setup-python@v4
