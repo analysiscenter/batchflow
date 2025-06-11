@@ -1774,7 +1774,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             torch.save({item: getattr(self, item) for item in preserved},
                        path, pickle_module=pickle_module, **kwargs)
 
-    def load(self, file, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
+    def load(self, file, fmt=None, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
         """ Load a torch model from a file.
 
         If the model was saved in ONNX format (refer to :meth:`.save` for more info), we fix the microbatch size
@@ -1784,6 +1784,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         ----------
         file : str, PathLike, io.Bytes
             a file where a model is stored.
+        fmt: optional str
+            Weights format. Available formats: "pt", "onnx", "openvino", "safetensors"
         make_infrastructure : bool
             Whether to re-create model loss, optimizer, scaler and decay.
         mode : str
@@ -1806,7 +1808,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self._parse_devices()
 
         if isinstance(file, str):
-            if file.endswith(".safetensors"):
+            if fmt == "safetensors" or file.endswith(".safetensors"):
                 from safetensors.torch import load_file
                 state_dict = load_file(file, device=device)
 
@@ -1822,7 +1824,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
                 return
 
-            if file.endswith(".onnx"):
+            if fmt == "onnx" or file.endswith(".onnx"):
                 try:
                     from onnx2torch import convert
                 except ImportError as e:
@@ -1840,7 +1842,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
                 return
 
-            if file.endswith(".openvino"):
+            if fmt == "openvino" or file.endswith(".openvino"):
                 model = OVModel(model_path=file, **model_load_kwargs)
                 self.model = model
 
