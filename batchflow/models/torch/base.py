@@ -1813,7 +1813,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         if isinstance(file, str):
             if fmt == "safetensors" or (fmt is None and file.endswith(".safetensors")):
                 from safetensors.torch import load_file
-                state_dict = load_file(file, device=device)
+                state_dict = load_file(file)
 
                 self.initialize()
                 self.model.load_state_dict(state_dict)
