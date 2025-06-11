@@ -1809,7 +1809,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self._parse_devices()
 
         if isinstance(file, str):
-            if fmt == "safetensors" or file.endswith(".safetensors"):
+            if fmt == "safetensors" or (fmt is None and file.endswith(".safetensors")):
                 from safetensors.torch import load_file
                 state_dict = load_file(file, device=device)
 
@@ -1825,7 +1825,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
                 return
 
-            if fmt == "onnx" or file.endswith(".onnx"):
+            if fmt == "onnx" or (fmt is None and file.endswith(".onnx")):
                 try:
                     from onnx2torch import convert
                 except ImportError as e:
@@ -1843,7 +1843,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
                 return
 
-            if fmt == "openvino" or file.endswith(".openvino"):
+            if fmt == "openvino" or (fmt is None and file.endswith(".openvino")):
                 model = OVModel(model_path=file, **model_load_kwargs)
                 self.model = model
 
