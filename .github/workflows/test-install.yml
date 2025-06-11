@@ -198,11 +198,3 @@ jobs:
       run: |
         cd tests
         uv run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
-    - name: Run basic tests
-      run: |
-        cd tests
-        uv run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
-    - name: Run basic tests
-      run: |
-        cd tests
-        uv run python -m pytest --disable-pytest-warnings -v dataset_test.py filesindex_test.py datasetindex_test.py
