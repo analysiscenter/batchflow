@@ -15,7 +15,6 @@ import torch
 from torch import nn
 from torch.optim.swa_utils import AveragedModel, SWALR
 
-
 from sklearn.decomposition import PCA
 
 from ...utils_import import make_delayed_import
@@ -400,6 +399,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     PRESERVE_ONNX = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
     PRESERVE_OPENVINO = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
+    PRESERVE_SAFETENSORS = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
 
     def __init__(self, config=None):
         if not isinstance(config, (dict, Config)):
@@ -1669,7 +1669,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Store model
-    def save(self, path, use_onnx=False, path_onnx=None, use_openvino=False, path_openvino=None,
+    def save(self, path, fmt="pt", pickle_metadata=True,
              batch_size=None, opset_version=13, pickle_module=dill, ignore_attributes=None, **kwargs):
         """ Save underlying PyTorch model along with meta parameters (config, device spec, etc).
 
@@ -1682,17 +1682,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         ----------
         path : str
             Path to a file where the model data will be stored.
-        use_onnx: bool
-            Whether to store model in ONNX format.
-        path_onnx : str, optional
-            Used only if `use_onnx` is True.
-            If provided, then path to store the ONNX model; default `path_onnx` is `path` with '_onnx' postfix.
-        use_openvino: bool
-            Whether to store model as openvino xml file.
-        path_openvino : str, optional
-            Used only if `use_openvino` is True.
-            If provided, then path to store the openvino model; default `path_openvino` is `path` with '_openvino'
-            postfix.
+        fmt: str
+            Weights format. Available formats: "pt", "onnx", "openvino", "safetensors"
+        pickle_metadata: bool
+            Whether make pickle with metadata
         batch_size : int, optional
             Used only if `use_onnx` is True.
             Fixed batch size of the ONNX module. This is the only viable batch size for this model after loading.
@@ -1706,6 +1699,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         kwargs : dict
             Other keyword arguments, passed directly to :func:`torch.save`.
         """
+        available_formats = ("pt", "onnx", "openvino", "safetensors")
+
+        if fmt not in available_formats:
+            raise ValueError(f"fmt must be in {available_formats}")
+
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
@@ -1720,25 +1718,27 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             ignore_attributes = []
         ignore_attributes = set(ignore_attributes)
 
-        if use_onnx:
+        if fmt == "onnx":
             if batch_size is None:
                 raise ValueError('Specify valid `batch_size`, used for model inference!')
 
             inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
-            path_onnx = path_onnx or (path + '_onnx')
+
+            path_onnx = path if not pickle_metadata else os.path.splitext(path)[0] + ".onnx"
             torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
 
-            # Save the rest of parameters
-            preserved = self.PRESERVE_ONNX - ignore_attributes
+            if pickle_metadata:
+                # Save the rest of parameters
+                preserved = self.PRESERVE_ONNX - ignore_attributes
 
-            preserved_dict = {item: getattr(self, item) for item in preserved}
-            torch.save({'onnx': True, 'path_onnx': path_onnx, 'onnx_batch_size': batch_size, **preserved_dict},
-                       path, pickle_module=pickle_module, **kwargs)
+                preserved_dict = {item: getattr(self, item) for item in preserved}
+                torch.save({'onnx': True, 'path_onnx': path_onnx, 'onnx_batch_size': batch_size, **preserved_dict},
+                        path, pickle_module=pickle_module, **kwargs)
 
-        elif use_openvino:
+        elif fmt == "openvino":
             import openvino as ov
 
-            path_openvino = path_openvino or (path + '_openvino')
+            path_openvino = path if not pickle_metadata else os.path.splitext(path)[0] + ".openvino"
             if os.path.splitext(path_openvino)[-1] == '':
                 path_openvino = f'{path_openvino}.xml'
 
@@ -1751,18 +1751,33 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             ov.save_model(model, output_model=path_openvino)
 
-            # Save the rest of parameters
-            preserved = self.PRESERVE_OPENVINO - ignore_attributes
+            if pickle_metadata:
+                # Save the rest of parameters
+                preserved = self.PRESERVE_OPENVINO - ignore_attributes
+                preserved_dict = {item: getattr(self, item) for item in preserved}
+                torch.save({'openvino': True, 'path_openvino': path_openvino, **preserved_dict},
+                        path, pickle_module=pickle_module, **kwargs)
+
+        elif fmt == "safetensors":
+            from safetensors.torch import save_file
+            state_dict = self.model.state_dict()
+
+            path_safetensors = path if not pickle_metadata else os.path.splitext(path)[0] + ".safetensors"
+            save_file(state_dict, path_safetensors)
+
+            preserved = self.PRESERVE_SAFETENSORS - ignore_attributes
             preserved_dict = {item: getattr(self, item) for item in preserved}
-            torch.save({'openvino': True, 'path_openvino': path_openvino, **preserved_dict},
-                       path, pickle_module=pickle_module, **kwargs)
+
+            if pickle_metadata:
+                torch.save({'safetensors': True, 'path_safetensors': path_safetensors, **preserved_dict},
+                        path, pickle_module=pickle_module, **kwargs)
 
         else:
             preserved = set(self.PRESERVE) - set(ignore_attributes)
             torch.save({item: getattr(self, item) for item in preserved},
                        path, pickle_module=pickle_module, **kwargs)
 
-    def load(self, file, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
+    def load(self, file, fmt=None, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
         """ Load a torch model from a file.
 
         If the model was saved in ONNX format (refer to :meth:`.save` for more info), we fix the microbatch size
@@ -1772,6 +1787,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         ----------
         file : str, PathLike, io.Bytes
             a file where a model is stored.
+        fmt: optional str
+            Weights format. Available formats: "pt", "onnx", "openvino", "safetensors"
         make_infrastructure : bool
             Whether to re-create model loss, optimizer, scaler and decay.
         mode : str
@@ -1792,6 +1809,50 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.amp = False
         else:
             self._parse_devices()
+
+        if isinstance(file, str):
+            if fmt == "safetensors" or (fmt is None and file.endswith(".safetensors")):
+                from safetensors.torch import load_file
+                state_dict = load_file(file)
+
+                self.initialize()
+                self.model.load_state_dict(state_dict)
+
+                self.model_to_device()
+
+                if make_infrastructure:
+                    self.make_infrastructure()
+
+                self.set_model_mode(mode)
+
+                return
+
+            if fmt == "onnx" or (fmt is None and file.endswith(".onnx")):
+                try:
+                    from onnx2torch import convert
+                except ImportError as e:
+                    raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
+
+                model = convert(file).eval()
+                self.model = model
+
+                self.model_to_device()
+
+                if make_infrastructure:
+                    self.make_infrastructure()
+
+                self.set_model_mode(mode)
+
+                return
+
+            if fmt == "openvino" or (fmt is None and file.endswith(".openvino")):
+                model = OVModel(model_path=file, **model_load_kwargs)
+                self.model = model
+
+                self._loaded_from_openvino = True
+                self.disable_training = True
+
+                return
 
         kwargs['map_location'] = self.device
 
@@ -1827,6 +1888,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 self.microbatch_size = checkpoint['onnx_batch_size']
                 self._loaded_from_onnx = True
                 self.disable_training = True
+
+            if "safetensors" in checkpoint:
+                from safetensors.torch import load_file
+                state_dict = load_file(checkpoint['path_safetensors'], device=device)
+                self.model.load_state_dict(state_dict)
 
             self.model_to_device()
 
