@@ -1684,6 +1684,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             Path to a file where the model data will be stored.
         fmt: str
             Weights format. Available formats: "pt", "onnx", "openvino", "safetensors"
+        pickle_metadata: bool
+            Whether make pickle with metadata
         batch_size : int, optional
             Used only if `use_onnx` is True.
             Fixed batch size of the ONNX module. This is the only viable batch size for this model after loading.
