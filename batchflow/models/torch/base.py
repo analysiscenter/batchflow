@@ -1669,7 +1669,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Store model
-    def save(self, path, fmt="pt", pickle_metadata=True,
+    def save(self, path, fmt=None, pickle_metadata=True,
              batch_size=None, opset_version=13, pickle_module=dill, ignore_attributes=None, **kwargs):
         """ Save underlying PyTorch model along with meta parameters (config, device spec, etc).
 
@@ -1682,7 +1682,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         ----------
         path : str
             Path to a file where the model data will be stored.
-        fmt: str
+        fmt: Optional[str]
             Weights format. Available formats: "pt", "onnx", "openvino", "safetensors"
         pickle_metadata: bool
             Whether make pickle with metadata
@@ -1700,6 +1700,9 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             Other keyword arguments, passed directly to :func:`torch.save`.
         """
         available_formats = ("pt", "onnx", "openvino", "safetensors")
+
+        if fmt is None:
+            fmt = os.path.splitext(path)[-1][1:]
 
         if fmt not in available_formats:
             raise ValueError(f"fmt must be in {available_formats}")
