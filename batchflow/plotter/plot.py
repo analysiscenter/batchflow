@@ -103,7 +103,7 @@ class Layer:
 
     def dilate(self, data):
         """ Apply dilation to array. """
-        import cv2
+        from .morphology import dilate
         dilation_config = self.config.get('dilate', False)
 
         default_kernel = np.ones((3, 1), dtype=np.uint8)
@@ -116,7 +116,7 @@ class Layer:
                 dilation_config = {'kernel': np.ones(dilation_config, dtype=np.uint8)}
             elif 'kernel' in dilation_config and isinstance(dilation_config['kernel'], tuple):
                 dilation_config['kernel'] = np.ones(dilation_config['kernel'], dtype=np.uint8)
-            data = cv2.dilate(data.astype(np.float32), **dilation_config)
+            data = dilate(data.astype(np.float32), **dilation_config)
         return data
 
     def mask(self, data):
