@@ -1819,49 +1819,13 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         if isinstance(file, str):
             if fmt == "safetensors" or (fmt is None and file.endswith(".safetensors")):
-                from safetensors.torch import load_file
-                state_dict = load_file(file)
-
-                inputs = self.make_placeholder_data(to_device=True)
-                with torch.no_grad():
-                    self.model = Network(inputs=inputs, config=self.config, device=self.device)
-
-                self.model.load_state_dict(state_dict)
-
-                self.model_to_device()
-
-                if make_infrastructure:
-                    self.make_infrastructure()
-
-                self.set_model_mode(mode)
-
+                self.load_safetensors(file, make_infrastructure=make_infrastructure, mode=mode)
                 return
-
-            if fmt == "onnx" or (fmt is None and file.endswith(".onnx")):
-                try:
-                    from onnx2torch import convert
-                except ImportError as e:
-                    raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
-
-                model = convert(file).eval()
-                self.model = model
-
-                self.model_to_device()
-
-                if make_infrastructure:
-                    self.make_infrastructure()
-
-                self.set_model_mode(mode)
-
+            elif fmt == "onnx" or (fmt is None and file.endswith(".onnx")):
+                self.load_onnx(file, make_infrastructure=make_infrastructure, mode=mode)
                 return
-
-            if fmt == "openvino" or (fmt is None and file.endswith(".openvino")):
-                model = OVModel(model_path=file, **model_load_kwargs)
-                self.model = model
-
-                self._loaded_from_openvino = True
-                self.disable_training = True
-
+            elif fmt == "openvino" or (fmt is None and file.endswith(".openvino")):
+                self.load_openvino(file, **model_load_kwargs)
                 return
 
         kwargs['map_location'] = self.device
@@ -1879,37 +1843,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         if 'openvino' in checkpoint:
             # Load openvino model
-            model = OVModel(model_path=checkpoint['path_openvino'], **model_load_kwargs)
-            self.model = model
-
-            self._loaded_from_openvino = True
-            self.disable_training = True
-
-        else:
-            # Load model from onnx, if needed
-            if 'onnx' in checkpoint:
-                try:
-                    from onnx2torch import convert
-                except ImportError as e:
-                    raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
-
-                model = convert(checkpoint['path_onnx']).eval()
-                self.model = model
-                self.microbatch_size = checkpoint['onnx_batch_size']
-                self._loaded_from_onnx = True
-                self.disable_training = True
-
-            if "safetensors" in checkpoint:
-                from safetensors.torch import load_file
-                state_dict = load_file(checkpoint['path_safetensors'], device=device)
-                self.model.load_state_dict(state_dict)
-
-            self.model_to_device()
-
-            if make_infrastructure:
-                self.make_infrastructure()
-
-            self.set_model_mode(mode)
+            self.load_openvino(checkpoint['path_openvino'], **model_load_kwargs)
+        elif 'onnx' in checkpoint:
+            self.load_openvino(checkpoint['path_openvino'], microbatch_size=checkpoint['onnx_batch_size'], **model_load_kwargs)
+        elif "safetensors" in checkpoint:
+            self.load_safetensors(checkpoint['path_safetensors'], make_infrastructure=make_infrastructure, mode=mode)
 
 
     # Utilities to use when working with TorchModel
@@ -1932,6 +1870,53 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 return model_reference
         return None
 
+    def load_onnx(self, file, make_infrastructure=False, mode='eval', microbatch_size=None):
+        try:
+            from onnx2torch import convert
+        except ImportError as e:
+            raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
+
+        model = convert(file).eval()
+        self.model = model
+        if microbatch_size:
+            self.microbatch_size = microbatch_size
+
+        self.model_to_device()
+
+        if make_infrastructure:
+            self.make_infrastructure()
+
+        self.set_model_mode(mode)
+
+    def load_safetensors(self, file, make_infrastructure=False, mode='eval'):
+        try:
+            from safetensors.torch import load_file
+        except ImportError as e:
+            raise ImportError('Loading model, stored in Safetensors format, requires `safetensors` library.') from e
+
+        state_dict = load_file(file)
+
+        inputs = self.make_placeholder_data(to_device=True)
+        with torch.no_grad():
+            self.model = Network(inputs=inputs, config=self.config, device=self.device)
+
+        self.model.load_state_dict(state_dict)
+
+        self.model_to_device()
+
+        if make_infrastructure:
+            self.make_infrastructure()
+
+        self.set_model_mode(mode)
+
+        return
+
+    def load_openvino(self, file, **model_load_kwargs):
+        model = OVModel(model_path=file, **model_load_kwargs)
+        self.model = model
+
+        self._loaded_from_openvino = True
+        self.disable_training = True
 
     # Debug and profile the performance
     def set_requires_grad(self, requires_grad):
