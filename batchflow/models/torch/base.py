@@ -987,12 +987,16 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     def model_to_device(self, model=None):
         """ Put model on device(s). If needed, apply DataParallel wrapper. """
-        model = model if model is not None else self.model
+        model_ = model if model is not None else self.model
 
         if len(self.devices) > 1:
-            model = nn.DataParallel(model, self.devices)
+            model_ = nn.DataParallel(model_, self.devices)
         else:
-            model = model.to(self.device)
+            model_ = model_.to(self.device)
+
+        if model is None:
+            self.model = model_
+        return model_
 
 
     # Apply model to train/predict on given data
