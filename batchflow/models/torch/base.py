@@ -1707,6 +1707,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         if fmt is None:
             fmt = os.path.splitext(path)[-1][1:]
+            if fmt == 'xml':
+                fmt = 'openvino'
 
         if fmt not in available_formats:
             raise ValueError(f"fmt must be in {available_formats}")
@@ -1731,23 +1733,24 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
 
-            path_onnx = path if not pickle_metadata else os.path.splitext(path)[0] + ".onnx"
-            torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
+            if not pickle_metadata:
+                torch.onnx.export(self.model.eval(), inputs, path, opset_version=opset_version)
+            else:
+                name, ext = os.path.splitext(path)
+                if ext == '.onnx':
+                    raise ValueError('Path should not have .onnx extension when saving with metadata!')
 
-            if pickle_metadata:
+                path_onnx = name + ".onnx"
+                torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
                 # Save the rest of parameters
                 preserved = self.PRESERVE_ONNX - ignore_attributes
 
                 preserved_dict = {item: getattr(self, item) for item in preserved}
                 torch.save({'onnx': True, 'path_onnx': path_onnx, 'onnx_batch_size': batch_size, **preserved_dict},
-                        path, pickle_module=pickle_module, **kwargs)
+                            path, pickle_module=pickle_module, **kwargs)
 
         elif fmt == "openvino":
             import openvino as ov
-
-            path_openvino = path if not pickle_metadata else os.path.splitext(path)[0] + ".openvino"
-            if os.path.splitext(path_openvino)[-1] == '':
-                path_openvino = f'{path_openvino}.xml'
 
             # Save model
             model = self.model.eval()
@@ -1756,26 +1759,39 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                 inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
                 model = ov.convert_model(model, example_input=inputs)
 
-            ov.save_model(model, output_model=path_openvino)
+            if not pickle_metadata:
+                ov.save_model(model, output_model=path)
+            else:
+                name, ext = os.path.splitext(path)
+                if ext == '.xml':
+                    raise ValueError('Path should not have .xml extension when saving with metadata!')
 
-            if pickle_metadata:
+                path_openvino = name + ".xml" # OpenVINO model is saved in XML format
+                ov.save_model(model, output_model=path_openvino)
+
                 # Save the rest of parameters
                 preserved = self.PRESERVE_OPENVINO - ignore_attributes
                 preserved_dict = {item: getattr(self, item) for item in preserved}
                 torch.save({'openvino': True, 'path_openvino': path_openvino, **preserved_dict},
-                        path, pickle_module=pickle_module, **kwargs)
+                           path, pickle_module=pickle_module, **kwargs)
 
         elif fmt == "safetensors":
             from safetensors.torch import save_file
             state_dict = self.model.state_dict()
 
-            path_safetensors = path if not pickle_metadata else os.path.splitext(path)[0] + ".safetensors"
-            save_file(state_dict, path_safetensors)
+            if not pickle_metadata:
+                save_file(state_dict, path)
+            else:
+                name, ext = os.path.splitext(path)
+                if ext == '.safetensors':
+                    raise ValueError('Path should not have .safetensors extension when saving with metadata!')
+                path_safetensors = name + ".safetensors"
 
-            preserved = self.PRESERVE_SAFETENSORS - ignore_attributes
-            preserved_dict = {item: getattr(self, item) for item in preserved}
+                save_file(state_dict, path_safetensors)
 
-            if pickle_metadata:
+                preserved = self.PRESERVE_SAFETENSORS - ignore_attributes
+                preserved_dict = {item: getattr(self, item) for item in preserved}
+
                 torch.save({'safetensors': True, 'path_safetensors': path_safetensors, **preserved_dict},
                         path, pickle_module=pickle_module, **kwargs)
 
@@ -1821,10 +1837,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             if fmt == "safetensors" or (fmt is None and file.endswith(".safetensors")):
                 self.load_safetensors(file, make_infrastructure=make_infrastructure, mode=mode)
                 return
-            elif fmt == "onnx" or (fmt is None and file.endswith(".onnx")):
+            if fmt == "onnx" or (fmt is None and file.endswith(".onnx")):
                 self.load_onnx(file, make_infrastructure=make_infrastructure, mode=mode)
                 return
-            elif fmt == "openvino" or (fmt is None and file.endswith(".openvino")):
+            if fmt == "openvino" or (fmt is None and file.endswith(".xml")):
                 self.load_openvino(file, **model_load_kwargs)
                 return
 
@@ -1845,32 +1861,13 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             # Load openvino model
             self.load_openvino(checkpoint['path_openvino'], **model_load_kwargs)
         elif 'onnx' in checkpoint:
-            self.load_openvino(checkpoint['path_openvino'], microbatch_size=checkpoint['onnx_batch_size'], **model_load_kwargs)
+            self.load_openvino(checkpoint['path_openvino'], microbatch_size=checkpoint['onnx_batch_size'],
+                               **model_load_kwargs)
         elif "safetensors" in checkpoint:
             self.load_safetensors(checkpoint['path_safetensors'], make_infrastructure=make_infrastructure, mode=mode)
 
-
-    # Utilities to use when working with TorchModel
-    @staticmethod
-    def get_model_reference(obj=None):
-        """ Get the instance of a `TorchModel`, if called inside :meth:`.train` or :meth:`.predict` contexts.
-        A possible example of usage is to call inside loss module forward to get the reference of the model.
-        """
-        if hasattr(obj, 'model_reference') and obj.model_reference is not None:
-            return obj.model_reference
-
-        for frame in inspect.stack():
-            if frame.function not in {'_train', '_predict'}:
-                continue
-            if 'self' not in frame.frame.f_locals:
-                continue
-
-            model_reference = frame.frame.f_locals['self']
-            if isinstance(model_reference, TorchModel):
-                return model_reference
-        return None
-
     def load_onnx(self, file, make_infrastructure=False, mode='eval', microbatch_size=None):
+        """Load a model from ONNX file."""
         try:
             from onnx2torch import convert
         except ImportError as e:
@@ -1889,6 +1886,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.set_model_mode(mode)
 
     def load_safetensors(self, file, make_infrastructure=False, mode='eval'):
+        """Load a model from Safetensors file."""
         try:
             from safetensors.torch import load_file
         except ImportError as e:
@@ -1912,11 +1910,33 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         return
 
     def load_openvino(self, file, **model_load_kwargs):
+        """Load a model from OpenVINO file."""
         model = OVModel(model_path=file, **model_load_kwargs)
         self.model = model
 
         self._loaded_from_openvino = True
         self.disable_training = True
+
+
+    # Utilities to use when working with TorchModel
+    @staticmethod
+    def get_model_reference(obj=None):
+        """ Get the instance of a `TorchModel`, if called inside :meth:`.train` or :meth:`.predict` contexts.
+        A possible example of usage is to call inside loss module forward to get the reference of the model.
+        """
+        if hasattr(obj, 'model_reference') and obj.model_reference is not None:
+            return obj.model_reference
+
+        for frame in inspect.stack():
+            if frame.function not in {'_train', '_predict'}:
+                continue
+            if 'self' not in frame.frame.f_locals:
+                continue
+
+            model_reference = frame.frame.f_locals['self']
+            if isinstance(model_reference, TorchModel):
+                return model_reference
+        return None
 
     # Debug and profile the performance
     def set_requires_grad(self, requires_grad):
