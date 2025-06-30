@@ -387,7 +387,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         'microbatch_size': 16,                                     # size of microbatches at training
     }
     """
-    AVAILABLE_FORMATS = ("pt", "onnx", "openvino", "safetensors")
+    AVAILABLE_FORMATS = ("onnx", "openvino", "safetensors")
 
     PRESERVE = set([
         'full_config', 'config', 'model',
