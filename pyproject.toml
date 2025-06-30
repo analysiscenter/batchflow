@@ -80,12 +80,12 @@ safetensors = [
 ]
 
 onnx = [
-    "onnx >=1.14.0",
-    "onnx2torch >= 1.5.0",
+    "onnx>=1.14.0",
+    "onnx2torch>=1.5.0",
 ]
 
 openvino = [
-    "openvino >= 2025.0.0",
+    "openvino>=2025.0.0",
 ]
 
 other = [
