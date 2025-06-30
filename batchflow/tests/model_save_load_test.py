@@ -1,5 +1,6 @@
 """ Test for model saving and loading """
 
+import os
 import pickle
 
 import pytest
@@ -186,3 +187,49 @@ class TestModelSaveLoad:
         loaded_predictions = model_load.predict(*args, **kwargs)
 
         assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
+
+    @pytest.mark.parametrize("fmt", [None, 'onnx', 'openvino', 'safetensors'])
+    @pytest.mark.parametrize("pickle_metadata", [False, True])
+    def test_save_load_format(self, save_path, model_class, fmt, pickle_metadata):
+        num_classes = 10
+        dataset_size = 10
+        image_shape = (2, 100, 100)
+
+        save_kwargs = {
+            None: {},
+            'onnx': dict(batch_size=dataset_size),
+            'openvino': {},
+            'safetensors': {},
+        }
+        load_kwargs = {
+            None: {},
+            'onnx': {},
+            'openvino': {'device': 'cpu'},
+            'safetensors': {},
+        }
+
+        if fmt == 'openvino' and not pickle_metadata:
+            save_path = os.path.splitext(save_path)[0] + '.xml'
+
+        model_config = {
+            'classes': num_classes,
+            'inputs_shapes': image_shape,
+            'output': 'sigmoid'
+        }
+
+        model_save = model_class(config=model_config)
+
+        batch_shape = (dataset_size, *image_shape)
+        images_array = np.random.random(batch_shape)
+
+        inputs = images_array.astype('float32')
+
+        saved_predictions = model_save.predict(inputs, outputs='sigmoid')
+        model_save.save(path=save_path, pickle_metadata=pickle_metadata, fmt=fmt, **save_kwargs[fmt])
+
+        load_config = {} if fmt != 'safetensors' else model_save.config
+        model_load = model_class(config=load_config)
+        model_load.load(path=save_path, fmt='pt' if pickle_metadata else fmt, **load_kwargs[fmt])
+        loaded_predictions = model_load.predict(inputs, outputs='sigmoid')
+
+        assert np.isclose(np.concatenate(saved_predictions), np.concatenate(loaded_predictions), atol=1e-3).all()
