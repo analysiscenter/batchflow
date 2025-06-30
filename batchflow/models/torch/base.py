@@ -387,6 +387,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         'microbatch_size': 16,                                     # size of microbatches at training
     }
     """
+    AVAILABLE_FORMATS = ("pt", "onnx", "openvino", "safetensors")
+
     PRESERVE = set([
         'full_config', 'config', 'model',
         'inputs_shapes', 'targets_shapes', 'classes',
@@ -402,7 +404,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
     PRESERVE_SAFETENSORS = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
 
     def __init__(self, config=None):
-        if not isinstance(config, (dict, Config)):
+        if config is not None and not isinstance(config, (dict, Config)):
             config = {'load/file': config}
         self.model_lock = Lock()
 
@@ -1674,7 +1676,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     # Store model
     def save(self, path, fmt=None, pickle_metadata=True,
-             batch_size=None, opset_version=13, pickle_module=dill, ignore_attributes=None, **kwargs):
+             batch_size=None, opset_version=13, pickle_module=dill, ignore_attributes=('optimizer', 'decay'), **kwargs):
         """ Save underlying PyTorch model along with meta parameters (config, device spec, etc).
 
         If `use_onnx` is set to True, then the model is converted to ONNX format and stored in a separate file.
@@ -1703,15 +1705,17 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         kwargs : dict
             Other keyword arguments, passed directly to :func:`torch.save`.
         """
-        available_formats = ("pt", "onnx", "openvino", "safetensors")
-
         if fmt is None:
             fmt = os.path.splitext(path)[-1][1:]
             if fmt == 'xml':
                 fmt = 'openvino'
+            if fmt == '':
+                fmt = 'pt'
 
-        if fmt not in available_formats:
-            raise ValueError(f"fmt must be in {available_formats}")
+        if fmt not in self.AVAILABLE_FORMATS:
+            raise ValueError(f"fmt must be in {self.AVAILABLE_FORMATS} but got {fmt}!")
+
+        pickle_module = dill if pickle_module is None else pickle_module
 
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
@@ -1733,15 +1737,18 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
             inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
 
+            self.sanitize_module_names(self.model)
+
             if not pickle_metadata:
-                torch.onnx.export(self.model.eval(), inputs, path, opset_version=opset_version)
+                torch.onnx.export(self.model.eval(), inputs, path, opset_version=opset_version,
+                                  operator_export_type=torch.onnx.OperatorExportTypes.ONNX,)
             else:
                 name, ext = os.path.splitext(path)
                 if ext == '.onnx':
                     raise ValueError('Path should not have .onnx extension when saving with metadata!')
 
                 path_onnx = name + ".onnx"
-                torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
+                torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version, operator_export_type=torch.onnx.OperatorExportTypes.ONNX,)
                 # Save the rest of parameters
                 preserved = self.PRESERVE_ONNX - ignore_attributes
 
@@ -1800,7 +1807,23 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             torch.save({item: getattr(self, item) for item in preserved},
                        path, pickle_module=pickle_module, **kwargs)
 
-    def load(self, file, fmt=None, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
+    @classmethod
+    def sanitize_module_names(cls, module):
+        """
+        Recursively rename submodules to ensure names are safe for ONNX export.
+        Replaces spaces, quotes, and commas with underscores.
+        """
+        # Work on a list of keys to avoid mutating dict while iterating
+        keys = list(module._modules.keys())
+        for key in keys:
+            child = module._modules[key]
+            clean_key = key.replace(' ', '_').replace('"', '').replace(',', '_')
+            if clean_key != key:
+                module._modules[clean_key] = module._modules.pop(key)
+            # Recurse
+            cls.sanitize_module_names(child)
+
+    def load(self, path, fmt=None, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
         """ Load a torch model from a file.
 
         If the model was saved in ONNX format (refer to :meth:`.save` for more info), we fix the microbatch size
@@ -1808,7 +1831,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         Parameters
         ----------
-        file : str, PathLike, io.Bytes
+        path : str, PathLike, io.Bytes
             a file where a model is stored.
         fmt: optional str
             Weights format. Available formats: "pt", "onnx", "openvino", "safetensors"
@@ -1825,6 +1848,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         device = kwargs.pop('device', None)
 
+        pickle_module = dill if pickle_module is None else pickle_module
+
         if device is not None:
             self.device = device
 
@@ -1833,21 +1858,21 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         else:
             self._parse_devices()
 
-        if isinstance(file, str):
-            if fmt == "safetensors" or (fmt is None and file.endswith(".safetensors")):
-                self.load_safetensors(file, make_infrastructure=make_infrastructure, mode=mode)
+        if isinstance(path, str):
+            if fmt == "safetensors" or (fmt is None and path.endswith(".safetensors")):
+                self.load_safetensors(path, make_infrastructure=make_infrastructure, mode=mode)
                 return
-            if fmt == "onnx" or (fmt is None and file.endswith(".onnx")):
-                self.load_onnx(file, make_infrastructure=make_infrastructure, mode=mode)
+            if fmt == "onnx" or (fmt is None and path.endswith(".onnx")):
+                self.load_onnx(path, make_infrastructure=make_infrastructure, mode=mode)
                 return
-            if fmt == "openvino" or (fmt is None and file.endswith(".xml")):
-                self.load_openvino(file, **model_load_kwargs)
+            if fmt == "openvino" or (fmt is None and path.endswith(".xml")):
+                self.load_openvino(path, **model_load_kwargs)
                 return
 
         kwargs['map_location'] = self.device
 
         # Load items from disk storage and set them as insance attributes
-        checkpoint = torch.load(file, pickle_module=pickle_module, **kwargs)
+        checkpoint = torch.load(path, pickle_module=pickle_module, **kwargs)
 
         # `load_config` is a reference to `self.external_config` used to update `config`
         # It is required since `self.external_config` may be overwritten in the cycle below
@@ -1861,8 +1886,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             # Load openvino model
             self.load_openvino(checkpoint['path_openvino'], **model_load_kwargs)
         elif 'onnx' in checkpoint:
-            self.load_openvino(checkpoint['path_openvino'], microbatch_size=checkpoint['onnx_batch_size'],
-                               **model_load_kwargs)
+            self.load_onnx(checkpoint['path_onnx'], microbatch_size=checkpoint['onnx_batch_size'],
+                           **model_load_kwargs)
         elif "safetensors" in checkpoint:
             self.load_safetensors(checkpoint['path_safetensors'], make_infrastructure=make_infrastructure, mode=mode)
 
