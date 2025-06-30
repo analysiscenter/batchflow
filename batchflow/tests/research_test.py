@@ -570,6 +570,7 @@ class TestResearch:
         assert research.results.df.iloc[0].a == f(2)
         assert research.results.df.iloc[0].b == f(3)
 
+    @pytest.mark.slow
     @pytest.mark.parametrize('dump_results', [False, True])
     @pytest.mark.parametrize('redirect_stdout', [True, 0, 1, 2, 3])
     @pytest.mark.parametrize('redirect_stderr', [True, 0, 1, 2, 3])

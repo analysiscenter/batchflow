@@ -5,8 +5,11 @@ from pprint import pformat as _pformat
 import numpy as np
 import torch
 
-from ...plotter import plot
 from ...decorators import deprecated
+
+from ...utils_import import try_import
+plot = try_import(module='...plotter', package=__name__, attribute='plot',
+                  help='Try `pip install batchflow[image]`!')
 
 # Also imports `tensorboard`, if necessary
 

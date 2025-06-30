@@ -25,7 +25,8 @@ dependencies = [
     "numba>=0.56",
     "llvmlite",
     "scipy>=1.9",
-    "tqdm>=4.19"
+    "tqdm>=4.19",
+    "pytest>=8.3.4",
 ]
 
 [project.optional-dependencies]
@@ -72,6 +73,19 @@ jupyter = [
 
 telegram = [
     "pillow>=9.4,<11.0",
+]
+
+safetensors = [
+    "safetensors>=0.5.3",
+]
+
+onnx = [
+    "onnx >=1.14.0",
+    "onnx2torch >= 1.5.0",
+]
+
+openvino = [
+    "openvino >= 2025.0.0",
 ]
 
 other = [

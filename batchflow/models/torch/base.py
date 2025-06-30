@@ -15,7 +15,6 @@ import torch
 from torch import nn
 from torch.optim.swa_utils import AveragedModel, SWALR
 
-
 from sklearn.decomposition import PCA
 
 from ...utils_import import make_delayed_import
@@ -388,6 +387,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         'microbatch_size': 16,                                     # size of microbatches at training
     }
     """
+    AVAILABLE_FORMATS = ("onnx", "openvino", "safetensors")
+
     PRESERVE = set([
         'full_config', 'config', 'model',
         'inputs_shapes', 'targets_shapes', 'classes',
@@ -400,9 +401,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     PRESERVE_ONNX = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
     PRESERVE_OPENVINO = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
+    PRESERVE_SAFETENSORS = PRESERVE - set(['model', 'loss', 'optimizer', 'scaler', 'decay'])
 
     def __init__(self, config=None):
-        if not isinstance(config, (dict, Config)):
+        if config is not None and not isinstance(config, (dict, Config)):
             config = {'load/file': config}
         self.model_lock = Lock()
 
@@ -987,12 +989,16 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     def model_to_device(self, model=None):
         """ Put model on device(s). If needed, apply DataParallel wrapper. """
-        model = model if model is not None else self.model
+        model_ = model if model is not None else self.model
 
         if len(self.devices) > 1:
-            model = nn.DataParallel(model, self.devices)
+            model_ = nn.DataParallel(model_, self.devices)
         else:
-            model = model.to(self.device)
+            model_ = model_.to(self.device)
+
+        if model is None:
+            self.model = model_
+        return model_
 
 
     # Apply model to train/predict on given data
@@ -1669,8 +1675,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
 
     # Store model
-    def save(self, path, use_onnx=False, path_onnx=None, use_openvino=False, path_openvino=None,
-             batch_size=None, opset_version=13, pickle_module=dill, ignore_attributes=None, **kwargs):
+    def save(self, path, fmt=None, pickle_metadata=True, batch_size=None, opset_version=13, pickle_module=dill,
+             ignore_attributes=('optimizer', 'decay'), **kwargs):
         """ Save underlying PyTorch model along with meta parameters (config, device spec, etc).
 
         If `use_onnx` is set to True, then the model is converted to ONNX format and stored in a separate file.
@@ -1682,17 +1688,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         ----------
         path : str
             Path to a file where the model data will be stored.
-        use_onnx: bool
-            Whether to store model in ONNX format.
-        path_onnx : str, optional
-            Used only if `use_onnx` is True.
-            If provided, then path to store the ONNX model; default `path_onnx` is `path` with '_onnx' postfix.
-        use_openvino: bool
-            Whether to store model as openvino xml file.
-        path_openvino : str, optional
-            Used only if `use_openvino` is True.
-            If provided, then path to store the openvino model; default `path_openvino` is `path` with '_openvino'
-            postfix.
+        fmt: Optional[str]
+            Weights format. Available formats: "onnx", "openvino", "safetensors".
+        pickle_metadata: bool
+            Whether dump metadata (see `PRESERVE` attribute) to the file.
         batch_size : int, optional
             Used only if `use_onnx` is True.
             Fixed batch size of the ONNX module. This is the only viable batch size for this model after loading.
@@ -1706,11 +1705,13 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         kwargs : dict
             Other keyword arguments, passed directly to :func:`torch.save`.
         """
+        pickle_module = dill if pickle_module is None else pickle_module
+
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
 
-        # Unwrap DDP model
+        # Unwrap DDP if needed
         if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
             self.model = self.model.module
 
@@ -1720,49 +1721,145 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             ignore_attributes = []
         ignore_attributes = set(ignore_attributes)
 
-        if use_onnx:
-            if batch_size is None:
-                raise ValueError('Specify valid `batch_size`, used for model inference!')
+        if fmt is None:
+            self._save_torch(path, pickle_metadata, ignore_attributes, pickle_module, kwargs)
+            return
 
-            inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
-            path_onnx = path_onnx or (path + '_onnx')
-            torch.onnx.export(self.model.eval(), inputs, path_onnx, opset_version=opset_version)
+        if fmt not in self.AVAILABLE_FORMATS:
+            raise ValueError(f"fmt must be in {self.AVAILABLE_FORMATS} but got {fmt}!")
 
-            # Save the rest of parameters
-            preserved = self.PRESERVE_ONNX - ignore_attributes
-
-            preserved_dict = {item: getattr(self, item) for item in preserved}
-            torch.save({'onnx': True, 'path_onnx': path_onnx, 'onnx_batch_size': batch_size, **preserved_dict},
-                       path, pickle_module=pickle_module, **kwargs)
-
-        elif use_openvino:
-            import openvino as ov
-
-            path_openvino = path_openvino or (path + '_openvino')
-            if os.path.splitext(path_openvino)[-1] == '':
-                path_openvino = f'{path_openvino}.xml'
-
-            # Save model
-            model = self.model.eval()
-
-            if not isinstance(self.model, ov.Model):
-                inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
-                model = ov.convert_model(model, example_input=inputs)
-
-            ov.save_model(model, output_model=path_openvino)
-
-            # Save the rest of parameters
-            preserved = self.PRESERVE_OPENVINO - ignore_attributes
-            preserved_dict = {item: getattr(self, item) for item in preserved}
-            torch.save({'openvino': True, 'path_openvino': path_openvino, **preserved_dict},
-                       path, pickle_module=pickle_module, **kwargs)
-
+        if fmt == "onnx":
+            self._save_onnx(path, pickle_metadata, batch_size, opset_version,
+                            ignore_attributes, pickle_module, kwargs)
+        elif fmt == "openvino":
+            self._save_openvino(path, pickle_metadata, batch_size,
+                                ignore_attributes, pickle_module, kwargs)
+        elif fmt == "safetensors":
+            self._save_safetensors(path, pickle_metadata,
+                                ignore_attributes, pickle_module, kwargs)
         else:
-            preserved = set(self.PRESERVE) - set(ignore_attributes)
-            torch.save({item: getattr(self, item) for item in preserved},
-                       path, pickle_module=pickle_module, **kwargs)
+            raise RuntimeError(f"Unsupported format: {fmt}")
 
-    def load(self, file, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
+
+    def _save_torch(self, path, pickle_metadata, ignore_attributes, pickle_module, kwargs):
+        """ Save the model in PyTorch format. """
+        if pickle_metadata:
+            preserved = set(self.PRESERVE) - ignore_attributes
+            saved_data = {item: getattr(self, item) for item in preserved}
+            torch.save(saved_data, path, pickle_module=pickle_module, **kwargs)
+        else:
+            torch.save({'model': self.model}, path, pickle_module=pickle_module, **kwargs)
+
+
+    def _save_onnx(self, path, pickle_metadata, batch_size, opset_version,
+                ignore_attributes, pickle_module, kwargs):
+        """ Save the model in ONNX format."""
+        if batch_size is None:
+            raise ValueError("`batch_size` must be specified when saving in ONNX format!")
+
+        inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
+        self.sanitize_module_names(self.model)
+
+        if pickle_metadata:
+            name, ext = os.path.splitext(path)
+            if ext == ".onnx":
+                raise ValueError("Path should not have .onnx extension when saving with metadata!")
+            onnx_path = name + ".onnx"
+        else:
+            onnx_path = path
+
+        torch.onnx.export(
+            self.model.eval(),
+            inputs,
+            onnx_path,
+            opset_version=opset_version,
+        )
+
+        if pickle_metadata:
+            preserved = self.PRESERVE_ONNX - ignore_attributes
+            meta = {
+                "onnx": True,
+                "path_onnx": onnx_path,
+                "onnx_batch_size": batch_size,
+                **{k: getattr(self, k) for k in preserved}
+            }
+            torch.save(meta, path, pickle_module=pickle_module, **kwargs)
+
+
+    def _save_openvino(self, path, pickle_metadata, batch_size,
+                    ignore_attributes, pickle_module, kwargs):
+        """ Save the model in OpenVINO format. """
+        import openvino as ov
+
+        model = self.model.eval()
+        if not isinstance(model, ov.Model):
+            inputs = self.make_placeholder_data(batch_size=batch_size, unwrap=False)
+            model = ov.convert_model(model, example_input=inputs)
+
+        name, ext = os.path.splitext(path)
+        if pickle_metadata:
+            if ext == ".xml":
+                raise ValueError("Path should not have .xml extension when saving with metadata!")
+            openvino_path = name + ".xml"
+        else:
+            if ext != ".xml":
+                raise ValueError("Path should have .xml extension when saving OpenVINO model!")
+            openvino_path = path
+
+        ov.save_model(model, output_model=openvino_path)
+
+        if pickle_metadata:
+            preserved = self.PRESERVE_OPENVINO - ignore_attributes
+            meta = {
+                "openvino": True,
+                "path_openvino": openvino_path,
+                **{k: getattr(self, k) for k in preserved}
+            }
+            torch.save(meta, path, pickle_module=pickle_module, **kwargs)
+
+
+    def _save_safetensors(self, path, pickle_metadata,
+                        ignore_attributes, pickle_module, kwargs):
+        """ Save the model in Safetensors format."""
+        from safetensors.torch import save_file
+
+        if pickle_metadata:
+            name, ext = os.path.splitext(path)
+            if ext == ".safetensors":
+                raise ValueError("Path should not have .safetensors extension when saving with metadata!")
+
+            safetensors_path = os.path.splitext(path)[0] + ".safetensors"
+        else:
+            safetensors_path = path
+
+        save_file(self.model.state_dict(), safetensors_path)
+
+        if pickle_metadata:
+            preserved = self.PRESERVE_SAFETENSORS - ignore_attributes
+            meta = {
+                "safetensors": True,
+                "path_safetensors": safetensors_path,
+                **{k: getattr(self, k) for k in preserved}
+            }
+            torch.save(meta, path, pickle_module=pickle_module, **kwargs)
+
+    @classmethod
+    def sanitize_module_names(cls, module):
+        """
+        Recursively rename submodules to ensure names are safe for ONNX export.
+        Replaces spaces, quotes, and commas with underscores.
+        """
+        # Work on a list of keys to avoid mutating dict while iterating
+        keys = list(module._modules.keys()) # noqa: SLF001
+        for key in keys:
+            child = module._modules[key] # noqa: SLF001
+            clean_key = key.replace(' ', '_').replace('"', '').replace(',', '_')
+            if clean_key != key:
+                module._modules[clean_key] = module._modules.pop(key) # noqa: SLF001
+            # Recurse
+            cls.sanitize_module_names(child)
+
+    def load(self, path, fmt=None, make_infrastructure=False, mode='eval', pickle_module=dill, **kwargs):
         """ Load a torch model from a file.
 
         If the model was saved in ONNX format (refer to :meth:`.save` for more info), we fix the microbatch size
@@ -1770,8 +1867,10 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         Parameters
         ----------
-        file : str, PathLike, io.Bytes
+        path : str, PathLike, io.Bytes
             a file where a model is stored.
+        fmt: optional str
+            Weights format. Available formats: "pt", "onnx", "openvino", "safetensors"
         make_infrastructure : bool
             Whether to re-create model loss, optimizer, scaler and decay.
         mode : str
@@ -1782,8 +1881,8 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             Other keyword arguments, passed directly to :func:`torch.save`.
         """
         model_load_kwargs = kwargs.pop('model_load_kwargs', {})
-
         device = kwargs.pop('device', None)
+        pickle_module = dill if pickle_module is None else pickle_module
 
         if device is not None:
             self.device = device
@@ -1793,10 +1892,21 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         else:
             self._parse_devices()
 
+        if isinstance(path, str):
+            if fmt == "safetensors" or (fmt is None and path.endswith(".safetensors")):
+                self._load_safetensors(path, make_infrastructure=make_infrastructure, mode=mode)
+                return
+            if fmt == "onnx" or (fmt is None and path.endswith(".onnx")):
+                self._load_onnx(path, make_infrastructure=make_infrastructure, mode=mode)
+                return
+            if fmt == "openvino" or (fmt is None and path.endswith(".xml")):
+                self._load_openvino(path, **model_load_kwargs)
+                return
+
         kwargs['map_location'] = self.device
 
         # Load items from disk storage and set them as insance attributes
-        checkpoint = torch.load(file, pickle_module=pickle_module, **kwargs)
+        checkpoint = torch.load(path, pickle_module=pickle_module, **kwargs)
 
         # `load_config` is a reference to `self.external_config` used to update `config`
         # It is required since `self.external_config` may be overwritten in the cycle below
@@ -1808,32 +1918,63 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
         if 'openvino' in checkpoint:
             # Load openvino model
-            model = OVModel(model_path=checkpoint['path_openvino'], **model_load_kwargs)
-            self.model = model
+            self._load_openvino(checkpoint['path_openvino'], **model_load_kwargs)
+        elif 'onnx' in checkpoint:
+            self._load_onnx(checkpoint['path_onnx'], microbatch_size=checkpoint['onnx_batch_size'],
+                           **model_load_kwargs)
+        elif "safetensors" in checkpoint:
+            self._load_safetensors(checkpoint['path_safetensors'], make_infrastructure=make_infrastructure, mode=mode)
 
-            self._loaded_from_openvino = True
-            self.disable_training = True
+    def _load_onnx(self, file, make_infrastructure=False, mode='eval', microbatch_size=None):
+        """Load a model from ONNX file."""
+        try:
+            from onnx2torch import convert
+        except ImportError as e:
+            raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
 
-        else:
-            # Load model from onnx, if needed
-            if 'onnx' in checkpoint:
-                try:
-                    from onnx2torch import convert
-                except ImportError as e:
-                    raise ImportError('Loading model, stored in ONNX format, requires `onnx2torch` library.') from e
+        model = convert(file).eval()
+        self.model = model
+        if microbatch_size:
+            self.microbatch_size = microbatch_size
 
-                model = convert(checkpoint['path_onnx']).eval()
-                self.model = model
-                self.microbatch_size = checkpoint['onnx_batch_size']
-                self._loaded_from_onnx = True
-                self.disable_training = True
+        self.model_to_device()
 
-            self.model_to_device()
+        if make_infrastructure:
+            self.make_infrastructure()
 
-            if make_infrastructure:
-                self.make_infrastructure()
+        self.set_model_mode(mode)
 
-            self.set_model_mode(mode)
+    def _load_safetensors(self, file, make_infrastructure=False, mode='eval'):
+        """Load a model from Safetensors file."""
+        try:
+            from safetensors.torch import load_file
+        except ImportError as e:
+            raise ImportError('Loading model, stored in Safetensors format, requires `safetensors` library.') from e
+
+        state_dict = load_file(file)
+
+        inputs = self.make_placeholder_data(to_device=True)
+        with torch.no_grad():
+            self.model = Network(inputs=inputs, config=self.config, device=self.device)
+
+        self.model.load_state_dict(state_dict)
+
+        self.model_to_device()
+
+        if make_infrastructure:
+            self.make_infrastructure()
+
+        self.set_model_mode(mode)
+
+        return
+
+    def _load_openvino(self, file, **model_load_kwargs):
+        """Load a model from OpenVINO file."""
+        model = OVModel(model_path=file, **model_load_kwargs)
+        self.model = model
+
+        self._loaded_from_openvino = True
+        self.disable_training = True
 
 
     # Utilities to use when working with TorchModel
@@ -1855,7 +1996,6 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             if isinstance(model_reference, TorchModel):
                 return model_reference
         return None
-
 
     # Debug and profile the performance
     def set_requires_grad(self, requires_grad):
