@@ -188,7 +188,7 @@ class TestModelSaveLoad:
 
         assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
 
-    @pytest.mark.parametrize("fmt", ['onnx', 'openvino', 'safetensors'])
+    @pytest.mark.parametrize("fmt", [None, 'onnx', 'openvino', 'safetensors'])
     @pytest.mark.parametrize("pickle_metadata", [False, True])
     def test_save_load_format(self, save_path, model_class, fmt, pickle_metadata):
         num_classes = 10
@@ -196,11 +196,13 @@ class TestModelSaveLoad:
         image_shape = (2, 100, 100)
 
         save_kwargs = {
+            None: {},
             'onnx': dict(batch_size=dataset_size),
             'openvino': {},
             'safetensors': {},
         }
         load_kwargs = {
+            None: {},
             'onnx': {},
             'openvino': {'device': 'cpu'},
             'safetensors': {},
