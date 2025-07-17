@@ -405,7 +405,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
 
     def __init__(self, config=None):
         if config is not None and not isinstance(config, (dict, Config)):
-            config = {'load/file': config}
+            config = {'load/path': config}
         self.model_lock = Lock()
 
         # Configs
