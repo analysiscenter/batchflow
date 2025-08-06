@@ -26,7 +26,6 @@ dependencies = [
     "llvmlite",
     "scipy>=1.9",
     "tqdm>=4.19",
-    "pytest>=8.3.4",
 ]
 
 [project.optional-dependencies]
@@ -56,7 +55,7 @@ nn = [
 
 dev = [
     "pandas>=0.24",
-    "pytest>=7.0",
+    "pytest>=8.3.4",
     "ruff"
 ]
 
