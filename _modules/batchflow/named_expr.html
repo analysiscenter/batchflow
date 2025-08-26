@@ -1,0 +1,1355 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>batchflow.named_expr &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">batchflow.named_expr</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for batchflow.named_expr</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot; Contains named expression classes&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+
+<span class="kn">from</span> <span class="nn">.config</span> <span class="kn">import</span> <span class="n">Config</span>
+<span class="kn">from</span> <span class="nn">.utils_random</span> <span class="kn">import</span> <span class="n">make_rng</span>
+
+
+<span class="k">class</span> <span class="nc">_DummyBatch</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; A fake batch for static models &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span> <span class="o">=</span> <span class="n">pipeline</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">dataset</span> <span class="k">if</span> <span class="n">pipeline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">indices</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+
+
+<div class="viewcode-block" id="eval_expr">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.eval_expr">[docs]</a>
+<span class="k">def</span> <span class="nf">eval_expr</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">no_eval</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Evaluate a named expression recursively</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    expr</span>
+<span class="sd">        an expression to evaluate</span>
+
+<span class="sd">    no_eval : sequence of str</span>
+<span class="sd">        a list of arguments not to evalute.</span>
+<span class="sd">        Applicable only if expr is a dict which keys are checked against `no_eval` list.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">no_eval</span> <span class="o">=</span> <span class="n">no_eval</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">NamedExpression</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">_expr</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">W</span><span class="p">):</span>
+                <span class="n">expr</span> <span class="o">=</span> <span class="n">_expr</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_expr</span><span class="p">,</span> <span class="p">(</span><span class="n">NamedExpression</span><span class="p">,</span> <span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">Config</span><span class="p">)):</span>
+                <span class="n">expr</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="n">_expr</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">expr</span> <span class="o">=</span> <span class="n">_expr</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="sa">f</span><span class="s2">&quot;Can&#39;t evaluate expression: </span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2"> because </span><span class="se">\n</span><span class="s2"> </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+        <span class="n">_expr</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">expr</span><span class="p">:</span>
+            <span class="n">_expr</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">eval_expr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">expr</span><span class="p">)(</span><span class="n">_expr</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="p">(</span><span class="nb">dict</span><span class="p">,</span> <span class="n">Config</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">defaultdict</span><span class="p">):</span>
+            <span class="n">_expr</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">expr</span><span class="p">)(</span><span class="n">expr</span><span class="o">.</span><span class="n">default_factory</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">_expr</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">expr</span><span class="p">)()</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">expr</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">no_eval</span><span class="p">:</span>
+                <span class="c1"># save current params for later evaluation</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">NamedExpression</span><span class="p">):</span>
+                    <span class="n">val</span><span class="o">.</span><span class="n">set_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">val</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="n">_expr</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">key</span><span class="p">:</span> <span class="n">val</span><span class="p">})</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="n">_expr</span>
+    <span class="k">return</span> <span class="n">expr</span></div>
+
+
+
+<div class="viewcode-block" id="swap">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.swap">[docs]</a>
+<span class="k">def</span> <span class="nf">swap</span><span class="p">(</span><span class="n">op</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Swap args &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">_op_</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_op_</span></div>
+
+
+
+<span class="n">AN_EXPR</span> <span class="o">=</span> <span class="s2">&quot;#!__op__&quot;</span>
+
+<span class="n">TERNARY_OPS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;#slice&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="nb">slice</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">),</span>
+    <span class="s1">&#39;#call&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">a</span><span class="p">(</span><span class="o">*</span><span class="n">b</span><span class="p">,</span> <span class="o">**</span><span class="n">c</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="n">BINARY_OPS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;__add__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="s1">&#39;__radd__&#39;</span><span class="p">:</span> <span class="n">swap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">add</span><span class="p">),</span> <span class="s1">&#39;__concat__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">concat</span><span class="p">,</span>
+    <span class="s1">&#39;__sub__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">sub</span><span class="p">,</span> <span class="s1">&#39;__rsub__&#39;</span><span class="p">:</span> <span class="n">swap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">sub</span><span class="p">),</span>
+    <span class="s1">&#39;__mul__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">mul</span><span class="p">,</span> <span class="s1">&#39;__rmul__&#39;</span><span class="p">:</span> <span class="n">swap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">mul</span><span class="p">),</span>
+    <span class="s1">&#39;__floordiv__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">floordiv</span><span class="p">,</span> <span class="s1">&#39;__rfloordiv__&#39;</span><span class="p">:</span> <span class="n">swap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">floordiv</span><span class="p">),</span>
+    <span class="s1">&#39;__truediv__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">truediv</span><span class="p">,</span> <span class="s1">&#39;__rtruediv__&#39;</span><span class="p">:</span> <span class="n">swap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">truediv</span><span class="p">),</span>
+    <span class="s1">&#39;__mod__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">mod</span><span class="p">,</span> <span class="s1">&#39;__rmod__&#39;</span><span class="p">:</span> <span class="n">swap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">mod</span><span class="p">),</span>
+    <span class="s1">&#39;__pow__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">pow</span><span class="p">,</span> <span class="s1">&#39;__rpow__&#39;</span><span class="p">:</span> <span class="n">swap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">pow</span><span class="p">),</span>
+    <span class="s1">&#39;__matmul__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">matmul</span><span class="p">,</span> <span class="s1">&#39;__rmatmul__&#39;</span><span class="p">:</span> <span class="n">swap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">matmul</span><span class="p">),</span>
+    <span class="s1">&#39;__lshift__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">lshift</span><span class="p">,</span> <span class="s1">&#39;__rshift__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">rshift</span><span class="p">,</span>
+    <span class="s1">&#39;__and__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">and_</span><span class="p">,</span> <span class="s1">&#39;__or__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">or_</span><span class="p">,</span> <span class="s1">&#39;__xor__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">xor</span><span class="p">,</span>
+    <span class="s1">&#39;__lt__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">lt</span><span class="p">,</span> <span class="s1">&#39;__le__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">le</span><span class="p">,</span> <span class="s1">&#39;__gt__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">gt</span><span class="p">,</span> <span class="s1">&#39;__ge__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">ge</span><span class="p">,</span>
+    <span class="s1">&#39;__eq__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">eq</span><span class="p">,</span> <span class="s1">&#39;__ne__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">ne</span><span class="p">,</span>
+    <span class="s1">&#39;__is__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">is_</span><span class="p">,</span> <span class="s1">&#39;__is_not__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">is_not</span><span class="p">,</span>
+    <span class="s1">&#39;#getitem&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span><span class="p">[</span><span class="n">b</span><span class="p">],</span>
+    <span class="s1">&#39;#item&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span><span class="p">[</span><span class="n">b</span><span class="p">],</span>
+    <span class="s1">&#39;#format&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">b</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">a</span><span class="p">),</span>
+    <span class="s1">&#39;#attr&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="n">UNARY_OPS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;__neg__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">neg</span><span class="p">,</span> <span class="s1">&#39;__pos__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="s1">&#39;__invert__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">inv</span><span class="p">,</span> <span class="s1">&#39;__not__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">not_</span><span class="p">,</span>
+    <span class="s1">&#39;__abs__&#39;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">abs</span><span class="p">,</span>
+    <span class="s1">&#39;#str&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">OPERATIONS</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">TERNARY_OPS</span><span class="p">,</span> <span class="o">**</span><span class="n">BINARY_OPS</span><span class="p">,</span> <span class="o">**</span><span class="n">UNARY_OPS</span><span class="p">}</span>
+
+<span class="n">OPERATIONS_SIGNS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;__pos__&#39;</span><span class="p">:</span> <span class="s1">&#39;+&#39;</span><span class="p">,</span> <span class="s1">&#39;__neg__&#39;</span><span class="p">:</span> <span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="s1">&#39;__invert__&#39;</span><span class="p">:</span> <span class="s1">&#39;~&#39;</span><span class="p">,</span> <span class="s1">&#39;__concat__&#39;</span><span class="p">:</span> <span class="s1">&#39;+&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__add__&#39;</span><span class="p">:</span> <span class="s1">&#39;+&#39;</span><span class="p">,</span> <span class="s1">&#39;__radd__&#39;</span><span class="p">:</span> <span class="s1">&#39;+&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__sub__&#39;</span><span class="p">:</span> <span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="s1">&#39;__rsub__&#39;</span><span class="p">:</span> <span class="s1">&#39;-&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__mul__&#39;</span><span class="p">:</span> <span class="s1">&#39;*&#39;</span><span class="p">,</span> <span class="s1">&#39;__rmul__&#39;</span><span class="p">:</span> <span class="s1">&#39;*&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__floordiv__&#39;</span><span class="p">:</span> <span class="s1">&#39;//&#39;</span><span class="p">,</span> <span class="s1">&#39;__rfloordiv__&#39;</span><span class="p">:</span> <span class="s1">&#39;//&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__truediv__&#39;</span><span class="p">:</span> <span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="s1">&#39;__rtruediv__&#39;</span><span class="p">:</span> <span class="s1">&#39;/&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__mod__&#39;</span><span class="p">:</span> <span class="s1">&#39;%&#39;</span><span class="p">,</span> <span class="s1">&#39;__rmod__&#39;</span><span class="p">:</span> <span class="s1">&#39;%&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__pow__&#39;</span><span class="p">:</span> <span class="s1">&#39;**&#39;</span><span class="p">,</span> <span class="s1">&#39;__rpow__&#39;</span><span class="p">:</span> <span class="s1">&#39;**&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__matmul__&#39;</span><span class="p">:</span> <span class="s1">&#39;@&#39;</span><span class="p">,</span> <span class="s1">&#39;__rmatmul__&#39;</span><span class="p">:</span> <span class="s1">&#39;@&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__lshift__&#39;</span><span class="p">:</span> <span class="s1">&#39;&gt;&gt;&#39;</span><span class="p">,</span> <span class="s1">&#39;__rshift__&#39;</span><span class="p">:</span> <span class="s1">&#39;&gt;&gt;&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__and__&#39;</span><span class="p">:</span> <span class="s1">&#39;&amp;&#39;</span><span class="p">,</span> <span class="s1">&#39;__or__&#39;</span><span class="p">:</span> <span class="s1">&#39; |&#39;</span><span class="p">,</span> <span class="s1">&#39;__xor__&#39;</span><span class="p">:</span> <span class="s1">&#39;^&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__lt__&#39;</span><span class="p">:</span> <span class="s1">&#39;&lt;&#39;</span><span class="p">,</span> <span class="s1">&#39;__le__&#39;</span><span class="p">:</span> <span class="s1">&#39;&lt;=&#39;</span><span class="p">,</span> <span class="s1">&#39;__gt__&#39;</span><span class="p">:</span> <span class="s1">&#39;&gt;&#39;</span><span class="p">,</span> <span class="s1">&#39;__ge__&#39;</span><span class="p">:</span> <span class="s1">&#39;&gt;=&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__eq__&#39;</span><span class="p">:</span> <span class="s1">&#39;==&#39;</span><span class="p">,</span> <span class="s1">&#39;__ne__&#39;</span><span class="p">:</span> <span class="s1">&#39;!=&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;__is__&#39;</span><span class="p">:</span> <span class="s1">&#39;is&#39;</span><span class="p">,</span> <span class="s1">&#39;__is_not__&#39;</span><span class="p">:</span> <span class="s1">&#39;is not&#39;</span><span class="p">,</span> <span class="s1">&#39;__not__&#39;</span><span class="p">:</span> <span class="s1">&#39;not &#39;</span>
+<span class="p">}</span>
+
+<div class="viewcode-block" id="add_ops">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.add_ops">[docs]</a>
+<span class="k">def</span> <span class="nf">add_ops</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Add arithmetic operations to a class.</span>
+<span class="sd">    Allows to create and parse syntax trees using operations like &#39;+&#39;, &#39;-&#39;, &#39;*&#39;, &#39;/&#39;.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    op_cls : class</span>
+<span class="sd">        The class which represents an arithmetics expression.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">OPERATIONS</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">op</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;#&#39;</span><span class="p">:</span>
+            <span class="k">def</span> <span class="nf">_oper_</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">op</span><span class="o">=</span><span class="n">op</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">AlgebraicNamedExpression</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="n">op</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">other</span><span class="p">)</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">_oper_</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">cls</span></div>
+
+
+
+<div class="viewcode-block" id="MetaNamedExpression">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.MetaNamedExpression">[docs]</a>
+<span class="k">class</span> <span class="nc">MetaNamedExpression</span><span class="p">(</span><span class="nb">type</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Meta class to allow for easy instantiation through attribution</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    `B.images` is equal to B(&#39;images&#39;), but requires fewer letters to type</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__getattr__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NamedExpression">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression">[docs]</a>
+<span class="nd">@add_ops</span>
+<span class="k">class</span> <span class="nc">NamedExpression</span><span class="p">(</span><span class="n">metaclass</span><span class="o">=</span><span class="n">MetaNamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Base class for a named expression</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    name : str</span>
+<span class="sd">        a name</span>
+<span class="sd">    mode : str</span>
+<span class="sd">        a default assignment method: write, append, extend, update.</span>
+<span class="sd">        Can be shrotened to jiust the first letter: w, a, e, u.</span>
+
+<span class="sd">        - &#39;w&#39; - overwrite with a new value. This is a default mode.</span>
+<span class="sd">        - &#39;a&#39; - append a new value</span>
+<span class="sd">                (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)</span>
+<span class="sd">        - &#39;e&#39; - extend with a new value</span>
+<span class="sd">                (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)</span>
+<span class="sd">        - &#39;u&#39; - update with a new value</span>
+<span class="sd">                (see dict.update https://docs.python.org/3/library/stdtypes.html#dict.update</span>
+<span class="sd">                or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;__dict__&#39;</span><span class="p">,</span> <span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">=</span> <span class="n">mode</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">eval</span> <span class="o">=</span> <span class="nb">eval</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">AlgebraicNamedExpression</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="s1">&#39;#attr&#39;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">slice</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">NamedExpression</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="p">(</span><span class="n">key</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">key</span><span class="o">.</span><span class="n">stop</span><span class="p">,</span> <span class="n">key</span><span class="o">.</span><span class="n">step</span><span class="p">)):</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="n">AlgebraicNamedExpression</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="s1">&#39;#slice&#39;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">key</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">key</span><span class="o">.</span><span class="n">stop</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="n">key</span><span class="o">.</span><span class="n">step</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">AlgebraicNamedExpression</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="s1">&#39;#item&#39;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">key</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">AlgebraicNamedExpression</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="s1">&#39;#call&#39;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">args</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NamedExpression.str">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.str">[docs]</a>
+    <span class="k">def</span> <span class="nf">str</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Convert a named expression value to a string &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">AlgebraicNamedExpression</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="s1">&#39;#str&#39;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NamedExpression.format">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.format">[docs]</a>
+    <span class="k">def</span> <span class="nf">format</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">string</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Convert a value to a formatted representation, controlled by format spec.</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+<span class="sd">        Unlike Python built-in function, the usage is value.format(format_spec), for example:</span>
+<span class="sd">        ::</span>
+
+<span class="sd">            V(&#39;variable&#39;).format(&#39;Value of the variable is {:7.7}&#39;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">AlgebraicNamedExpression</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="s1">&#39;#format&#39;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">string</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_get_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return parameters needed to evaluate the expression &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">pkwargs</span> <span class="o">=</span> <span class="n">kwargs</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">pkwargs</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="o">|</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">pkwargs</span><span class="p">[</span><span class="n">arg</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># pre-set parameters should prevail</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">arg</span><span class="p">),</span> <span class="n">NamedExpression</span><span class="p">):</span>
+                        <span class="n">pkwargs</span><span class="p">[</span><span class="n">arg</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">pkwargs</span><span class="p">[</span><span class="n">arg</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">pkwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;batch&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">pkwargs</span><span class="p">[</span><span class="s1">&#39;batch&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_DummyBatch</span><span class="p">(</span><span class="n">pkwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;pipeline&#39;</span><span class="p">))</span>
+
+        <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_name</span><span class="p">(</span><span class="o">**</span><span class="n">pkwargs</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">name</span><span class="p">,</span> <span class="n">pkwargs</span>
+
+<div class="viewcode-block" id="NamedExpression.set_params">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.set_params">[docs]</a>
+    <span class="k">def</span> <span class="nf">set_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">kwargs</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_get_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">NamedExpression</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
+
+<div class="viewcode-block" id="NamedExpression.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a value of a named expression</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        This method should be overriden in child classes.</span>
+<span class="sd">        In the first line it should usually call `_get_params` method::</span>
+
+<span class="sd">            name, kwargs = self._get_params(**kwargs)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s1">&#39;Cannot get a value from an abstract named expression&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NamedExpression.set">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.set">[docs]</a>
+    <span class="k">def</span> <span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">eval</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Set a value to a named expression</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        mode : str</span>
+<span class="sd">            an assignment method: write, append, extend, update.</span>
+<span class="sd">            A default mode may be specified when instantiating an expression.</span>
+<span class="sd">        eval : bool</span>
+<span class="sd">            whether to evaluate value before assigning it to the expression</span>
+<span class="sd">            (as value might contain other named expressions,</span>
+<span class="sd">            so it should be processed recursively)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">kwargs</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">mode</span> <span class="o">=</span> <span class="n">mode</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span>
+
+        <span class="k">if</span> <span class="nb">eval</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">mode</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;a&#39;</span><span class="p">,</span> <span class="s1">&#39;append&#39;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">mode</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">,</span> <span class="s1">&#39;extend&#39;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">mode</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;u&#39;</span><span class="p">,</span> <span class="s1">&#39;update&#39;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NamedExpression.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value to a named expression &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;assign should be implemented in child classes&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NamedExpression.append">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.append">[docs]</a>
+    <span class="k">def</span> <span class="nf">append</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Append a value to a named expression</span>
+
+<span class="sd">        if a named expression is a dict or set, `update` is called, or `append` otherwise.</span>
+
+<span class="sd">        See also</span>
+<span class="sd">        --------</span>
+<span class="sd">        list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists</span>
+<span class="sd">        dict.update https://docs.python.org/3/library/stdtypes.html#dict.update</span>
+<span class="sd">        set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">var</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="p">(</span><span class="nb">set</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)):</span>
+            <span class="n">var</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">var</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NamedExpression.extend">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.extend">[docs]</a>
+    <span class="k">def</span> <span class="nf">extend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Extend a named expression with a new value</span>
+<span class="sd">        (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists) &quot;&quot;&quot;</span>
+        <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">var</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">var</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">value</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NamedExpression.update">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.update">[docs]</a>
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Update a named expression with a new value</span>
+<span class="sd">        (see dict.update https://docs.python.org/3/library/stdtypes.html#dict.update</span>
+<span class="sd">        or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update) &quot;&quot;&quot;</span>
+        <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">var</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">var</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="s1">&#39;(&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__setstate__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__getstate__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span></div>
+
+
+<div class="viewcode-block" id="AlgebraicNamedExpression">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.AlgebraicNamedExpression">[docs]</a>
+<span class="k">class</span> <span class="nc">AlgebraicNamedExpression</span><span class="p">(</span><span class="n">NamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Algebraic expression over named expressions &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">AN_EXPR</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">=</span> <span class="n">op</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="n">a</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">b</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
+
+<div class="viewcode-block" id="AlgebraicNamedExpression.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.AlgebraicNamedExpression.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a value of an algebraic expression &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="s1">&#39;#call&#39;</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;_call&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="n">_call</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="ow">in</span> <span class="n">UNARY_OPS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">OPERATIONS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">op</span><span class="p">](</span><span class="n">a</span><span class="p">)</span>
+
+        <span class="n">b</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="ow">in</span> <span class="n">BINARY_OPS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">OPERATIONS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">op</span><span class="p">](</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+        <span class="n">c</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">c</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">OPERATIONS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">op</span><span class="p">](</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AlgebraicNamedExpression.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.AlgebraicNamedExpression.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value to a named expression &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;#attr&#39;</span><span class="p">,</span> <span class="s1">&#39;#item&#39;</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Assigning a value to an arithmetic expression is not possible&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+
+        <span class="n">_</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">a</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="s1">&#39;#attr&#39;</span><span class="p">:</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="s1">&#39;#item&#39;</span><span class="p">:</span>
+            <span class="n">a</span><span class="p">[</span><span class="n">b</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="ow">in</span> <span class="n">OPERATIONS_SIGNS</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="ow">in</span> <span class="n">UNARY_OPS</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">OPERATIONS_SIGNS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">op</span><span class="p">]</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="ow">in</span> <span class="n">BINARY_OPS</span><span class="p">:</span>
+                <span class="k">return</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; &#39;</span> <span class="o">+</span> <span class="n">OPERATIONS_SIGNS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">op</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39; &#39;</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="s1">&#39;__abs__&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;|&#39;</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;|&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="s1">&#39;#str&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;str(&#39;</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="s1">&#39;#attr&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="c1"># remove &#39;&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="s1">&#39;#item&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;[&#39;</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span> <span class="o">+</span><span class="s1">&#39;]&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="s1">&#39;#format&#39;</span><span class="p">:</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>  <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+            <span class="k">return</span> <span class="s1">&#39;f&#39;</span> <span class="o">+</span> <span class="n">b</span> <span class="o">+</span> <span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">a</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="s1">&#39;#slice&#39;</span><span class="p">:</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="s1">&#39;:&#39;</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">c</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+            <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="s1">&#39;:&#39;</span> <span class="o">+</span> <span class="n">b</span> <span class="o">+</span> <span class="n">c</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="s1">&#39;#call&#39;</span><span class="p">:</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">args</span> <span class="o">=</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">kwargs</span> <span class="o">=</span> <span class="s1">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">repr</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;=&#39;</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">items</span><span class="p">()])</span>
+                <span class="n">args</span> <span class="o">=</span> <span class="n">args</span> <span class="o">+</span> <span class="s1">&#39;, &#39;</span> <span class="o">+</span> <span class="n">kwargs</span> <span class="k">if</span> <span class="n">args</span> <span class="k">else</span> <span class="n">kwargs</span>
+            <span class="k">return</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;(&#39;</span> <span class="o">+</span> <span class="n">args</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span>
+
+        <span class="k">return</span> <span class="s1">&#39;Unknown expression&#39;</span></div>
+
+
+
+<div class="viewcode-block" id="IF">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.IF">[docs]</a>
+<span class="k">class</span> <span class="nc">IF</span><span class="p">(</span><span class="n">NamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Select either ``true`` or ``false``, based on ``condition``.</span>
+<span class="sd">    Useful for simple variables that change along the run of a pipeline.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    Select model mode based on the current pipeline iteration::</span>
+<span class="sd">        mode = IF(condition=I.current&lt;450, true=&#39;train&#39;, false=&#39;eval&#39;)</span>
+
+<span class="sd">    Train the last 20% with larger batch size::</span>
+<span class="sd">        batch_size = IF(condition=I.ratio &gt; 0.8, true=256, false=128)</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    An alternative to this named expression is to use ``F``::</span>
+<span class="sd">        def select_batch_size(ratio):</span>
+<span class="sd">            return 256 if ratio &gt; 0.8 else 128</span>
+
+<span class="sd">        batch_size = F(select_batch_size)(ratio=I.ratio)</span>
+
+<span class="sd">    Or, with a lambda::</span>
+<span class="sd">        batch_size = F(lambda ratio: 256 if ratio &gt; 0.8 else 128)(ratio=I.ratio)</span>
+
+<span class="sd">    ``F`` is recommended where more flexibility is needed, and ``IF`` can be used for simple binary choices.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="n">true</span><span class="p">,</span> <span class="n">false</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="s1">&#39;#!__if__&#39;</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">condition</span> <span class="o">=</span> <span class="n">condition</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">true</span> <span class="o">=</span> <span class="n">true</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">false</span> <span class="o">=</span> <span class="n">false</span>
+
+<div class="viewcode-block" id="IF.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.IF.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Select based on condition. &quot;&quot;&quot;</span>
+        <span class="n">condition</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">condition</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">bool</span><span class="p">(</span><span class="n">condition</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">true</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">false</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="IF.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.IF.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value to a named expression, based on condition. &quot;&quot;&quot;</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">condition</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">condition</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">bool</span><span class="p">(</span><span class="n">condition</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">true</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">false</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="B">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.B">[docs]</a>
+<span class="k">class</span> <span class="nc">B</span><span class="p">(</span><span class="n">NamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Batch component or attribute name</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    ``B()`` return the batch itself.</span>
+
+<span class="sd">    To avoid unexpected data changes the copy of the batch may be returned, if ``copy=True``.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    ::</span>
+
+<span class="sd">        B(&#39;size&#39;)</span>
+<span class="sd">        B(&#39;images_shape&#39;)</span>
+<span class="sd">        B(copy=True)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">mode</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">copy</span> <span class="o">=</span> <span class="n">copy</span>
+
+    <span class="k">def</span> <span class="nf">_get_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">batch</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;batch&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">name</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">kwargs</span>
+
+<div class="viewcode-block" id="B.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.B.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a value of a batch component &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">_DummyBatch</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Batch expressions are not allowed in static models: B(&#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39;)&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">batch</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span> <span class="k">else</span> <span class="n">batch</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="B.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.B.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value to a batch component &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="L">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.L">[docs]</a>
+<span class="k">class</span> <span class="nc">L</span><span class="p">(</span><span class="n">B</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; List of objects or a batch component with a list of objects.</span>
+
+<span class="sd">    Note</span>
+<span class="sd">    ----</span>
+<span class="sd">    ``L(&#39;comp&#39;).attr`` is equivalent to the list comprehension ``[val.attr for val in batch.comp]``.</span>
+<span class="sd">    ``L(&#39;comp&#39;).func(*args, **kwargs)`` is equivalent to the list comprehension ``[val.func(*args, **kwargs)</span>
+<span class="sd">                                                                                   for val in batch.comp]``.</span>
+<span class="sd">    ``L(&#39;comp&#39;)[item]`` is equivalent to the list comprehension ``[val[item] for val in batch.comp]``.</span>
+<span class="sd">    Any chains of consecutive calls of items or attribures like ``L(&#39;comp&#39;).attr[item].attr2 ... `` are also allowed.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">mode</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span> <span class="o">=</span> <span class="n">kwargs</span>
+
+<div class="viewcode-block" id="L.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.L.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Returns an instance of the class that allows one to access attributes or items stored in the batch</span>
+<span class="sd">        component or call a method from it.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="c1"># when given a component name, convert to a component data</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">L</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+
+        <span class="c1"># expecting that name is a collection of items</span>
+        <span class="k">if</span> <span class="s1">&#39;attr&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="nb">getattr</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;attr&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">name</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s1">&#39;item&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">v</span><span class="p">[</span><span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;item&#39;</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">name</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s1">&#39;call&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">call_args</span><span class="p">,</span> <span class="n">call_kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;call&#39;</span><span class="p">]</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">v</span><span class="p">(</span><span class="o">*</span><span class="n">eval_expr</span><span class="p">(</span><span class="n">call_args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span> <span class="o">**</span><span class="n">eval_expr</span><span class="p">(</span><span class="n">call_kwargs</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">name</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">name</span></div>
+
+
+<div class="viewcode-block" id="L.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.L.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value to batch component or item/attribute stored in the batch component &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="s1">&#39;attr&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">name</span> <span class="p">,</span><span class="n">value</span><span class="p">):</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;attr&#39;</span><span class="p">],</span> <span class="n">v</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="s1">&#39;item&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+                <span class="n">n</span><span class="p">[</span><span class="n">eval_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;item&#39;</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)]</span> <span class="o">=</span> <span class="n">v</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># If value is assigned to the object itself it will be rewritten with `value`.</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">L</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">L</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="o">=</span><span class="n">item</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">L</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">call</span><span class="o">=</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="s1">&#39;L(&#39;</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span>
+        <span class="k">if</span> <span class="s1">&#39;attr&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">s</span> <span class="o">+</span> <span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;attr&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s1">&#39;item&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">s</span> <span class="o">+</span> <span class="s1">&#39;[&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;item&#39;</span><span class="p">])</span> <span class="o">+</span><span class="s1">&#39;]&#39;</span>
+        <span class="k">if</span> <span class="s1">&#39;call&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;call&#39;</span><span class="p">]</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">args</span><span class="p">))</span> <span class="k">if</span> <span class="n">args</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+            <span class="n">kwargs</span> <span class="o">=</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">()])</span> <span class="k">if</span> <span class="n">kwargs</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="n">args</span> <span class="o">+</span> <span class="s1">&#39;, &#39;</span> <span class="o">+</span> <span class="n">kwargs</span> <span class="k">if</span> <span class="n">kwargs</span> <span class="k">else</span> <span class="n">args</span>
+            <span class="k">return</span> <span class="n">s</span> <span class="o">+</span> <span class="s1">&#39;(&#39;</span> <span class="o">+</span> <span class="n">args</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span>
+        <span class="k">return</span> <span class="n">s</span></div>
+
+
+
+<div class="viewcode-block" id="PipelineNamedExpression">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.PipelineNamedExpression">[docs]</a>
+<span class="k">class</span> <span class="nc">PipelineNamedExpression</span><span class="p">(</span><span class="n">NamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Base class for pipeline expressions &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">_get_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">pipeline</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;pipeline&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;pipeline&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;batch&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">pipeline</span>
+        <span class="k">return</span> <span class="n">name</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">kwargs</span></div>
+
+
+<div class="viewcode-block" id="C">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.C">[docs]</a>
+<span class="k">class</span> <span class="nc">C</span><span class="p">(</span><span class="n">PipelineNamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; A pipeline config option</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    ``C()`` return config itself.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    Get a value from the current pipeline config::</span>
+
+<span class="sd">        C(&#39;model_class&#39;, default=ResNet)</span>
+<span class="sd">        C(&#39;GPU&#39;)</span>
+
+<span class="sd">    Get the whole config from the current pipeline::</span>
+
+<span class="sd">        C()</span>
+
+<span class="sd">    Get a value from another pipeline config::</span>
+
+<span class="sd">        C(&#39;model_class&#39;, pipeline=train_pipeline)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">mode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_has_default</span> <span class="o">=</span> <span class="s1">&#39;default&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="C.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.C.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a value of a pipeline config &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">config</span> <span class="ow">or</span> <span class="n">Config</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">config</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_has_default</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">default</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Name is not found in the config: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+
+<div class="viewcode-block" id="C.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.C.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value to a pipeline config &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">pipeline</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="V">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.V">[docs]</a>
+<span class="k">class</span> <span class="nc">V</span><span class="p">(</span><span class="n">PipelineNamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Pipeline variable name</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    Get a variable value from the current pipeline::</span>
+
+<span class="sd">        V(&#39;model_name&#39;)</span>
+
+<span class="sd">    Get a variable value from another pipeline::</span>
+
+<span class="sd">        V(&#39;loss_history&#39;, pipeline=train_pipeline)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="V.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.V.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a value of a pipeline variable &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">get_variable</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+
+<div class="viewcode-block" id="V.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.V.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value to a pipeline variable &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">pipeline</span><span class="o">.</span><span class="n">assign_variable</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="M">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.M">[docs]</a>
+<span class="k">class</span> <span class="nc">M</span><span class="p">(</span><span class="n">PipelineNamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Model name</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    Get a model from the current pipeline::</span>
+
+<span class="sd">        M(&#39;model_name&#39;)</span>
+
+<span class="sd">    Get a model from a given pipeline::</span>
+
+<span class="sd">        M(&#39;model_name&#39;, pipeline=train_pipeline)</span>
+
+<span class="sd">    Get a model from a pipeline specified in the current pipeline config::</span>
+
+<span class="sd">        M(&#39;model_name&#39;, pipeline=C(&#39;train_pipeline&#39;))</span>
+
+<span class="sd">    Get a model from a pipeline specified in another pipeline config::</span>
+
+<span class="sd">        M(&#39;model_name&#39;, pipeline=C(&#39;train_pipeline&#39;, pipeline=test_template))</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="M.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.M.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a model from a pipeline &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">get_model_by_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+
+<div class="viewcode-block" id="M.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.M.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">batch</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">pipeline</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value to a model &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">value</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">pipeline</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Assigning a value to a model is not possible.&#39;</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="I">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.I">[docs]</a>
+<span class="k">class</span> <span class="nc">I</span><span class="p">(</span><span class="n">PipelineNamedExpression</span><span class="p">):</span> <span class="c1"># noqa: E742; ambiguous-class-name</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Iteration counter</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    name : str</span>
+<span class="sd">        Determines returned value. One of:</span>
+<span class="sd">            - &#39;current&#39; or its substring - current iteration number, default.</span>
+<span class="sd">            - &#39;maximum&#39; or &#39;total&#39; or their substring - total number of iterations to be performed.</span>
+<span class="sd">              If total number is not defined, raises an error.</span>
+<span class="sd">            - &#39;ratio&#39; or its substring - current iteration divided by a total number of iterations.</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError</span>
+<span class="sd">    If `name` is not valid.</span>
+<span class="sd">    If `name` is &#39;m&#39; or &#39;r&#39; and total number of iterations is not defined.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    ::</span>
+
+<span class="sd">        I(&#39;current&#39;)</span>
+<span class="sd">        I(&#39;max&#39;)</span>
+<span class="sd">        I(&#39;max&#39;)</span>
+<span class="sd">        R(&#39;normal&#39;, loc=0, scale=I(&#39;ratio&#39;)*100)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;c&#39;</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="I.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.I.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return current or maximum iteration number or their ratio &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">current_iter</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;batch&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iteration</span> <span class="ow">or</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">iter_params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;_n_iters&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="s1">&#39;current&#39;</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">current_iter</span>
+
+        <span class="n">total</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">iter_params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;_total&#39;</span><span class="p">)</span> <span class="c1"># if pipeline.iter_params else None</span>
+
+        <span class="k">if</span> <span class="s1">&#39;maximum&#39;</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;total&#39;</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">total</span>
+
+        <span class="k">if</span> <span class="n">total</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Total number of iterations is not defined!&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="s1">&#39;ratio&#39;</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+            <span class="n">ratio</span> <span class="o">=</span> <span class="n">current_iter</span> <span class="o">/</span> <span class="n">total</span>
+            <span class="k">return</span> <span class="n">ratio</span>
+
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Unknown key for named expresssion I: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="I.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.I.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value by calling a callable &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Assigning a value to an iteration number is not supported&quot;</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="R">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.R">[docs]</a>
+<span class="k">class</span> <span class="nc">R</span><span class="p">(</span><span class="n">PipelineNamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; A random value</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    name : str</span>
+<span class="sd">        a distribution name</span>
+
+<span class="sd">    seed : int, SeedSequence, Generator, BitGenerator, RandomState</span>
+<span class="sd">        a random state (see :func:`~.make_rng`)</span>
+
+<span class="sd">    args, kwargs</span>
+<span class="sd">        distribution parameters</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    If `size` is needed, it should be specified as a named, not a positional argument.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    ::</span>
+
+<span class="sd">        R(&#39;normal&#39;, 0, 1)</span>
+<span class="sd">        R(&#39;poisson&#39;, lam=5.5, seed=42, size=3)</span>
+<span class="sd">        R([&#39;metro&#39;, &#39;taxi&#39;, &#39;bike&#39;], p=[.6, .1, .3], size=10)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="n">args</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span> <span class="o">=</span> <span class="n">kwargs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">random</span> <span class="o">=</span> <span class="n">make_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_random</span> <span class="o">=</span> <span class="n">seed</span> <span class="ow">is</span> <span class="kc">None</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="n">NamedExpression</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;size is expected to be int or tuple of int or a named expression&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">size</span> <span class="o">=</span> <span class="n">size</span>
+
+    <span class="k">def</span> <span class="nf">_get_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="c1"># if seed was explicitly set in R(...), use it</span>
+        <span class="c1"># otherwise use the RNG from the pipeline if it exists</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_random</span> <span class="ow">and</span> <span class="n">pipeline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">random</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">random</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">random</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">random</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">random</span>
+
+        <span class="k">return</span> <span class="n">name</span><span class="p">,</span> <span class="n">random</span><span class="p">,</span> <span class="n">kwargs</span>
+
+<div class="viewcode-block" id="R.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.R.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a value of a random variable</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        size : int, tuple of int</span>
+<span class="sd">            Output shape. If the given shape is (m, n, k), then m * n * k samples are drawn</span>
+<span class="sd">            and returned as m x n x k array.</span>
+<span class="sd">            If size was also specified at instance creation, then output shape is extended from the beginning.</span>
+<span class="sd">            So `size` is treated like a batch size, while size specified at instantiation is an item size.</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+<span class="sd">        ::</span>
+
+<span class="sd">            ne = R(&#39;normal&#39;, 0, 1, size=(10, 20)))</span>
+<span class="sd">            value = ne.get(batch=batch)</span>
+<span class="sd">            # value.shape will be (10, 20)</span>
+
+<span class="sd">            value = ne.get(size=30, batch=batch)</span>
+<span class="sd">            # value.shape will be (30, 10, 20)</span>
+<span class="sd">            # so size is treated like a batch size</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;size is expected to be int or tuple of int&#39;</span><span class="p">)</span>
+
+        <span class="n">name</span><span class="p">,</span> <span class="n">random</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="n">name</span><span class="p">,)</span> <span class="o">+</span> <span class="n">args</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;choice&#39;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">random</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">random</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;An expression should be an int, an iterable or a numpy distribution name&#39;</span><span class="p">,</span>
+                            <span class="n">name</span><span class="p">,</span> <span class="n">random</span><span class="p">)</span>
+
+        <span class="n">args</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">size</span><span class="p">,</span> <span class="n">kwsize</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">size</span><span class="p">),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">kwsize</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">size</span> <span class="o">=</span> <span class="n">kwsize</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+                    <span class="n">size</span> <span class="o">=</span> <span class="p">(</span><span class="n">size</span><span class="p">,)</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">kwsize</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+                    <span class="n">kwsize</span> <span class="o">=</span> <span class="p">(</span><span class="n">kwsize</span><span class="p">,)</span>
+                <span class="n">size</span> <span class="o">=</span> <span class="n">kwsize</span> <span class="o">+</span> <span class="n">size</span>
+
+        <span class="n">rkwargs</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">,</span> <span class="s1">&#39;size&#39;</span><span class="p">:</span> <span class="n">size</span><span class="p">}</span>
+        <span class="n">rkwargs</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="n">rkwargs</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">name</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">rkwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="R.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.R.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Assigning a value to a random variable is not supported&quot;</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">repr_str</span> <span class="o">=</span> <span class="s1">&#39;R(&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">:</span>
+            <span class="n">repr_str</span> <span class="o">+=</span> <span class="s1">&#39;, &#39;</span> <span class="o">+</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">repr_str</span> <span class="o">+=</span> <span class="s1">&#39;, &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">repr_str</span> <span class="o">+</span> <span class="p">(</span><span class="s1">&#39;, size=&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">size</span> <span class="k">else</span> <span class="s1">&#39;)&#39;</span><span class="p">)</span></div>
+
+
+
+
+<div class="viewcode-block" id="F">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.F">[docs]</a>
+<span class="k">class</span> <span class="nc">F</span><span class="p">(</span><span class="n">NamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; A function, method or any other callable that might take arguments</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    ::</span>
+
+<span class="sd">        F(MyBatch.rotate)(B(), angle=30)</span>
+<span class="sd">        F(make_data)</span>
+<span class="sd">        F(prepare_data)(batch=B(), item=10)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="F.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.F.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_call</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a value from a callable</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        _call : bool</span>
+<span class="sd">            Whether to call name-function while evaluating the expression.</span>
+<span class="sd">            Sometimes we might not want calling the func, e.g. when evaluating an F-expr within a call-expression</span>
+<span class="sd">            F(func)(1, arg2=10), since we want to evaluate the whole expression.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">name</span><span class="p">()</span> <span class="k">if</span> <span class="n">_call</span> <span class="k">else</span> <span class="n">name</span></div>
+
+
+<div class="viewcode-block" id="F.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.F.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value by calling a callable &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Assigning a value to a callable is not supported&quot;</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="D">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.D">[docs]</a>
+<span class="k">class</span> <span class="nc">D</span><span class="p">(</span><span class="n">NamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Dataset attribute or dataset itself</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    ::</span>
+
+<span class="sd">        D()</span>
+<span class="sd">        D(&#39;classes&#39;)</span>
+<span class="sd">        D(&#39;organization&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">_get_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">batch</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;batch&#39;</span><span class="p">]</span>
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">batch</span><span class="o">.</span><span class="n">dataset</span> <span class="ow">or</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;batch&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">dataset</span>
+        <span class="k">if</span> <span class="n">dataset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Dataset is not set&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">name</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">kwargs</span>
+
+<div class="viewcode-block" id="D.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.D.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a value of a dataset attribute &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">dataset</span>
+        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s2">&quot;Attribute does not exist in the dataset&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+
+<div class="viewcode-block" id="D.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.D.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value to a dataset attribute &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Assigning a value to D() is not possible.&#39;</span><span class="p">)</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="W">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.W">[docs]</a>
+<span class="k">class</span> <span class="nc">W</span><span class="p">(</span><span class="n">NamedExpression</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; A wrapper which returns the wrapped named expression without evaluating it</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    ::</span>
+
+<span class="sd">        W(V(&#39;variable&#39;))</span>
+<span class="sd">        W(B(copy=True))</span>
+<span class="sd">        W(R(&#39;normal&#39;, 0, 1, size=B(&#39;size&#39;)))</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="W.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.W.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a wrapped named expression &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">NamedExpression</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Named expressions is expected, but given </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">set_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span></div>
+
+
+<div class="viewcode-block" id="W.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.W.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">kwargs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">value</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="P">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.P">[docs]</a>
+<span class="k">class</span> <span class="nc">P</span><span class="p">(</span><span class="n">W</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; A wrapper for values passed to actions parallelized with @inbatch_parallel</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    Each image in the batch will be rotated at its own angle::</span>
+
+<span class="sd">        pipeline</span>
+<span class="sd">            .rotate(angle=P(R(&#39;normal&#39;, 0, 1)))</span>
+
+<span class="sd">    Without ``P`` all images in the batch will be rotated at the same angle,</span>
+<span class="sd">    as an angle is randomized across batches only::</span>
+
+<span class="sd">        pipeline</span>
+<span class="sd">            .rotate(angle=R(&#39;normal&#39;, 0, 1))</span>
+
+<span class="sd">    To put it simply, ``R(...)`` is evaluated as ``R(..., size=batch.size)``.</span>
+
+<span class="sd">    Generate 3 categorical random samples for each batch item::</span>
+
+<span class="sd">        pipeline</span>
+<span class="sd">            .calc_route(P(R([&#39;metro&#39;, &#39;taxi&#39;, &#39;bike&#39;], p=[.6, 0.1, 0.3], size=3))</span>
+
+<span class="sd">    Generate a random number of random samples for each batch item::</span>
+
+<span class="sd">        pipeline</span>
+<span class="sd">            .some_action(P(R(&#39;normal&#39;, 0, 1, size=R(&#39;randint&#39;, 3, 8))))</span>
+
+<span class="sd">    ``P`` works with arbitrary iterables too::</span>
+
+<span class="sd">        pipeline</span>
+<span class="sd">            .do_something(n=P([1, 2, 3, 4, 5]))</span>
+
+<span class="sd">    The first batch item will get ``n=1``, the second ``n=2`` and so on.</span>
+
+<span class="sd">    See also</span>
+<span class="sd">    --------</span>
+<span class="sd">    :func:`~.inbatch_parallel`</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">_get_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
+
+<div class="viewcode-block" id="P.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.P.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">parallel</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Calculate and return a value of the expression &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span>
+
+        <span class="n">name</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">batch</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;batch&#39;</span><span class="p">]</span>
+
+        <span class="c1"># it&#39;s called from the decorator, so values were pre-calculated, just return them</span>
+        <span class="k">if</span> <span class="n">parallel</span><span class="p">:</span>
+            <span class="c1"># However, we can still have some R-expressions, e.g. for probabilities</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">R</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">batch</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
+
+        <span class="c1"># pre-calculate values to pass them into decorator which takes them one by one</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="p">(</span><span class="n">R</span><span class="p">,</span> <span class="n">AlgebraicNamedExpression</span><span class="p">)):</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">batch</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">NamedExpression</span><span class="p">):</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="n">name</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">):</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="si">}</span><span class="s2"> returned a value (len=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2">) which does not fit the batch size (len=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+
+        <span class="c1"># return P-expr to be recognized by the decorator</span>
+        <span class="k">return</span> <span class="n">P</span><span class="p">(</span><span class="n">values</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="P.assign">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.P.assign">[docs]</a>
+    <span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assign a value &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">kwargs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">value</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="PP">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.PP">[docs]</a>
+<span class="k">class</span> <span class="nc">PP</span><span class="p">(</span><span class="n">P</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; A wrapper for single-value expressions passed to actions parallelized with @inbatch_parallel</span>
+<span class="sd">    `PP(expr)` is essentialy `P([expr for _ in batch.indices])`</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    Each image in the batch will be rotated at its own angle::</span>
+
+<span class="sd">        pipeline</span>
+<span class="sd">            .rotate(angle=PP(F(get_single_angle)))</span>
+
+<span class="sd">    as ``get_single_angle`` will be called ``batch.size`` times.</span>
+
+<span class="sd">    ``R(...)`` will be evaluated only once within ``P(...)``, but many times within ``PP(...)``::</span>
+
+<span class="sd">        pipeline</span>
+<span class="sd">            .rotate(angle=PP(R(&#39;normal&#39;, 0, 1)))</span>
+
+<span class="sd">    That is why ``P(R(...))`` is much more efficient than ``PP(R(...))``.</span>
+
+<span class="sd">    However, ``PP`` is indispensable for shape-specific operations like ``@`` or broadcasting::</span>
+
+<span class="sd">        pipeline</span>
+<span class="sd">            .rotate(angle=PP(R(&#39;normal&#39;, R(&#39;normal&#39;, 50, 15, size=3), 15)))</span>
+
+<span class="sd">    Internal ``R`` specifies a 3D angle mean and thus defines the shape.</span>
+<span class="sd">    External ``R`` knows nothing about that shape and will throw an exception within ``P``,</span>
+<span class="sd">    but it&#39;ll work fine within ``PP``.</span>
+
+<span class="sd">    See also</span>
+<span class="sd">    --------</span>
+<span class="sd">    :func:`~.inbatch_parallel`</span>
+<span class="sd">    :class:`~.P`</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="PP.get">
+<a class="viewcode-back" href="../../api/batchflow.named_expressions.html#batchflow.named_expr.PP.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Calculate and return a value of the expression &quot;&quot;&quot;</span>
+
+        <span class="n">name</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_params</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">batch</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;batch&#39;</span><span class="p">]</span>
+
+        <span class="c1"># pre-calculate values to pass them into decorator which takes them one by one</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">NamedExpression</span><span class="p">)</span> <span class="k">else</span> <span class="n">name</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">batch</span><span class="o">.</span><span class="n">indices</span><span class="p">]</span>
+
+        <span class="c1"># return P-expr to be recognized by the decorator</span>
+        <span class="k">return</span> <span class="n">P</span><span class="p">(</span><span class="n">values</span><span class="p">)</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

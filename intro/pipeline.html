@@ -1,0 +1,764 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pipeline &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Named expressions" href="named_expr.html" />
+    <link rel="prev" title="Batch class for handling images" href="images_batch.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">A short introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes and capabilities</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="dsindex.html">Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html">Batch class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html">Batch class for handling images</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html">Named expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html">Within batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="prefetch.html">Inter-batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html">Working with models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html">Torch models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="research.html">Research</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_zoo.html">Model zoo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="classes.html">Classes and capabilities</a></li>
+      <li class="breadcrumb-item active">Pipeline</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/intro/pipeline.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="pipeline">
+<h1>Pipeline<a class="headerlink" href="#pipeline" title="Link to this heading"></a></h1>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Link to this heading"></a></h2>
+<p>Quite often you can’t just use the data itself, as it needs some specific preprocessing beforehand. And not too rarely
+you end up with several processing workflows which you have to use simultaneously.
+That is the situation when pipelines might come in handy.</p>
+<p>Firstly, you create a batch class with all necessary actions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">ClientTransactions</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="o">...</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">other_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param</span><span class="p">):</span>
+        <span class="o">...</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">yet_another_action</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="o">...</span>
+        <span class="k">return</span> <span class="bp">self</span>
+</pre></div>
+</div>
+<p>Secondly, you create a dataset (<cite>client_index</cite> is an instance of <a class="reference internal" href="dsindex.html#datasetindex"><span class="std std-ref">DatasetIndex</span></a>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ct_ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="p">(</span><span class="n">client_index</span><span class="p">,</span> <span class="n">batch_class</span><span class="o">=</span><span class="n">ClientTranasactions</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>And now you can define a workflow pipeline:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">trans_pipeline</span> <span class="o">=</span> <span class="p">(</span><span class="n">ct_ds</span><span class="o">.</span><span class="n">pipeline</span><span class="p">()</span>
+                    <span class="o">.</span><span class="n">some_action</span><span class="p">()</span>
+                    <span class="o">.</span><span class="n">other_action</span><span class="p">(</span><span class="n">param</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+                    <span class="o">.</span><span class="n">yet_another_action</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>And nothing happens! Because all the actions are lazy.
+Let’s run them.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">trans_pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now the dataset is split into batches and then all the actions are executed for each batch independently.</p>
+<p>In the very same way you can define an augmentation workflow:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">augm_wf</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_dataset</span><span class="o">.</span><span class="n">pipeline</span><span class="p">()</span>
+            <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">random_rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">))</span>
+            <span class="o">.</span><span class="n">random_resize</span><span class="p">(</span><span class="n">factor</span><span class="o">=</span><span class="p">(</span><span class="mf">0.8</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">))</span>
+            <span class="o">.</span><span class="n">random_crop</span><span class="p">(</span><span class="n">factor</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.8</span><span class="p">))</span>
+            <span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>And again, no action is executed until its result is needed.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">NUM_ITERS</span> <span class="o">=</span> <span class="mi">1000</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">NUM_ITERS</span><span class="p">):</span>
+    <span class="n">image_batch</span> <span class="o">=</span> <span class="n">augm_wf</span><span class="o">.</span><span class="n">next_batch</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+    <span class="c1"># only now the actions are fired and data is changed with the workflow defined earlier</span>
+</pre></div>
+</div>
+</section>
+<section id="actions">
+<h2>Actions<a class="headerlink" href="#actions" title="Link to this heading"></a></h2>
+<p>Pipeline actions might come from 3 sources:</p>
+<ul class="simple">
+<li><p>Pipeline API</p></li>
+<li><p>batch class actions</p></li>
+<li><p>arbitrary namespaces.</p></li>
+</ul>
+<p><a class="reference internal" href="../api/batchflow.pipeline.html"><span class="doc">Pipeline API</span></a> contains operations with variables and models.</p>
+<p><a class="reference internal" href="batch.html"><span class="doc">Batch class</span></a> comprises data loading operations, preprocessing methods and augmentations.
+A batch class method marked with <a class="reference internal" href="batch.html#actions"><span class="std std-ref">action</span></a> decorator might be used in a pipeline workflow.</p>
+<p>Besides, pipeline actions chains might include arbitrary functions from given namespaces.</p>
+<section id="actions-from-namespaces">
+<h3>Actions from namespaces<a class="headerlink" href="#actions-from-namespaces" title="Link to this heading"></a></h3>
+<p>Just add a namespace (e.g. a class, a module) which contains the functions needed within a pipeline.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span> <span class="o">=</span> <span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">pipeline</span><span class="p">()</span>
+             <span class="o">.</span><span class="n">add_namespace</span><span class="p">(</span><span class="n">numpy</span><span class="p">,</span> <span class="n">mymodule</span><span class="p">)</span>    <span class="c1"># numpy and mymodule methods are now accessible within the pipeline</span>
+             <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s2">&quot;var&quot;</span><span class="p">)</span>              <span class="c1"># Pipeline API</span>
+             <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s2">&quot;resnet&quot;</span><span class="p">,</span> <span class="n">ResNet18</span><span class="p">)</span>    <span class="c1"># Pipeline API</span>
+             <span class="o">.</span><span class="n">resize</span><span class="p">((</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">))</span>                <span class="c1"># batch class API, namely ImagesBatch</span>
+             <span class="o">.</span><span class="n">my_func</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s2">&quot;var&quot;</span><span class="p">))</span>     <span class="c1"># call a function from mymodule and store its result into a pipeline variable</span>
+             <span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">V</span><span class="p">(</span><span class="s2">&quot;var&quot;</span><span class="p">))</span>                   <span class="c1"># Pipeline API again</span>
+</pre></div>
+</div>
+<p>The result of these actions can be stored with <cite>save_to</cite> parameter:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">before</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">some_func</span><span class="p">(</span><span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;some_var&#39;</span><span class="p">)))</span>
+</pre></div>
+</div>
+<p>Normally, <cite>named expressions &lt;named_expr&gt;</cite> are used in <cite>save_to</cite>. However, lists or numpy arrays also work out.
+Note that <cite>save_to</cite> argument is never passed to a function, since it is fully processed within the pipeline.</p>
+<p>For convenience the main module and the dataset class are automatically added to namespaces available.
+So you can use dataset methods or functions defined right in the main module in the pipeline chain.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">dataset_method</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;dataset method&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mi">200</span>
+
+<span class="k">def</span> <span class="nf">main_func</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;main func&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="mi">100</span>
+
+<span class="n">pipeline</span><span class="o">.</span>
+    <span class="o">.</span><span class="n">dataset_method</span><span class="p">(</span><span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;return_from_method&#39;</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">main_func</span><span class="p">(</span><span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;return_from_func&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="before-and-after-pipelines">
+<span id="after-pipeline"></span><h2>Before and after pipelines<a class="headerlink" href="#before-and-after-pipelines" title="Link to this heading"></a></h2>
+<p>More complicated pipelines include setup and tear down actions. That’s exactly what <cite>before</cite> and <cite>after</cite> pipelines are supposed to do.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">before</span>
+        <span class="o">.</span><span class="n">add_namespace</span><span class="p">(</span><span class="n">mymodule</span><span class="p">)</span>           <span class="c1"># mymodule methods are now accessible within the pipeline</span>
+        <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s2">&quot;var&quot;</span><span class="p">)</span>              <span class="c1"># Pipeline API</span>
+        <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s2">&quot;my-model&quot;</span><span class="p">,</span> <span class="n">ResNet18</span><span class="p">)</span>   <span class="c1"># Pipeline API</span>
+        <span class="o">.</span><span class="n">connect_to_mydb</span><span class="p">(</span><span class="n">USER</span><span class="p">,</span> <span class="n">PASSWORD</span><span class="p">)</span>   <span class="c1"># a method from mymodule</span>
+
+<span class="n">pipeline</span><span class="o">.</span><span class="n">after</span>
+    <span class="o">.</span><span class="n">add_namespace</span><span class="p">(</span><span class="n">mymodule</span><span class="p">)</span>           <span class="c1"># mymodule methods are now accessible within the pipeline</span>
+    <span class="o">.</span><span class="n">save_model</span><span class="p">(</span><span class="s2">&quot;ResNet18&quot;</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>     <span class="c1">#Pipeline API</span>
+    <span class="o">.</span><span class="n">disconnect_from_mydb</span><span class="p">()</span>            <span class="c1"># a method from mymodule</span>
+</pre></div>
+</div>
+<p><cite>before</cite> and <cite>after</cite> pipelines are executed automatically when the main pipeline is executed (specifically, before and after it).</p>
+<p>Note that the main module and the dataset class are automatically added to namespaces available.
+And result of these actions can be retrieved and stored with <cite>save_to</cite> parameter.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">dataset_method</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;dataset method&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mi">200</span>
+
+<span class="k">def</span> <span class="nf">main_func</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;main func&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="mi">100</span>
+
+<span class="n">pipeline</span><span class="o">.</span><span class="n">before</span>
+    <span class="o">.</span><span class="n">dataset_method</span><span class="p">(</span><span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;return_from_method&#39;</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">main_func</span><span class="p">(</span><span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;return_from_func&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>However, take into account that when you iterate over the pipeline with <cite>gen_batch(…)</cite> or <cite>next_batch(…)</cite>, <cite>after</cite>-pipeline
+will be executed automatically only when the iteration is fully finished.
+If you break the iteration process (e.g. when early stopping is occurred or when exception is caught),
+you should explicitly call <cite>pipeline.after.run()</cite>.</p>
+<p>See <a class="reference internal" href="../api/batchflow.once_pipeline.html"><span class="doc">API</span></a> for methods available in <cite>before</cite> and <cite>after</cite> pipelines.</p>
+<p>The whole pipeline can be chained in a single instruction:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">before</span>
+        <span class="o">.</span><span class="n">add_namespace</span><span class="p">(</span><span class="n">mymodule</span><span class="p">)</span>           <span class="c1"># mymodule methods are now accessible within the pipeline</span>
+        <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s2">&quot;var&quot;</span><span class="p">)</span>              <span class="c1"># Pipeline API</span>
+        <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s2">&quot;my-model&quot;</span><span class="p">,</span> <span class="n">ResNet18</span><span class="p">)</span>   <span class="c1"># Pipeline API</span>
+        <span class="o">.</span><span class="n">connect_to_mydb</span><span class="p">(</span><span class="n">USER</span><span class="p">,</span> <span class="n">PASSWORD</span><span class="p">)</span>   <span class="c1"># a method from mymodule</span>
+
+    <span class="o">.</span><span class="n">main</span>
+        <span class="n">load</span><span class="p">(</span><span class="n">dst</span><span class="o">=</span><span class="s1">&#39;features&#39;</span><span class="p">)</span>
+        <span class="n">train_model</span><span class="p">(</span><span class="s1">&#39;my-model&#39;</span><span class="p">,</span> <span class="n">B</span><span class="o">.</span><span class="n">features</span><span class="p">)</span>
+
+    <span class="o">.</span><span class="n">after</span>
+        <span class="o">.</span><span class="n">add_namespace</span><span class="p">(</span><span class="n">mymodule</span><span class="p">)</span>           <span class="c1"># mymodule methods are now accessible within the pipeline</span>
+        <span class="o">.</span><span class="n">save_model</span><span class="p">(</span><span class="s2">&quot;ResNet18&quot;</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>     <span class="c1">#Pipeline API</span>
+        <span class="o">.</span><span class="n">disconnect_from_mydb</span><span class="p">()</span>            <span class="c1"># a method from mymodule</span>
+
+<span class="n">pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="algebra-of-pipelines">
+<h2>Algebra of pipelines<a class="headerlink" href="#algebra-of-pipelines" title="Link to this heading"></a></h2>
+<p>There are two ways to define a pipeline:</p>
+<ul class="simple">
+<li><p>a chain of actions</p></li>
+<li><p>a pipeline algebra</p></li>
+</ul>
+<p>An action chain is a concise and convenient way to write pipelines. But sometimes it’s not enough, for instance, when you want to manipulate with many pipelines adding them or multiplying as if they were numbers or matrices. And that’s what we call <cite>a pipeline algebra</cite>.</p>
+<p>There are 5 operations available: <cite>+</cite>, <cite>*</cite>, <cite>&#64;</cite>, <cite>&lt;&lt;</cite>, <cite>&gt;&gt;</cite>.</p>
+<section id="concat">
+<h3>concat <cite>+</cite><a class="headerlink" href="#concat" title="Link to this heading"></a></h3>
+<p>Add two pipelines by concatenating them, so the actions from the first pipeline will be executed before actions from the second one.
+<cite>p.resize(shape=(256, 256)) + p.rotate(angle=45)</cite></p>
+</section>
+<section id="repeat">
+<h3>repeat <cite>*</cite><a class="headerlink" href="#repeat" title="Link to this heading"></a></h3>
+<p>Repeat the pipeline several times.
+<cite>p.random_rotate(angle=(-30, 30)) * 3</cite></p>
+</section>
+<section id="sometimes">
+<h3>sometimes <cite>&#64;</cite><a class="headerlink" href="#sometimes" title="Link to this heading"></a></h3>
+<p>Execute the pipeline with the given probability.
+<cite>p.random_rotate(angle=(-30, 30)) &#64; 0.5</cite></p>
+</section>
+<section id="and">
+<h3><cite>&gt;&gt;</cite> and <cite>&lt;&lt;</cite><a class="headerlink" href="#and" title="Link to this heading"></a></h3>
+<p>Link a pipeline to a dataset.
+<cite>dataset &gt;&gt; pipeline</cite> or <cite>pipeline &lt;&lt; dataset</cite></p>
+<p>Or update pipeline’s config.
+<cite>config &gt;&gt; pipeline</cite> or <cite>pipeline &lt;&lt; config</cite></p>
+<p>The complete example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow</span> <span class="kn">import</span> <span class="n">Pipeline</span>
+
+<span class="k">with</span> <span class="n">Pipeline</span><span class="p">()</span> <span class="k">as</span> <span class="n">p</span><span class="p">:</span>
+    <span class="n">preprocessing_pipeline</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>
+                             <span class="o">+</span> <span class="n">p</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+                             <span class="o">+</span> <span class="n">p</span><span class="o">.</span><span class="n">random_rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">))</span> <span class="o">@</span> <span class="mf">.8</span>
+                             <span class="o">+</span> <span class="n">p</span><span class="o">.</span><span class="n">random_transform</span><span class="p">()</span> <span class="o">*</span> <span class="mi">3</span>
+                             <span class="o">+</span> <span class="n">p</span><span class="o">.</span><span class="n">random_crop</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">))</span>
+
+<span class="n">images_prepocessing</span> <span class="o">=</span> <span class="n">preprocessing_pipeline</span> <span class="o">&lt;&lt;</span> <span class="n">images_dataset</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="creating-pipelines">
+<h2>Creating pipelines<a class="headerlink" href="#creating-pipelines" title="Link to this heading"></a></h2>
+<p>Pipelines can be created from scratch or from a dataset.</p>
+<section id="a-template-pipeline">
+<h3>A template pipeline<a class="headerlink" href="#a-template-pipeline" title="Link to this heading"></a></h3>
+<p>The code below creates a pipeline from scratch.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow</span> <span class="kn">import</span> <span class="n">Pipeline</span>
+
+<span class="n">my_pipeline</span> <span class="o">=</span> <span class="n">Pipeline</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">some_action</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">another_action</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Or one can use a context manager with pipeline algebra:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow</span> <span class="kn">import</span> <span class="n">Pipeline</span>
+
+<span class="k">with</span> <span class="n">Pipeline</span><span class="p">()</span> <span class="k">as</span> <span class="n">p</span><span class="p">:</span>
+    <span class="n">my_pipeline</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">some_action</span><span class="p">()</span> <span class="o">+</span> <span class="n">p</span><span class="o">.</span><span class="n">another_action</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>However, you cannot execute this pipeline as it doesn’t linked to any dataset.
+On the other hand, such pipelines might be applied to different datasets:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cifar10_pipeline</span> <span class="o">=</span> <span class="n">template_preprocessing_pipeline</span> <span class="o">&lt;&lt;</span> <span class="n">cifar10_dataset</span>
+<span class="n">mnist_pipeline</span> <span class="o">=</span> <span class="n">template_preprocessing_pipeline</span> <span class="o">&lt;&lt;</span> <span class="n">mnist_dataset</span>
+</pre></div>
+</div>
+</section>
+<section id="a-dataset-pipeline">
+<h3>A dataset pipeline<a class="headerlink" href="#a-dataset-pipeline" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_pipeline</span> <span class="o">=</span> <span class="n">my_dataset</span><span class="o">.</span><span class="n">pipeline</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">some_action</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">another_action</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Or a shorter version:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_pipeline</span> <span class="o">=</span> <span class="n">my_dataset</span><span class="o">.</span><span class="n">p</span>
+                <span class="o">.</span><span class="n">some_action</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">another_action</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Every call to <cite>dataset.pipeline()</cite> or <cite>dataset.p</cite> creates a new pipeline.</p>
+</section>
+</section>
+<section id="running-pipelines">
+<h2>Running pipelines<a class="headerlink" href="#running-pipelines" title="Link to this heading"></a></h2>
+<p>There are 5 ways to execute a pipeline.</p>
+<section id="batch-generator">
+<h3>Batch generator<a class="headerlink" href="#batch-generator" title="Link to this heading"></a></h3>
+<p><a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.gen_batch" title="batchflow.Pipeline.gen_batch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gen_batch()</span></code></a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">my_pipeline</span><span class="o">.</span><span class="n">gen_batch</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="c1"># do whatever you want</span>
+</pre></div>
+</div>
+<p><cite>batch</cite> will be the batch returned from the very last action of the pipeline.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><cite>BATCH_SIZE</cite> is a size of the batch taken from the dataset. Actions might change the size of the batch and thus the batch you will get from the pipeline might have a different size.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Pipeline execution might take a long time so showing a progress bar might be helpful. Just add <cite>bar=True</cite> to gen_batch parameters.</p>
+</div>
+<p>To start from scratch, <cite>reset</cite> parameter can be used:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">my_pipeline</span><span class="o">.</span><span class="n">gen_batch</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">reset</span><span class="o">=</span><span class="s1">&#39;vars&#39;</span><span class="p">):</span>
+   <span class="c1"># do whatever you want</span>
+</pre></div>
+</div>
+<p>You might reset pipeline variables, the batch iterator and models. See <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.reset" title="batchflow.Pipeline.reset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code></a> for details.</p>
+</section>
+<section id="run">
+<h3>Run<a class="headerlink" href="#run" title="Link to this heading"></a></h3>
+<p>To execute the pipeline right now for all iterations at once call <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.run" title="batchflow.Pipeline.run"><code class="xref py py-meth docutils literal notranslate"><span class="pre">run()</span></code></a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_pipeline</span> <span class="o">=</span> <span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">p</span>
+   <span class="o">.</span><span class="n">some_action</span><span class="p">()</span>
+   <span class="o">.</span><span class="n">other_action</span><span class="p">()</span>
+   <span class="o">.</span><span class="n">yet_another_action</span><span class="p">()</span>
+   <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">bar</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Some people prefer a slightly longer, but a bit more certain name <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.run_now" title="batchflow.Pipeline.run_now"><code class="xref py py-meth docutils literal notranslate"><span class="pre">run_now()</span></code></a>.</p>
+<p>Usually <cite>run</cite> is used to execute the pipeline without resetting all the variables and models
+(thus continuing the execution which started earlier and keeping the values and trained models).
+However, you might want to start from scratch re-initialzing the variables and/or the models:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_pipeline</span><span class="o">.</span><span class="n">run_now</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">n_iters</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">reset</span><span class="o">=</span><span class="s1">&#39;variables&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>or:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_pipeline</span><span class="o">.</span><span class="n">run_now</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">n_iters</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">reset</span><span class="o">=</span><span class="s1">&#39;models&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>or even:</p>
+<blockquote>
+<div><p>my_pipeline.run_now(BATCH_SIZE, n_iters=1000, reset=’all’)</p>
+</div></blockquote>
+<p>In this case the pipeline variables will be reinitialized and the modes will be reset to initial untrained state.</p>
+</section>
+<section id="lazy-run">
+<h3>Lazy run<a class="headerlink" href="#lazy-run" title="Link to this heading"></a></h3>
+<p>You can add <cite>run</cite> with <cite>lazy=True</cite> or just <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.run_later" title="batchflow.Pipeline.run_later"><code class="xref py py-meth docutils literal notranslate"><span class="pre">run_later()</span></code></a> as the last action in the pipeline and
+then call <cite>run()</cite> or <cite>next_batch()</cite> without arguments at all:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_pipeline</span> <span class="o">=</span> <span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">some_action</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">other_action</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">yet_another_action</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">run_later</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">MAX_ITER</span><span class="p">):</span>
+    <span class="n">batch</span> <span class="o">=</span> <span class="n">my_pipeline</span><span class="o">.</span><span class="n">next_batch</span><span class="p">()</span>
+    <span class="c1"># do whatever you want</span>
+</pre></div>
+</div>
+</section>
+<section id="next-batch-function">
+<h3>next_batch function<a class="headerlink" href="#next-batch-function" title="Link to this heading"></a></h3>
+<p><a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.next_batch" title="batchflow.Pipeline.next_batch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">next_batch()</span></code></a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">MAX_ITER</span><span class="p">):</span>
+    <span class="n">batch</span> <span class="o">=</span> <span class="n">my_pipeline</span><span class="o">.</span><span class="n">next_batch</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">n_iters</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="c1"># do whatever you want</span>
+</pre></div>
+</div>
+<p>If you need to start from scratch, you might call <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.reset" title="batchflow.Pipeline.reset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code></a> beforehand:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_pipeline</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="s1">&#39;models&#39;</span><span class="p">)</span>
+<span class="n">my_pipeline</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="s1">&#39;variables&#39;</span><span class="p">)</span>
+<span class="n">my_pipeline</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="s1">&#39;all&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Or pass <cite>reset</cite> parameter to <cite>next_batch</cite>.</p>
+</section>
+<section id="single-execution">
+<h3>Single execution<a class="headerlink" href="#single-execution" title="Link to this heading"></a></h3>
+<p>A pipeline might be run for one given batch only with <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.execute_for" title="batchflow.Pipeline.execute_for"><code class="xref py py-meth docutils literal notranslate"><span class="pre">execute_for()</span></code></a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">res_batch</span> <span class="o">=</span> <span class="n">my_pipeline</span><span class="o">.</span><span class="n">execute_for</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="pipeline-variables">
+<h2>Pipeline variables<a class="headerlink" href="#pipeline-variables" title="Link to this heading"></a></h2>
+<p>Sometimes batches can be processed in a “do and forget” manner: when you take a batch, make some data transformations and then switch to another batch.
+However, not infrequently you might need to remember some parameters or intermediate results (e.g. a value of loss function or accuracy on every batch
+to draw a graph later). This is why you might need pipeline variables.</p>
+<section id="initializing-a-variable">
+<h3>Initializing a variable<a class="headerlink" href="#initializing-a-variable" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">my_pipeline</span> <span class="o">=</span> <span class="p">(</span><span class="n">my_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s2">&quot;my_variable&quot;</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s2">&quot;some_counter&quot;</span><span class="p">,</span> <span class="n">init_on_each_run</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s2">&quot;var with init function&quot;</span><span class="p">,</span> <span class="n">F</span><span class="p">(</span><span class="n">my_init_function</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s2">&quot;loss_history&quot;</span><span class="p">,</span> <span class="n">init_on_each_run</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">first_action</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">second_action</span><span class="p">()</span>
+    <span class="o">...</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>To initialize a variable just add to a pipeline <cite>init_variable(…)</cite> with a variable name and a default value.
+Variables might be initialized once in a lifetime (e.g. some global state or a configuration parameter) or before each run
+(like counters or history stores).</p>
+<p>Sometimes it is more convenient to initialize variables indirectly through a function. For instance, <cite>loss_history</cite> cannot be initialized with <cite>[]</cite>
+as it would make a global variable which won’t be cleared on every run. What you actually need is to call <cite>list()</cite> on each run.</p>
+<p>Init functions are also a good place for some complex logic or randomization.</p>
+</section>
+<section id="updating-a-variable">
+<h3>Updating a variable<a class="headerlink" href="#updating-a-variable" title="Link to this heading"></a></h3>
+<p>Each batch instance have a pointer to the pipeline it was created in (or <cite>None</cite> if the batch was created manually).</p>
+<p>So getting an access to a variable is easy:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">var_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">get_variable</span><span class="p">(</span><span class="s2">&quot;variable_name&quot;</span><span class="p">)</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+<p>If a variable does not exist, it might be created and initialized, if <cite>create</cite> parameter is set to <cite>True</cite>.
+For a flexible initialization <cite>default</cite>, <cite>init</cite> and <cite>init_on_each_run</cite> might also be passed to <cite>get_variable()</cite>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>An explicit variable initialization in a pipeline is a preferred way to create variables.</p>
+</div>
+<p>If <cite>create</cite> is <cite>False</cite> (which is by default), then <cite>get_variable</cite> will raise a <cite>KeyError</cite> if a variable does not exist.</p>
+<p><cite>v()</cite> is a shorter alias for <cite>get_variable()</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">v</span><span class="p">(</span><span class="s1">&#39;var_name&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To change a variable value just call <cite>set_variable</cite> within an action:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="o">...</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">set_variable</span><span class="p">(</span><span class="s2">&quot;variable_name&quot;</span><span class="p">,</span> <span class="n">new_value</span><span class="p">)</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+<p>Or add <cite>update</cite> to the pipeline:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">V</span><span class="p">(</span><span class="s2">&quot;current_batch_labels&quot;</span><span class="p">),</span> <span class="n">F</span><span class="p">(</span><span class="n">MyBatch</span><span class="o">.</span><span class="n">get_labels</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">V</span><span class="p">(</span><span class="s2">&quot;all_labels&quot;</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;append&#39;</span><span class="p">),</span> <span class="n">V</span><span class="p">(</span><span class="s1">&#39;current_batch_labels&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>The first parameter specifies <a class="reference internal" href="named_expr.html"><span class="doc">a named expression</span></a> where the value will be stored.
+The second parameter is an updating value and it can be a value of any type or <a class="reference internal" href="named_expr.html"><span class="doc">a named expression</span></a>.</p>
+<p>Note that a named expression might have a mode (e.g. <cite>V(‘name’, mode=’a’)</cite>) which could be one of:</p>
+<ul class="simple">
+<li><p><cite>‘w’</cite> or <cite>‘write’</cite> to rewrite a variable with a new value. This is a default mode.</p></li>
+<li><p><cite>‘a’</cite> or <cite>‘append’</cite> to append a value to a variable (e.g. if a variable is a list).</p></li>
+<li><p><cite>‘e’</cite> or <cite>‘extend’</cite> to extend a variable with a new value (e.g. if a variable is a list and a value is a list too).</p></li>
+<li><p><cite>‘u’</cite> or <cite>‘update’</cite> to update a variable with a new value (e.g. if a variable is a dict).</p></li>
+</ul>
+<p>For sets and dicts <cite>‘u’</cite> and <cite>‘a’</cite> do the same.</p>
+</section>
+<section id="deleting-a-variable">
+<h3>Deleting a variable<a class="headerlink" href="#deleting-a-variable" title="Link to this heading"></a></h3>
+<p>Just call <cite>pipeline.delete_variable(“variable_name”)</cite> or <cite>pipeline.del_variable(“variable_name”)</cite>.</p>
+</section>
+<section id="deleting-all-variables">
+<h3>Deleting all variables<a class="headerlink" href="#deleting-all-variables" title="Link to this heading"></a></h3>
+<p>As simple as <cite>pipeline.delete_all_variables()</cite>.</p>
+</section>
+</section>
+<section id="update">
+<h2>Update<a class="headerlink" href="#update" title="Link to this heading"></a></h2>
+<p>A pipeline might need custom calculations which can be implemented with <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.save_to" title="batchflow.Pipeline.save_to"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save_to()</span></code></a> <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.update" title="batchflow.Pipeline.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">update()</span></code></a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;counter&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;counter&#39;</span><span class="p">),</span> <span class="n">V</span><span class="p">(</span><span class="s1">&#39;counter&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The first parameter is a named expression where the result will be stored, while the second parameter is an expression
+which value will be re-calculated at each iteration.</p>
+<p>Some other useful examples might include:</p>
+<ul>
+<li><p>collecting loss history:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;loss_history&#39;</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">save_to</span><span class="p">(</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;list&#39;</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;a&#39;</span><span class="p">),</span> <span class="n">V</span><span class="p">(</span><span class="s1">&#39;current_loss&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+</li>
+<li><p>collecting predictions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;all_predictions&#39;</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;all_predictions&#39;</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;e&#39;</span><span class="p">),</span> <span class="n">V</span><span class="p">(</span><span class="s1">&#39;predictions&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+</li>
+<li><p>assessing performance:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;time&#39;</span><span class="p">),</span> <span class="n">L</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">))</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">save_to</span><span class="p">(</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;time&#39;</span><span class="p">),</span> <span class="n">L</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">)</span> <span class="o">-</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;time&#39;</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;throughput&#39;</span><span class="p">),</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">nbytes</span> <span class="o">/</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;time&#39;</span><span class="p">))</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>The methods are synonyms and might be used interchangably to fit your pipeline narrative.</p>
+</section>
+<section id="pipeline-locks">
+<h2>Pipeline locks<a class="headerlink" href="#pipeline-locks" title="Link to this heading"></a></h2>
+<p>If you use multi-threading <a class="reference internal" href="prefetch.html"><span class="doc">prefetching</span></a> or <a class="reference internal" href="parallel.html"><span class="doc">in-batch parallelism</span></a>,
+than you might require synchronization when accessing some shared resource:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">init_lock</span><span class="p">(</span><span class="s1">&#39;lock_name&#39;</span><span class="p">)</span>
+    <span class="o">...</span> <span class="c1"># common section</span>
+    <span class="o">.</span><span class="n">acquire_lock</span><span class="p">(</span><span class="s1">&#39;lock_name&#39;</span><span class="p">)</span>
+    <span class="o">...</span> <span class="c1"># a critical section</span>
+    <span class="o">.</span><span class="n">release_lock</span><span class="p">(</span><span class="s1">&#39;lock_name&#39;</span><span class="p">)</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">prefetch</span><span class="o">=</span><span class="n">PARALLEL_BATCHES</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Locks are stored as variables with the very same names. So you can access a lock easiliy as <code class="docutils literal notranslate"><span class="pre">pipeline.v('lock_name')</span></code>
+and use it within actions or even custom functions.</p>
+<p><code class="docutils literal notranslate"><span class="pre">init_lock</span></code> is not required as the first acquire will create the lock if needed.
+However, <code class="docutils literal notranslate"><span class="pre">init_lock</span></code> allow for cleaner and tidier pipelines.</p>
+</section>
+<section id="join-and-merge">
+<h2>Join and merge<a class="headerlink" href="#join-and-merge" title="Link to this heading"></a></h2>
+<section id="joining-pipelines">
+<h3>Joining pipelines<a class="headerlink" href="#joining-pipelines" title="Link to this heading"></a></h3>
+<p>If you have a pipeline <cite>images</cite> and a pipeline <cite>labels</cite>, you might join them for a more convenient processing:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">images_with_labels</span> <span class="o">=</span> <span class="p">(</span><span class="n">images</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">random_rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="n">pi</span><span class="o">/</span><span class="mi">4</span><span class="p">,</span> <span class="n">pi</span><span class="o">/</span><span class="mi">4</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">labels</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">some_action</span><span class="p">()</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>When this pipeline is run, the following will happen for each batch of <cite>images</cite>:</p>
+<ul class="simple">
+<li><p>the actions <cite>load</cite>, <cite>resize</cite> and <cite>random_rotate</cite> will be executed</p></li>
+<li><p>a batch of <cite>labels</cite> with the same index will be created</p></li>
+<li><p>the <cite>labels</cite> batch will be passed into <cite>some_action</cite> as a first argument (after <cite>self</cite>, of course).</p></li>
+</ul>
+<p>So, images batch class should look as follows:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">ImagesBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">fmt</span><span class="p">):</span>
+        <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">resize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
+        <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">random_rotate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">angle</span><span class="p">):</span>
+        <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">some_actions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">labels_batch</span><span class="p">):</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+<p>You can join several sources:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">full_images</span> <span class="o">=</span> <span class="p">(</span><span class="n">images</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">random_rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">masks</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">some_action</span><span class="p">()</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Thus, the tuple of batches from <cite>labels</cite> and <cite>masks</cite> will be passed into <cite>some_action</cite> as the first arguments (as always, after <cite>self</cite>).</p>
+<p>Mostly, <cite>join</cite> is used as follows:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">full_images</span> <span class="o">=</span> <span class="p">(</span><span class="n">images</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">masks</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">components</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">,</span> <span class="s1">&#39;masks&#39;</span><span class="p">])</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="../api/batchflow.batch.html#batchflow.Batch.load" title="batchflow.Batch.load"><code class="xref py py-func docutils literal notranslate"><span class="pre">load()</span></code></a> for more details.</p>
+</section>
+<section id="merging-pipelines">
+<h3>Merging pipelines<a class="headerlink" href="#merging-pipelines" title="Link to this heading"></a></h3>
+<p>You can also merge data from two pipelines (this is not the same as <a class="reference external" href="#algebra-of-pipelines">concatenating pipelines</a>).:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">images_with_augmentation</span> <span class="o">=</span> <span class="p">(</span><span class="n">images_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">random_rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">random_crop</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">batch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">epochs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">lazy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="n">all_images</span> <span class="o">=</span> <span class="p">(</span><span class="n">images_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">images_with_augmentation</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">batch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">epochs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>What will happen here is</p>
+<ul class="simple">
+<li><p><cite>images_with_augmentation</cite> will generate batches of size 16</p></li>
+<li><p><cite>all_images</cite> before merge will generate batches of size 16</p></li>
+<li><p><cite>merge</cite> will combine both batches in some way.</p></li>
+</ul>
+<p>Pipeline’s <cite>merge</cite> calls <cite>batch_class.merge([batche_from_pipe1, batch_from_pipe2])</cite>.</p>
+<p>The default <cite>Batch.merge</cite> just concatenate data from both batches, thus making a batch of double size.</p>
+<p>Take into account that the default <cite>merge</cite> also changes index to <cite>numpy.arange(new_size)</cite>.</p>
+</section>
+</section>
+<section id="rebatch">
+<h2>Rebatch<a class="headerlink" href="#rebatch" title="Link to this heading"></a></h2>
+<p>When actions change the batch size (for instance, dropping some bad or skipping incomplete data),
+you might end up in a situation when you don’t know the batch size and, what is sometimes much worse,
+batch size differs. To solve this problem, just call <cite>rebatch</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">images_pipeline</span> <span class="o">=</span> <span class="p">(</span><span class="n">images_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">random_rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">skip_black_images</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">skip_too_noisy_images</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">rebatch</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Under the hood <cite>rebatch</cite> calls <cite>merge</cite>, so you must ensure that <cite>merge</cite> works properly for your specific data and write your own <cite>merge</cite> if needed.</p>
+</section>
+<section id="exceptions">
+<h2>Exceptions<a class="headerlink" href="#exceptions" title="Link to this heading"></a></h2>
+<section id="skipbatchexception">
+<h3>SkipBatchException<a class="headerlink" href="#skipbatchexception" title="Link to this heading"></a></h3>
+<p>Sometimes you might want to stop processing a batch within a pipeline (e.g. if it does not meet a certain criteria or contains erroneous data, etc).
+Just throw <a class="reference internal" href="../api/batchflow.exceptions.html#batchflow.SkipBatchException" title="batchflow.SkipBatchException"><code class="xref py py-class docutils literal notranslate"><span class="pre">SkipBatchException</span></code></a> in an action method and the pipeline will skip this batch and switch to a new one.</p>
+</section>
+<section id="emptybatchsequence">
+<h3>EmptyBatchSequence<a class="headerlink" href="#emptybatchsequence" title="Link to this heading"></a></h3>
+<p>When you call several <cite>run</cite> (or <cite>gen_batch</cite>, or <cite>next_batch</cite>) one after another without resetting a batch iterator (see <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.reset" title="batchflow.Pipeline.reset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code></a>),
+you might bump into a situation when the batch iterator is exhausted. Whenever this happens, <code class="xref py py-class docutils literal notranslate"><span class="pre">EmptyBatchSequence</span></code> warning is emitted,
+which can ba caught if needed:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">try</span><span class="p">:</span>
+    <span class="n">pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+<span class="k">except</span> <span class="n">EmptyBatchSequence</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;There are no batches left. Call pipeline.reset(&#39;iter&#39;).&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="models">
+<h2>Models<a class="headerlink" href="#models" title="Link to this heading"></a></h2>
+<p>See <a class="reference internal" href="models.html"><span class="doc">Working with models</span></a>.</p>
+</section>
+<section id="debugging">
+<h2>Debugging<a class="headerlink" href="#debugging" title="Link to this heading"></a></h2>
+<p>To debug a pipeline you might pass <cite>debug</cite> parameter when executing the pipeline, e.g.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">batch_size</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Execution parameters are gathered into <cite>pipeline.debug_info</cite> data frame, which contains
+batch id, action name, start time and execution time.</p>
+<p>This might help you to analyze pipeline exection, find bottlenecks and so on.</p>
+</section>
+<section id="api">
+<h2>API<a class="headerlink" href="#api" title="Link to this heading"></a></h2>
+<p>See <a class="reference internal" href="../api/batchflow.pipeline.html"><span class="doc">pipelines API</span></a>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="images_batch.html" class="btn btn-neutral float-left" title="Batch class for handling images" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="named_expr.html" class="btn btn-neutral float-right" title="Named expressions" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

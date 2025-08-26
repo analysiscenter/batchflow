@@ -1,0 +1,725 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="batchflow" href="batchflow.core.html" />
+    <link rel="prev" title="Torch" href="../intro/model_zoo_torch.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.core.html">batchflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.opensets.html">batchflow.opensets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.html">batchflow.models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html">batchflow.research</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">API</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/batchflow.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="api">
+<h1>API<a class="headerlink" href="#api" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="batchflow.core.html">batchflow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.index.html">Index</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.index.html#datasetindex">DatasetIndex</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex"><code class="docutils literal notranslate"><span class="pre">DatasetIndex</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.build_index"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.build_index()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.build_pos"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.build_pos()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.calc_split"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.calc_split()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.concat"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.concat()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.create_batch"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.create_batch()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.create_subset"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.create_subset()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.from_index"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.from_index()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.gen_batch"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.gen_batch()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.get_default_iter_params"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.get_default_iter_params()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.get_pos"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.get_pos()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.index"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.index</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.indices"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.indices</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.is_split"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.is_split</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.next_batch"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.next_batch()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.reset"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.reset()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.reset_iter"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.reset_iter()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.shuffle"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.shuffle()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.size"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.size</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.split"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.split()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.subset_by_pos"><code class="docutils literal notranslate"><span class="pre">DatasetIndex.subset_by_pos()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.index.html#filesindex">FilesIndex</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.index.html#batchflow.FilesIndex"><code class="docutils literal notranslate"><span class="pre">FilesIndex</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.FilesIndex.build_from_index"><code class="docutils literal notranslate"><span class="pre">FilesIndex.build_from_index()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.FilesIndex.build_from_one_path"><code class="docutils literal notranslate"><span class="pre">FilesIndex.build_from_one_path()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.FilesIndex.build_from_path"><code class="docutils literal notranslate"><span class="pre">FilesIndex.build_from_path()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.FilesIndex.build_index"><code class="docutils literal notranslate"><span class="pre">FilesIndex.build_index()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.FilesIndex.build_key"><code class="docutils literal notranslate"><span class="pre">FilesIndex.build_key()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.FilesIndex.concat"><code class="docutils literal notranslate"><span class="pre">FilesIndex.concat()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.FilesIndex.create_subset"><code class="docutils literal notranslate"><span class="pre">FilesIndex.create_subset()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.FilesIndex.get_fullpath"><code class="docutils literal notranslate"><span class="pre">FilesIndex.get_fullpath()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.index.html#batchflow.FilesIndex.paths"><code class="docutils literal notranslate"><span class="pre">FilesIndex.paths</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.dataset.html">Dataset</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.batch.html">Batch</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch"><code class="docutils literal notranslate"><span class="pre">Batch</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.add_components"><code class="docutils literal notranslate"><span class="pre">Batch.add_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.apply_defaults"><code class="docutils literal notranslate"><span class="pre">Batch.apply_defaults</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.apply_parallel"><code class="docutils literal notranslate"><span class="pre">Batch.apply_parallel()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.array_of_nones"><code class="docutils literal notranslate"><span class="pre">Batch.array_of_nones</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.as_dataset"><code class="docutils literal notranslate"><span class="pre">Batch.as_dataset()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.components"><code class="docutils literal notranslate"><span class="pre">Batch.components</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.create_attrs"><code class="docutils literal notranslate"><span class="pre">Batch.create_attrs()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.data"><code class="docutils literal notranslate"><span class="pre">Batch.data</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.data_setter"><code class="docutils literal notranslate"><span class="pre">Batch.data_setter</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.dataset"><code class="docutils literal notranslate"><span class="pre">Batch.dataset</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.deepcopy"><code class="docutils literal notranslate"><span class="pre">Batch.deepcopy()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.do_nothing"><code class="docutils literal notranslate"><span class="pre">Batch.do_nothing()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.dump"><code class="docutils literal notranslate"><span class="pre">Batch.dump()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.from_data"><code class="docutils literal notranslate"><span class="pre">Batch.from_data()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.get"><code class="docutils literal notranslate"><span class="pre">Batch.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.get_attrs"><code class="docutils literal notranslate"><span class="pre">Batch.get_attrs()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.get_errors"><code class="docutils literal notranslate"><span class="pre">Batch.get_errors()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.indices"><code class="docutils literal notranslate"><span class="pre">Batch.indices</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.items"><code class="docutils literal notranslate"><span class="pre">Batch.items</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.load"><code class="docutils literal notranslate"><span class="pre">Batch.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.merge"><code class="docutils literal notranslate"><span class="pre">Batch.merge()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.merge_component"><code class="docutils literal notranslate"><span class="pre">Batch.merge_component()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.pipeline"><code class="docutils literal notranslate"><span class="pre">Batch.pipeline</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.random"><code class="docutils literal notranslate"><span class="pre">Batch.random</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.random_seed"><code class="docutils literal notranslate"><span class="pre">Batch.random_seed</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.run_once"><code class="docutils literal notranslate"><span class="pre">Batch.run_once()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.save"><code class="docutils literal notranslate"><span class="pre">Batch.save()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.size"><code class="docutils literal notranslate"><span class="pre">Batch.size</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch.html#batchflow.Batch.to_array"><code class="docutils literal notranslate"><span class="pre">Batch.to_array()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.batch_image.html">ImagesBatch</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch"><code class="docutils literal notranslate"><span class="pre">ImagesBatch</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.add"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.add()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.add_components"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.add_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.additive_noise"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.additive_noise()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.apply_defaults"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.apply_defaults</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.apply_parallel"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.apply_parallel()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.array_of_nones"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.array_of_nones</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.as_dataset"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.as_dataset()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.clip"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.clip()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.components"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.components</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.create_attrs"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.create_attrs()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.crop"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.crop()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.cutout"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.cutout()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.data"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.data</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.data_setter"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.data_setter</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.dataset"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.dataset</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.deepcopy"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.deepcopy()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.do_nothing"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.do_nothing()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.dump"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.dump()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.elastic_transform"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.elastic_transform()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.enhance"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.enhance()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.filter"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.flip"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.flip()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.from_data"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.from_data()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.get"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.get_attrs"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.get_attrs()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.get_errors"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.get_errors()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.image_shape"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.image_shape</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.indices"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.indices</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.invert"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.invert()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.items"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.items</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.load"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.merge"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.merge()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.merge_component"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.merge_component()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.multiplicative_noise"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.multiplicative_noise()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.multiply"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.multiply()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.pad"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.pad()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.pil_convert"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.pil_convert()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.pipeline"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.pipeline</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.posterize"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.posterize()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.put_on_background"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.put_on_background()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.random"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.random</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.random_seed"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.random_seed</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.resize"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.resize()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.rotate"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.rotate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.run_once"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.run_once()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.salt"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.salt()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.save"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.save()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.scale"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.scale()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.shift"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.shift()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.size"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.size</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.split_to_patches"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.split_to_patches()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.to_array"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.to_array()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.to_pil"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.to_pil()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.batch_image.html#batchflow.ImagesBatch.transform"><code class="docutils literal notranslate"><span class="pre">ImagesBatch.transform()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.batch_image.html#batchflow.batch_image.ImagesBatch._calc_origin"><code class="docutils literal notranslate"><span class="pre">ImagesBatch._calc_origin()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.pipeline.html">Pipeline</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline"><code class="docutils literal notranslate"><span class="pre">Pipeline</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.acquire_lock"><code class="docutils literal notranslate"><span class="pre">Pipeline.acquire_lock()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.add_namespace"><code class="docutils literal notranslate"><span class="pre">Pipeline.add_namespace()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.append_pipeline"><code class="docutils literal notranslate"><span class="pre">Pipeline.append_pipeline()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.assign_variable"><code class="docutils literal notranslate"><span class="pre">Pipeline.assign_variable()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.call"><code class="docutils literal notranslate"><span class="pre">Pipeline.call()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.concat"><code class="docutils literal notranslate"><span class="pre">Pipeline.concat()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.create_batch"><code class="docutils literal notranslate"><span class="pre">Pipeline.create_batch()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.del_variable"><code class="docutils literal notranslate"><span class="pre">Pipeline.del_variable()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.delete_all_variables"><code class="docutils literal notranslate"><span class="pre">Pipeline.delete_all_variables()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.delete_variable"><code class="docutils literal notranslate"><span class="pre">Pipeline.delete_variable()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.discard_batch"><code class="docutils literal notranslate"><span class="pre">Pipeline.discard_batch()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.execute_for"><code class="docutils literal notranslate"><span class="pre">Pipeline.execute_for()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.from_pipeline"><code class="docutils literal notranslate"><span class="pre">Pipeline.from_pipeline()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.gather_metrics"><code class="docutils literal notranslate"><span class="pre">Pipeline.gather_metrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.gen_batch"><code class="docutils literal notranslate"><span class="pre">Pipeline.gen_batch()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.gen_rebatch"><code class="docutils literal notranslate"><span class="pre">Pipeline.gen_rebatch()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.get_action_name"><code class="docutils literal notranslate"><span class="pre">Pipeline.get_action_name()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.get_last_action_proba"><code class="docutils literal notranslate"><span class="pre">Pipeline.get_last_action_proba()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.get_last_action_repeat"><code class="docutils literal notranslate"><span class="pre">Pipeline.get_last_action_repeat()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.get_method"><code class="docutils literal notranslate"><span class="pre">Pipeline.get_method()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.get_model_by_name"><code class="docutils literal notranslate"><span class="pre">Pipeline.get_model_by_name()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.get_variable"><code class="docutils literal notranslate"><span class="pre">Pipeline.get_variable()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.has_variable"><code class="docutils literal notranslate"><span class="pre">Pipeline.has_variable()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.import_model"><code class="docutils literal notranslate"><span class="pre">Pipeline.import_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.index"><code class="docutils literal notranslate"><span class="pre">Pipeline.index</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.indices"><code class="docutils literal notranslate"><span class="pre">Pipeline.indices</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.init_lock"><code class="docutils literal notranslate"><span class="pre">Pipeline.init_lock()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.init_model"><code class="docutils literal notranslate"><span class="pre">Pipeline.init_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.init_variable"><code class="docutils literal notranslate"><span class="pre">Pipeline.init_variable()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.init_variables"><code class="docutils literal notranslate"><span class="pre">Pipeline.init_variables()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.is_method_from_ns"><code class="docutils literal notranslate"><span class="pre">Pipeline.is_method_from_ns()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.join"><code class="docutils literal notranslate"><span class="pre">Pipeline.join()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.load_model"><code class="docutils literal notranslate"><span class="pre">Pipeline.load_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.load_model_now"><code class="docutils literal notranslate"><span class="pre">Pipeline.load_model_now()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.load_model_once"><code class="docutils literal notranslate"><span class="pre">Pipeline.load_model_once()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.m"><code class="docutils literal notranslate"><span class="pre">Pipeline.m()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.merge"><code class="docutils literal notranslate"><span class="pre">Pipeline.merge()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.model"><code class="docutils literal notranslate"><span class="pre">Pipeline.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.next_batch"><code class="docutils literal notranslate"><span class="pre">Pipeline.next_batch()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.num_actions"><code class="docutils literal notranslate"><span class="pre">Pipeline.num_actions</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.predict_model"><code class="docutils literal notranslate"><span class="pre">Pipeline.predict_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.print"><code class="docutils literal notranslate"><span class="pre">Pipeline.print()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.profile_info"><code class="docutils literal notranslate"><span class="pre">Pipeline.profile_info</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.random"><code class="docutils literal notranslate"><span class="pre">Pipeline.random</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.random_seed"><code class="docutils literal notranslate"><span class="pre">Pipeline.random_seed</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.rebatch"><code class="docutils literal notranslate"><span class="pre">Pipeline.rebatch()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.release_lock"><code class="docutils literal notranslate"><span class="pre">Pipeline.release_lock()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.repr"><code class="docutils literal notranslate"><span class="pre">Pipeline.repr()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.reset"><code class="docutils literal notranslate"><span class="pre">Pipeline.reset()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.run"><code class="docutils literal notranslate"><span class="pre">Pipeline.run()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.run_later"><code class="docutils literal notranslate"><span class="pre">Pipeline.run_later()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.run_now"><code class="docutils literal notranslate"><span class="pre">Pipeline.run_now()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.save_model"><code class="docutils literal notranslate"><span class="pre">Pipeline.save_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.save_model_now"><code class="docutils literal notranslate"><span class="pre">Pipeline.save_model_now()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.save_model_once"><code class="docutils literal notranslate"><span class="pre">Pipeline.save_model_once()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.save_to"><code class="docutils literal notranslate"><span class="pre">Pipeline.save_to()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.set_config"><code class="docutils literal notranslate"><span class="pre">Pipeline.set_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.set_dataset"><code class="docutils literal notranslate"><span class="pre">Pipeline.set_dataset()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.set_variable"><code class="docutils literal notranslate"><span class="pre">Pipeline.set_variable()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.show_profile_info"><code class="docutils literal notranslate"><span class="pre">Pipeline.show_profile_info()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.train_model"><code class="docutils literal notranslate"><span class="pre">Pipeline.train_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.update"><code class="docutils literal notranslate"><span class="pre">Pipeline.update()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.update_config"><code class="docutils literal notranslate"><span class="pre">Pipeline.update_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.update_variable"><code class="docutils literal notranslate"><span class="pre">Pipeline.update_variable()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline.v"><code class="docutils literal notranslate"><span class="pre">Pipeline.v()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.once_pipeline.html">Once pipeline</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline"><code class="docutils literal notranslate"><span class="pre">OncePipeline</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.add_namespace"><code class="docutils literal notranslate"><span class="pre">OncePipeline.add_namespace()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.concat"><code class="docutils literal notranslate"><span class="pre">OncePipeline.concat()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.copy"><code class="docutils literal notranslate"><span class="pre">OncePipeline.copy()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.import_model"><code class="docutils literal notranslate"><span class="pre">OncePipeline.import_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.init_lock"><code class="docutils literal notranslate"><span class="pre">OncePipeline.init_lock()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.init_model"><code class="docutils literal notranslate"><span class="pre">OncePipeline.init_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.init_variable"><code class="docutils literal notranslate"><span class="pre">OncePipeline.init_variable()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.load_model"><code class="docutils literal notranslate"><span class="pre">OncePipeline.load_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.run"><code class="docutils literal notranslate"><span class="pre">OncePipeline.run()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.save_model"><code class="docutils literal notranslate"><span class="pre">OncePipeline.save_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.save_to"><code class="docutils literal notranslate"><span class="pre">OncePipeline.save_to()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.update"><code class="docutils literal notranslate"><span class="pre">OncePipeline.update()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.named_expressions.html">Named expressions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.eval_expr"><code class="docutils literal notranslate"><span class="pre">eval_expr()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.swap"><code class="docutils literal notranslate"><span class="pre">swap()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.add_ops"><code class="docutils literal notranslate"><span class="pre">add_ops()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.MetaNamedExpression"><code class="docutils literal notranslate"><span class="pre">MetaNamedExpression</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression"><code class="docutils literal notranslate"><span class="pre">NamedExpression</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.name"><code class="docutils literal notranslate"><span class="pre">NamedExpression.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.mode"><code class="docutils literal notranslate"><span class="pre">NamedExpression.mode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.str"><code class="docutils literal notranslate"><span class="pre">NamedExpression.str()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.format"><code class="docutils literal notranslate"><span class="pre">NamedExpression.format()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.set_params"><code class="docutils literal notranslate"><span class="pre">NamedExpression.set_params()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.get"><code class="docutils literal notranslate"><span class="pre">NamedExpression.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.set"><code class="docutils literal notranslate"><span class="pre">NamedExpression.set()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.assign"><code class="docutils literal notranslate"><span class="pre">NamedExpression.assign()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.append"><code class="docutils literal notranslate"><span class="pre">NamedExpression.append()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.extend"><code class="docutils literal notranslate"><span class="pre">NamedExpression.extend()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.update"><code class="docutils literal notranslate"><span class="pre">NamedExpression.update()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.AlgebraicNamedExpression"><code class="docutils literal notranslate"><span class="pre">AlgebraicNamedExpression</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.AlgebraicNamedExpression.get"><code class="docutils literal notranslate"><span class="pre">AlgebraicNamedExpression.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.AlgebraicNamedExpression.assign"><code class="docutils literal notranslate"><span class="pre">AlgebraicNamedExpression.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.IF"><code class="docutils literal notranslate"><span class="pre">IF</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.IF.get"><code class="docutils literal notranslate"><span class="pre">IF.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.IF.assign"><code class="docutils literal notranslate"><span class="pre">IF.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.B"><code class="docutils literal notranslate"><span class="pre">B</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.B.get"><code class="docutils literal notranslate"><span class="pre">B.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.B.assign"><code class="docutils literal notranslate"><span class="pre">B.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.L"><code class="docutils literal notranslate"><span class="pre">L</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.L.get"><code class="docutils literal notranslate"><span class="pre">L.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.L.assign"><code class="docutils literal notranslate"><span class="pre">L.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.PipelineNamedExpression"><code class="docutils literal notranslate"><span class="pre">PipelineNamedExpression</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.C"><code class="docutils literal notranslate"><span class="pre">C</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.C.get"><code class="docutils literal notranslate"><span class="pre">C.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.C.assign"><code class="docutils literal notranslate"><span class="pre">C.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.V"><code class="docutils literal notranslate"><span class="pre">V</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.V.get"><code class="docutils literal notranslate"><span class="pre">V.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.V.assign"><code class="docutils literal notranslate"><span class="pre">V.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.M"><code class="docutils literal notranslate"><span class="pre">M</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.M.get"><code class="docutils literal notranslate"><span class="pre">M.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.M.assign"><code class="docutils literal notranslate"><span class="pre">M.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.I"><code class="docutils literal notranslate"><span class="pre">I</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.I.get"><code class="docutils literal notranslate"><span class="pre">I.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.I.assign"><code class="docutils literal notranslate"><span class="pre">I.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.R"><code class="docutils literal notranslate"><span class="pre">R</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.R.get"><code class="docutils literal notranslate"><span class="pre">R.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.R.assign"><code class="docutils literal notranslate"><span class="pre">R.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.F"><code class="docutils literal notranslate"><span class="pre">F</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.F.get"><code class="docutils literal notranslate"><span class="pre">F.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.F.assign"><code class="docutils literal notranslate"><span class="pre">F.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.D"><code class="docutils literal notranslate"><span class="pre">D</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.D.get"><code class="docutils literal notranslate"><span class="pre">D.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.D.assign"><code class="docutils literal notranslate"><span class="pre">D.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.W"><code class="docutils literal notranslate"><span class="pre">W</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.W.get"><code class="docutils literal notranslate"><span class="pre">W.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.W.assign"><code class="docutils literal notranslate"><span class="pre">W.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.P"><code class="docutils literal notranslate"><span class="pre">P</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.P.get"><code class="docutils literal notranslate"><span class="pre">P.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.P.assign"><code class="docutils literal notranslate"><span class="pre">P.assign()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.PP"><code class="docutils literal notranslate"><span class="pre">PP</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.PP.get"><code class="docutils literal notranslate"><span class="pre">PP.get()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.sampler.html">Sampler</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.arithmetize"><code class="docutils literal notranslate"><span class="pre">arithmetize()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.Sampler"><code class="docutils literal notranslate"><span class="pre">Sampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.Sampler.weight"><code class="docutils literal notranslate"><span class="pre">Sampler.weight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.Sampler.sample"><code class="docutils literal notranslate"><span class="pre">Sampler.sample()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.Sampler.apply"><code class="docutils literal notranslate"><span class="pre">Sampler.apply()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.Sampler.truncate"><code class="docutils literal notranslate"><span class="pre">Sampler.truncate()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.OrSampler"><code class="docutils literal notranslate"><span class="pre">OrSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.OrSampler.sample"><code class="docutils literal notranslate"><span class="pre">OrSampler.sample()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.AndSampler"><code class="docutils literal notranslate"><span class="pre">AndSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.AndSampler.sample"><code class="docutils literal notranslate"><span class="pre">AndSampler.sample()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ApplySampler"><code class="docutils literal notranslate"><span class="pre">ApplySampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ApplySampler.sample"><code class="docutils literal notranslate"><span class="pre">ApplySampler.sample()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.TruncateSampler"><code class="docutils literal notranslate"><span class="pre">TruncateSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.TruncateSampler.max_iters"><code class="docutils literal notranslate"><span class="pre">TruncateSampler.max_iters</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.TruncateSampler.sample"><code class="docutils literal notranslate"><span class="pre">TruncateSampler.sample()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.WeightedSampler"><code class="docutils literal notranslate"><span class="pre">WeightedSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.WeightedSampler.sample"><code class="docutils literal notranslate"><span class="pre">WeightedSampler.sample()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.BaseOperationSampler"><code class="docutils literal notranslate"><span class="pre">BaseOperationSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.BaseOperationSampler.operation"><code class="docutils literal notranslate"><span class="pre">BaseOperationSampler.operation</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.BaseOperationSampler.sample"><code class="docutils literal notranslate"><span class="pre">BaseOperationSampler.sample()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.AddSampler"><code class="docutils literal notranslate"><span class="pre">AddSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.AddSampler.operation"><code class="docutils literal notranslate"><span class="pre">AddSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.MulSampler"><code class="docutils literal notranslate"><span class="pre">MulSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.MulSampler.operation"><code class="docutils literal notranslate"><span class="pre">MulSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.TruedivSampler"><code class="docutils literal notranslate"><span class="pre">TruedivSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.TruedivSampler.operation"><code class="docutils literal notranslate"><span class="pre">TruedivSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.SubSampler"><code class="docutils literal notranslate"><span class="pre">SubSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.SubSampler.operation"><code class="docutils literal notranslate"><span class="pre">SubSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.PowSampler"><code class="docutils literal notranslate"><span class="pre">PowSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.PowSampler.operation"><code class="docutils literal notranslate"><span class="pre">PowSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.FloordivSampler"><code class="docutils literal notranslate"><span class="pre">FloordivSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.FloordivSampler.operation"><code class="docutils literal notranslate"><span class="pre">FloordivSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ModSampler"><code class="docutils literal notranslate"><span class="pre">ModSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ModSampler.operation"><code class="docutils literal notranslate"><span class="pre">ModSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RAddSampler"><code class="docutils literal notranslate"><span class="pre">RAddSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RAddSampler.operation"><code class="docutils literal notranslate"><span class="pre">RAddSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RMulSampler"><code class="docutils literal notranslate"><span class="pre">RMulSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RMulSampler.operation"><code class="docutils literal notranslate"><span class="pre">RMulSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RTruedivSampler"><code class="docutils literal notranslate"><span class="pre">RTruedivSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RTruedivSampler.operation"><code class="docutils literal notranslate"><span class="pre">RTruedivSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RSubSampler"><code class="docutils literal notranslate"><span class="pre">RSubSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RSubSampler.operation"><code class="docutils literal notranslate"><span class="pre">RSubSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RPowSampler"><code class="docutils literal notranslate"><span class="pre">RPowSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RPowSampler.operation"><code class="docutils literal notranslate"><span class="pre">RPowSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RFloordivSampler"><code class="docutils literal notranslate"><span class="pre">RFloordivSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RFloordivSampler.operation"><code class="docutils literal notranslate"><span class="pre">RFloordivSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RModSampler"><code class="docutils literal notranslate"><span class="pre">RModSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.RModSampler.operation"><code class="docutils literal notranslate"><span class="pre">RModSampler.operation</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ConstantSampler"><code class="docutils literal notranslate"><span class="pre">ConstantSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ConstantSampler.constant"><code class="docutils literal notranslate"><span class="pre">ConstantSampler.constant</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ConstantSampler.sample"><code class="docutils literal notranslate"><span class="pre">ConstantSampler.sample()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.NumpySampler"><code class="docutils literal notranslate"><span class="pre">NumpySampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.NumpySampler.name"><code class="docutils literal notranslate"><span class="pre">NumpySampler.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.NumpySampler.state"><code class="docutils literal notranslate"><span class="pre">NumpySampler.state</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.NumpySampler._params"><code class="docutils literal notranslate"><span class="pre">NumpySampler._params</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.NumpySampler.sample"><code class="docutils literal notranslate"><span class="pre">NumpySampler.sample()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ScipySampler"><code class="docutils literal notranslate"><span class="pre">ScipySampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ScipySampler.name"><code class="docutils literal notranslate"><span class="pre">ScipySampler.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ScipySampler.state"><code class="docutils literal notranslate"><span class="pre">ScipySampler.state</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ScipySampler.distr"><code class="docutils literal notranslate"><span class="pre">ScipySampler.distr</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.ScipySampler.sample"><code class="docutils literal notranslate"><span class="pre">ScipySampler.sample()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.HistoSampler"><code class="docutils literal notranslate"><span class="pre">HistoSampler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.HistoSampler.bins"><code class="docutils literal notranslate"><span class="pre">HistoSampler.bins</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.HistoSampler.edges"><code class="docutils literal notranslate"><span class="pre">HistoSampler.edges</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.HistoSampler.sample"><code class="docutils literal notranslate"><span class="pre">HistoSampler.sample()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.HistoSampler.update"><code class="docutils literal notranslate"><span class="pre">HistoSampler.update()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html#batchflow.sampler.cart_prod"><code class="docutils literal notranslate"><span class="pre">cart_prod()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.decorators.html">Decorators</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html#action">action</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.decorators.html#batchflow.action"><code class="docutils literal notranslate"><span class="pre">action()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html#inbatch-parallel">inbatch_parallel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html#parallel">parallel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html#apply-parallel">apply_parallel</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.decorators.html#batchflow.apply_parallel"><code class="docutils literal notranslate"><span class="pre">apply_parallel()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html#any-action-failed">any_action_failed</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.decorators.html#batchflow.any_action_failed"><code class="docutils literal notranslate"><span class="pre">any_action_failed()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html#mjit">mjit</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.decorators.html#batchflow.mjit"><code class="docutils literal notranslate"><span class="pre">mjit()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html#deprecated">deprecated</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.decorators.html#batchflow.deprecated"><code class="docutils literal notranslate"><span class="pre">deprecated()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.exceptions.html">Exceptions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.exceptions.html#skipbatchexception">SkipBatchException</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.exceptions.html#batchflow.SkipBatchException"><code class="docutils literal notranslate"><span class="pre">SkipBatchException</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.utils.html">Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.utils.html#save-data-to">save_data_to</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.utils.html#batchflow.save_data_to"><code class="docutils literal notranslate"><span class="pre">save_data_to()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.utils.html#read-data-from">read_data_from</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.utils.html#batchflow.read_data_from"><code class="docutils literal notranslate"><span class="pre">read_data_from()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="batchflow.opensets.html">batchflow.opensets</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.opensets.html#mnist">MNIST</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.opensets.html#cifar10">CIFAR10</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.opensets.html#cifar100">CIFAR100</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="batchflow.models.html">batchflow.models</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.metrics.html">dataset.models.metrics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.metrics.html#metrics">Metrics</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.Metrics"><code class="docutils literal notranslate"><span class="pre">Metrics</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.Metrics.evaluate"><code class="docutils literal notranslate"><span class="pre">Metrics.evaluate()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.metrics.html#classificationmetrics">ClassificationMetrics</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.accuracy"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.accuracy()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.append"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.append()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.condition_negative"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.condition_negative()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.condition_positive"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.condition_positive()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.confusion_matrix"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.confusion_matrix</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.copy"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.copy()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.diagnostics_odds_ratio"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.diagnostics_odds_ratio()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.f1_score"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.f1_score()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_discovery_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_discovery_rate()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_negative"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_negative()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_negative_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_negative_rate()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_omission_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_omission_rate()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_positive"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_positive()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_positive_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_positive_rate()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.free"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.free()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.jaccard"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.jaccard()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.negative_likelihood_ratio"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.negative_likelihood_ratio()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.negative_predictive_value"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.negative_predictive_value()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.one_hot"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.one_hot()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.plot_confusion_matrix"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.plot_confusion_matrix()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.positive_likelihood_ratio"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.positive_likelihood_ratio()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.positive_predictive_value"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.positive_predictive_value()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.prediction_negative"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.prediction_negative()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.prediction_positive"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.prediction_positive()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.prevalence"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.prevalence()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.total_population"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.total_population()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.true_negative"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.true_negative()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.true_negative_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.true_negative_rate()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.true_positive"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.true_positive()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.true_positive_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.true_positive_rate()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.update"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.update()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.metrics.html#segmentationmetricsbypixels">SegmentationMetricsByPixels</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByPixels"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByPixels</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.metrics.html#segmentationmetricsbyinstances">SegmentationMetricsByInstances</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.condition_positive"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.condition_positive()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.free"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.free()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.prediction_positive"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.prediction_positive()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.total_population"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.total_population()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.true_negative"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.true_negative()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.true_positive"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.true_positive()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.torch.html">batchflow.models.torch</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.torch.models.html">Models</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.torch.base.html">TorchModel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.torch.vgg.html">VGG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.torch.resnet.html">ResNet</a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.torch.unet.html">UNet</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.torch.layers.html">Custom layers and blocks</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.html#batchflow.models.BaseModel"><code class="docutils literal notranslate"><span class="pre">BaseModel</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.BaseModel.default_name"><code class="docutils literal notranslate"><span class="pre">BaseModel.default_name</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.BaseModel.is_model_like"><code class="docutils literal notranslate"><span class="pre">BaseModel.is_model_like()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.BaseModel.load"><code class="docutils literal notranslate"><span class="pre">BaseModel.load()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.BaseModel.predict"><code class="docutils literal notranslate"><span class="pre">BaseModel.predict()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.BaseModel.reset"><code class="docutils literal notranslate"><span class="pre">BaseModel.reset()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.BaseModel.save"><code class="docutils literal notranslate"><span class="pre">BaseModel.save()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.BaseModel.train"><code class="docutils literal notranslate"><span class="pre">BaseModel.train()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.html#batchflow.models.SklearnModel"><code class="docutils literal notranslate"><span class="pre">SklearnModel</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.SklearnModel.estimator"><code class="docutils literal notranslate"><span class="pre">SklearnModel.estimator</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.SklearnModel.build"><code class="docutils literal notranslate"><span class="pre">SklearnModel.build()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.SklearnModel.load"><code class="docutils literal notranslate"><span class="pre">SklearnModel.load()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.SklearnModel.predict"><code class="docutils literal notranslate"><span class="pre">SklearnModel.predict()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.SklearnModel.reset"><code class="docutils literal notranslate"><span class="pre">SklearnModel.reset()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.SklearnModel.save"><code class="docutils literal notranslate"><span class="pre">SklearnModel.save()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.html#batchflow.models.SklearnModel.train"><code class="docutils literal notranslate"><span class="pre">SklearnModel.train()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="batchflow.research.html">batchflow.research</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html#research">Research</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html#domain">Domain</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html#alias">Alias</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html#configalias">ConfigAlias</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html#experiment">Experiment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html#researchresults">ResearchResults</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html#named-expressions">Named expressions</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../intro/model_zoo_torch.html" class="btn btn-neutral float-left" title="Torch" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="batchflow.core.html" class="btn btn-neutral float-right" title="batchflow" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

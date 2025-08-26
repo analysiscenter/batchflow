@@ -1,0 +1,515 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>batchflow.dataset &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">batchflow.dataset</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for batchflow.dataset</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot; Dataset &quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">copy</span> <span class="k">as</span> <span class="nn">cp</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">.base</span> <span class="kn">import</span> <span class="n">Baseset</span>
+<span class="kn">from</span> <span class="nn">.batch</span> <span class="kn">import</span> <span class="n">Batch</span>
+<span class="kn">from</span> <span class="nn">.dsindex</span> <span class="kn">import</span> <span class="n">DatasetIndex</span>
+<span class="kn">from</span> <span class="nn">.named_expr</span> <span class="kn">import</span> <span class="n">F</span>
+<span class="kn">from</span> <span class="nn">.pipeline</span> <span class="kn">import</span> <span class="n">Pipeline</span>
+<span class="kn">from</span> <span class="nn">.components</span> <span class="kn">import</span> <span class="n">create_item_class</span>
+
+
+<div class="viewcode-block" id="Dataset">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset">[docs]</a>
+<span class="k">class</span> <span class="nc">Dataset</span><span class="p">(</span><span class="n">Baseset</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The Dataset holds an index of all data items</span>
+<span class="sd">    (e.g. customers, transactions, etc)</span>
+<span class="sd">    and a specific action class to process a small subset of data (batch).</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    batch_class : Batch</span>
+
+<span class="sd">    index : DatasetIndex or FilesIndex</span>
+
+<span class="sd">    indices : class:`numpy.ndarray`</span>
+<span class="sd">        an array with the indices</span>
+
+<span class="sd">    p : Pipeline</span>
+<span class="sd">        Actions which will be applied to this dataset</span>
+
+<span class="sd">    preloaded : data-type</span>
+<span class="sd">        For small dataset it could be convenient to preload data at first</span>
+
+<span class="sd">    train : Dataset</span>
+<span class="sd">        The train part of this dataset. It appears after splitting</span>
+
+<span class="sd">    test : Dataset</span>
+<span class="sd">        The test part of this dataset. It appears after splitting</span>
+
+<span class="sd">    validation : Dataset</span>
+<span class="sd">        The validation part of this dataset. It appears after splitting</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">batch_class</span><span class="o">=</span><span class="n">Batch</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">preloaded</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cast_to_array</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Create Dataset</span>
+
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+<span class="sd">            index : DatasetIndex or FilesIndex or int</span>
+<span class="sd">                Stores an index for a dataset</span>
+
+<span class="sd">            batch_class : Batch or inherited-from-Batch</span>
+<span class="sd">                Batch class holds the data and contains processing functions</span>
+
+<span class="sd">            preloaded : data-type</span>
+<span class="sd">                For smaller dataset it might be convenient to preload all data at once.</span>
+<span class="sd">                As a result, all created batches will contain a portion of preloaded.</span>
+
+<span class="sd">            cast_to_array : bool</span>
+<span class="sd">                whether to cast preloaded data to array when creating components data</span>
+
+<span class="sd">            copy : bool</span>
+<span class="sd">                whether to copy data from `preloaded` when creating a batch to alow for in-place transformations</span>
+
+<span class="sd">            **kwargs : dict</span>
+<span class="sd">                additional dataset attributes or `cv_split` parameters</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">batch_class</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">Batch</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">batch_class</span><span class="p">,</span> <span class="n">Batch</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;batch_class should be inherited from Batch&quot;</span><span class="p">,</span> <span class="n">batch_class</span><span class="p">)</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cast_to_array</span> <span class="o">=</span> <span class="n">cast_to_array</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">batch_class</span> <span class="o">=</span> <span class="n">batch_class</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">preloaded</span> <span class="o">=</span> <span class="n">preloaded</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;_copy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;_copy&#39;</span><span class="p">,</span> <span class="n">copy</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_splits</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="n">cv_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="n">item</span><span class="p">:</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;method&#39;</span><span class="p">,</span> <span class="s1">&#39;n_splits&#39;</span><span class="p">,</span> <span class="s1">&#39;shuffle&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">cv_kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;n_splits&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cv_split</span><span class="p">(</span><span class="o">**</span><span class="n">cv_kwargs</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_attrs</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Dataset.create_attrs">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset.create_attrs">[docs]</a>
+    <span class="k">def</span> <span class="nf">create_attrs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Create attributes from kwargs &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="k">for</span> <span class="n">attr</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Dataset.get_attrs">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset.get_attrs">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_attrs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return additional attrs as kwargs &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">attr</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span><span class="p">}</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return preloaded data &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preloaded</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_class</span><span class="o">.</span><span class="n">components</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span> <span class="o">=</span> <span class="n">create_item_class</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_class</span><span class="o">.</span><span class="n">components</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preloaded</span><span class="p">,</span>
+                                                 <span class="n">cast_to_array</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cast_to_array</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">preloaded</span>
+
+    <span class="k">def</span> <span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">name</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;cv&#39;</span> <span class="ow">and</span> <span class="n">name</span><span class="p">[</span><span class="mi">2</span><span class="p">:]</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;To access cross-validation call cv_split() first.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;batch_class&#39;</span> <span class="ow">in</span> <span class="nb">dir</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="ow">and</span> \
+           <span class="bp">self</span><span class="o">.</span><span class="n">batch_class</span><span class="o">.</span><span class="n">components</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_class</span><span class="o">.</span><span class="n">components</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> not found in class </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Dataset.from_dataset">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset.from_dataset">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_dataset</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">batch_class</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Create a Dataset object from another dataset with a new index</span>
+<span class="sd">            (usually a subset of the source dataset index)</span>
+
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+<span class="sd">            dataset : Dataset</span>
+<span class="sd">                Source dataset</span>
+
+<span class="sd">            index : DatasetIndex</span>
+<span class="sd">                Set of items from source dataset which should be in the new Dataset</span>
+
+<span class="sd">            batch_class : type</span>
+<span class="sd">                a subclass of Batch class</span>
+
+<span class="sd">            copy : bool</span>
+<span class="sd">                whether to create a copy of the dataset or use the same instance wherever possible</span>
+
+<span class="sd">            Returns</span>
+<span class="sd">            -------</span>
+<span class="sd">            Dataset</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">batch_class</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="p">(</span><span class="n">batch_class</span> <span class="o">==</span> <span class="n">dataset</span><span class="o">.</span><span class="n">batch_class</span><span class="p">))</span> <span class="ow">and</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_is_same_index</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">dataset</span><span class="o">.</span><span class="n">index</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">copy</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">dataset</span>
+        <span class="k">if</span> <span class="n">copy</span><span class="p">:</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+        <span class="n">bcl</span> <span class="o">=</span> <span class="n">batch_class</span> <span class="k">if</span> <span class="n">batch_class</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">dataset</span><span class="o">.</span><span class="n">batch_class</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">batch_class</span><span class="o">=</span><span class="n">bcl</span><span class="p">,</span> <span class="n">preloaded</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">preloaded</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span><span class="o">**</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_attrs</span><span class="p">(),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">})</span></div>
+
+
+    <span class="k">def</span> <span class="nf">__copy__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">from_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Dataset.copy">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset.copy">[docs]</a>
+    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Make a shallow copy of the dataset object &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">cp</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Dataset.build_index">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset.build_index">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">build_index</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Check if instance of the index is DatasetIndex</span>
+<span class="sd">            if it is not - create DatasetIndex from inputs</span>
+
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+<span class="sd">            index : DatasetIndex or any</span>
+
+<span class="sd">            Returns</span>
+<span class="sd">            -------</span>
+<span class="sd">            DatasetIndex</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">DatasetIndex</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">index</span>
+        <span class="k">return</span> <span class="n">DatasetIndex</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_is_same_index</span><span class="p">(</span><span class="n">index1</span><span class="p">,</span> <span class="n">index2</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Check if index1 and index2 are equals</span>
+
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+<span class="sd">            index1 : DatasetIndex</span>
+
+<span class="sd">            index2 : DatasetIndex</span>
+
+<span class="sd">            Returns</span>
+<span class="sd">            -------</span>
+<span class="sd">            bool</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">index1</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">index2</span><span class="p">))</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index2</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">index1</span><span class="p">)))</span> <span class="ow">and</span> \
+               <span class="n">index1</span><span class="o">.</span><span class="n">indices</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">index2</span><span class="o">.</span><span class="n">indices</span><span class="o">.</span><span class="n">shape</span> <span class="ow">and</span> \
+               <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">index1</span><span class="o">.</span><span class="n">indices</span> <span class="o">==</span> <span class="n">index2</span><span class="o">.</span><span class="n">indices</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Dataset.create_subset">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset.create_subset">[docs]</a>
+    <span class="k">def</span> <span class="nf">create_subset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Create a dataset based on the given subset of indices</span>
+
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+<span class="sd">            index : DatasetIndex or np.array</span>
+
+<span class="sd">            Returns</span>
+<span class="sd">            -------</span>
+<span class="sd">            Dataset</span>
+
+<span class="sd">            Raises</span>
+<span class="sd">            ------</span>
+<span class="sd">            IndexError</span>
+<span class="sd">                When a user wants to create a subset from source dataset it is necessary to be confident</span>
+<span class="sd">                that the index of new subset lies in the range of source dataset&#39;s index.</span>
+<span class="sd">                If the index lies out of the source dataset index&#39;s range, the IndexError is raised.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">indices</span> <span class="o">=</span> <span class="n">index</span><span class="o">.</span><span class="n">indices</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">DatasetIndex</span><span class="p">)</span> <span class="k">else</span> <span class="n">index</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">IndexError</span>
+        <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">from_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">create_subset</span><span class="p">(</span><span class="n">index</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="Dataset.create_batch">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset.create_batch">[docs]</a>
+    <span class="k">def</span> <span class="nf">create_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">pos</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Create a batch from given indices.</span>
+
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+<span class="sd">            index : DatasetIndex</span>
+<span class="sd">                Indices of dataset objects that should be included into batch</span>
+
+<span class="sd">            pos : bool</span>
+<span class="sd">                Whether `index` contains elements positions. Defaults to False</span>
+
+<span class="sd">            Returns</span>
+<span class="sd">            -------</span>
+<span class="sd">            Batch</span>
+
+<span class="sd">            Notes</span>
+<span class="sd">            -----</span>
+<span class="sd">            If `pos` is `False`, then `index` should contain the indices</span>
+<span class="sd">            that should be included in the batch, otherwise `index`</span>
+<span class="sd">            should contain their positions in current index.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">DatasetIndex</span><span class="p">):</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">create_batch</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">pos</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_class</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">preloaded</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_copy</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Dataset.pipeline">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset.pipeline">[docs]</a>
+    <span class="k">def</span> <span class="nf">pipeline</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Start a new data processing workflow</span>
+
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+<span class="sd">            config : Config or dict</span>
+<span class="sd">                Config lets you initialize variables in the Pipeline object, e.g. for the augmentation task</span>
+<span class="sd">                https://analysiscenter.github.io/batchflow/intro/pipeline.html#initializing-a-variable</span>
+
+<span class="sd">            Returns</span>
+<span class="sd">            -------</span>
+<span class="sd">            Pipeline</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Pipeline</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">p</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;A short alias for `pipeline()` &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="fm">__rshift__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+<span class="sd">            other : Pipeline</span>
+
+<span class="sd">            Returns</span>
+<span class="sd">            -------</span>
+<span class="sd">            Pipeline</span>
+<span class="sd">                Pipeline object which now has Dataset object as attribute</span>
+
+<span class="sd">            Raises</span>
+<span class="sd">            ------</span>
+<span class="sd">            TypeError</span>
+<span class="sd">                If the type of other is not a Pipeline</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Pipeline</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Pipeline is expected, but got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">other</span><span class="p">)</span><span class="si">}</span><span class="s2">. Use as dataset &gt;&gt; pipeline&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">other</span> <span class="o">&lt;&lt;</span> <span class="bp">self</span>
+
+<div class="viewcode-block" id="Dataset.cv">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset.cv">[docs]</a>
+    <span class="k">def</span> <span class="nf">cv</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a dataset which corresponds to n-th CV split &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_splits</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The dataset has been split into fewer splits than </span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span>  <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;cv&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">n</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="Dataset.CV">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset.CV">[docs]</a>
+    <span class="k">def</span> <span class="nf">CV</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">):</span> <span class="c1"># noqa: N802; invalid-function-name</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a dataset which corresponds to the fold defined as NamedExpression &quot;&quot;&quot;</span>
+        <span class="k">return</span>  <span class="n">F</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cv</span><span class="p">)(</span><span class="n">expr</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Dataset.cv_split">
+<a class="viewcode-back" href="../../api/batchflow.dataset.html#batchflow.Dataset.cv_split">[docs]</a>
+    <span class="k">def</span> <span class="nf">cv_split</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;kfold&#39;</span><span class="p">,</span> <span class="n">n_splits</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Create datasets for cross-validation</span>
+
+<span class="sd">        Datasets are available as `cv0`, `cv1` and so on. And they are already split into train and test parts.</span>
+
+<span class="sd">        Another way to access these splits is `train.cv0`, `train.cv1`, ..., `test.cv0`, `test.cv1`, ...</span>
+
+<span class="sd">        Note that each pair (e.g. `cv0.train` and `train.cv0`) refers to the very same instance of a dataset,</span>
+<span class="sd">        i.e. if you change `train.cv0`, `cv0.train` will also change.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        method : {&#39;kfold&#39;}</span>
+<span class="sd">            a splitting method (only `kfold` is supported)</span>
+
+<span class="sd">        n_splits : int</span>
+<span class="sd">            a number of folds</span>
+
+<span class="sd">        shuffle</span>
+<span class="sd">            specifies the order of items (see :meth:`~.DatasetIndex.shuffle`)</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+
+<span class="sd">        ::</span>
+
+<span class="sd">            dataset = Dataset(10)</span>
+<span class="sd">            dataset.cv_split(n_splits=3)</span>
+<span class="sd">            print(dataset.cv0.test.indices) # [0, 1, 2, 3]</span>
+<span class="sd">            print(dataset.cv1.test.indices) # [4, 5, 6]</span>
+<span class="sd">            print(dataset.cv2.test.indices) # [7, 8, 9]</span>
+<span class="sd">            print(dataset.test.cv0.indices) # [0, 1, 2, 3]</span>
+<span class="sd">            print(dataset.test.cv1.indices) # [4, 5, 6]</span>
+<span class="sd">            print(dataset.test.cv2.indices) # [7, 8, 9]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_splits</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_splits</span><span class="p">):</span>
+                <span class="n">cv_attr</span> <span class="o">=</span> <span class="s1">&#39;cv&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+                <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cv_attr</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">train</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">train</span><span class="p">,</span> <span class="n">cv_attr</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">test</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">test</span><span class="p">,</span> <span class="n">cv_attr</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_splits</span> <span class="o">=</span> <span class="n">n_splits</span>
+
+        <span class="n">order</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">shuffle</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s1">&#39;kfold&#39;</span><span class="p">:</span>
+            <span class="n">splits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_split_kfold</span><span class="p">(</span><span class="n">n_splits</span><span class="p">,</span> <span class="n">order</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unknown split method:&quot;</span><span class="p">,</span> <span class="n">method</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">train</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">n_splits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_splits</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">n_splits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_splits</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_splits</span><span class="p">):</span>
+            <span class="n">test_indices</span> <span class="o">=</span> <span class="n">splits</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">train_indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">split</span> <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">split</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">splits</span><span class="p">)</span> <span class="k">if</span> <span class="n">i</span> <span class="o">!=</span> <span class="n">j</span><span class="p">])</span>
+
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;cv&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+            <span class="n">cv_dataset</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;cv&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+            <span class="n">cv_dataset</span><span class="o">.</span><span class="n">train</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_subset</span><span class="p">(</span><span class="n">train_indices</span><span class="p">)</span>
+            <span class="n">cv_dataset</span><span class="o">.</span><span class="n">test</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_subset</span><span class="p">(</span><span class="n">test_indices</span><span class="p">)</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">train</span><span class="p">,</span> <span class="s1">&#39;cv&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="n">cv_dataset</span><span class="o">.</span><span class="n">train</span><span class="p">)</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">test</span><span class="p">,</span> <span class="s1">&#39;cv&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="n">cv_dataset</span><span class="o">.</span><span class="n">test</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_split_kfold</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n_splits</span><span class="p">,</span> <span class="n">order</span><span class="p">):</span>
+        <span class="n">split_sizes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">n_splits</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">order</span><span class="p">)</span> <span class="o">//</span> <span class="n">n_splits</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+        <span class="n">split_sizes</span><span class="p">[:</span><span class="nb">len</span><span class="p">(</span><span class="n">order</span><span class="p">)</span> <span class="o">%</span> <span class="n">n_splits</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">current</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">splits</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">split_size</span> <span class="ow">in</span> <span class="n">split_sizes</span><span class="p">:</span>
+            <span class="n">start</span><span class="p">,</span> <span class="n">stop</span> <span class="o">=</span> <span class="n">current</span><span class="p">,</span> <span class="n">current</span> <span class="o">+</span> <span class="n">split_size</span>
+            <span class="n">splits</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="n">order</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">stop</span><span class="p">]])</span>
+            <span class="n">current</span> <span class="o">=</span> <span class="n">stop</span>
+        <span class="k">return</span> <span class="n">splits</span>
+
+    <span class="k">def</span> <span class="nf">__getstate__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__setstate__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">state</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="c1"># this warrants that all hidden objects are reconstructed upon unpickling</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

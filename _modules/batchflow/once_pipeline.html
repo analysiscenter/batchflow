@@ -1,0 +1,425 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>batchflow.once_pipeline &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">batchflow.once_pipeline</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for batchflow.once_pipeline</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot; Once pipeline &quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">copy</span> <span class="k">as</span> <span class="nn">cp</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">.named_expr</span> <span class="kn">import</span> <span class="n">NamedExpression</span><span class="p">,</span> <span class="n">eval_expr</span>
+<span class="kn">from</span> <span class="nn">._const</span> <span class="kn">import</span> <span class="n">ACTIONS</span><span class="p">,</span> <span class="n">IMPORT_MODEL_ID</span><span class="p">,</span> <span class="n">LOAD_MODEL_ID</span><span class="p">,</span> <span class="n">SAVE_MODEL_ID</span><span class="p">,</span> <span class="n">UPDATE_ID</span>
+
+
+<div class="viewcode-block" id="OncePipeline">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline">[docs]</a>
+<span class="k">class</span> <span class="nc">OncePipeline</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Pipeline that runs only once before or after the main pipeline &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pipeline</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">namespaces</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span> <span class="o">=</span> <span class="n">pipeline</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">main</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_namespaces</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">namespaces</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_actions</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="OncePipeline.concat">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.concat">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">concat</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">pipe1</span><span class="p">,</span> <span class="n">pipe2</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Concatenate two pipelines &quot;&quot;&quot;</span>
+        <span class="n">new_p</span> <span class="o">=</span> <span class="n">OncePipeline</span><span class="p">(</span><span class="n">pipe1</span><span class="o">.</span><span class="n">pipeline</span><span class="p">)</span>
+        <span class="n">new_p</span><span class="o">.</span><span class="n">_actions</span> <span class="o">=</span> <span class="n">pipe1</span><span class="o">.</span><span class="n">_actions</span> <span class="o">+</span> <span class="n">pipe2</span><span class="o">.</span><span class="n">_actions</span>  <span class="c1"># noqa: SLF001; private-member-access</span>
+        <span class="n">new_p</span><span class="o">.</span><span class="n">_namespaces</span> <span class="o">=</span> <span class="n">pipe1</span><span class="o">.</span><span class="n">_namespaces</span> <span class="o">+</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">pipe2</span><span class="o">.</span><span class="n">_namespaces</span> <span class="k">if</span> <span class="n">a</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">pipe1</span><span class="o">.</span><span class="n">_namespaces</span><span class="p">]</span>  <span class="c1"># noqa: SLF001; private-member-access</span>
+        <span class="k">return</span> <span class="n">new_p</span></div>
+
+
+    <span class="k">def</span> <span class="nf">__getstate__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">actions</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_actions</span><span class="p">,</span> <span class="n">namespaces</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_namespaces</span><span class="p">,</span> <span class="n">pipeline</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">state</span>
+
+    <span class="k">def</span> <span class="nf">__setstate__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_actions</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;actions&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_namespaces</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;namespaces&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;pipeline&#39;</span><span class="p">]</span>
+
+<div class="viewcode-block" id="OncePipeline.copy">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.copy">[docs]</a>
+    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Make a shallow copy of the dataset object &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">cp</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">OncePipeline</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span> <span class="o">+</span> <span class="n">other</span>
+        <span class="k">return</span> <span class="n">other</span> <span class="o">+</span> <span class="bp">self</span>
+
+    <span class="k">def</span> <span class="nf">_add_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">save_to</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">action</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s1">&#39;args&#39;</span><span class="p">:</span> <span class="n">args</span><span class="p">,</span> <span class="s1">&#39;kwargs&#39;</span><span class="p">:</span> <span class="n">kwargs</span><span class="p">,</span> <span class="s1">&#39;save_to&#39;</span><span class="p">:</span> <span class="n">save_to</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">_args</span><span class="p">:</span>
+            <span class="n">action</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="o">**</span><span class="n">_args</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_actions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span> <span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">is_method_from_ns</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_add_action</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown name: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OncePipeline.add_namespace">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.add_namespace">[docs]</a>
+    <span class="k">def</span> <span class="nf">add_namespace</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">namespaces</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">add_namespace</span><span class="p">(</span><span class="o">*</span><span class="n">namespaces</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_exec_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+        <span class="n">args_value</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="n">action</span><span class="p">[</span><span class="s1">&#39;args&#39;</span><span class="p">],</span> <span class="n">pipeline</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="p">)</span>
+        <span class="n">kwargs_value</span> <span class="o">=</span> <span class="n">eval_expr</span><span class="p">(</span><span class="n">action</span><span class="p">[</span><span class="s1">&#39;kwargs&#39;</span><span class="p">],</span> <span class="n">pipeline</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">action</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">ACTIONS</span><span class="p">:</span>
+            <span class="n">method</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ACTIONS</span><span class="p">[</span><span class="n">action</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]])</span>
+            <span class="n">method</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">method</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">get_method</span><span class="p">(</span><span class="n">action</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">method</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown method: </span><span class="si">{</span><span class="n">action</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="n">res</span> <span class="o">=</span> <span class="n">method</span><span class="p">(</span><span class="o">*</span><span class="n">args_value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs_value</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">action</span><span class="p">[</span><span class="s1">&#39;save_to&#39;</span><span class="p">],</span> <span class="n">NamedExpression</span><span class="p">):</span>
+                <span class="n">action</span><span class="p">[</span><span class="s1">&#39;save_to&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="n">pipeline</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">action</span><span class="p">[</span><span class="s1">&#39;save_to&#39;</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+                <span class="n">action</span><span class="p">[</span><span class="s1">&#39;save_to&#39;</span><span class="p">][:]</span> <span class="o">=</span> <span class="n">res</span>
+
+<div class="viewcode-block" id="OncePipeline.run">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.run">[docs]</a>
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Execute all actions &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_actions</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_exec_action</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="OncePipeline.init_variable">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.init_variable">[docs]</a>
+    <span class="k">def</span> <span class="nf">init_variable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lock</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Create a variable if not exists.</span>
+<span class="sd">        If the variable exists, does nothing.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        name : string</span>
+<span class="sd">            a name of the variable</span>
+<span class="sd">        default</span>
+<span class="sd">            an initial value for the variable set when pipeline is created</span>
+<span class="sd">        lock : bool</span>
+<span class="sd">            whether to lock a variable before each update (default: True)</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        self - in order to use it in the pipeline chains</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+<span class="sd">        &gt;&gt;&gt; pp = dataset.p.before</span>
+<span class="sd">                    .init_variable(&quot;iterations&quot;, default=0)</span>
+<span class="sd">                    .init_variable(&quot;accuracy&quot;)</span>
+<span class="sd">                    .init_variable(&quot;loss_history&quot;, [])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s1">&#39;init_on_each_run&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;`init_on_each_run` in `</span><span class="si">%s</span><span class="s2">` is obsolete. Use `default` instead.&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="n">default</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;init_on_each_run&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">variables</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="p">,</span> <span class="n">lock</span><span class="o">=</span><span class="n">lock</span><span class="p">,</span> <span class="n">pipeline</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="OncePipeline.init_lock">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.init_lock">[docs]</a>
+    <span class="k">def</span> <span class="nf">init_lock</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;lock&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Create a lock as a pipeline variable</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        name : string</span>
+<span class="sd">            a lock name</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        self - in order to use it in the pipeline chains</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+<span class="sd">        &gt;&gt;&gt; pp = dataset.p.before</span>
+<span class="sd">                    .init_lock(&quot;model_update&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+
+<div class="viewcode-block" id="OncePipeline.init_model">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.init_model">[docs]</a>
+    <span class="k">def</span> <span class="nf">init_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">model_class</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Initialize a static or dynamic model by building or importing it</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        name : str</span>
+<span class="sd">            a name for the model (to refer to it later when training or infering).</span>
+
+<span class="sd">        model_class : class or named expression</span>
+<span class="sd">            a model class (might also be specified in the config).</span>
+
+<span class="sd">        mode : {&#39;static&#39;, &#39;dynamic&#39;}</span>
+<span class="sd">            model creation mode:</span>
+<span class="sd">            - static - the model is created right now, during the pipeline definition</span>
+<span class="sd">            - dynamic - the model is created at the first iteration when the pipeline is run (default)</span>
+
+<span class="sd">        config : dict or Config</span>
+<span class="sd">            (optional) model configurations parameters, where each key and value could be named expressions.</span>
+
+<span class="sd">        source</span>
+<span class="sd">            a model or a pipeline to import from</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+<span class="sd">        Build a model::</span>
+
+<span class="sd">            pipeline.before.init_model(&#39;my-model&#39;, MyModel, &#39;static&#39;)</span>
+
+<span class="sd">        Import a model::</span>
+
+<span class="sd">            pipeline.before.init_model(&#39;my-model&#39;, source=train_pipeline)</span>
+
+<span class="sd">        Build a model with a config::</span>
+
+<span class="sd">            pipeline.before</span>
+<span class="sd">              .init_variable(&#39;images_shape&#39;, [256, 256])</span>
+<span class="sd">              .init_model(&#39;my_model&#39;, MyModel, &#39;static&#39;, config={&#39;input_shape&#39;: V(&#39;images_shape&#39;)})</span>
+
+<span class="sd">            pipeline.before</span>
+<span class="sd">              .init_variable(&#39;shape_name&#39;, &#39;images_shape&#39;)</span>
+<span class="sd">              .init_model(&#39;my_model&#39;, C(&#39;model&#39;), &#39;dynamic&#39;, config={V(&#39;shape_name)&#39;: B(&#39;images_shape&#39;)})</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">model_class</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">source</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="OncePipeline.import_model">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.import_model">[docs]</a>
+    <span class="k">def</span> <span class="nf">import_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">source</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Import a model</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        name : str</span>
+<span class="sd">            a name with which the model is stored in this pipeline</span>
+
+<span class="sd">        source</span>
+<span class="sd">            a model or a pipeline to import from</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+
+<span class="sd">        Import a given model instance::</span>
+
+<span class="sd">            pipeline.before.import_model(&#39;my-model&#39;, custom_resnet_model)</span>
+
+<span class="sd">        Import `my-model` from the pipeline::</span>
+
+<span class="sd">            pipeline.before.import_model(&#39;my-model&#39;, train_pipeline)</span>
+
+<span class="sd">        Import `resnet` model from `train_pipeline` and give it a name `my-model`::</span>
+
+<span class="sd">            pipeline.before.import_model(&#39;my-model&#39;, train_pipeline.m(&#39;resnet&#39;))</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_add_action</span><span class="p">(</span><span class="n">IMPORT_MODEL_ID</span><span class="p">,</span> <span class="n">_args</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">source</span><span class="o">=</span><span class="n">source</span><span class="p">,</span> <span class="n">model_name</span><span class="o">=</span><span class="n">name</span><span class="p">))</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_exec_import_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">_exec_import_model</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">action</span><span class="p">)</span>  <span class="c1"># noqa: SLF001; private-member-access</span>
+
+<div class="viewcode-block" id="OncePipeline.save_model">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.save_model">[docs]</a>
+    <span class="k">def</span> <span class="nf">save_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Save a model &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_add_action</span><span class="p">(</span><span class="n">SAVE_MODEL_ID</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">_args</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">model_name</span><span class="o">=</span><span class="n">name</span><span class="p">),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>  <span class="c1"># noqa: SLF001; private-member-access</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_exec_save_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">_exec_save_model</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">action</span><span class="p">)</span>  <span class="c1"># noqa: SLF001; private-member-access</span>
+
+
+<div class="viewcode-block" id="OncePipeline.load_model">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.load_model">[docs]</a>
+    <span class="k">def</span> <span class="nf">load_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">model_class</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Load a model &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;static&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">load_model_now</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">model_class</span><span class="p">,</span> <span class="n">mode</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_add_action</span><span class="p">(</span><span class="n">LOAD_MODEL_ID</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span>
+                                <span class="n">_args</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span> <span class="n">model_class</span><span class="o">=</span><span class="n">model_class</span><span class="p">,</span> <span class="n">model_name</span><span class="o">=</span><span class="n">name</span><span class="p">),</span>
+                                <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_exec_load_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">_exec_load_model</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">action</span><span class="p">)</span>  <span class="c1"># noqa: SLF001; private-member-access</span>
+
+
+<div class="viewcode-block" id="OncePipeline.save_to">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.save_to">[docs]</a>
+    <span class="k">def</span> <span class="nf">save_to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Save a value of a given named expression lazily during pipeline execution</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        dst : NamedExpression or any data container</span>
+<span class="sd">            destination</span>
+
+<span class="sd">        value</span>
+<span class="sd">            an updating value, could be a value of any type or a named expression</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        self - in order to use it in the pipeline chains</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        This method does not change a value of the variable until the pipeline is run.</span>
+<span class="sd">        So it should be used in pipeline definition chains only.</span>
+<span class="sd">        :func:`~.save_data_to` is imperative and may be used to change variable value within actions.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="OncePipeline.update">
+<a class="viewcode-back" href="../../api/batchflow.once_pipeline.html#batchflow.once_pipeline.OncePipeline.update">[docs]</a>
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Update a value of a given named expression lazily during pipeline execution</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        expr : NamedExpression</span>
+<span class="sd">            an expression</span>
+
+<span class="sd">        value</span>
+<span class="sd">            an updating value, could be a value of any type or a named expression</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        self - in order to use it in the pipeline chains</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        This method does not change a value of the variable until the pipeline is run.</span>
+<span class="sd">        So it should be used in pipeline definition chains only.</span>
+<span class="sd">        ``set_variable`` is imperative and may be used to change variable value within actions.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_add_action</span><span class="p">(</span><span class="n">UPDATE_ID</span><span class="p">,</span> <span class="n">_args</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">expr</span><span class="o">=</span><span class="n">expr</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">))</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_exec_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+        <span class="n">action</span><span class="p">[</span><span class="s1">&#39;expr&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">action</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">],</span> <span class="n">pipeline</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

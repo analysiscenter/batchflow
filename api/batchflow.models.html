@@ -1,0 +1,346 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>batchflow.models &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="dataset.models.metrics" href="batchflow.models.metrics.html" />
+    <link rel="prev" title="batchflow.opensets" href="batchflow.opensets.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="batchflow.html">API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="batchflow.core.html">batchflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.opensets.html">batchflow.opensets</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">batchflow.models</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.metrics.html">dataset.models.metrics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.torch.html">batchflow.models.torch</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html">batchflow.research</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="batchflow.html">API</a></li>
+      <li class="breadcrumb-item active">batchflow.models</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/batchflow.models.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="batchflow-models">
+<h1>batchflow.models<a class="headerlink" href="#batchflow-models" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="batchflow.models.metrics.html">dataset.models.metrics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.metrics.html#metrics">Metrics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.Metrics"><code class="docutils literal notranslate"><span class="pre">Metrics</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.Metrics.evaluate"><code class="docutils literal notranslate"><span class="pre">Metrics.evaluate()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.metrics.html#classificationmetrics">ClassificationMetrics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.accuracy"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.accuracy()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.append"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.append()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.condition_negative"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.condition_negative()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.condition_positive"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.condition_positive()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.confusion_matrix"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.confusion_matrix</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.copy"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.copy()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.diagnostics_odds_ratio"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.diagnostics_odds_ratio()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.f1_score"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.f1_score()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_discovery_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_discovery_rate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_negative"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_negative()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_negative_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_negative_rate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_omission_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_omission_rate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_positive"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_positive()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.false_positive_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.false_positive_rate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.free"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.free()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.jaccard"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.jaccard()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.negative_likelihood_ratio"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.negative_likelihood_ratio()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.negative_predictive_value"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.negative_predictive_value()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.one_hot"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.one_hot()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.plot_confusion_matrix"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.plot_confusion_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.positive_likelihood_ratio"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.positive_likelihood_ratio()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.positive_predictive_value"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.positive_predictive_value()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.prediction_negative"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.prediction_negative()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.prediction_positive"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.prediction_positive()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.prevalence"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.prevalence()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.total_population"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.total_population()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.true_negative"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.true_negative()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.true_negative_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.true_negative_rate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.true_positive"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.true_positive()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.true_positive_rate"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.true_positive_rate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.ClassificationMetrics.update"><code class="docutils literal notranslate"><span class="pre">ClassificationMetrics.update()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.metrics.html#segmentationmetricsbypixels">SegmentationMetricsByPixels</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByPixels"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByPixels</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.metrics.html#segmentationmetricsbyinstances">SegmentationMetricsByInstances</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.condition_positive"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.condition_positive()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.free"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.free()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.prediction_positive"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.prediction_positive()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.total_population"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.total_population()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.true_negative"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.true_negative()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.true_positive"><code class="docutils literal notranslate"><span class="pre">SegmentationMetricsByInstances.true_positive()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="batchflow.models.torch.html">batchflow.models.torch</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.torch.models.html">Models</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.torch.base.html">TorchModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.torch.vgg.html">VGG</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.torch.resnet.html">ResNet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.torch.unet.html">UNet</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.torch.layers.html">Custom layers and blocks</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<p id="module-batchflow.models">Contains models</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.models.BaseModel">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">BaseModel</span></span><a class="reference internal" href="../_modules/batchflow/models/base.html#BaseModel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.BaseModel" title="Link to this definition"></a></dt>
+<dd><p>Base interface for models.</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.models.BaseModel.default_name">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">default_name</span></span><a class="headerlink" href="#batchflow.models.BaseModel.default_name" title="Link to this definition"></a></dt>
+<dd><p>Placeholder for model name.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.BaseModel.is_model_like">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_model_like</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/base.html#BaseModel.is_model_like"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.BaseModel.is_model_like" title="Link to this definition"></a></dt>
+<dd><p>Check if the <cite>obj</cite> provides the same interface, as required by this specification.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.BaseModel.load">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/base.html#BaseModel.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.BaseModel.load" title="Link to this definition"></a></dt>
+<dd><p>Load the model from the disc.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.BaseModel.predict">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/base.html#BaseModel.predict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.BaseModel.predict" title="Link to this definition"></a></dt>
+<dd><p>Make a prediction using the model.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.BaseModel.reset">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/base.html#BaseModel.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.BaseModel.reset" title="Link to this definition"></a></dt>
+<dd><p>Reset the trained model to allow a new training from scratch.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.BaseModel.save">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">save</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/base.html#BaseModel.save"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.BaseModel.save" title="Link to this definition"></a></dt>
+<dd><p>Save the model to the disc.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.BaseModel.train">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/base.html#BaseModel.train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.BaseModel.train" title="Link to this definition"></a></dt>
+<dd><p>Train the model.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.models.SklearnModel">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">SklearnModel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/sklearn.html#SklearnModel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.SklearnModel" title="Link to this definition"></a></dt>
+<dd><p>Base class for scikit-learn models</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.models.SklearnModel.estimator">
+<span class="sig-name descname"><span class="pre">estimator</span></span><a class="headerlink" href="#batchflow.models.SklearnModel.estimator" title="Link to this definition"></a></dt>
+<dd><p>an instance of scikit-learn estimator</p>
+</dd></dl>
+
+<p class="rubric">Notes</p>
+<p><strong>Configuration</strong></p>
+<p>estimator - an instance of scikit-learn estimator</p>
+<p>load / path - a path to a pickled estimator</p>
+<p class="rubric">Examples</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;static&#39;</span><span class="p">,</span> <span class="n">SklearnModel</span><span class="p">,</span> <span class="s1">&#39;my_model&#39;</span><span class="p">,</span>
+                <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;estimator&#39;</span><span class="p">:</span> <span class="n">sklearn</span><span class="o">.</span><span class="n">linear_model</span><span class="o">.</span><span class="n">SGDClassifier</span><span class="p">(</span><span class="n">loss</span><span class="o">=</span><span class="s1">&#39;huber&#39;</span><span class="p">)})</span>
+
+<span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;static&#39;</span><span class="p">,</span> <span class="n">SklearnModel</span><span class="p">,</span> <span class="s1">&#39;my_model&#39;</span><span class="p">,</span>
+                <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;load/path&#39;</span><span class="p">:</span> <span class="s1">&#39;/path/to/estimator.pickle&#39;</span><span class="p">})</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.SklearnModel.build">
+<span class="sig-name descname"><span class="pre">build</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/sklearn.html#SklearnModel.build"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.SklearnModel.build" title="Link to this definition"></a></dt>
+<dd><p>Define the model</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.SklearnModel.load">
+<span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/sklearn.html#SklearnModel.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.SklearnModel.load" title="Link to this definition"></a></dt>
+<dd><p>Load the model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – a full path to a file from which a model will be loaded</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.SklearnModel.predict">
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/sklearn.html#SklearnModel.predict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.SklearnModel.predict" title="Link to this definition"></a></dt>
+<dd><p>Predict with the data provided</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>X</strong> (<em>array-like</em>) – Subset of the training data, shape (n_samples, n_features)</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>For more details and other parameters look at the documentation for the estimator used.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Predicted value per sample, shape (n_samples,)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.SklearnModel.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/sklearn.html#SklearnModel.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.SklearnModel.reset" title="Link to this definition"></a></dt>
+<dd><p>Reset the trained model to allow a new training from scratch</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.SklearnModel.save">
+<span class="sig-name descname"><span class="pre">save</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/sklearn.html#SklearnModel.save"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.SklearnModel.save" title="Link to this definition"></a></dt>
+<dd><p>Save the model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – a full path to a file where a model will be saved to</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.SklearnModel.train">
+<span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/sklearn.html#SklearnModel.train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.SklearnModel.train" title="Link to this definition"></a></dt>
+<dd><p>Train the model with the data provided</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>array-like</em>) – Subset of the training data, shape (n_samples, n_features)</p></li>
+<li><p><strong>y</strong> (<em>numpy array</em>) – Subset of the target values, shape (n_samples,)</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>For more details and other parameters look at the documentation for the estimator used.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="batchflow.opensets.html" class="btn btn-neutral float-left" title="batchflow.opensets" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="batchflow.models.metrics.html" class="btn btn-neutral float-right" title="dataset.models.metrics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

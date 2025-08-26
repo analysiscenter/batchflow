@@ -1,0 +1,409 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Working with models &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Torch models" href="torch_models.html" />
+    <link rel="prev" title="Inter-batch parallelism" href="prefetch.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">A short introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes and capabilities</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="dsindex.html">Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html">Batch class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html">Batch class for handling images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html">Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html">Named expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html">Within batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="prefetch.html">Inter-batch parallelism</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Working with models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html">Torch models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="research.html">Research</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_zoo.html">Model zoo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="classes.html">Classes and capabilities</a></li>
+      <li class="breadcrumb-item active">Working with models</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/intro/models.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="working-with-models">
+<h1>Working with models<a class="headerlink" href="#working-with-models" title="Link to this heading"></a></h1>
+<p>Pipelines can include model definitions, training, evauluation and prediction actions which link models and pipelines.</p>
+<section id="model-class">
+<h2>Model class<a class="headerlink" href="#model-class" title="Link to this heading"></a></h2>
+<p>Models are defined in model classes. You can take ready to use architectures or write your own models.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow.models</span> <span class="kn">import</span> <span class="n">BaseModel</span>
+
+<span class="k">class</span> <span class="nc">MyModel</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="c1">#... do whatever you want</span>
+</pre></div>
+</div>
+</section>
+<section id="model-types">
+<h2>Model types<a class="headerlink" href="#model-types" title="Link to this heading"></a></h2>
+<p>There are two modes of model definition:</p>
+<ul class="simple">
+<li><p>static</p></li>
+<li><p>dynamic</p></li>
+</ul>
+<p>A static model is created when the pipeline is created, i.e. before it is executed.
+As a result, the model might have an access to the pipeline, its config and variables.</p>
+<p>A dynamic model is created during the pipeline’s execution, when some action uses the model the first time.
+Consequently, the model has an access to the pipeline and the very first batch thus allowing to create models adapting
+to batch size, content, shape and data types.</p>
+</section>
+<section id="adding-a-model-to-a-pipeline">
+<span id="init-a-model"></span><h2>Adding a model to a pipeline<a class="headerlink" href="#adding-a-model-to-a-pipeline" title="Link to this heading"></a></h2>
+<p>First of all, a model should be initialized:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">full_workflow</span> <span class="o">=</span> <span class="n">my_dataset</span><span class="o">.</span><span class="n">p</span>
+                          <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;static&#39;</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+                          <span class="o">...</span>
+</pre></div>
+</div>
+<p>In <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.init_model" title="batchflow.Pipeline.init_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">init_model()</span></code></a> you state a mode (<code class="docutils literal notranslate"><span class="pre">static</span></code> or <code class="docutils literal notranslate"><span class="pre">dynamic</span></code>), an optional short model name (otherwise, a class name will be used) and an optional configuration.
+A static model is initialized immediately in the <code class="docutils literal notranslate"><span class="pre">init_model</span></code>, while a dynamic model will be initialized when the pipeline is being run and the very first batch flows into the pipeline.</p>
+<p>If a model was already created in another pipeline, it might be <a class="reference external" href="#importing-models">imported</a>.</p>
+</section>
+<section id="configuring-a-model">
+<h2>Configuring a model<a class="headerlink" href="#configuring-a-model" title="Link to this heading"></a></h2>
+<p>More often than not models have many options and hyperparameters which define the model structure
+(e.g. number and types of layers for a neural network or a number and depth of trees for forests),
+as well as a training procedure (e.g. an optimization algorithm or regularization constants).</p>
+<p>Global options:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">build</span></code> : bool - whether to call <code class="docutils literal notranslate"><span class="pre">model.build(...)</span></code> to create a model. Default is <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">load</span></code> : dict - parameters for model loading from some storage. If present, a model will be loaded by calling <cite>self.load(**config[‘load’])</cite>.</p></li>
+</ul>
+<p>Loading usually requires some additional config parameters like paths, file names or file formats. Check the documentation for the model you use for more details.</p>
+<p>For some models only one of <code class="docutils literal notranslate"><span class="pre">build</span></code> or <code class="docutils literal notranslate"><span class="pre">load</span></code> should be specified. While other models might need a building phase even if a model is loaded from a disk.</p>
+<p>Read a model specification to know how to configure it.</p>
+<p>For flexibilty <code class="docutils literal notranslate"><span class="pre">config</span></code> might include so called <a class="reference internal" href="named_expr.html"><span class="doc">named expressions</span></a> which are defined by name but substitued with their actual values:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">B('name')</span></code> - a batch component or attribute</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">V('name')</span></code> - a pipeline variable</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">C('name')</span></code> - a pipeline config option</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">F(name)</span></code> - a function, method or any other callable</p></li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;images_shape&#39;</span><span class="p">,</span> <span class="p">[</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">])</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;mymodel&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;static&#39;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_shape&#39;</span><span class="p">:</span> <span class="n">V</span><span class="p">(</span><span class="s1">&#39;images_shape&#39;</span><span class="p">)})</span>
+
+<span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;shape_name&#39;</span><span class="p">,</span> <span class="s1">&#39;images_shape&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;mymodel&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;shape_name&#39;</span><span class="p">):</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;images_shape&#39;</span><span class="p">)})</span>
+
+<span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;mymodel&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_shape&#39;</span><span class="p">:</span> <span class="n">F</span><span class="p">(</span><span class="k">lambda</span> <span class="n">batch</span><span class="p">:</span> <span class="n">batch</span><span class="o">.</span><span class="n">images</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:])})</span>
+</pre></div>
+</div>
+</section>
+<section id="training-a-model">
+<h2>Training a model<a class="headerlink" href="#training-a-model" title="Link to this heading"></a></h2>
+<p>A train action should be stated after an initialization action:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">full_workflow</span> <span class="o">=</span> <span class="p">(</span><span class="n">my_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;static&#39;</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">),</span> <span class="n">y</span><span class="o">=</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;labels&#39;</span><span class="p">))</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.train_model" title="batchflow.Pipeline.train_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">train_model()</span></code></a> arguments might be specific to a particular model you use. So read a model specfication to find out what it expects for training.</p>
+<p>Model independent arguments are:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">make_data</span></code> - a function or method which takes a current batch and a model instance and returns a dict of arguments for <code class="docutils literal notranslate"><span class="pre">model.train(...)</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">save_to</span></code> - a location or a sequence of locations to store an output of <code class="docutils literal notranslate"><span class="pre">model.train</span></code> (if there any).
+Could be <a class="reference internal" href="named_expr.html"><span class="doc">a named expression</span></a>: <code class="docutils literal notranslate"><span class="pre">B(&quot;name&quot;)</span></code>, <code class="docutils literal notranslate"><span class="pre">C(&quot;name&quot;)</span></code> or <code class="docutils literal notranslate"><span class="pre">V(&quot;name&quot;)</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mode</span></code> - could be one of:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">'w'</span></code> or <code class="docutils literal notranslate"><span class="pre">'write'</span></code> to rewrite a location with a new value</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'a'</span></code> or <code class="docutils literal notranslate"><span class="pre">'append'</span></code> to append a value to a location (e.g. if a location is a list)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'e'</span></code> or <code class="docutils literal notranslate"><span class="pre">'extend'</span></code> to extend a location with a new value (e.g. if a location is a list and a value is a list too)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'u'</span></code> or <code class="docutils literal notranslate"><span class="pre">'update'</span></code> to update a location with a new value (e.g. if a location is a dict).</p></li>
+</ul>
+<p>For sets and dicts <code class="docutils literal notranslate"><span class="pre">'u'</span></code> and <code class="docutils literal notranslate"><span class="pre">'a'</span></code> do the same.</p>
+</li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">full_workflow</span> <span class="o">=</span> <span class="p">(</span><span class="n">my_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;static&#39;</span><span class="p">,</span> <span class="n">my_config</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;another_model&#39;</span><span class="p">,</span> <span class="n">AnotherModel</span><span class="p">,</span> <span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">another_config</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;current_loss&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;current_accuracy&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;loss_history&#39;</span><span class="p">,</span> <span class="n">init_on_each_run</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;loss&#39;</span><span class="p">,</span> <span class="s1">&#39;accuracy&#39;</span><span class="p">],</span> <span class="n">x</span><span class="o">=</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">),</span> <span class="n">y</span><span class="o">=</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;labels&#39;</span><span class="p">),</span>
+                 <span class="n">save_to</span><span class="o">=</span><span class="p">[</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;current_loss&#39;</span><span class="p">),</span> <span class="n">V</span><span class="p">(</span><span class="s1">&#39;current_accuracy&#39;</span><span class="p">)])</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="s1">&#39;another_model&#39;</span><span class="p">,</span> <span class="n">fetches</span><span class="o">=</span><span class="s1">&#39;loss&#39;</span><span class="p">,</span>
+                 <span class="n">feed_dict</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;x&#39;</span><span class="p">:</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">),</span> <span class="s1">&#39;y&#39;</span><span class="p">:</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;labels&#39;</span><span class="p">)},</span>
+                 <span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;loss_history&#39;</span><span class="p">),</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;append&#39;</span><span class="p">)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Here, parameters <code class="docutils literal notranslate"><span class="pre">output</span></code>, <code class="docutils literal notranslate"><span class="pre">x</span></code> and <code class="docutils literal notranslate"><span class="pre">y</span></code> are specific to <code class="docutils literal notranslate"><span class="pre">my_model</span></code>, while <code class="docutils literal notranslate"><span class="pre">fetches</span></code> and <code class="docutils literal notranslate"><span class="pre">feed_dict</span></code> are specific to <code class="docutils literal notranslate"><span class="pre">another_model</span></code>.</p>
+<p>You can also write an action which works with a model directly:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">train_linked_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_name</span><span class="p">):</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_model_by_name</span><span class="p">(</span><span class="n">model_name</span><span class="p">)</span>
+        <span class="o">...</span>
+
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">train_in_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_name</span><span class="p">):</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_model_by_name</span><span class="p">(</span><span class="n">model_name</span><span class="p">)</span>
+        <span class="o">...</span>
+
+
+<span class="n">full_workflow</span> <span class="o">=</span> <span class="p">(</span><span class="n">my_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;model-1&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;static&#39;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">my_config</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;model-2&#39;</span><span class="p">,</span> <span class="n">MyOtherModel</span><span class="p">,</span> <span class="n">dynamic</span><span class="s1">&#39;, config=some_config)</span>
+    <span class="o">.</span><span class="n">some_preprocessing</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">some_augmentation</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">train_in_batch</span><span class="p">(</span><span class="s1">&#39;model-1&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">train_linked_model</span><span class="p">(</span><span class="s1">&#39;model-2&#39;</span><span class="p">)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="predicting-with-a-model">
+<h2>Predicting with a model<a class="headerlink" href="#predicting-with-a-model" title="Link to this heading"></a></h2>
+<p><a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.predict_model" title="batchflow.Pipeline.predict_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">predict_model()</span></code></a> is very similar to <a class="reference external" href="#training-a-model">train_model</a> described above:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">full_workflow</span> <span class="o">=</span> <span class="p">(</span><span class="n">my_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;my-model&#39;</span><span class="p">,</span> <span class="s1">&#39;static&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;predicted_labels&#39;</span><span class="p">,</span> <span class="n">init_on_each_run</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">predict_model</span><span class="p">(</span><span class="s1">&#39;my-model&#39;</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">),</span> <span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;predicted_labels&#39;</span><span class="p">))</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Read a model specfication to find out what it needs for predicting and what its output is.</p>
+</section>
+<section id="loading-a-model">
+<span id="id1"></span><h2>Loading a model<a class="headerlink" href="#loading-a-model" title="Link to this heading"></a></h2>
+<p>A model can be loaded into a pipeline:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">some_pipeline</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">ResNet18</span><span class="p">,</span> <span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The parameters are the same as in <a class="reference internal" href="#init-a-model"><span class="std std-ref">the model initalization</span></a>.</p>
+<p>Note, that <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.load_model" title="batchflow.Pipeline.load_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_model()</span></code></a> just adds a loading action to the pipeline, but the actual loading
+will happen only when pipeline is being executed.</p>
+<p>Also take into account that <code class="docutils literal notranslate"><span class="pre">load_model</span></code> will be called at each iteration which might be desired or undesired depending
+on the specific circumstances.</p>
+<p>To load model only once before the pipeline is executed you might use <a class="reference internal" href="pipeline.html#after-pipeline"><span class="std std-ref">before</span></a> pipeline:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">some_pipeline</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">ResNet18</span><span class="p">,</span> <span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>There is also and imperative <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.load_model_now" title="batchflow.Pipeline.load_model_now"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_model_now()</span></code></a>, i.e. it loads a model immediately, and not when a pipeline is executed.
+Thus, it cannot be a part of a pipeline’s chain of actions. <code class="docutils literal notranslate"><span class="pre">load_model_now</span></code> is expected to be called in an action method or before a training
+or inference pipeline is run (e.g. before <a class="reference external" href="pipeline#running-pipelines">pipeline.run</a>).</p>
+</section>
+<section id="saving-a-model">
+<span id="id2"></span><h2>Saving a model<a class="headerlink" href="#saving-a-model" title="Link to this heading"></a></h2>
+<p>You can write a model to a persistent storage at any time by calling <code class="docutils literal notranslate"><span class="pre">save_model(...)</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">some_pipeline</span><span class="o">.</span><span class="n">save_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As usual, the first argument is a model name, while all other arguments are model specific, so read a model documentation
+to find out what parameters are required to save a model.</p>
+<p>Note, that <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.save_model" title="batchflow.Pipeline.save_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save_model()</span></code></a> just adds a saving action to the pipeline, but the actual saving
+will happen only when pipeline is being executed.</p>
+<p>Also take into account that <code class="docutils literal notranslate"><span class="pre">save_model</span></code> will be called at each iteration which might be desired or undesired depending
+on the specific circumstances.</p>
+<p>To save model only once after the pipeline you might use <a class="reference internal" href="pipeline.html#after-pipeline"><span class="std std-ref">after</span></a> pipeline:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">some_pipeline</span><span class="o">.</span><span class="n">after</span><span class="o">.</span><span class="n">save_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>There is also and imperative <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.save_model_now" title="batchflow.Pipeline.save_model_now"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save_model_now()</span></code></a>, i.e. it saves a model immediately, and not when a pipeline is executed.
+Thus, it cannot be a part of a pipeline’s chain of actions. <code class="docutils literal notranslate"><span class="pre">save_model_now</span></code> is expected to be called in an action method or after a training pipeline has finished
+(e.g. after <a class="reference external" href="pipeline#running-pipelines">pipeline.run</a>).</p>
+</section>
+<section id="models-and-template-pipelines">
+<h2>Models and template pipelines<a class="headerlink" href="#models-and-template-pipelines" title="Link to this heading"></a></h2>
+<p>A template pipeline is not linked to any dataset and thus it will never run. It might be used as a building block for more complex pipelines.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">template_pipeline</span> <span class="o">=</span> <span class="p">(</span><span class="n">Pipeline</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;m1&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;static&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;m2&#39;</span><span class="p">,</span> <span class="n">MyModel2</span><span class="p">,</span> <span class="s1">&#39;dynamic&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">prepocess</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">normalize</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="s1">&#39;m1&#39;</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="s1">&#39;m2&#39;</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Linking a pipeline to a dataset creates a new pipeline that can be run.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mnist_pipeline</span> <span class="o">=</span> <span class="p">(</span><span class="n">template_pipeline</span> <span class="o">&lt;&lt;</span> <span class="n">mnist_dataset</span><span class="p">)</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">cifar_pipeline</span> <span class="o">=</span> <span class="p">(</span><span class="n">template_pipeline</span> <span class="o">&lt;&lt;</span> <span class="n">cifar_dataset</span><span class="p">)</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Take into account, that a static model is created only once in the template_pipeline.
+But it will be used in each child pipeline with different datasets (which might be a good or bad thing).</p>
+<p>Whilst, a separate instance of a dynamic model will be created in each child pipeline.</p>
+</section>
+<section id="importing-models">
+<h2>Importing models<a class="headerlink" href="#importing-models" title="Link to this heading"></a></h2>
+<p>Models exist within pipelines. This is very convenient if a single pipeline includes everything: preprocessing,
+model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between
+pipelines. For instance, when you train a model in one pipeline and later use it in an inference pipeline.</p>
+<p>This can be easily achieved with a model import.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">train_pipeline</span> <span class="o">=</span> <span class="p">(</span><span class="n">images_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;model&#39;</span><span class="p">,</span> <span class="n">Resnet50</span><span class="p">,</span> <span class="s1">&#39;dynamic&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">random_rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="s1">&#39;model&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="n">inference_pipeline_template</span> <span class="o">=</span> <span class="p">(</span><span class="n">Pipeline</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">normalize</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">import_model</span><span class="p">(</span><span class="s1">&#39;model&#39;</span><span class="p">,</span> <span class="n">train_pipeline</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">predict_model</span><span class="p">(</span><span class="s1">&#39;model&#39;</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="o">...</span>
+
+<span class="n">infer</span> <span class="o">=</span> <span class="p">(</span><span class="n">inference_pipeline_template</span> <span class="o">&lt;&lt;</span> <span class="n">some_dataset</span><span class="p">)</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">INFER_BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>When <code class="docutils literal notranslate"><span class="pre">inference_pipeline_template</span></code> is run, the model <code class="docutils literal notranslate"><span class="pre">model</span></code> from <code class="docutils literal notranslate"><span class="pre">train_pipeline</span></code> will be imported.
+If you still have questions about import_model, search the answer in <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.import_model" title="batchflow.Pipeline.import_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">import_model()</span></code></a>.</p>
+</section>
+<section id="parallel-training">
+<h2>Parallel training<a class="headerlink" href="#parallel-training" title="Link to this heading"></a></h2>
+<p>If you <a class="reference internal" href="prefetch.html"><span class="doc">prefetch</span></a> with actions based on non-thread-safe models, you might encounter that your model
+hardly learns anything. The reason is that model variables might not update concurrently. To solve this problem a lock
+can be added to the train or predict method to allow for only one concurrent execution:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Pipeline</span><span class="p">()</span>
+<span class="o">...</span>
+<span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">B</span><span class="o">.</span><span class="n">images</span><span class="p">,</span> <span class="n">B</span><span class="o">.</span><span class="n">targets</span><span class="p">,</span> <span class="n">use_lock</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>By default, the lock is used during both train and predict methods.</p>
+</section>
+<section id="ready-to-use-models">
+<h2>Ready to use models<a class="headerlink" href="#ready-to-use-models" title="Link to this heading"></a></h2>
+<p>See documentation for <a class="reference internal" href="torch_models.html"><span class="doc">Torch models</span></a> and
+the list of <a class="reference internal" href="model_zoo.html"><span class="doc">implemented architectures</span></a>.</p>
+</section>
+<section id="model-metrics">
+<h2>Model metrics<a class="headerlink" href="#model-metrics" title="Link to this heading"></a></h2>
+<p>Module <a class="reference internal" href="../api/batchflow.models.metrics.html"><span class="doc">models.metrics</span></a> comes in handy to evaluate model performance.
+It contains many useful metrics (sensitivity, specificity, accuracy, false discovery rate and many others)
+for different scenarios (2-class and multiclass classification, pixel-wise and instance-wise semantic segmentation).</p>
+<p>Models can be evaluated in a one-shot manner when you pass <cite>targets</cite> and <cite>predictions</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">metrics</span> <span class="o">=</span> <span class="n">ClassificationMetrics</span><span class="p">(</span><span class="n">targets</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;labels&#39;</span><span class="p">)</span>
+<span class="n">metrics</span><span class="o">.</span><span class="n">evaluate</span><span class="p">([</span><span class="s1">&#39;sensitivity&#39;</span><span class="p">,</span> <span class="s1">&#39;specificity&#39;</span><span class="p">],</span> <span class="n">multiclass</span><span class="o">=</span><span class="s1">&#39;macro&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Or in a pipeline:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span> <span class="o">=</span> <span class="p">(</span><span class="n">test_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">init_variables</span><span class="p">([</span><span class="s1">&#39;metrics&#39;</span><span class="p">,</span> <span class="s1">&#39;inferred_masks&#39;</span><span class="p">])</span>
+    <span class="o">.</span><span class="n">import_model</span><span class="p">(</span><span class="s1">&#39;unet&#39;</span><span class="p">,</span> <span class="n">train_pipeline</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">predict_model</span><span class="p">(</span><span class="s1">&#39;unet&#39;</span><span class="p">,</span> <span class="n">fetches</span><span class="o">=</span><span class="s1">&#39;predictions&#39;</span><span class="p">,</span> <span class="n">feed_dict</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;x&#39;</span><span class="p">:</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">)},</span>
+                   <span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;inferred_masks&#39;</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">gather_metrics</span><span class="p">(</span><span class="n">SegmentationMetricsByPixels</span><span class="p">,</span> <span class="n">targets</span><span class="o">=</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;masks&#39;</span><span class="p">),</span> <span class="n">predictions</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;inferred_masks&#39;</span><span class="p">),</span>
+                    <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;proba&#39;</span><span class="p">,</span> <span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;metrics&#39;</span><span class="p">),</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;u&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="n">metrics</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">get_variable</span><span class="p">(</span><span class="s1">&#39;metrics&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">metrics</span><span class="o">.</span><span class="n">evaluate</span><span class="p">([</span><span class="s1">&#39;sensitivity&#39;</span><span class="p">,</span> <span class="s1">&#39;specificity&#39;</span><span class="p">]))</span>
+</pre></div>
+</div>
+<p>For more information about metrics see <a class="reference internal" href="../api/batchflow.models.metrics.html"><span class="doc">metrics API</span></a> and <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.gather_metrics" title="batchflow.Pipeline.gather_metrics"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gather_metrics()</span></code></a>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="prefetch.html" class="btn btn-neutral float-left" title="Inter-batch parallelism" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="torch_models.html" class="btn btn-neutral float-right" title="Torch models" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

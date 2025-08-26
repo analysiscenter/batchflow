@@ -1,0 +1,203 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A short introduction &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Classes and capabilities" href="classes.html" />
+    <link rel="prev" title="Welcome to BatchFlow documentation!" href="../index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">A short introduction</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/intro/intro.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="a-short-introduction">
+<h1>A short introduction<a class="headerlink" href="#a-short-introduction" title="Link to this heading"></a></h1>
+<section id="index">
+<h2>Index<a class="headerlink" href="#index" title="Link to this heading"></a></h2>
+<p>Index holds a sequence of data item ids. As a dataset is split into batches, you should have a mechanism to uniquely address each data item.
+In simple cases it can be just a <cite>numpy.arange</cite>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset_index</span> <span class="o">=</span> <span class="n">DatasetIndex</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">my_array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+</pre></div>
+</div>
+<p><cite>FilesIndex</cite> is helpful when your data comes from multiple files.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset_index</span> <span class="o">=</span> <span class="n">FilesIndex</span><span class="p">(</span><span class="s2">&quot;/path/to/files/*.png&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Most of the times creating an index in one line of code is all you need to do about a dataset index.</p>
+<p>For more details see <a class="reference internal" href="dsindex.html"><span class="doc">How to work with an Index</span></a>.</p>
+</section>
+<section id="dataset">
+<h2>Dataset<a class="headerlink" href="#dataset" title="Link to this heading"></a></h2>
+<p>A dataset consists of an index (1-d sequence with unique keys per each data item) and a batch class which processes small subsets of data.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client_ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="p">(</span><span class="n">dataset_index</span><span class="p">,</span> <span class="n">batch_class</span><span class="o">=</span><span class="n">Batch</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now you can iterate over sequential or random batches:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">batch</span> <span class="o">=</span> <span class="n">client_ds</span><span class="o">.</span><span class="n">next_batch</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You will rarely need anything than creating a dataset in one line of code,
+but you may always dig deeper into <a class="reference internal" href="dataset.html"><span class="doc">how to work with datasets</span></a>.</p>
+</section>
+<section id="batch">
+<h2>Batch<a class="headerlink" href="#batch" title="Link to this heading"></a></h2>
+<p>Batch class holds the data and contains processing functions.
+Normally, you never create batch instances, as they are created in the <cite>Dataset</cite> or <cite>Pipeline</cite> batch generators.</p>
+<p>See more info about <a class="reference internal" href="batch.html"><span class="doc">useful batch methods and actions and how to create your own batch class</span></a>.</p>
+</section>
+<section id="pipeline">
+<h2>Pipeline<a class="headerlink" href="#pipeline" title="Link to this heading"></a></h2>
+<p>After a batch class is created, you can define a processing workflow for the whole dataset:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">my_pipeline</span> <span class="o">=</span> <span class="n">my_dataset</span><span class="o">.</span><span class="n">pipeline</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">some_processing</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">another_processing</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s1">&#39;/other/path&#39;</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>All the methods here (except <cite>run</cite>) are <a class="reference internal" href="batch.html"><span class="doc">actions from the batch class</span></a>.</p>
+<p>Now you are ready for a deeper immersion into <a class="reference internal" href="pipeline.html"><span class="doc">how to create, use and run pipelines</span></a>.</p>
+</section>
+<section id="within-batch-parallelism">
+<h2>Within-batch parallelism<a class="headerlink" href="#within-batch-parallelism" title="Link to this heading"></a></h2>
+<p>In order to accelerate data processing you can run batch methods in parallel:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow</span> <span class="kn">import</span> <span class="n">Batch</span><span class="p">,</span> <span class="n">inbatch_parallel</span><span class="p">,</span> <span class="n">action</span>
+
+<span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_fn&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_fn&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;threads&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="c1"># process just one item from the batch</span>
+        <span class="k">return</span> <span class="n">some_value</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="parallel.html"><span class="doc">How to make parallel methods</span></a>.</p>
+</section>
+<section id="inter-batch-parallelism">
+<h2>Inter-batch parallelism<a class="headerlink" href="#inter-batch-parallelism" title="Link to this heading"></a></h2>
+<p>To further increase pipeline performance and eliminate inter batch delays you may process several batches in parallel:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">some_pipeline</span><span class="o">.</span><span class="n">next_batch</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">prefetch</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The parameter <cite>prefetch</cite> defines how many additional batches will be processed in the background.</p>
+<p>See more indo about <a class="reference internal" href="prefetch.html"><span class="doc">prefetching</span></a>.</p>
+</section>
+<section id="models">
+<h2>Models<a class="headerlink" href="#models" title="Link to this heading"></a></h2>
+<p>Mostly, pipelines are needed to train machine learning models or predict using these models.</p>
+<p>See <a class="reference internal" href="models.html"><span class="doc">Working with models</span></a> to understand what a model is and how to use it within pipelines.</p>
+<p>There is a bunch of <a class="reference internal" href="model_zoo.html"><span class="doc">predefined models</span></a> which you can use out of the box.</p>
+</section>
+<section id="research">
+<h2>Research<a class="headerlink" href="#research" title="Link to this heading"></a></h2>
+<p>To perform multiple experiments with different parameters you can use <cite>Research</cite> class:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow.research</span> <span class="kn">import</span> <span class="n">Research</span>
+<span class="o">...</span>
+<span class="n">research</span> <span class="o">=</span> <span class="p">(</span><span class="n">Research</span><span class="p">()</span>
+            <span class="o">.</span><span class="n">add_pipeline</span><span class="p">(</span><span class="n">train_pipeline</span><span class="p">,</span> <span class="n">variables</span><span class="o">=</span><span class="s1">&#39;loss&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;train&#39;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">add_pipeline</span><span class="p">(</span><span class="n">test_pipeline</span><span class="p">,</span> <span class="n">variables</span><span class="o">=</span><span class="s1">&#39;accuracy&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;test&#39;</span><span class="p">,</span> <span class="n">import_model_from</span><span class="o">=</span><span class="s1">&#39;train&#39;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">add_grid_config</span><span class="p">(</span><span class="s1">&#39;model_class&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">VGG7</span><span class="p">,</span> <span class="n">VGG16</span><span class="p">],</span> <span class="s1">&#39;layout&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;cna&#39;</span><span class="p">,</span> <span class="s1">&#39;can&#39;</span><span class="p">])</span>
+            <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">n_reps</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">n_iters</span><span class="o">=</span><span class="mi">1000</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>See more indo about <a class="reference internal" href="research.html"><span class="doc">Research</span></a>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../index.html" class="btn btn-neutral float-left" title="Welcome to BatchFlow documentation!" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="classes.html" class="btn btn-neutral float-right" title="Classes and capabilities" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

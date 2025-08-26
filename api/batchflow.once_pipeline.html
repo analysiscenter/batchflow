@@ -1,0 +1,329 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Once pipeline &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Named expressions" href="batchflow.named_expressions.html" />
+    <link rel="prev" title="Pipeline" href="batchflow.pipeline.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="batchflow.html">API</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="batchflow.core.html">batchflow</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="batchflow.index.html">Index</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.dataset.html">Dataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.batch.html">Batch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.batch_image.html">ImagesBatch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.pipeline.html">Pipeline</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Once pipeline</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html">Named expressions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html">Sampler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html">Decorators</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.exceptions.html">Exceptions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.utils.html">Utilities</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.opensets.html">batchflow.opensets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.html">batchflow.models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html">batchflow.research</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="batchflow.html">API</a></li>
+          <li class="breadcrumb-item"><a href="batchflow.core.html">batchflow</a></li>
+      <li class="breadcrumb-item active">Once pipeline</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/batchflow.once_pipeline.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="once-pipeline">
+<h1>Once pipeline<a class="headerlink" href="#once-pipeline" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">OncePipeline</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pipeline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">namespaces</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline" title="Link to this definition"></a></dt>
+<dd><p>Pipeline that runs only once before or after the main pipeline</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.add_namespace">
+<span class="sig-name descname"><span class="pre">add_namespace</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">namespaces</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.add_namespace"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.add_namespace" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.concat">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">concat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pipe1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pipe2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.concat"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.concat" title="Link to this definition"></a></dt>
+<dd><p>Concatenate two pipelines</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.copy">
+<span class="sig-name descname"><span class="pre">copy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.copy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.copy" title="Link to this definition"></a></dt>
+<dd><p>Make a shallow copy of the dataset object</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.import_model">
+<span class="sig-name descname"><span class="pre">import_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.import_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.import_model" title="Link to this definition"></a></dt>
+<dd><p>Import a model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – a name with which the model is stored in this pipeline</p></li>
+<li><p><strong>source</strong> – a model or a pipeline to import from</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Import a given model instance:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">import_model</span><span class="p">(</span><span class="s1">&#39;my-model&#39;</span><span class="p">,</span> <span class="n">custom_resnet_model</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Import <cite>my-model</cite> from the pipeline:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">import_model</span><span class="p">(</span><span class="s1">&#39;my-model&#39;</span><span class="p">,</span> <span class="n">train_pipeline</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Import <cite>resnet</cite> model from <cite>train_pipeline</cite> and give it a name <cite>my-model</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">import_model</span><span class="p">(</span><span class="s1">&#39;my-model&#39;</span><span class="p">,</span> <span class="n">train_pipeline</span><span class="o">.</span><span class="n">m</span><span class="p">(</span><span class="s1">&#39;resnet&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.init_lock">
+<span class="sig-name descname"><span class="pre">init_lock</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'lock'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.init_lock"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.init_lock" title="Link to this definition"></a></dt>
+<dd><p>Create a lock as a pipeline variable</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<em>string</em>) – a lock name</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>self - in order to use it in the pipeline chains</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">pp</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">p</span><span class="o">.</span><span class="n">before</span>
+<span class="go">            .init_lock(&quot;model_update&quot;)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.init_model">
+<span class="sig-name descname"><span class="pre">init_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'dynamic'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.init_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.init_model" title="Link to this definition"></a></dt>
+<dd><p>Initialize a static or dynamic model by building or importing it</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – a name for the model (to refer to it later when training or infering).</p></li>
+<li><p><strong>model_class</strong> (<em>class</em><em> or </em><em>named expression</em>) – a model class (might also be specified in the config).</p></li>
+<li><p><strong>mode</strong> (<em>{'static'</em><em>, </em><em>'dynamic'}</em>) – model creation mode:
+- static - the model is created right now, during the pipeline definition
+- dynamic - the model is created at the first iteration when the pipeline is run (default)</p></li>
+<li><p><strong>config</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a><em> or </em><em>Config</em>) – (optional) model configurations parameters, where each key and value could be named expressions.</p></li>
+<li><p><strong>source</strong> – a model or a pipeline to import from</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Build a model:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;my-model&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;static&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Import a model:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;my-model&#39;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">train_pipeline</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Build a model with a config:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">before</span>
+  <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;images_shape&#39;</span><span class="p">,</span> <span class="p">[</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">])</span>
+  <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;static&#39;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_shape&#39;</span><span class="p">:</span> <span class="n">V</span><span class="p">(</span><span class="s1">&#39;images_shape&#39;</span><span class="p">)})</span>
+
+<span class="n">pipeline</span><span class="o">.</span><span class="n">before</span>
+  <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;shape_name&#39;</span><span class="p">,</span> <span class="s1">&#39;images_shape&#39;</span><span class="p">)</span>
+  <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">C</span><span class="p">(</span><span class="s1">&#39;model&#39;</span><span class="p">),</span> <span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;shape_name)&#39;</span><span class="p">:</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;images_shape&#39;</span><span class="p">)})</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.init_variable">
+<span class="sig-name descname"><span class="pre">init_variable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lock</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.init_variable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.init_variable" title="Link to this definition"></a></dt>
+<dd><p>Create a variable if not exists.
+If the variable exists, does nothing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>string</em>) – a name of the variable</p></li>
+<li><p><strong>default</strong> – an initial value for the variable set when pipeline is created</p></li>
+<li><p><strong>lock</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – whether to lock a variable before each update (default: True)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>self - in order to use it in the pipeline chains</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">pp</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">p</span><span class="o">.</span><span class="n">before</span>
+<span class="go">            .init_variable(&quot;iterations&quot;, default=0)</span>
+<span class="go">            .init_variable(&quot;accuracy&quot;)</span>
+<span class="go">            .init_variable(&quot;loss_history&quot;, [])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.load_model">
+<span class="sig-name descname"><span class="pre">load_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'dynamic'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.load_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.load_model" title="Link to this definition"></a></dt>
+<dd><p>Load a model</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.run" title="Link to this definition"></a></dt>
+<dd><p>Execute all actions</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.save_model">
+<span class="sig-name descname"><span class="pre">save_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.save_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.save_model" title="Link to this definition"></a></dt>
+<dd><p>Save a model</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.save_to">
+<span class="sig-name descname"><span class="pre">save_to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dst</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.save_to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.save_to" title="Link to this definition"></a></dt>
+<dd><p>Save a value of a given named expression lazily during pipeline execution</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dst</strong> (<a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression" title="batchflow.named_expr.NamedExpression"><em>NamedExpression</em></a><em> or </em><em>any data container</em>) – destination</p></li>
+<li><p><strong>value</strong> – an updating value, could be a value of any type or a named expression</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>self - in order to use it in the pipeline chains</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>This method does not change a value of the variable until the pipeline is run.
+So it should be used in pipeline definition chains only.
+<a class="reference internal" href="batchflow.utils.html#batchflow.save_data_to" title="batchflow.save_data_to"><code class="xref py py-func docutils literal notranslate"><span class="pre">save_data_to()</span></code></a> is imperative and may be used to change variable value within actions.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.once_pipeline.OncePipeline.update">
+<span class="sig-name descname"><span class="pre">update</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/once_pipeline.html#OncePipeline.update"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.once_pipeline.OncePipeline.update" title="Link to this definition"></a></dt>
+<dd><p>Update a value of a given named expression lazily during pipeline execution</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>expr</strong> (<a class="reference internal" href="batchflow.named_expressions.html#batchflow.named_expr.NamedExpression" title="batchflow.named_expr.NamedExpression"><em>NamedExpression</em></a>) – an expression</p></li>
+<li><p><strong>value</strong> – an updating value, could be a value of any type or a named expression</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>self - in order to use it in the pipeline chains</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>This method does not change a value of the variable until the pipeline is run.
+So it should be used in pipeline definition chains only.
+<code class="docutils literal notranslate"><span class="pre">set_variable</span></code> is imperative and may be used to change variable value within actions.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="batchflow.pipeline.html" class="btn btn-neutral float-left" title="Pipeline" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="batchflow.named_expressions.html" class="btn btn-neutral float-right" title="Named expressions" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

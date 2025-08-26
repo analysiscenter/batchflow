@@ -1,0 +1,453 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Torch models &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Models" href="../api/batchflow.models.torch.models.html" />
+    <link rel="prev" title="Working with models" href="models.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">A short introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes and capabilities</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="dsindex.html">Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html">Batch class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html">Batch class for handling images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html">Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html">Named expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html">Within batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="prefetch.html">Inter-batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html">Working with models</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Torch models</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/batchflow.models.torch.models.html">Models</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="research.html">Research</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_zoo.html">Model zoo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="classes.html">Classes and capabilities</a></li>
+      <li class="breadcrumb-item active">Torch models</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/intro/torch_models.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="torch-models">
+<h1>Torch models<a class="headerlink" href="#torch-models" title="Link to this heading"></a></h1>
+<section id="getting-started">
+<h2>Getting started<a class="headerlink" href="#getting-started" title="Link to this heading"></a></h2>
+<p>A model might be used for training or inference. In both cases you need to specify a model config and a pipeline.</p>
+<p>A typical minimal config includes <code class="docutils literal notranslate"><span class="pre">inputs</span></code> and <code class="docutils literal notranslate"><span class="pre">initial_block</span></code> sections:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">model_config</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;inputs&#39;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">images</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;shape&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">3</span><span class="p">)},</span>
+                   <span class="n">targets</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;classes&#39;</span><span class="p">:</span> <span class="mi">10</span><span class="p">}),</span>
+    <span class="s1">&#39;initial_block/inputs&#39;</span><span class="p">:</span> <span class="s1">&#39;images&#39;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>A minimal training pipeline consists of <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.init_model" title="batchflow.Pipeline.init_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">init_model()</span></code></a> and <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.train_model" title="batchflow.Pipeline.train_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">train_model()</span></code></a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span> <span class="o">=</span> <span class="n">my_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;loss&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">model_config</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">),</span> <span class="n">labels</span><span class="o">=</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;labels&#39;</span><span class="p">),</span> <span class="n">fetches</span><span class="o">=</span><span class="s1">&#39;loss&#39;</span><span class="p">,</span> <span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;loss&#39;</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To create an inference pipeline replace <code class="docutils literal notranslate"><span class="pre">train_model</span></code> with <a class="reference internal" href="../api/batchflow.pipeline.html#batchflow.Pipeline.predict_model" title="batchflow.Pipeline.predict_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">predict_model()</span></code></a>.</p>
+<p>A pipeline can also <code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code> a pretrained model which was previously <a class="reference internal" href="models.html#saving-a-model"><span class="std std-ref">saved</span></a> to a disk:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">model_config</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;build&#39;</span><span class="p">:</span> <span class="s1">&#39;first&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;load&#39;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s1">&#39;/path/to/model&#39;</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="n">pipeline</span> <span class="o">=</span> <span class="n">my_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;loss&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">model_config</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">predict_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">),</span> <span class="n">fetches</span><span class="o">=</span><span class="s1">&#39;predictions&#39;</span><span class="p">,</span> <span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;predictions&#39;</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that you can indicate through ‘build’ option whether a model needs to be created or updated by calling <code class="xref py py-meth docutils literal notranslate"><span class="pre">build()</span></code>.
+Most often than not ‘build’ should be <cite>False</cite> (which is a default value), but sometimes it might be convenient
+to create the model before loading or change it after loading.</p>
+<p>Specify <cite>build=’first’</cite> to create the graph and load a pretrained model afterwards.
+While <cite>build=True</cite> means that the model will be loaded first and after that <cite>model.build()</cite> will be executed thus allowing to change the model.</p>
+</section>
+<section id="model-structure">
+<h2>Model structure<a class="headerlink" href="#model-structure" title="Link to this heading"></a></h2>
+<p>A typical model comprises of</p>
+<ul class="simple">
+<li><p>initial_block</p></li>
+<li><p>body (which, in turn, might include blocks)</p></li>
+<li><p>head.</p></li>
+</ul>
+<p>This division might seem somewhat arbitrary, though, many modern networks follow it.</p>
+<section id="initial-block">
+<h3>initial_block<a class="headerlink" href="#initial-block" title="Link to this heading"></a></h3>
+<p>This block just transforms the raw inputs into more managable and initially preprocessed tensors.</p>
+<p>Some networks do not need this (like VGG). However, most network have 1 or 2 convolutional layers
+and sometimes also a max pooling layer with stride 2. These layers can be put into body, as well.
+But the initial block takes all irregular front layers, thus allowing for a regular body structure.</p>
+</section>
+<section id="body">
+<h3>body<a class="headerlink" href="#body" title="Link to this heading"></a></h3>
+<p>Body contains a repetitive structure of building blocks. Most networks (like VGG, ResNet and the likes) have a straight sequence of blocks, while others (e.g. UNet, LinkNet, RefineNet, ResNetAttention) look like graphs with many interconnections.</p>
+<p>Initial block’s output goes into body as inputs.
+And body’s output is a compressed representation (embedding) of the input tensors.
+It can later be used for various tasks: classification, regression, detection, etc.
+So <code class="docutils literal notranslate"><span class="pre">body</span></code> produces a task-independent embedding.</p>
+</section>
+<section id="block">
+<h3>block<a class="headerlink" href="#block" title="Link to this heading"></a></h3>
+<p>The network building block reflects the model’s unique logic and specific technology.</p>
+<p>Not surprisingly, many networks comprise different types of blocks, for example:</p>
+<ul class="simple">
+<li><p>UNet and LinkNet have encoder and decoder blocks</p></li>
+<li><p>Inception includes inception, reduction, and expanded blocks</p></li>
+<li><p>DenseNet have dense and transition blocks</p></li>
+<li><p>SqueezeNet alternates fire blocks with max-pooling.</p></li>
+</ul>
+<p>When creating a custom model you can have as many block types as you need, though aim to make them universal and reusable elsewhere.
+For instance, <code class="xref py py-class docutils literal notranslate"><span class="pre">LinkNet</span></code> and <code class="xref py py-class docutils literal notranslate"><span class="pre">GlobalConvolutionNetwork</span></code> use <code class="xref py py-class docutils literal notranslate"><span class="pre">ResNet</span></code> blocks.</p>
+</section>
+<section id="head">
+<h3>head<a class="headerlink" href="#head" title="Link to this heading"></a></h3>
+<p>It receives body’s output and produces a task-specific result, for instance, class logits for classification.
+The default head consists of one <code class="xref py py-class docutils literal notranslate"><span class="pre">ConvBlock</span></code>. So, by specifying a model’s config you can
+instantiate models for different tasks.</p>
+<p>Classification with 10 classes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">config</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="o">...</span>
+    <span class="s1">&#39;loss&#39;</span><span class="p">:</span> <span class="s1">&#39;ce&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;inputs&#39;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">images</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;shape&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">3</span><span class="p">)},</span>
+                   <span class="n">labels</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;classes&#39;</span><span class="p">:</span> <span class="mi">10</span><span class="p">})</span>
+    <span class="s1">&#39;initial_block/inputs&#39;</span><span class="p">:</span> <span class="s1">&#39;images&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;head&#39;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">layout</span><span class="o">=</span><span class="s1">&#39;cdV&#39;</span><span class="p">,</span> <span class="n">filters</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">dropout_rate</span><span class="o">=</span><span class="mf">.2</span><span class="p">),</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Regression:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">config</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="o">...</span>
+    <span class="s1">&#39;loss&#39;</span><span class="p">:</span> <span class="s1">&#39;mse&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;inputs&#39;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">heart_signals</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;shape&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">4000</span><span class="p">,</span> <span class="mi">1</span><span class="p">)},</span>
+                   <span class="n">targets</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;shape&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">})</span>
+    <span class="s1">&#39;initial_block/inputs&#39;</span><span class="p">:</span> <span class="s1">&#39;heart_signals&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;head&#39;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">layout</span><span class="o">=</span><span class="s1">&#39;df&#39;</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">dropout_rate</span><span class="o">=</span><span class="mf">.2</span><span class="p">),</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="how-to-configure-a-model">
+<h2>How to configure a model<a class="headerlink" href="#how-to-configure-a-model" title="Link to this heading"></a></h2>
+<p>Configuration options may vary between models. However, some parameters are available in many (if not all) models.</p>
+<section id="inputs">
+<h3>inputs<a class="headerlink" href="#inputs" title="Link to this heading"></a></h3>
+<p>Inputs section contains a description of model input data, its shapes, transformations needed and names of the resulting tensors.</p>
+<dl class="simple">
+<dt>Each input might have following parameters:</dt><dd><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">dtype</span></code><span class="classifier">str (by default ‘float32’)</span></dt><dd><p>data type</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">shape</span></code><span class="classifier">int or tuple / list</span></dt><dd><p>a tensor shape which includes the number of channels/classes and doesn’t include a batch size.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">classes</span></code><span class="classifier">array-like or int</span></dt><dd><p>an array of class labels if data labels are strings or just a number of classes</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p>Even though all parameters are optional, at least some of them should be specified for each input tensor.</p>
+<p>For instance, this config will create placeholders with the names <code class="docutils literal notranslate"><span class="pre">images</span></code> and <code class="docutils literal notranslate"><span class="pre">targets</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">model_config</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;inputs&#39;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">images</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;shape&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">3</span><span class="p">)},</span>
+                   <span class="n">targets</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;classes&#39;</span><span class="p">:</span> <span class="mi">10</span><span class="p">}),</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Later, names <code class="docutils literal notranslate"><span class="pre">images</span></code> and <code class="docutils literal notranslate"><span class="pre">targets</span></code> will be used to feed data into the model when training or predicting.
+Take into account that one-hot encoding is not required for labels when using cross-entropy loss as it is applied
+automatically. However, for custom losses one-hot encoding might be necessary.</p>
+<p>For more information on the configuration of the inputs, see <code class="xref py py-meth docutils literal notranslate"><span class="pre">_make_inputs()</span></code>.</p>
+</section>
+<section id="id1">
+<h3>initial block<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<p>Initial block specifies which inputs flow into the model to turn into prediction:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">model_config</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;initial_block/inputs&#39;</span><span class="p">:</span> <span class="s1">&#39;images&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>As the default initial block contains a <code class="xref py py-class docutils literal notranslate"><span class="pre">ConvBlock</span></code>, all its parameters might be also specfied in the config:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">model_config</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;initial_block&#39;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">layout</span><span class="o">=</span><span class="s1">&#39;cnap&#39;</span><span class="p">,</span> <span class="n">filters</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">strides</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+    <span class="s1">&#39;initial_block/inputs&#39;</span><span class="p">:</span> <span class="s1">&#39;images&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>So the configured initial block gets <cite>images</cite> tensor and applies a convolution with 7x7 kernel and stride 2.</p>
+<p>Initial block can also be specified as <cite>nn.Module</cite>.</p>
+<p>For <a class="reference internal" href="model_zoo_torch.html"><span class="doc">predefined models</span></a> an initial block has the default configuration according to the original paper.
+So you almost never need to redefine it.</p>
+<p>However, <code class="docutils literal notranslate"><span class="pre">initial_block/inputs</span></code> should always be specified.</p>
+</section>
+<section id="id2">
+<h3>body<a class="headerlink" href="#id2" title="Link to this heading"></a></h3>
+<p>Body is the main part of a model. Thus its configuration highly depends on the model structure and purpose.</p>
+<p>For instance, <code class="xref py py-class docutils literal notranslate"><span class="pre">ResNet</span></code> body config includes <code class="docutils literal notranslate"><span class="pre">block</span></code> section with specific residual block parameters. While <code class="xref py py-class docutils literal notranslate"><span class="pre">UNet</span></code> body contains <code class="docutils literal notranslate"><span class="pre">upsample</span></code> section which specifies the technique to resize tensors in a decoder part of the network.</p>
+<p>See the model documentation to find out how to configure its body.</p>
+<p>Body can be specified as <cite>nn.Module</cite> or a dict with parameters for a specific model.</p>
+</section>
+<section id="id3">
+<h3>head<a class="headerlink" href="#id3" title="Link to this heading"></a></h3>
+<p>For many models head is just another <code class="xref py py-class docutils literal notranslate"><span class="pre">ConvBlock</span></code>. So you may configure layout, the number of filters, dense layer units or other parameters. As usual, it is rarely needed for predefined models.</p>
+<p>Head can be specified as <cite>nn.Module</cite> or a dict with <code class="xref py py-class docutils literal notranslate"><span class="pre">ConvBlock</span></code> parameters.</p>
+</section>
+<section id="loss-learning-rate-decay-optimizer">
+<h3>Loss, learning rate decay, optimizer<a class="headerlink" href="#loss-learning-rate-decay-optimizer" title="Link to this heading"></a></h3>
+<p>These parameters might be defined in one of three formats:</p>
+<ul class="simple">
+<li><p>name</p></li>
+<li><p>tuple (name, args)</p></li>
+<li><p>dict {‘name’: name, …other args}</p></li>
+</ul>
+<p>where name might be one of:
+- short name (‘mse’, ‘ce’, ‘l1’, ‘cos’, ‘hinge’, ‘huber’, ‘logloss’, ‘dice’)
+- class name from <code class="docutils literal notranslate"><span class="pre">torch</span></code> (e.g. ‘L1Loss’ or ‘TripletMargin’)
+- callable.</p>
+<p>For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;loss&#39;</span><span class="p">:</span> <span class="s1">&#39;mse&#39;</span><span class="p">}</span>
+<span class="p">{</span><span class="s1">&#39;loss&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;KLDiv&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;reduction&#39;</span><span class="p">:</span> <span class="s1">&#39;none&#39;</span><span class="p">})</span>
+<span class="p">{</span><span class="s1">&#39;loss&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">MyCustomLoss</span><span class="p">,</span> <span class="s1">&#39;epsilon&#39;</span><span class="p">:</span> <span class="mf">1e-6</span><span class="p">}}</span>
+</pre></div>
+</div>
+<p>Available short names for losses: mse, ce, l1, cos, hinge, huber, logloss, dice.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;decay&#39;</span><span class="p">:</span> <span class="s1">&#39;exp&#39;</span><span class="p">}</span>
+<span class="p">{</span><span class="s1">&#39;decay&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;StepLR&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;steps_size&#39;</span><span class="p">:</span> <span class="mi">10000</span><span class="p">})}</span>
+<span class="p">{</span><span class="s1">&#39;decay&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">MyCustomDecay</span><span class="p">,</span> <span class="s1">&#39;decay_rate&#39;</span><span class="p">:</span> <span class="mf">.5</span><span class="p">}</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;optimizer&#39;</span><span class="p">:</span> <span class="s1">&#39;Adam&#39;</span><span class="p">}</span>
+<span class="p">{</span><span class="s1">&#39;optimizer&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;SparseAdam&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;lr&#39;</span><span class="p">:</span> <span class="mf">0.01</span><span class="p">})}</span>
+<span class="p">{</span><span class="s1">&#39;optimizer&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;Adagrad&#39;</span><span class="p">,</span> <span class="s1">&#39;initial_accumulator_value&#39;</span><span class="p">:</span> <span class="mf">0.01</span><span class="p">}</span>
+<span class="p">{</span><span class="s1">&#39;optimizer&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">MyCustomOptimizer</span><span class="p">,</span> <span class="n">momentum</span><span class="o">=</span><span class="mf">0.95</span><span class="p">}}</span>
+</pre></div>
+</div>
+<p>For more detail see <code class="xref py py-class docutils literal notranslate"><span class="pre">TorchModel</span></code> documentation.</p>
+</section>
+</section>
+<section id="how-to-write-a-custom-model">
+<h2>How to write a custom model<a class="headerlink" href="#how-to-write-a-custom-model" title="Link to this heading"></a></h2>
+<p>To begin with, take a look at <code class="xref py py-class docutils literal notranslate"><span class="pre">ConvBlock</span></code> to find out how to write complex networks in just one line of code.
+This block is a convenient building block for concise, yet very expressive neural networks.</p>
+<section id="the-simplest-case-you-should-avoid">
+<h3>The simplest case you should avoid<a class="headerlink" href="#the-simplest-case-you-should-avoid" title="Link to this heading"></a></h3>
+<p>Just redefine <code class="docutils literal notranslate"><span class="pre">body()</span></code> method.</p>
+<p>For example, let’s create a small fully convolutional network with 3 layers of 3x3 convolutions, batch normalization, dropout
+and a dense layer at the end:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow.models.torch</span> <span class="kn">import</span> <span class="n">TorchModel</span>
+<span class="kn">from</span> <span class="nn">batchflow.models.torch.layers</span> <span class="kn">import</span> <span class="n">ConvBlock</span>
+
+<span class="k">class</span> <span class="nc">MyModel</span><span class="p">(</span><span class="n">TorchModel</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">body</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">ConvBlock</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="s1">&#39;cna cna cna df&#39;</span><span class="p">,</span> <span class="n">filters</span><span class="o">=</span><span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">],</span> <span class="n">units</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                      <span class="n">dropout_rate</span><span class="o">=</span><span class="mf">.2</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">x</span>
+</pre></div>
+</div>
+<p>Despite simplicity, this approach is highly discouraged as:</p>
+<ul class="simple">
+<li><p>the model parameters are hard coded in the body</p></li>
+<li><p>the model cannot be configured within a pipeline</p></li>
+<li><p>the model does not allow model composition, i.e. using this model components in other models.</p></li>
+</ul>
+</section>
+<section id="the-right-way">
+<h3>The right way<a class="headerlink" href="#the-right-way" title="Link to this heading"></a></h3>
+<p>Here we split network configuration and network definition into separate methods:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow.models.torch</span> <span class="kn">import</span> <span class="n">TorchModel</span>
+<span class="kn">from</span> <span class="nn">batchflow.models.torch.layers</span> <span class="kn">import</span> <span class="n">ConvBlock</span>
+
+<span class="k">class</span> <span class="nc">MyModel</span><span class="p">(</span><span class="n">TorchModel</span><span class="p">):</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">TorchModel</span><span class="o">.</span><span class="n">default_config</span><span class="p">()</span>
+        <span class="n">config</span><span class="p">[</span><span class="s1">&#39;body&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">filters</span><span class="o">=</span><span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">],</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="s1">&#39;cna cna cna&#39;</span><span class="p">))</span>
+        <span class="n">config</span><span class="p">[</span><span class="s1">&#39;head&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">units</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="s1">&#39;df&#39;</span><span class="p">,</span> <span class="n">dropout_rate</span><span class="o">=</span><span class="mf">.2</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">config</span>
+
+    <span class="k">def</span> <span class="nf">build_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">build_config</span><span class="p">(</span><span class="n">names</span><span class="p">)</span>
+        <span class="n">config</span><span class="p">[</span><span class="s1">&#39;head/units&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">(</span><span class="s1">&#39;targets&#39;</span><span class="p">)</span>
+        <span class="n">config</span><span class="p">[</span><span class="s1">&#39;head/filters&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">(</span><span class="s1">&#39;targets&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">config</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">body</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">kwargs</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get_block_defaults</span><span class="p">(</span><span class="s1">&#39;body&#39;</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">ConvBlock</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">x</span>
+</pre></div>
+</div>
+<p>Note that <code class="docutils literal notranslate"><span class="pre">default_config</span></code> and <code class="docutils literal notranslate"><span class="pre">body</span></code> are <code class="docutils literal notranslate"><span class="pre">&#64;classmethods</span></code> now, which means that they might be called without
+instantiating a <code class="docutils literal notranslate"><span class="pre">MyModel</span></code> object.
+This is needed for model composition, e.g. when <code class="docutils literal notranslate"><span class="pre">MyModel</span></code> serves as a base network for an FCN or SSD network.</p>
+<p>On the other hand, <code class="docutils literal notranslate"><span class="pre">build_config</span></code> is an ordinary method, so it is called only when an instance of <code class="docutils literal notranslate"><span class="pre">MyModel</span></code> is created.</p>
+<p>Thus, <code class="docutils literal notranslate"><span class="pre">default_config</span></code> should contain all the constants which are totaly independent of the dataset
+and a specific task at hand, while <code class="docutils literal notranslate"><span class="pre">build_config</span></code> is intended to extract values from the dataset through pipeline’s configuration (for details see <a class="reference external" href="models#configuring-a-model">Configuring a model</a>).</p>
+<p>Now you can train the model with a simple pipeline:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">model_config</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;loss&#39;</span><span class="p">:</span> <span class="s1">&#39;ce&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;decay&#39;</span><span class="p">:</span> <span class="s1">&#39;exp&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;optimizer&#39;</span><span class="p">:</span> <span class="s1">&#39;Adam&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;inputs&#39;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">images</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;shape&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">3</span><span class="p">)},</span>
+                   <span class="n">labels</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;classes&#39;</span><span class="p">:</span> <span class="mi">10</span><span class="p">}),</span>
+    <span class="s1">&#39;initial_block/inputs&#39;</span><span class="p">:</span> <span class="s1">&#39;images&#39;</span>
+<span class="p">}</span>
+
+<span class="n">pipeline</span> <span class="o">=</span> <span class="n">my_dataset</span><span class="o">.</span><span class="n">p</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;loss_history&#39;</span><span class="p">,</span> <span class="n">init_on_each_run</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">model_config</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">),</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;labels&#39;</span><span class="p">),</span>
+                 <span class="n">fetches</span><span class="o">=</span><span class="s1">&#39;loss&#39;</span><span class="p">,</span> <span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;loss_history&#39;</span><span class="p">),</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;a&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To switch to a fully convolutional head with 3x3 convolutions and global average pooling,
+just add 1 line to the config:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">model_config</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="o">...</span>
+    <span class="s1">&#39;head/layout&#39;</span><span class="p">:</span> <span class="s1">&#39;cV&#39;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>As a result, the very same model class might be used</p>
+<ul class="simple">
+<li><p>in numerous scenarios</p></li>
+<li><p>with different configurations</p></li>
+<li><p>for various tasks</p></li>
+<li><p>with heterogenous data.</p></li>
+</ul>
+<p>Things worth mentioning:</p>
+<ol class="arabic simple">
+<li><p>Override <code class="xref py py-meth docutils literal notranslate"><span class="pre">initial_block()</span></code>, <code class="xref py py-meth docutils literal notranslate"><span class="pre">body()</span></code> and <code class="xref py py-meth docutils literal notranslate"><span class="pre">head()</span></code>, if needed.
+In many cases config is just enough to build a network without additional code writing.</p></li>
+<li><p>Input data and its parameters should be defined in configuration under <code class="docutils literal notranslate"><span class="pre">inputs</span></code> key.
+See <code class="xref py py-meth docutils literal notranslate"><span class="pre">TorchModel._make_inputs()</span></code> for details.</p></li>
+<li><p>You might want to use a convenient multidimensional <code class="xref py py-class docutils literal notranslate"><span class="pre">ConvBlock</span></code>,
+as well as other predefined layers from <code class="docutils literal notranslate"><span class="pre">batchflow.models.torch.layers</span></code>.
+Of course, you can use usual <a class="reference external" href="https://pytorch.org/docs/stable/nn.html">Torch layers</a>.</p></li>
+<li><p>In many cases there is no need to write a loss function, learning rate decay and optimizer
+as they might be defined through config.</p></li>
+<li><p>For a configured loss to work one of the inputs should have a name <code class="docutils literal notranslate"><span class="pre">targets</span></code> and
+the model output is considered <code class="docutils literal notranslate"><span class="pre">predictions</span></code>.
+They will be passed to a loss function.</p></li>
+</ol>
+</section>
+</section>
+<section id="ready-to-use-models">
+<h2>Ready to use models<a class="headerlink" href="#ready-to-use-models" title="Link to this heading"></a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/batchflow.models.torch.models.html">Models</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../api/batchflow.models.torch.base.html">TorchModel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/batchflow.models.torch.vgg.html">VGG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/batchflow.models.torch.resnet.html">ResNet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/batchflow.models.torch.unet.html">UNet</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="models.html" class="btn btn-neutral float-left" title="Working with models" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../api/batchflow.models.torch.models.html" class="btn btn-neutral float-right" title="Models" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

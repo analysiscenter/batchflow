@@ -1,0 +1,402 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Batch class &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Batch class for handling images" href="images_batch.html" />
+    <link rel="prev" title="Dataset" href="dataset.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">A short introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes and capabilities</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="dsindex.html">Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Batch class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html">Batch class for handling images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html">Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html">Named expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html">Within batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="prefetch.html">Inter-batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html">Working with models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html">Torch models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="research.html">Research</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_zoo.html">Model zoo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="classes.html">Classes and capabilities</a></li>
+      <li class="breadcrumb-item active">Batch class</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/intro/batch.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="batch-class">
+<h1>Batch class<a class="headerlink" href="#batch-class" title="Link to this heading"></a></h1>
+<p>Batch class holds the data and contains processing functions.
+Normally, you never create batch instances, as they are created in the <cite>Dataset</cite> or <cite>Pipeline</cite> batch generators.</p>
+<section id="index">
+<h2>Index<a class="headerlink" href="#index" title="Link to this heading"></a></h2>
+<p><cite>Batch</cite> class stores the <span class="xref std std-doc">index</span> of all data items which belong to the batch. You can access the index through <cite>self.index</cite> (it is an instance of <a class="reference internal" href="dsindex.html#datasetindex"><span class="std std-ref">DatasetIndex</span></a> or its child). The sequence of indices is also available as <cite>self.indices</cite>.</p>
+</section>
+<section id="data">
+<h2>Data<a class="headerlink" href="#data" title="Link to this heading"></a></h2>
+<p>The base <a class="reference internal" href="../api/batchflow.batch.html#batchflow.Batch" title="batchflow.Batch"><code class="xref py py-class docutils literal notranslate"><span class="pre">Batch</span></code></a> class has a private property <code class="xref py py-attr docutils literal notranslate"><span class="pre">_data</span></code> which you can use to store your data in. Just call <a class="reference internal" href="../api/batchflow.batch.html#batchflow.Batch.load" title="batchflow.Batch.load"><code class="xref py py-func docutils literal notranslate"><span class="pre">load()</span></code></a>. After that, you can access data through a public property <a class="reference internal" href="../api/batchflow.batch.html#batchflow.Batch.data" title="batchflow.Batch.data"><code class="xref py py-attr docutils literal notranslate"><span class="pre">data</span></code></a>. This approach allows to conceal an internal data structure and provides for a more convenient and (perhaps) more stable public interface to access the data.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">some_method</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">some_data</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>If your batch has <a class="reference internal" href="#components">components</a>, you might put only a few components:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">some_method</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">some_data</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;comp1&#39;</span><span class="p">,</span> <span class="s1">&#39;comp2&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>Even though this is just a convention and you are not obliged to use it, many predefined methods follow it, thus making your life a bit easier.</p>
+<section id="preloaded">
+<h3>preloaded<a class="headerlink" href="#preloaded" title="Link to this heading"></a></h3>
+<p>To fill in the batch with preloaded data you might initialize it with <cite>preloaded</cite> argument:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">batch</span> <span class="o">=</span> <span class="n">MyBatch</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">preloaded</span><span class="o">=</span><span class="n">data</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>So <a class="reference internal" href="../api/batchflow.batch.html#batchflow.Batch.data" title="batchflow.Batch.data"><code class="xref py py-attr docutils literal notranslate"><span class="pre">data</span></code></a> will contain data right after batch creation and you don’t need to call <a class="reference internal" href="../api/batchflow.batch.html#batchflow.Batch.load" title="batchflow.Batch.load"><code class="xref py py-func docutils literal notranslate"><span class="pre">load()</span></code></a> action.</p>
+<p>You also might initialize the whole dataset:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span> <span class="o">=</span> <span class="n">Dataset</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">batch_class</span><span class="o">=</span><span class="n">Mybatch</span><span class="p">,</span> <span class="n">preloaded</span><span class="o">=</span><span class="n">data</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Thus <code class="xref py py-func docutils literal notranslate"><span class="pre">gen_batch()</span></code> and <code class="xref py py-func docutils literal notranslate"><span class="pre">next_batch()</span></code> will automatically create batches that contain preloaded data.</p>
+<p>To put it simply, <cite>preloaded=data</cite> is roughly equivalent to <cite>batch.load(src=data)</cite>.</p>
+<p>See <a class="reference internal" href="../api/batchflow.batch.html#batchflow.Batch.load" title="batchflow.Batch.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a> for details.</p>
+</section>
+<section id="components">
+<span id="id1"></span><h3>components<a class="headerlink" href="#components" title="Link to this heading"></a></h3>
+<p>Not infrequently, the batch stores a more complex data structures, e.g. features and labels or images, masks, bounding boxes and labels. To work with these you might employ data components. Just define a property as follows:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="n">components</span> <span class="o">=</span> <span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="s1">&#39;masks&#39;</span><span class="p">,</span> <span class="s1">&#39;labels&#39;</span>
+</pre></div>
+</div>
+<p>And this allows you to address components to read and write data:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">image_5</span> <span class="o">=</span> <span class="n">batch</span><span class="o">.</span><span class="n">images</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>
+<span class="n">batch</span><span class="o">.</span><span class="n">images</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_image</span>
+<span class="n">label_k</span> <span class="o">=</span> <span class="n">batch</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">.</span><span class="n">labels</span>
+<span class="n">batch</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">masks</span> <span class="o">=</span> <span class="n">new_masks</span>
+</pre></div>
+</div>
+<p>Numerous methods take <code class="docutils literal notranslate"><span class="pre">components</span></code> parameters which allows to specify which components will be affected by the method.
+For instance, you can load components from different sources, or save components to disk, or apply some transformations
+(like resizing, zooming or rotating).</p>
+</section>
+</section>
+<section id="dataset">
+<h2>Dataset<a class="headerlink" href="#dataset" title="Link to this heading"></a></h2>
+<p>Each batch also refers to a dataset which it was created from - <cite>batch.dataset</cite>. However, note that while a batch travels through a pipeline it might be transformed beyond recognition,
+but the dataset reference does not change.</p>
+<p>Another way to access dataset attributes is to use <code class="xref py py-class docutils literal notranslate"><span class="pre">D</span></code>-expression.</p>
+</section>
+<section id="action-methods">
+<span id="actions"></span><h2>Action methods<a class="headerlink" href="#action-methods" title="Link to this heading"></a></h2>
+<p><cite>Action</cite>-methods form a public API of the batch class which is available in <a class="reference internal" href="pipeline.html"><span class="doc">pipelines</span></a>. If you operate directly with the batch class instances, you don’t need <cite>action</cite>-methods. However, pipelines provide the most convenient interface to process the whole dataset and to separate data processing steps and model training / validation cycles.</p>
+<p>In order to convert a batch class method to an action you add <cite>&#64;action</cite> decorator:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow</span> <span class="kn">import</span> <span class="n">Batch</span><span class="p">,</span> <span class="n">action</span>
+
+<span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># process your data</span>
+        <span class="k">return</span> <span class="bp">self</span>
+</pre></div>
+</div>
+<p>Take into account that an <cite>action</cite>-method should return an instance of some <cite>Batch</cite>-class: the very same one or some other class.
+If an <cite>action</cite> changes the instance’s data directly, it may simply return <cite>self</cite>.</p>
+</section>
+<section id="models-and-model-based-actions">
+<h2>Models and model-based actions<a class="headerlink" href="#models-and-model-based-actions" title="Link to this heading"></a></h2>
+<p>To get access to a model just call <code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_by_name()</span></code> within actions or ordinary batch class methods.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">train_my_model</span><span class="p">(</span><span class="n">model_name</span><span class="p">):</span>
+        <span class="n">my_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_model_by_name</span><span class="p">(</span><span class="n">model_name</span><span class="p">)</span>
+        <span class="n">my_model</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For more details see <a class="reference internal" href="models.html"><span class="doc">Working with models</span></a>.</p>
+</section>
+<section id="running-methods-in-parallel">
+<h2>Running methods in parallel<a class="headerlink" href="#running-methods-in-parallel" title="Link to this heading"></a></h2>
+<p>As a batch can be quite large it might make sense to parallel the computations. And it is pretty easy to do:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow</span> <span class="kn">import</span> <span class="n">Batch</span><span class="p">,</span> <span class="n">inbatch_parallel</span><span class="p">,</span> <span class="n">action</span>
+
+<span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_fn&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_fn&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;threads&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">):</span>
+        <span class="c1"># process just one item</span>
+        <span class="k">return</span> <span class="n">some_value</span>
+</pre></div>
+</div>
+<p>For further details see <a class="reference internal" href="parallel.html"><span class="doc">how to make parallel actions</span></a>.</p>
+</section>
+<section id="writing-your-own-batch">
+<h2>Writing your own Batch<a class="headerlink" href="#writing-your-own-batch" title="Link to this heading"></a></h2>
+<section id="constructor-should-include-args-and-kwargs">
+<h3>Constructor should include <cite>*args</cite> and <cite>*kwargs</cite><a class="headerlink" href="#constructor-should-include-args-and-kwargs" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">your_param1</span><span class="p">,</span> <span class="n">your_param2</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+        <span class="c1"># process your data</span>
+</pre></div>
+</div>
+<p>It is not so important if you are extremely careful when calling batch generators and parallelizing actions, so you are absolutly sure that a batch cannot get unexpected arguments.
+But usually it is just easier to add <cite>*args</cite> and <cite>*kwargs</cite> and have a guarantee that your program will not break or hang up (as it most likely will do if you do batch prefetching with multiprocessing).</p>
+</section>
+<section id="don-t-load-data-in-the-constructor">
+<h3>Don’t load data in the constructor<a class="headerlink" href="#don-t-load-data-in-the-constructor" title="Link to this heading"></a></h3>
+<p>The constructor should just intialize properties.
+<cite>Action</cite>-method <cite>load</cite> is the best place for reading data from files or other sources.</p>
+<p>So DON’T do this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">your_param1</span><span class="p">,</span> <span class="n">your_param2</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="o">...</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Instead DO that:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">your_param1</span><span class="p">,</span> <span class="n">your_param2</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+        <span class="o">...</span>
+
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="c1"># load data from source</span>
+        <span class="o">...</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="n">src</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+</pre></div>
+</div>
+</section>
+<section id="store-your-data-in-data-property">
+<h3>Store your data in <cite>_data</cite> property<a class="headerlink" href="#store-your-data-in-data-property" title="Link to this heading"></a></h3>
+<p>It is just a convenient convention which makes your life more consistent.</p>
+</section>
+<section id="use-components">
+<h3>Use components<a class="headerlink" href="#use-components" title="Link to this heading"></a></h3>
+<p>Quite often a batch contains several semantic data parts, like images and labels, or transactions and ther scores.
+For a more flexible data processing and covenient actions create data components. It takes just one line of code:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="n">components</span> <span class="o">=</span> <span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="s1">&#39;masks&#39;</span><span class="p">,</span> <span class="s1">&#39;labels&#39;</span>
+</pre></div>
+</div>
+<p>See above <a class="reference external" href="#components">for more details about components</a>.</p>
+</section>
+<section id="make-actions-whenever-possible">
+<h3>Make <cite>actions</cite> whenever possible<a class="headerlink" href="#make-actions-whenever-possible" title="Link to this heading"></a></h3>
+<p>If you create some method transforming batch data, you might want to call it as a step in a <a class="reference internal" href="pipeline.html"><span class="doc">Pipeline</span></a> processing the whole dataset.
+So make it an <cite>action</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">change_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">):</span>
+        <span class="c1"># process your data</span>
+        <span class="k">return</span> <span class="bp">self</span>
+</pre></div>
+</div>
+<p><cite>Actions</cite> should return an instance of some batch class.</p>
+</section>
+<section id="parallelize-everyting-you-can">
+<h3>Parallelize everyting you can<a class="headerlink" href="#parallelize-everyting-you-can" title="Link to this heading"></a></h3>
+<p>If you want a really fast data processing you can’t do without <cite>numba</cite> or <cite>cython</cite>.
+And don’t forget about input/output operations.
+For more details see <a class="reference internal" href="parallel.html"><span class="doc">how to make a parallel actions</span></a>.</p>
+</section>
+<section id="define-load-and-dump-action-methods">
+<h3>Define <cite>load</cite> and <cite>dump</cite> action-methods<a class="headerlink" href="#define-load-and-dump-action-methods" title="Link to this heading"></a></h3>
+<p><cite>load</cite> and <cite>dump</cite> allows for a convenient and managable data flow.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;raw&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;raw&#39;</span><span class="p">:</span>
+            <span class="o">...</span> <span class="c1"># load from a raw file</span>
+        <span class="k">elif</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;blosc&#39;</span><span class="p">:</span>
+            <span class="o">...</span> <span class="c1"># load from a blosc file</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">fmt</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;raw&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;raw&#39;</span><span class="p">:</span>
+            <span class="o">...</span> <span class="c1"># write self.data to a raw file</span>
+        <span class="k">elif</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;blosc&#39;</span><span class="p">:</span>
+            <span class="o">...</span> <span class="c1"># write self.data to a blosc file</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">dum</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">fmt</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+</pre></div>
+</div>
+<p>This lets you create explicit pipeline workflows:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">batch</span>
+   <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;/some/path&#39;</span><span class="p">,</span> <span class="s1">&#39;raw&#39;</span><span class="p">)</span>
+   <span class="o">.</span><span class="n">some_action</span><span class="p">(</span><span class="n">param1</span><span class="p">)</span>
+   <span class="o">.</span><span class="n">other_action</span><span class="p">(</span><span class="n">param2</span><span class="p">)</span>
+   <span class="o">.</span><span class="n">one_more_action</span><span class="p">()</span>
+   <span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="s1">&#39;/other/path&#39;</span><span class="p">,</span> <span class="s1">&#39;blosc&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="make-all-i-o-in-async-methods">
+<h3>Make all I/O in <cite>async</cite> methods<a class="headerlink" href="#make-all-i-o-in-async-methods" title="Link to this heading"></a></h3>
+<p>This is extremely important if you read batch data from many files.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;raw&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;raw&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">put_into_data</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_load_raw</span><span class="p">(</span><span class="n">src</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;blosc&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">put_into_data</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_load_blosc</span><span class="p">(</span><span class="n">src</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unknown format &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">fmt</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_io&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_io&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;async&#39;</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">_load_raw</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">full_path</span><span class="p">):</span>
+        <span class="c1"># load one data item from a raw format file</span>
+        <span class="k">return</span> <span class="n">loaded_item</span>
+
+    <span class="k">def</span> <span class="nf">_init_io</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="n">item_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">get_fullpath</span><span class="p">(</span><span class="n">item_id</span><span class="p">)]</span> <span class="k">for</span> <span class="n">item_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">_post_io</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">all_res</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">any_action_failed</span><span class="p">(</span><span class="n">all_res</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span><span class="s2">&quot;Could not load data.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">put_into_data</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">all_res</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span>
+</pre></div>
+</div>
+</section>
+<section id="make-all-i-o-in-async-methods-even-if-there-is-nothing-to-parallelize">
+<h3>Make all I/O in <cite>async</cite> methods even if there is nothing to parallelize<a class="headerlink" href="#make-all-i-o-in-async-methods-even-if-there-is-nothing-to-parallelize" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;run_once&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;async&#39;</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">read_some_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;raw&#39;</span><span class="p">):</span>
+        <span class="o">...</span>
+<span class="o">...</span>
+<span class="n">some_pipeline</span>
+    <span class="o">.</span><span class="n">do_whatever_you_want</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">read_some_data</span><span class="p">(</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">do_something_else</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Init-function <cite>run_once</cite> runs the decorated method once (so no parallelism whatsoever).
+Besides, the method does not receive any additional arguments, only those passed to it directly.
+However, an <cite>action</cite> defined as asynchronous will be waited for.
+You may define your own <cite>post</cite>-method in order to check the result and process the exceptions if they arise.</p>
+<section id="api">
+<h4>API<a class="headerlink" href="#api" title="Link to this heading"></a></h4>
+<p>See <a class="reference internal" href="../api/batchflow.batch.html"><span class="doc">Batch API</span></a>.</p>
+</section>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="dataset.html" class="btn btn-neutral float-left" title="Dataset" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="images_batch.html" class="btn btn-neutral float-right" title="Batch class for handling images" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,534 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Batch &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ImagesBatch" href="batchflow.batch_image.html" />
+    <link rel="prev" title="Dataset" href="batchflow.dataset.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="batchflow.html">API</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="batchflow.core.html">batchflow</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="batchflow.index.html">Index</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.dataset.html">Dataset</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Batch</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.batch_image.html">ImagesBatch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.pipeline.html">Pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.once_pipeline.html">Once pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html">Named expressions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html">Sampler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html">Decorators</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.exceptions.html">Exceptions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.utils.html">Utilities</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.opensets.html">batchflow.opensets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.html">batchflow.models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html">batchflow.research</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="batchflow.html">API</a></li>
+          <li class="breadcrumb-item"><a href="batchflow.core.html">batchflow</a></li>
+      <li class="breadcrumb-item active">Batch</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/batchflow.batch.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="batch">
+<h1>Batch<a class="headerlink" href="#batch" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.Batch">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pipeline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preloaded</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch" title="Link to this definition"></a></dt>
+<dd><p>The core Batch class</p>
+<p>Note, that if any method is wrapped with <cite>&#64;apply_parallel</cite> decorator
+than for inner calls (i.e. from other methods) should be used version
+of desired method with underscores. (For example, if there is a decorated
+<cite>method</cite> than you need to call <cite>_method_</cite> from inside of <cite>other_method</cite>).
+Same is applicable for all child classes of <a class="reference internal" href="#batchflow.Batch" title="batchflow.batch.Batch"><code class="xref py py-class docutils literal notranslate"><span class="pre">batch.Batch</span></code></a>.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.add_components">
+<span class="sig-name descname"><span class="pre">add_components</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">components</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.add_components"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.add_components" title="Link to this definition"></a></dt>
+<dd><p>Add new components</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>components</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a>) – new component names</p></li>
+<li><p><strong>init</strong> (<em>array-like</em>) – initial component data</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If a component or an attribute with the given name already exists</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.Batch.apply_defaults">
+<span class="sig-name descname"><span class="pre">apply_defaults</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'dst':</span> <span class="pre">None,</span> <span class="pre">'post':</span> <span class="pre">'_assemble',</span> <span class="pre">'src':</span> <span class="pre">None,</span> <span class="pre">'target':</span> <span class="pre">'threads'}</span></em><a class="headerlink" href="#batchflow.Batch.apply_defaults" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.apply_parallel">
+<span class="sig-name descname"><span class="pre">apply_parallel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">post</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'for'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">requires_rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng_seeds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.apply_parallel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.apply_parallel" title="Link to this definition"></a></dt>
+<dd><p>Apply a function to each item in the container, returned by <cite>init</cite>, and assemble results by <cite>post</cite>.
+Depending on the <cite>target</cite> parameter, different parallelization engines may be used: for, threads, MPC, async.</p>
+<dl>
+<dt>Roughly, under the hood we perform the following:</dt><dd><ul class="simple">
+<li><dl class="simple">
+<dt>compute parameters, individual for each worker. Currently, these are:</dt><dd><ul>
+<li><p><cite>p</cite> to indicate whether the function should be applied</p></li>
+<li><p>worker id and a seed for random generator, if required</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>call <cite>init</cite> function, which outputs a container of items, passed directly to the <cite>func</cite>.</p></li>
+</ul>
+<p>The simplest example is the <cite>init</cite> funciton that returns batch indices, and the function works off of each.
+- wrap the <cite>func</cite> call into parallelization engine of choice.
+- compute results of <cite>func</cite> calls for each item, returned by <cite>init</cite>
+- assemble results by <cite>post</cite> function, e.g. stack the obtained numpy arrays.</p>
+</dd>
+</dl>
+<p>In the simplest possible case of <cite>init=None</cite>, <cite>src=images</cite>, <cite>dst=images_transformed</cite>, <cite>post=None</cite>,
+this function is almost equivalent to:</p>
+<blockquote>
+<div><p>container = [func(item, <a href="#id1"><span class="problematic" id="id2">*</span></a>args, <a href="#id3"><span class="problematic" id="id4">**</span></a>kwargs) for item in self.images]
+self.images_transformed = container</p>
+</div></blockquote>
+<p>If <cite>src</cite> is a list and <cite>dst</cite> is a list, then this function is applied recursively to each pair of src, dst.
+If <cite>src</cite> is a tuple, then this tuple is used as a whole.
+This allows to make functions that work on multiple components.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>func</strong> (<em>callable</em>) – A function to apply to each item from the source.
+Should accept <cite>src</cite> and <cite>dst</cite> parameters, or be written in a way that accepts variable args.</p></li>
+<li><p><strong>target</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – <dl class="simple">
+<dt>Parallelization engine:</dt><dd><ul>
+<li><p>’f’, ‘for’ for executing each worker sequentially, like in a for-loop.</p></li>
+<li><p>’t’, ‘threads’ for using threads.</p></li>
+<li><p>’m’, ‘mpc’ for using processes. Note the bigger overhead for process initialization.</p></li>
+<li><p>’a’, ‘async’ for asynchronous execution.</p></li>
+</ul>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>init</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><em>callable</em><em> or </em><em>container</em>) – <p>Function to init data for individual workers: must return a container of items.</p>
+<p>If ‘data’, then use <cite>src</cite> components as the init.
+If other str, then must be a name of the attribute of the batch to use as the init.
+If callable or any previous returned a callable, then result of this callable is used as the init.
+Note that in the last case callable should accept <cite>src</cite> and <cite>dst</cite> parameters, and <cite>kwargs</cite> are also passed.
+If not any of the above, then the object is used directly, for example, np.ndarray.</p>
+</p></li>
+<li><p><strong>post</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> or </em><em>callable</em>) – Function to apply to the results of function evaluation on each item.
+Must accept <cite>src</cite> and <cite>dst</cite> parameters, as well as <cite>kwargs</cite>.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><em>sequence</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The source to get data from:
+- None
+- str - a component name, e.g. ‘images’ or ‘masks’
+- tuple or list of str - several component names
+- sequence - data as a numpy-array, data frame, etc</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> or </em><em>array</em>) – the destination to put the result in, can be:
+- None - in this case dst is set to be same as src
+- str - a component name, e.g. ‘images’ or ‘masks’
+- tuple or list of str, e.g. [‘images’, ‘masks’]
+If not provided, uses <cite>src</cite>.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em> or </em><em>None</em>) – Probability of applying func to an element in the batch.</p></li>
+<li><p><strong>requires_rng</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether the <cite>func</cite> requires RNG. Should be used for correctly initialized seeds for reproducibility.
+If True, then a pre-initialized RNG will be passed to the function call as <cite>rng</cite> keyword parameter.</p></li>
+<li><p><strong>args</strong> – Other parameters passed to <code class="docutils literal notranslate"><span class="pre">func</span></code>.</p></li>
+<li><p><strong>kwargs</strong> – Other parameters passed to <code class="docutils literal notranslate"><span class="pre">func</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>apply_parallel does the following (but in parallel):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">dst</span><span class="p">[</span><span class="n">item</span><span class="p">]</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="n">item</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><cite>apply_parallel(func, src=[‘images’, ‘masks’])</cite> is equal to
+<cite>apply_parallel(func, src=[‘images’, ‘masks’], dst=[‘images’, ‘masks’])</cite>,
+which in turn equals to two subsequent calls:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">images</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="n">images</span><span class="p">)</span>
+<span class="n">masks</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="n">masks</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>However, named expressions will be evaluated only once before the first call.</p>
+<p>Whereas <cite>apply_parallel(func, src=(‘images’, ‘masks’))</cite> (i.e. when <cite>src</cite> takes a tuple of component names,
+not the list as in the previous example) passes both components data into <cite>func</cite> simultaneously:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">images</span><span class="p">,</span> <span class="n">masks</span> <span class="o">=</span> <span class="n">func</span><span class="p">((</span><span class="n">images</span><span class="p">,</span> <span class="n">masks</span><span class="p">))</span>
+</pre></div>
+</div>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">apply_parallel</span><span class="p">(</span><span class="n">make_masks_fn</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;masks&#39;</span><span class="p">)</span>
+<span class="n">apply_parallel</span><span class="p">(</span><span class="n">apply_mask</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="s1">&#39;masks&#39;</span><span class="p">),</span> <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;images_with_masks&#39;</span><span class="p">)</span>
+<span class="n">apply_parallel</span><span class="p">(</span><span class="n">rotate</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="s1">&#39;masks&#39;</span><span class="p">],</span> <span class="n">dst</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="s1">&#39;masks&#39;</span><span class="p">],</span> <span class="n">p</span><span class="o">=</span><span class="mf">.2</span><span class="p">)</span>
+<span class="n">apply_parallel</span><span class="p">(</span><span class="n">MyBatch</span><span class="o">.</span><span class="n">some_static_method</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mf">.5</span><span class="p">)</span>
+<span class="n">apply_parallel</span><span class="p">(</span><span class="n">B</span><span class="o">.</span><span class="n">some_method</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="s1">&#39;features&#39;</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mf">.5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>TODO: move logic of applying <cite>post</cite> function from <cite>inbatch_parallel</cite> here, as well as remove <cite>use_self</cite> arg.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.Batch.array_of_nones">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">array_of_nones</span></span><a class="headerlink" href="#batchflow.Batch.array_of_nones" title="Link to this definition"></a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">NumPy</span></code> array with <code class="docutils literal notranslate"><span class="pre">None</span></code> values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>1-D ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.as_dataset">
+<span class="sig-name descname"><span class="pre">as_dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.as_dataset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.as_dataset" title="Link to this definition"></a></dt>
+<dd><p>Makes a new dataset from batch data</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset</strong> – an instance or a subclass of Dataset</p></li>
+<li><p><strong>copy</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – whether to copy batch data to allow for further inplace transformations</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>an instance of a class specified by <cite>dataset</cite> arg, preloaded with this batch data</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.Batch.components">
+<span class="sig-name descname"><span class="pre">components</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#batchflow.Batch.components" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.create_attrs">
+<span class="sig-name descname"><span class="pre">create_attrs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.create_attrs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.create_attrs" title="Link to this definition"></a></dt>
+<dd><p>Create attributes from kwargs</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.Batch.data">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">data</span></span><a class="headerlink" href="#batchflow.Batch.data" title="Link to this definition"></a></dt>
+<dd><p>tuple or named components - batch data</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.Batch.data_setter">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">data_setter</span></span><a class="headerlink" href="#batchflow.Batch.data_setter" title="Link to this definition"></a></dt>
+<dd><p>tuple or named components - batch data</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.Batch.dataset">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">dataset</span></span><a class="headerlink" href="#batchflow.Batch.dataset" title="Link to this definition"></a></dt>
+<dd><p>Dataset - a dataset the batch has been taken from</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.deepcopy">
+<span class="sig-name descname"><span class="pre">deepcopy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.deepcopy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.deepcopy" title="Link to this definition"></a></dt>
+<dd><p>Return a deep copy of the batch.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.do_nothing">
+<span class="sig-name descname"><span class="pre">do_nothing</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.do_nothing"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.do_nothing" title="Link to this definition"></a></dt>
+<dd><p>An empty action (might be convenient in complicated pipelines)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.dump">
+<span class="sig-name descname"><span class="pre">dump</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.dump"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.dump" title="Link to this definition"></a></dt>
+<dd><p>Save data to another array or a file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dst</strong> – a destination (e.g. an array or a file name)</p></li>
+<li><p><strong>fmt</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – a destination format, one of None, ‘blosc’, ‘csv’, ‘hdf5’, ‘feather’</p></li>
+<li><p><strong>components</strong> (<em>None</em><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – components to load</p></li>
+<li><p><strong>*args</strong> – other parameters are passed to format-specific writers</p></li>
+<li><p><strong>*kwargs</strong> – other parameters are passed to format-specific writers</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.from_data">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.from_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.from_data" title="Link to this definition"></a></dt>
+<dd><p>Create a batch from data given</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.get">
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">item</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">component</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.get"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.get" title="Link to this definition"></a></dt>
+<dd><p>Return an item from the batch or the component</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.get_attrs">
+<span class="sig-name descname"><span class="pre">get_attrs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.get_attrs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.get_attrs" title="Link to this definition"></a></dt>
+<dd><p>Return additional attrs as kwargs</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.get_errors">
+<span class="sig-name descname"><span class="pre">get_errors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">all_res</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.get_errors"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.get_errors" title="Link to this definition"></a></dt>
+<dd><p>Return a list of errors from a parallel action</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.Batch.indices">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">indices</span></span><a class="headerlink" href="#batchflow.Batch.indices" title="Link to this definition"></a></dt>
+<dd><p>numpy array - an array with the indices</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.Batch.items">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">items</span></span><a class="headerlink" href="#batchflow.Batch.items" title="Link to this definition"></a></dt>
+<dd><p>list - batch items</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.load">
+<span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.load" title="Link to this definition"></a></dt>
+<dd><p>Load data from another array or a file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>src</strong> – a source (e.g. an array or a file name)</p></li>
+<li><p><strong>fmt</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – a source format, one of None, ‘blosc’, ‘csv’, ‘hdf5’, ‘feather’</p></li>
+<li><p><strong>dst</strong> (<em>None</em><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – components to load <cite>src</cite> to</p></li>
+<li><p><strong>**kwargs</strong> – other parameters to pass to format-specific loaders</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Loading creates new components if necessary.</p>
+<p class="rubric">Examples</p>
+<p>Load data from a pandas dataframe’s columns into all batch components:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">batch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">dataframe</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Load data from dataframe’s columns <cite>features</cite> and <cite>labels</cite> into components <cite>features</cite> and <cite>labels</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">batch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">dataframe</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;features&#39;</span><span class="p">,</span> <span class="s1">&#39;labels&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Load a dataframe into a component <cite>features</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">batch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">dataframe</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;features&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Load data from a dict into components <cite>images</cite> and <cite>masks</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">batch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">images</span><span class="o">=</span><span class="n">images_array</span><span class="p">,</span> <span class="n">masks</span><span class="o">=</span><span class="n">masks_array</span><span class="p">),</span> <span class="n">dst</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="s1">&#39;masks&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Load data from a tuple into components <cite>images</cite> and <cite>masks</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">batch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="p">(</span><span class="n">images_array</span><span class="p">,</span> <span class="n">masks_array</span><span class="p">),</span> <span class="n">dst</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="s1">&#39;masks&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Load data from an array into a component <cite>images</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">batch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">images_array</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;images&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Load data from a CSV file columns into components <cite>features</cite> and <cite>labels</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">batch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;csv&#39;</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="s1">&#39;/path/to/file.csv&#39;</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;features&#39;</span><span class="p">,</span> <span class="s1">&#39;labels`), index_col=0)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.merge">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">merge</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batches</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.merge"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.merge" title="Link to this definition"></a></dt>
+<dd><p>Merge several batches to form a new batch of a given size</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>batches</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a><em> of </em><em>batches</em>)</p></li>
+<li><p><strong>batch_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em> or </em><em>None</em>) – if <cite>None</cite>, just merge all batches into one batch (the rest will be <cite>None</cite>),
+if <cite>int</cite>, then make one batch of <cite>batch_size</cite> and a batch with the rest of data.</p></li>
+<li><p><strong>components</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a><em> or </em><em>None</em>) – if <cite>None</cite>, all components from initial batches will be created,
+if <cite>str</cite> or <cite>tuple</cite>, then create these components in new batches.</p></li>
+<li><p><strong>batch_class</strong> (<a class="reference internal" href="#batchflow.Batch" title="batchflow.Batch"><em>Batch</em></a><em> or </em><em>None</em>) – if <cite>None</cite>, created batches will be of the same class as initial batch,
+if <cite>Batch</cite>, created batches will be of that class.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>batch, rest</strong></p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)">tuple</a> of two batches</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If component is <cite>None</cite> in some batches and not <cite>None</cite> in others.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.merge_component">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">merge_component</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">component</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.merge_component"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.merge_component" title="Link to this definition"></a></dt>
+<dd><p>Merge the same component data from several batches</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.Batch.pipeline">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">pipeline</span></span><a class="headerlink" href="#batchflow.Batch.pipeline" title="Link to this definition"></a></dt>
+<dd><p>Pipeline - a pipeline the batch is being used in</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.Batch.random">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">random</span></span><a class="headerlink" href="#batchflow.Batch.random" title="Link to this definition"></a></dt>
+<dd><p>A random number generator <a class="reference external" href="https://numpy.org/doc/stable/reference/random/generator.html#numpy.random.Generator" title="(in NumPy v2.3)"><code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.random.Generator</span></code></a>.
+Use it instead of <cite>np.random</cite> for reproducibility.</p>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.Batch.random_seed">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">random_seed</span></span><a class="headerlink" href="#batchflow.Batch.random_seed" title="Link to this definition"></a></dt>
+<dd><p>SeedSequence for random number generation</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.run_once">
+<span class="sig-name descname"><span class="pre">run_once</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.run_once"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.run_once" title="Link to this definition"></a></dt>
+<dd><p>Init function for no parallelism
+Useful for async action-methods (will wait till the method finishes)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.save">
+<span class="sig-name descname"><span class="pre">save</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.save"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.save" title="Link to this definition"></a></dt>
+<dd><p>Save batch data to a file (an alias for dump method)</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.Batch.size">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">size</span></span><a class="headerlink" href="#batchflow.Batch.size" title="Link to this definition"></a></dt>
+<dd><p>int - number of items in the batch</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.Batch.to_array">
+<span class="sig-name descname"><span class="pre">to_array</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">comp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype=&lt;class</span> <span class="pre">'numpy.float32'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels='last'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">**kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch.html#Batch.to_array"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.Batch.to_array" title="Link to this definition"></a></dt>
+<dd><p>Converts batch components to np.ndarray format</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>dtype</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> or </em><em>np.dtype</em>) – Data type</p></li>
+<li><p><strong>channels</strong> (<em>None</em><em>, </em><em>'first'</em><em> or </em><em>'last'</em>) – the dimension for channels axis</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="batchflow.dataset.html" class="btn btn-neutral float-left" title="Dataset" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="batchflow.batch_image.html" class="btn btn-neutral float-right" title="ImagesBatch" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

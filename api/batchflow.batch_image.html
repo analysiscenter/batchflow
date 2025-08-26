@@ -1,0 +1,1092 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ImagesBatch &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Pipeline" href="batchflow.pipeline.html" />
+    <link rel="prev" title="Batch" href="batchflow.batch.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="batchflow.html">API</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="batchflow.core.html">batchflow</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="batchflow.index.html">Index</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.dataset.html">Dataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.batch.html">Batch</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">ImagesBatch</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.pipeline.html">Pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.once_pipeline.html">Once pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html">Named expressions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html">Sampler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html">Decorators</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.exceptions.html">Exceptions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.utils.html">Utilities</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.opensets.html">batchflow.opensets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.html">batchflow.models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html">batchflow.research</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="batchflow.html">API</a></li>
+          <li class="breadcrumb-item"><a href="batchflow.core.html">batchflow</a></li>
+      <li class="breadcrumb-item active">ImagesBatch</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/batchflow.batch_image.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="imagesbatch">
+<h1>ImagesBatch<a class="headerlink" href="#imagesbatch" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ImagesBatch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pipeline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preloaded</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseImagesBatch</span></code></p>
+<p>Batch class for 2D images.</p>
+<p>Images are stored as numpy arrays of PIL.Image.</p>
+<p>PIL.Image has the following system of coordinates:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>                   <span class="n">X</span>
+  <span class="mi">0</span> <span class="o">--------------</span> <span class="o">&gt;</span>
+  <span class="o">|</span>
+  <span class="o">|</span>
+  <span class="o">|</span>  <span class="n">images</span><span class="s1">&#39;s pixels</span>
+  <span class="o">|</span>
+  <span class="o">|</span>
+<span class="n">Y</span> <span class="n">v</span>
+</pre></div>
+</div>
+<p>Pixel’s position is defined as (x, y)</p>
+<p>Note, that if any class method is wrapped with <cite>&#64;apply_parallel</cite> decorator
+than for inner calls (i.e. from other class methods) should be used version
+of desired method with underscores. (For example, if there is a decorated
+<cite>method</cite> than you need to call <cite>_method_</cite> from inside of <cite>other_method</cite>).
+Same is applicable for all child classes of <a class="reference internal" href="batchflow.batch.html#batchflow.Batch" title="batchflow.batch.Batch"><code class="xref py py-class docutils literal notranslate"><span class="pre">batch.Batch</span></code></a>.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.add">
+<span class="sig-name descname"><span class="pre">add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">term</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preserve_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.add" title="Link to this definition"></a></dt>
+<dd><p>Add term to each pixel.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>term</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><em>sequence</em>)</p></li>
+<li><p><strong>clip</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – whether to force image’s pixels to be in [0, 255] or [0, 1.]</p></li>
+<li><p><strong>preserve_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether to preserve <code class="docutils literal notranslate"><span class="pre">dtype</span></code> of transformed images.
+If <code class="docutils literal notranslate"><span class="pre">False</span></code> is given then the resulting type will be <code class="docutils literal notranslate"><span class="pre">np.float</span></code>.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.add_components">
+<span class="sig-name descname"><span class="pre">add_components</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">components</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.add_components" title="Link to this definition"></a></dt>
+<dd><p>Add new components</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>components</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a>) – new component names</p></li>
+<li><p><strong>init</strong> (<em>array-like</em>) – initial component data</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If a component or an attribute with the given name already exists</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.additive_noise">
+<span class="sig-name descname"><span class="pre">additive_noise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preserve_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.additive_noise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.additive_noise" title="Link to this definition"></a></dt>
+<dd><p>Add additive noise to an image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>noise</strong> (<em>callable</em>) – Distribution. Must have <code class="docutils literal notranslate"><span class="pre">size</span></code> parameter.</p></li>
+<li><p><strong>clip</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – whether to force image’s pixels to be in [0, 255] or [0, 1.]</p></li>
+<li><p><strong>preserve_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether to preserve <code class="docutils literal notranslate"><span class="pre">dtype</span></code> of transformed images.
+If <code class="docutils literal notranslate"><span class="pre">False</span></code> is given then the resulting type will be <code class="docutils literal notranslate"><span class="pre">np.float</span></code>.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.apply_defaults">
+<span class="sig-name descname"><span class="pre">apply_defaults</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'dst':</span> <span class="pre">'images',</span> <span class="pre">'post':</span> <span class="pre">'_assemble',</span> <span class="pre">'src':</span> <span class="pre">'images',</span> <span class="pre">'target':</span> <span class="pre">'for'}</span></em><a class="headerlink" href="#batchflow.ImagesBatch.apply_defaults" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.apply_parallel">
+<span class="sig-name descname"><span class="pre">apply_parallel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">post</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'for'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">requires_rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng_seeds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.apply_parallel" title="Link to this definition"></a></dt>
+<dd><p>Apply a function to each item in the container, returned by <cite>init</cite>, and assemble results by <cite>post</cite>.
+Depending on the <cite>target</cite> parameter, different parallelization engines may be used: for, threads, MPC, async.</p>
+<dl>
+<dt>Roughly, under the hood we perform the following:</dt><dd><ul class="simple">
+<li><dl class="simple">
+<dt>compute parameters, individual for each worker. Currently, these are:</dt><dd><ul>
+<li><p><cite>p</cite> to indicate whether the function should be applied</p></li>
+<li><p>worker id and a seed for random generator, if required</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>call <cite>init</cite> function, which outputs a container of items, passed directly to the <cite>func</cite>.</p></li>
+</ul>
+<p>The simplest example is the <cite>init</cite> funciton that returns batch indices, and the function works off of each.
+- wrap the <cite>func</cite> call into parallelization engine of choice.
+- compute results of <cite>func</cite> calls for each item, returned by <cite>init</cite>
+- assemble results by <cite>post</cite> function, e.g. stack the obtained numpy arrays.</p>
+</dd>
+</dl>
+<p>In the simplest possible case of <cite>init=None</cite>, <cite>src=images</cite>, <cite>dst=images_transformed</cite>, <cite>post=None</cite>,
+this function is almost equivalent to:</p>
+<blockquote>
+<div><p>container = [func(item, <a href="#id1"><span class="problematic" id="id2">*</span></a>args, <a href="#id3"><span class="problematic" id="id4">**</span></a>kwargs) for item in self.images]
+self.images_transformed = container</p>
+</div></blockquote>
+<p>If <cite>src</cite> is a list and <cite>dst</cite> is a list, then this function is applied recursively to each pair of src, dst.
+If <cite>src</cite> is a tuple, then this tuple is used as a whole.
+This allows to make functions that work on multiple components.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>func</strong> (<em>callable</em>) – A function to apply to each item from the source.
+Should accept <cite>src</cite> and <cite>dst</cite> parameters, or be written in a way that accepts variable args.</p></li>
+<li><p><strong>target</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – <dl class="simple">
+<dt>Parallelization engine:</dt><dd><ul>
+<li><p>’f’, ‘for’ for executing each worker sequentially, like in a for-loop.</p></li>
+<li><p>’t’, ‘threads’ for using threads.</p></li>
+<li><p>’m’, ‘mpc’ for using processes. Note the bigger overhead for process initialization.</p></li>
+<li><p>’a’, ‘async’ for asynchronous execution.</p></li>
+</ul>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>init</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><em>callable</em><em> or </em><em>container</em>) – <p>Function to init data for individual workers: must return a container of items.</p>
+<p>If ‘data’, then use <cite>src</cite> components as the init.
+If other str, then must be a name of the attribute of the batch to use as the init.
+If callable or any previous returned a callable, then result of this callable is used as the init.
+Note that in the last case callable should accept <cite>src</cite> and <cite>dst</cite> parameters, and <cite>kwargs</cite> are also passed.
+If not any of the above, then the object is used directly, for example, np.ndarray.</p>
+</p></li>
+<li><p><strong>post</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> or </em><em>callable</em>) – Function to apply to the results of function evaluation on each item.
+Must accept <cite>src</cite> and <cite>dst</cite> parameters, as well as <cite>kwargs</cite>.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><em>sequence</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The source to get data from:
+- None
+- str - a component name, e.g. ‘images’ or ‘masks’
+- tuple or list of str - several component names
+- sequence - data as a numpy-array, data frame, etc</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> or </em><em>array</em>) – the destination to put the result in, can be:
+- None - in this case dst is set to be same as src
+- str - a component name, e.g. ‘images’ or ‘masks’
+- tuple or list of str, e.g. [‘images’, ‘masks’]
+If not provided, uses <cite>src</cite>.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em> or </em><em>None</em>) – Probability of applying func to an element in the batch.</p></li>
+<li><p><strong>requires_rng</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether the <cite>func</cite> requires RNG. Should be used for correctly initialized seeds for reproducibility.
+If True, then a pre-initialized RNG will be passed to the function call as <cite>rng</cite> keyword parameter.</p></li>
+<li><p><strong>args</strong> – Other parameters passed to <code class="docutils literal notranslate"><span class="pre">func</span></code>.</p></li>
+<li><p><strong>kwargs</strong> – Other parameters passed to <code class="docutils literal notranslate"><span class="pre">func</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>apply_parallel does the following (but in parallel):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">dst</span><span class="p">[</span><span class="n">item</span><span class="p">]</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="n">item</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><cite>apply_parallel(func, src=[‘images’, ‘masks’])</cite> is equal to
+<cite>apply_parallel(func, src=[‘images’, ‘masks’], dst=[‘images’, ‘masks’])</cite>,
+which in turn equals to two subsequent calls:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">images</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="n">images</span><span class="p">)</span>
+<span class="n">masks</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="n">masks</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>However, named expressions will be evaluated only once before the first call.</p>
+<p>Whereas <cite>apply_parallel(func, src=(‘images’, ‘masks’))</cite> (i.e. when <cite>src</cite> takes a tuple of component names,
+not the list as in the previous example) passes both components data into <cite>func</cite> simultaneously:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">images</span><span class="p">,</span> <span class="n">masks</span> <span class="o">=</span> <span class="n">func</span><span class="p">((</span><span class="n">images</span><span class="p">,</span> <span class="n">masks</span><span class="p">))</span>
+</pre></div>
+</div>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">apply_parallel</span><span class="p">(</span><span class="n">make_masks_fn</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;masks&#39;</span><span class="p">)</span>
+<span class="n">apply_parallel</span><span class="p">(</span><span class="n">apply_mask</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="s1">&#39;masks&#39;</span><span class="p">),</span> <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;images_with_masks&#39;</span><span class="p">)</span>
+<span class="n">apply_parallel</span><span class="p">(</span><span class="n">rotate</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="s1">&#39;masks&#39;</span><span class="p">],</span> <span class="n">dst</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="s1">&#39;masks&#39;</span><span class="p">],</span> <span class="n">p</span><span class="o">=</span><span class="mf">.2</span><span class="p">)</span>
+<span class="n">apply_parallel</span><span class="p">(</span><span class="n">MyBatch</span><span class="o">.</span><span class="n">some_static_method</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mf">.5</span><span class="p">)</span>
+<span class="n">apply_parallel</span><span class="p">(</span><span class="n">B</span><span class="o">.</span><span class="n">some_method</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="s1">&#39;features&#39;</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mf">.5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>TODO: move logic of applying <cite>post</cite> function from <cite>inbatch_parallel</cite> here, as well as remove <cite>use_self</cite> arg.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.array_of_nones">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">array_of_nones</span></span><a class="headerlink" href="#batchflow.ImagesBatch.array_of_nones" title="Link to this definition"></a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">NumPy</span></code> array with <code class="docutils literal notranslate"><span class="pre">None</span></code> values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>1-D ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.as_dataset">
+<span class="sig-name descname"><span class="pre">as_dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.as_dataset" title="Link to this definition"></a></dt>
+<dd><p>Makes a new dataset from batch data</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset</strong> – an instance or a subclass of Dataset</p></li>
+<li><p><strong>copy</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – whether to copy batch data to allow for further inplace transformations</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>an instance of a class specified by <cite>dataset</cite> arg, preloaded with this batch data</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.clip">
+<span class="sig-name descname"><span class="pre">clip</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">low</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">high</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">255</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.clip"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.clip" title="Link to this definition"></a></dt>
+<dd><p>Truncate image’s pixels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>low</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><em>sequence</em>) – Actual pixel’s value is equal max(value, low). If sequence is given, then its length must coincide
+with the number of channels in an image and each channel is thresholded separately</p></li>
+<li><p><strong>high</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><em>sequence</em>) – Actual pixel’s value is equal min(value, high). If sequence is given, then its length must coincide
+with the number of channels in an image and each channel is thresholded separately</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.components">
+<span class="sig-name descname"><span class="pre">components</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">('images',</span> <span class="pre">'labels',</span> <span class="pre">'masks')</span></em><a class="headerlink" href="#batchflow.ImagesBatch.components" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.create_attrs">
+<span class="sig-name descname"><span class="pre">create_attrs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.create_attrs" title="Link to this definition"></a></dt>
+<dd><p>Create attributes from kwargs</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.crop">
+<span class="sig-name descname"><span class="pre">crop</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">origin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">crop_boundaries</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.crop"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.crop" title="Link to this definition"></a></dt>
+<dd><p>Crop an image.</p>
+<p>Extract image data from the window of the size given by <cite>shape</cite> and placed at <cite>origin</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>origin</strong> (<em>sequence</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Location of the cropping box. See <a class="reference internal" href="#batchflow.batch_image.ImagesBatch._calc_origin" title="batchflow.batch_image.ImagesBatch._calc_origin"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ImagesBatch._calc_origin()</span></code></a> for details.</p></li>
+<li><p><strong>shape</strong> (<em>sequence</em>) – crop size in the form of (rows, columns)</p></li>
+<li><p><strong>crop_boundaries</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – If <cite>True</cite> then crop is got only from image’s area. Shape of the crop might diverge with the passed one</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Using ‘random’ origin with <cite>src</cite> as list with multiple elements will not result in same crop for each
+element, as origin will be sampled independently for each <cite>src</cite> element.
+To randomly sample same origin for a number of components, use <cite>R</cite> named expression for <cite>origin</cite> argument.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.cutout">
+<span class="sig-name descname"><span class="pre">cutout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">origin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">color</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.cutout"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.cutout" title="Link to this definition"></a></dt>
+<dd><p>Fills given areas with color</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>It is assumed that <code class="docutils literal notranslate"><span class="pre">origins</span></code>, <code class="docutils literal notranslate"><span class="pre">shapes</span></code> and <code class="docutils literal notranslate"><span class="pre">colors</span></code> have the same length.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>origin</strong> (<em>sequence</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Location of the cropping box. See <a class="reference internal" href="#batchflow.batch_image.ImagesBatch._calc_origin" title="batchflow.batch_image.ImagesBatch._calc_origin"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ImagesBatch._calc_origin()</span></code></a> for details.</p></li>
+<li><p><strong>shape</strong> (<em>sequence</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – <dl class="simple">
+<dt>Shape of a filled box. Can be one of:</dt><dd><ul>
+<li><p>sequence - crop size in the form of (rows, columns)</p></li>
+<li><p>int - shape has squared form</p></li>
+</ul>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>color</strong> (<em>sequence</em><em>, </em><em>number</em>) – <p>Color of a filled box. Can be one of:</p>
+<ul>
+<li><p>sequence - (r,g,b) form</p></li>
+<li><p>number - grayscale</p></li>
+</ul>
+</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Using ‘random’ origin with <cite>src</cite> as list with multiple elements will not result in same crop for each
+element, as origin will be sampled independently for each <cite>src</cite> element.
+To randomly sample same origin for a number of components, use <cite>R</cite> named expression for <cite>origin</cite> argument.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.data">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">data</span></span><a class="headerlink" href="#batchflow.ImagesBatch.data" title="Link to this definition"></a></dt>
+<dd><p>tuple or named components - batch data</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.data_setter">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">data_setter</span></span><a class="headerlink" href="#batchflow.ImagesBatch.data_setter" title="Link to this definition"></a></dt>
+<dd><p>tuple or named components - batch data</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.dataset">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">dataset</span></span><a class="headerlink" href="#batchflow.ImagesBatch.dataset" title="Link to this definition"></a></dt>
+<dd><p>Dataset - a dataset the batch has been taken from</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.deepcopy">
+<span class="sig-name descname"><span class="pre">deepcopy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.deepcopy" title="Link to this definition"></a></dt>
+<dd><p>Return a deep copy of the batch.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.do_nothing">
+<span class="sig-name descname"><span class="pre">do_nothing</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.do_nothing" title="Link to this definition"></a></dt>
+<dd><p>An empty action (might be convenient in complicated pipelines)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.dump">
+<span class="sig-name descname"><span class="pre">dump</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'images'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.dump" title="Link to this definition"></a></dt>
+<dd><p>Dump data.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If <cite>fmt=’images’</cite> than <code class="docutils literal notranslate"><span class="pre">dst</span></code> must be a single component (str).</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>All parameters must be named only.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><em>None</em>) – Path to the folder where to dump. If dst is None then path is determined from the index.</p></li>
+<li><p><strong>fmt</strong> (<em>{'image'</em><em>, </em><em>'blosc'</em><em>, </em><em>'csv'</em><em>, </em><em>'hdf5'</em><em>, </em><em>'feather'}</em>) – Format of the file to save.</p></li>
+<li><p><strong>components</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><em>sequence</em>) – Components to save.</p></li>
+<li><p><strong>ext</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Format to save images to.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.elastic_transform">
+<span class="sig-name descname"><span class="pre">elastic_transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.elastic_transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.elastic_transform" title="Link to this definition"></a></dt>
+<dd><p>Deformation of images as described by Simard, Steinkraus and Platt, <cite>Best Practices for Convolutional
+Neural Networks applied to Visual Document Analysis &lt;http://cognitivemedium.com/assets/rmnist/Simard.pdf&gt;_</cite>.</p>
+<p>Code slightly differs from <a class="reference external" href="https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a">https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>alpha</strong> (<em>number</em>) – maximum of vectors’ norms.</p></li>
+<li><p><strong>sigma</strong> (<em>number</em>) – Smooth factor.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.enhance">
+<span class="sig-name descname"><span class="pre">enhance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'hcbs'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1,</span> <span class="pre">1,</span> <span class="pre">1,</span> <span class="pre">1)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.enhance"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.enhance" title="Link to this definition"></a></dt>
+<dd><p>Apply enhancements from PIL.ImageEnhance to the image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>layout</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – defines layout of operations, default is <cite>hcbs</cite>:
+h - color
+c - contrast
+b - brightness
+s - sharpness</p></li>
+<li><p><strong>factor</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – factor of enhancement for each operation listed in <cite>layout</cite>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.filter">
+<span class="sig-name descname"><span class="pre">filter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.filter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.filter" title="Link to this definition"></a></dt>
+<dd><p>Filters an image. Calls <code class="docutils literal notranslate"><span class="pre">image.filter(getattr(PIL.ImageFilter,</span> <span class="pre">mode)(*args,</span> <span class="pre">**kwargs))</span></code>.</p>
+<p>For more details see <cite>ImageFilter &lt;http://pillow.readthedocs.io/en/stable/reference/ImageFilter.html&gt;_</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Name of the filter.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.flip">
+<span class="sig-name descname"><span class="pre">flip</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'lr'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.flip"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.flip" title="Link to this definition"></a></dt>
+<dd><p>Flips image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mode</strong> (<em>{'lr'</em><em>, </em><em>'ud'}</em>) – <ul>
+<li><p>‘lr’ - apply the left/right flip</p></li>
+<li><p>’ud’ - apply the upside/down flip</p></li>
+</ul>
+</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.from_data">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.from_data" title="Link to this definition"></a></dt>
+<dd><p>Create a batch from data given</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.get">
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">item</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">component</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.get" title="Link to this definition"></a></dt>
+<dd><p>Return an item from the batch or the component</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.get_attrs">
+<span class="sig-name descname"><span class="pre">get_attrs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.get_attrs" title="Link to this definition"></a></dt>
+<dd><p>Return additional attrs as kwargs</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.get_errors">
+<span class="sig-name descname"><span class="pre">get_errors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">all_res</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.get_errors" title="Link to this definition"></a></dt>
+<dd><p>Return a list of errors from a parallel action</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.image_shape">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">image_shape</span></span><a class="headerlink" href="#batchflow.ImagesBatch.image_shape" title="Link to this definition"></a></dt>
+<dd><p>tuple - shape of the image</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.indices">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">indices</span></span><a class="headerlink" href="#batchflow.ImagesBatch.indices" title="Link to this definition"></a></dt>
+<dd><p>numpy array - an array with the indices</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.invert">
+<span class="sig-name descname"><span class="pre">invert</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'all'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.invert"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.invert" title="Link to this definition"></a></dt>
+<dd><p>Invert givn channels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>channels</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><em>sequence</em>) – Indices of the channels to invert.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.items">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">items</span></span><a class="headerlink" href="#batchflow.ImagesBatch.items" title="Link to this definition"></a></dt>
+<dd><p>list - batch items</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.load">
+<span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.load" title="Link to this definition"></a></dt>
+<dd><p>Load data.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>if <cite>fmt=’images’</cite> than <code class="docutils literal notranslate"><span class="pre">components</span></code> must be a single component (str).</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>All parameters must be named only.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><em>None</em>) – Path to the folder with data. If src is None then path is determined from the index.</p></li>
+<li><p><strong>fmt</strong> (<em>{'image'</em><em>, </em><em>'blosc'</em><em>, </em><em>'csv'</em><em>, </em><em>'hdf5'</em><em>, </em><em>'feather'}</em>) – Format of the file to download.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><em>sequence</em>) – components to download.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.merge">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">merge</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batches</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.merge" title="Link to this definition"></a></dt>
+<dd><p>Merge several batches to form a new batch of a given size</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>batches</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a><em> of </em><em>batches</em>)</p></li>
+<li><p><strong>batch_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em> or </em><em>None</em>) – if <cite>None</cite>, just merge all batches into one batch (the rest will be <cite>None</cite>),
+if <cite>int</cite>, then make one batch of <cite>batch_size</cite> and a batch with the rest of data.</p></li>
+<li><p><strong>components</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a><em> or </em><em>None</em>) – if <cite>None</cite>, all components from initial batches will be created,
+if <cite>str</cite> or <cite>tuple</cite>, then create these components in new batches.</p></li>
+<li><p><strong>batch_class</strong> (<a class="reference internal" href="batchflow.batch.html#batchflow.Batch" title="batchflow.Batch"><em>Batch</em></a><em> or </em><em>None</em>) – if <cite>None</cite>, created batches will be of the same class as initial batch,
+if <cite>Batch</cite>, created batches will be of that class.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>batch, rest</strong></p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)">tuple</a> of two batches</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If component is <cite>None</cite> in some batches and not <cite>None</cite> in others.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.merge_component">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">merge_component</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">component</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.merge_component" title="Link to this definition"></a></dt>
+<dd><p>Merge the same component data from several batches</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.multiplicative_noise">
+<span class="sig-name descname"><span class="pre">multiplicative_noise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preserve_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.multiplicative_noise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.multiplicative_noise" title="Link to this definition"></a></dt>
+<dd><p>Add multiplicative noise to an image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>noise</strong> (<em>callable</em>) – Distribution. Must have <code class="docutils literal notranslate"><span class="pre">size</span></code> parameter.</p></li>
+<li><p><strong>clip</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – whether to force image’s pixels to be in [0, 255] or [0, 1.]</p></li>
+<li><p><strong>preserve_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether to preserve <code class="docutils literal notranslate"><span class="pre">dtype</span></code> of transformed images.
+If <code class="docutils literal notranslate"><span class="pre">False</span></code> is given then the resulting type will be <code class="docutils literal notranslate"><span class="pre">np.float</span></code>.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.multiply">
+<span class="sig-name descname"><span class="pre">multiply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multiplier</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preserve_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.multiply"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.multiply" title="Link to this definition"></a></dt>
+<dd><p>Multiply each pixel by the given multiplier.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>multiplier</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><em>sequence</em>)</p></li>
+<li><p><strong>clip</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – whether to force image’s pixels to be in [0, 255] or [0, 1.]</p></li>
+<li><p><strong>preserve_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether to preserve <code class="docutils literal notranslate"><span class="pre">dtype</span></code> of transformed images.
+If <code class="docutils literal notranslate"><span class="pre">False</span></code> is given then the resulting type will be <code class="docutils literal notranslate"><span class="pre">np.float</span></code>.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.pad">
+<span class="sig-name descname"><span class="pre">pad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.pad"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.pad" title="Link to this definition"></a></dt>
+<dd><p>Calls <code class="docutils literal notranslate"><span class="pre">PIL.ImageOps.expand</span></code>.</p>
+<p>For more details see <a class="reference external" href="http://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.expand">http://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.expand</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>offset</strong> (<em>sequence</em>) – Size of the borders in pixels. The order is (left, top, right, bottom).</p></li>
+<li><p><strong>mode</strong> (<em>{'const'</em><em>, </em><em>'wrap'}</em>) – Filling mode</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.pil_convert">
+<span class="sig-name descname"><span class="pre">pil_convert</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'L'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.pil_convert"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.pil_convert" title="Link to this definition"></a></dt>
+<dd><p>Convert image. Actually calls <code class="docutils literal notranslate"><span class="pre">image.convert(mode)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Pass ‘L’ to convert to grayscale</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.pipeline">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">pipeline</span></span><a class="headerlink" href="#batchflow.ImagesBatch.pipeline" title="Link to this definition"></a></dt>
+<dd><p>Pipeline - a pipeline the batch is being used in</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.posterize">
+<span class="sig-name descname"><span class="pre">posterize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.posterize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.posterize" title="Link to this definition"></a></dt>
+<dd><p>Posterizes image.</p>
+<p>More concretely, it quantizes pixels’ values so that they have``2^bits`` colors</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>bits</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – Number of bits used to store a color’s component.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.put_on_background">
+<span class="sig-name descname"><span class="pre">put_on_background</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">background</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">origin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.put_on_background"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.put_on_background" title="Link to this definition"></a></dt>
+<dd><p>Put an image on a background at given origin</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>background</strong> (<em>PIL.Image</em><em>, </em><em>np.ndarray</em><em> of </em><em>np.uint8</em>) – Blank background to put image on.</p></li>
+<li><p><strong>origin</strong> (<em>sequence</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Location of the cropping box. See <a class="reference internal" href="#batchflow.batch_image.ImagesBatch._calc_origin" title="batchflow.batch_image.ImagesBatch._calc_origin"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ImagesBatch._calc_origin()</span></code></a> for details.</p></li>
+<li><p><strong>mask</strong> (<em>None</em><em>, </em><em>PIL.Image</em><em>, </em><em>np.ndarray</em><em> of </em><em>np.uint8</em>) – mask passed to PIL.Image.paste</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Using ‘random’ origin with <cite>src</cite> as list with multiple elements will not result in same crop for each
+element, as origin will be sampled independently for each <cite>src</cite> element.
+To randomly sample same origin for a number of components, use <cite>R</cite> named expression for <cite>origin</cite> argument.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.random">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">random</span></span><a class="headerlink" href="#batchflow.ImagesBatch.random" title="Link to this definition"></a></dt>
+<dd><p>A random number generator <a class="reference external" href="https://numpy.org/doc/stable/reference/random/generator.html#numpy.random.Generator" title="(in NumPy v2.3)"><code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.random.Generator</span></code></a>.
+Use it instead of <cite>np.random</cite> for reproducibility.</p>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.random_seed">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">random_seed</span></span><a class="headerlink" href="#batchflow.ImagesBatch.random_seed" title="Link to this definition"></a></dt>
+<dd><p>SeedSequence for random number generation</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.resize">
+<span class="sig-name descname"><span class="pre">resize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.resize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.resize" title="Link to this definition"></a></dt>
+<dd><p>Calls <code class="docutils literal notranslate"><span class="pre">image.resize(*args,</span> <span class="pre">**kwargs)</span></code>.</p>
+<p>For more details see <cite>&lt;https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.resize&gt;_</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a>) – the resulting size of the image. If one of the components of tuple is None,
+corresponding dimension will be proportionally resized.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.rotate">
+<span class="sig-name descname"><span class="pre">rotate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.rotate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.rotate" title="Link to this definition"></a></dt>
+<dd><p>Rotates an image.</p>
+<blockquote>
+<div><p>kwargs are passed to PIL.Image.rotate</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>angle</strong> (<em>Number</em>) – In degrees counter clockwise.</p></li>
+<li><p><strong>resample</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – Interpolation order</p></li>
+<li><p><strong>expand</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether to expand the output to hold the whole image. Default is False.</p></li>
+<li><p><strong>center</strong> (<em>(</em><em>Number</em><em>, </em><em>Number</em><em>)</em>) – Center of rotation. Default is the center of the image.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.run_once">
+<span class="sig-name descname"><span class="pre">run_once</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.run_once" title="Link to this definition"></a></dt>
+<dd><p>Init function for no parallelism
+Useful for async action-methods (will wait till the method finishes)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.salt">
+<span class="sig-name descname"><span class="pre">salt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p_noise</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.015</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">color</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">255</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1,</span> <span class="pre">1)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.salt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.salt" title="Link to this definition"></a></dt>
+<dd><p>Set random pixel on image to givan value.</p>
+<p>Every pixel will be set to <code class="docutils literal notranslate"><span class="pre">color</span></code> value with probability <code class="docutils literal notranslate"><span class="pre">p_noise</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>p_noise</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of salting a pixel.</p></li>
+<li><p><strong>color</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><em>sequence</em><em>, </em><em>callable</em>) – <p>Color’s value.</p>
+<ul>
+<li><p>int, float, sequence – value of color</p></li>
+<li><p>callable – color is sampled for every chosen pixel (rules are the same as for int, float and sequence)</p></li>
+</ul>
+</p></li>
+<li><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><em>sequence</em><em> of </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><em>callable</em>) – <p>Size of salt</p>
+<ul>
+<li><p>int – square salt with side <code class="docutils literal notranslate"><span class="pre">size</span></code></p></li>
+<li><p>sequence – recangular salt in the form (row, columns)</p></li>
+<li><p>callable – size is sampled for every chosen pixel (rules are the same as for int and sequence)</p></li>
+</ul>
+</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.save">
+<span class="sig-name descname"><span class="pre">save</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.save" title="Link to this definition"></a></dt>
+<dd><p>Save batch data to a file (an alias for dump method)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.scale">
+<span class="sig-name descname"><span class="pre">scale</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">factor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preserve_shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">origin</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'center'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resample</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.scale"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.scale" title="Link to this definition"></a></dt>
+<dd><p>Scale the content of each image in the batch.</p>
+<p>Resulting shape is obtained as original_shape * factor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>factor</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><em>sequence</em>) – <p>resulting shape is obtained as original_shape * factor</p>
+<ul>
+<li><p>float - scale all axes with the given factor</p></li>
+<li><p>sequence (factor_1, factort_2, …) - scale each axis with the given factor separately</p></li>
+</ul>
+</p></li>
+<li><p><strong>preserve_shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – whether to preserve the shape of the image after scaling</p></li>
+<li><p><strong>origin</strong> (<em>array-like</em><em>, </em><em>{'center'</em><em>, </em><em>'top_left'</em><em>, </em><em>'top_right'</em><em>, </em><em>'bottom_left'</em><em>, </em><em>'bottom_right'</em><em>, </em><em>'random'}</em>) – <p>Relevant only if <cite>preserve_shape</cite> is True.
+If <cite>scale</cite> &lt; 1, defines position of the scaled image with respect to the original one’s shape.
+If <cite>scale</cite> &gt; 1, defines position of cropping box.</p>
+<p>Can be one of:</p>
+<ul>
+<li><p>’center’ - place the center of the input image on the center of the background and crop
+the input image accordingly.</p></li>
+<li><p>’top_left’ - place the upper-left corner of the input image on the upper-left of the background
+and crop the input image accordingly.</p></li>
+<li><p>’top_right’ - crop an image such that upper-right corners of
+an image and the cropping box coincide</p></li>
+<li><p>’bottom_left’ - crop an image such that lower-left corners of
+an image and the cropping box coincide</p></li>
+<li><p>’bottom_right’ - crop an image such that lower-right corners of
+an image and the cropping box coincide</p></li>
+<li><p>’random’ - place the upper-left corner of the input image on the randomly sampled position
+in the background. Position is sampled uniformly such that there is no need for cropping.</p></li>
+<li><p>array_like - sequence of ints or sequence of floats in [0, 1) interval;
+place the upper-left corner of the input image on the given position in the background.
+If <cite>origin</cite> is a sequence of floats in [0, 1), it defines a relative position
+of the origin in a valid region of image.</p></li>
+</ul>
+</p></li>
+<li><p><strong>resample</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – Parameter passed to PIL.Image.resize. Interpolation order</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Using ‘random’ option for origin with <cite>src</cite> as list with multiple elements will not result in same crop for each
+element, as origin will be sampled independently for each <cite>src</cite> element.
+To randomly sample same origin for a number of components, use <cite>R</cite> named expression for <cite>origin</cite> argument.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>self</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.shift">
+<span class="sig-name descname"><span class="pre">shift</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'const'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.shift"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.shift" title="Link to this definition"></a></dt>
+<dd><p>Shifts an image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>offset</strong> (<em>(</em><em>Number</em><em>, </em><em>Number</em><em>)</em>)</p></li>
+<li><p><strong>mode</strong> (<em>{'const'</em><em>, </em><em>'wrap'}</em>) – How to fill borders</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.size">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">size</span></span><a class="headerlink" href="#batchflow.ImagesBatch.size" title="Link to this definition"></a></dt>
+<dd><p>int - number of items in the batch</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.split_to_patches">
+<span class="sig-name descname"><span class="pre">split_to_patches</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patch_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_last</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'images'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.split_to_patches"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.split_to_patches" title="Link to this definition"></a></dt>
+<dd><p>Splits image to patches.</p>
+<p>Small images with the same shape (<code class="docutils literal notranslate"><span class="pre">patch_shape</span></code>) are cropped from the original one with stride <code class="docutils literal notranslate"><span class="pre">stride</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>patch_shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><em>sequence</em>) – Patch’s shape in the from (rows, columns). If int is given then patches have square shape.</p></li>
+<li><p><strong>stride</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><em>square</em>) – Step of the moving window from which patches are cropped. If int is given then the window has square shape.</p></li>
+<li><p><strong>drop_last</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether to drop patches whose window covers area out of the image.
+If False is passed then these patches are cropped from the edge of an image. See more in tutorials.</p></li>
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.to_array">
+<span class="sig-name descname"><span class="pre">to_array</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">comp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype=&lt;class</span> <span class="pre">'numpy.float32'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels='last'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">**kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#batchflow.ImagesBatch.to_array" title="Link to this definition"></a></dt>
+<dd><p>Converts batch components to np.ndarray format</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>dtype</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> or </em><em>np.dtype</em>) – Data type</p></li>
+<li><p><strong>channels</strong> (<em>None</em><em>, </em><em>'first'</em><em> or </em><em>'last'</em>) – the dimension for channels axis</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.to_pil">
+<span class="sig-name descname"><span class="pre">to_pil</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.to_pil"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.to_pil" title="Link to this definition"></a></dt>
+<dd><p>converts images in Batch to PIL format</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.ImagesBatch.transform">
+<span class="sig-name descname"><span class="pre">transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.ImagesBatch.transform" title="Link to this definition"></a></dt>
+<dd><p>Calls <code class="docutils literal notranslate"><span class="pre">image.transform(*args,</span> <span class="pre">**kwargs)</span></code>.</p>
+<p>For more information see
+<cite>&lt;http://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.transform&gt;_</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>src</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to get images from. Default is ‘images’.</p></li>
+<li><p><strong>dst</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Component to write images to. Default is ‘images’.</p></li>
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Probability of applying the transform. Default is 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.batch_image.ImagesBatch._calc_origin">
+<span class="sig-prename descclassname"><span class="pre">ImagesBatch.</span></span><span class="sig-name descname"><span class="pre">_calc_origin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">origin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">background_shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/batch_image.html#ImagesBatch._calc_origin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.batch_image.ImagesBatch._calc_origin" title="Link to this definition"></a></dt>
+<dd><p>Calculate coordinate of the input image with respect to the background.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image_shape</strong> (<em>sequence</em>) – shape of the input image.</p></li>
+<li><p><strong>origin</strong> (<em>array_like</em><em>, </em><em>sequence</em><em>, </em><em>{'center'</em><em>, </em><em>'top_left'</em><em>, </em><em>'top_right'</em><em>, </em><em>'bottom_left'</em><em>, </em><em>'bottom_right'</em><em>, </em><em>'random'}</em>) – <dl class="simple">
+<dt>Position of the input image with respect to the background. Can be one of:</dt><dd><ul>
+<li><p>’center’ - place the center of the input image on the center of the background and crop
+the input image accordingly.</p></li>
+<li><p>’top_left’ - place the upper-left corner of the input image on the upper-left of the background
+and crop the input image accordingly.</p></li>
+<li><p>’top_right’ - crop an image such that upper-right corners of
+an image and the cropping box coincide</p></li>
+<li><p>’bottom_left’ - crop an image such that lower-left corners of
+an image and the cropping box coincide</p></li>
+<li><p>’bottom_right’ - crop an image such that lower-right corners of
+an image and the cropping box coincide</p></li>
+<li><p>’random’ - place the upper-left corner of the input image on the randomly sampled position
+in the background. Position is sampled uniformly such that there is no need for cropping.</p></li>
+<li><p>other - sequence of ints or sequence of floats in [0, 1) interval;
+place the upper-left corner of the input image on the given position in the background.
+If <cite>origin</cite> is a sequence of floats in [0, 1), it defines a relative position of
+the origin in a valid region of image.</p></li>
+</ul>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>background_shape</strong> (<em>sequence</em>) – shape of the background image.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>sequence</strong></p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>calculated origin in the form (column, row)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="batchflow.batch.html" class="btn btn-neutral float-left" title="Batch" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="batchflow.pipeline.html" class="btn btn-neutral float-right" title="Pipeline" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

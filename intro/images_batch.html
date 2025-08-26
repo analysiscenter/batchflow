@@ -1,0 +1,417 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Batch class for handling images &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Pipeline" href="pipeline.html" />
+    <link rel="prev" title="Batch class" href="batch.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">A short introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes and capabilities</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="dsindex.html">Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html">Batch class</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Batch class for handling images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html">Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html">Named expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html">Within batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="prefetch.html">Inter-batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html">Working with models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html">Torch models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="research.html">Research</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_zoo.html">Model zoo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="classes.html">Classes and capabilities</a></li>
+      <li class="breadcrumb-item active">Batch class for handling images</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/intro/images_batch.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="batch-class-for-handling-images">
+<h1>Batch class for handling images<a class="headerlink" href="#batch-class-for-handling-images" title="Link to this heading"></a></h1>
+<p>ImagesBatch class handles 2D images and their labels. Images are stored as PIL.Image (usually) or np.ndarray.</p>
+<section id="components">
+<h2>Components<a class="headerlink" href="#components" title="Link to this heading"></a></h2>
+<p>The class has two components: <code class="docutils literal notranslate"><span class="pre">images</span></code> and <code class="docutils literal notranslate"><span class="pre">labels</span></code>.</p>
+</section>
+<section id="conversion-between-formats">
+<h2>Conversion between formats<a class="headerlink" href="#conversion-between-formats" title="Link to this heading"></a></h2>
+<p>Almost all actions in the batch work with <cite>PIL</cite> images. If dataset contains <cite>np.ndarray</cite> images, just call <a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.to_pil" title="batchflow.ImagesBatch.to_pil"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_pil</span></code></a> method to convert them inside batch.
+To convert images to <cite>np.ndarray</cite> use <a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.to_array" title="batchflow.ImagesBatch.to_array"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_array</span></code></a> (this might be needed, for example, before passing images to a model).</p>
+</section>
+<section id="augmentation">
+<h2>Augmentation<a class="headerlink" href="#augmentation" title="Link to this heading"></a></h2>
+<p>ImagesBatch provides typical augmentation actions, for example:</p>
+<ul>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.crop" title="batchflow.ImagesBatch.crop"><code class="xref py py-meth docutils literal notranslate"><span class="pre">crop</span></code></a> – crop rectangular area from an image</dt><dd><img alt="../_images/crop.png" src="../_images/crop.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.flip" title="batchflow.ImagesBatch.flip"><code class="xref py py-meth docutils literal notranslate"><span class="pre">flip</span></code></a> – flip an image (left to right or upside down)</dt><dd><img alt="../_images/flip.png" src="../_images/flip.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.scale" title="batchflow.ImagesBatch.scale"><code class="xref py py-meth docutils literal notranslate"><span class="pre">scale</span></code></a> – scale an image (stretch or tie)</dt><dd><img alt="../_images/scale.png" src="../_images/scale.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.put_on_background" title="batchflow.ImagesBatch.put_on_background"><code class="xref py py-meth docutils literal notranslate"><span class="pre">put_on_background</span></code></a> – put an image on a given background</dt><dd><img alt="../_images/put_on_background.png" src="../_images/put_on_background.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.resize" title="batchflow.ImagesBatch.resize"><code class="xref py py-meth docutils literal notranslate"><span class="pre">resize</span></code></a> – resize an image a to the given shape</dt><dd><img alt="../_images/resize.png" src="../_images/resize.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.pad" title="batchflow.ImagesBatch.pad"><code class="xref py py-meth docutils literal notranslate"><span class="pre">pad</span></code></a> – add constant values to the border of an image (enlarging the last’s shape)</dt><dd><img alt="../_images/pad.png" src="../_images/pad.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.invert" title="batchflow.ImagesBatch.invert"><code class="xref py py-meth docutils literal notranslate"><span class="pre">invert</span></code></a> – invert given channels in an image</dt><dd><img alt="../_images/invert.png" src="../_images/invert.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.salt" title="batchflow.ImagesBatch.salt"><code class="xref py py-meth docutils literal notranslate"><span class="pre">salt</span></code></a> – set pixels in random positions to given colour</dt><dd><img alt="../_images/salt.png" src="../_images/salt.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.clip" title="batchflow.ImagesBatch.clip"><code class="xref py py-meth docutils literal notranslate"><span class="pre">clip</span></code></a> – truncate pixels’ values</dt><dd><img alt="../_images/threshold.png" src="../_images/threshold.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.multiply" title="batchflow.ImagesBatch.multiply"><code class="xref py py-meth docutils literal notranslate"><span class="pre">multiply</span></code></a> – multiply an image by the given number</dt><dd><img alt="../_images/multiply.png" src="../_images/multiply.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.multiplicative_noise" title="batchflow.ImagesBatch.multiplicative_noise"><code class="xref py py-meth docutils literal notranslate"><span class="pre">multiplicative_noise</span></code></a> – add multiplicative noise to an image</dt><dd><img alt="../_images/multiplicative_noise.png" src="../_images/multiplicative_noise.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.add" title="batchflow.ImagesBatch.add"><code class="xref py py-meth docutils literal notranslate"><span class="pre">add</span></code></a> – add given term to an image</dt><dd><img alt="../_images/add.png" src="../_images/add.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.additive_noise" title="batchflow.ImagesBatch.additive_noise"><code class="xref py py-meth docutils literal notranslate"><span class="pre">additive_noise</span></code></a> – add additive noise an image</dt><dd><img alt="../_images/additive_noise.png" src="../_images/additive_noise.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.posterize" title="batchflow.ImagesBatch.posterize"><code class="xref py py-meth docutils literal notranslate"><span class="pre">posterize</span></code></a> – posterize an image</dt><dd><img alt="../_images/posterize.png" src="../_images/posterize.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.cutout" title="batchflow.ImagesBatch.cutout"><code class="xref py py-meth docutils literal notranslate"><span class="pre">cutout</span></code></a> – add colored rectangular areas to an image</dt><dd><img alt="../_images/cutout.png" src="../_images/cutout.png" />
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt><a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.elastic_transform" title="batchflow.ImagesBatch.elastic_transform"><code class="xref py py-meth docutils literal notranslate"><span class="pre">elastic_transform</span></code></a> – elastic deformation of images</dt><dd><img alt="../_images/elastic.png" src="../_images/elastic.png" />
+</dd>
+</dl>
+</li>
+</ul>
+<p>Perhaps, any function from scipy.ndimage is accesible as sp_&lt;method_name&gt;. Just use it as a usual action (without specifying input parameter). Note that they only works with scipy.ndarray and usually much slower than respective PIL methods.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>All these methods can be executed for randomly sampled images from a batch. You just need to specify <code class="docutils literal notranslate"><span class="pre">p</span></code> parameter when calling an action (probability of applying an action to an image).</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">R()</span></code> or <code class="docutils literal notranslate"><span class="pre">P(R())</span></code> <a class="reference internal" href="named_expr.html"><span class="doc">named expressions</span></a> to sample an argument for actions. In the first case the argument will be sampled for all images in a batch. If <code class="docutils literal notranslate"><span class="pre">P(R())</span></code> is passed then the argument will be sampled for each image.</p>
+</div>
+<p>Examples:</p>
+<p>All images in a batch are rotated by 10 degrees:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">...</span>
+<span class="p">(</span><span class="n">Pipeline</span><span class="p">()</span><span class="o">.</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>All images in a batch are rotated by the common angle sampled from the normal distribution</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">...</span>
+<span class="p">(</span><span class="n">Pipeline</span><span class="p">()</span><span class="o">.</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="n">R</span><span class="p">(</span><span class="s1">&#39;normal&#39;</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>Each image in a batch are rotated by its own sampled angle</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">...</span>
+<span class="p">(</span><span class="n">Pipeline</span><span class="p">()</span><span class="o">.</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="n">P</span><span class="p">(</span><span class="n">R</span><span class="p">(</span><span class="s1">&#39;normal&#39;</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mi">1</span><span class="p">)))</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>Rotate each image with probability 0.7 by its own sampled angle</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">...</span>
+<span class="p">(</span><span class="n">Pipeline</span><span class="p">()</span><span class="o">.</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="n">P</span><span class="p">(</span><span class="n">R</span><span class="p">(</span><span class="s1">&#39;normal&#39;</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mi">1</span><span class="p">)),</span> <span class="n">p</span><span class="o">=</span><span class="mf">0.7</span><span class="p">)</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>See more details in <a class="reference external" href="https://github.com/analysiscenter/batchflow/blob/master/examples/tutorials/06_image_augmentation.ipynb">the augmentation tutorial</a>.</p>
+</section>
+<section id="loading-from-files">
+<h2>Loading from files<a class="headerlink" href="#loading-from-files" title="Link to this heading"></a></h2>
+<p>To load images, use action <a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.load" title="batchflow.ImagesBatch.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load</span></code></a> with <code class="docutils literal notranslate"><span class="pre">fmt='image'</span></code>.</p>
+</section>
+<section id="saving">
+<h2>Saving<a class="headerlink" href="#saving" title="Link to this heading"></a></h2>
+<p>To dump images, use action <a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.dump" title="batchflow.ImagesBatch.dump"><code class="xref py py-meth docutils literal notranslate"><span class="pre">dump</span></code></a></p>
+</section>
+<section id="transform-actions-decorator">
+<h2><cite>transform_actions</cite> decorator<a class="headerlink" href="#transform-actions-decorator" title="Link to this heading"></a></h2>
+<p>This decorator finds all defined methods whose names start with user-defined <cite>suffix</cite> and <cite>prefix</cite> and
+decorates them with <code class="docutils literal notranslate"><span class="pre">wrapper</span></code> which is an argument too.</p>
+<dl class="simple">
+<dt>For example, there are two wrapper functions defined in <a class="reference internal" href="../api/batchflow.batch.html#batchflow.Batch" title="batchflow.Batch"><code class="xref py py-class docutils literal notranslate"><span class="pre">Batch</span></code></a>:</dt><dd><ol class="arabic simple">
+<li><p><code class="xref py py-meth docutils literal notranslate"><span class="pre">apply_transform_all()</span></code></p></li>
+<li><p><code class="xref py py-meth docutils literal notranslate"><span class="pre">apply_transform()</span></code></p></li>
+</ol>
+</dd>
+</dl>
+<p>And, by default, all methods that start with ‘_’ and end with ‘_’ are wrapped with the first mentioned method and those ones that start with ‘_’ and end with ‘_all’ are wrapped by the second one.</p>
+</section>
+<section id="defining-custom-actions">
+<h2>Defining custom actions<a class="headerlink" href="#defining-custom-actions" title="Link to this heading"></a></h2>
+<p>There are 3 ways to define an action:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>By writting a classic <code class="docutils literal notranslate"><span class="pre">action</span></code> like in  <a class="reference internal" href="../api/batchflow.batch.html#batchflow.Batch" title="batchflow.Batch"><code class="xref py py-class docutils literal notranslate"><span class="pre">Batch</span></code></a></p></li>
+<li><p>By writing a method that takes <code class="docutils literal notranslate"><span class="pre">image</span></code> as the first argument and returns transformed one. Method’s name must be surrounded by unary ‘_’.</p></li>
+<li><p>By writing a method that takes nd.array of <code class="docutils literal notranslate"><span class="pre">images</span></code> as the first argument and <code class="docutils literal notranslate"><span class="pre">indices</span></code> as the second. This method transforms <code class="docutils literal notranslate"><span class="pre">images[indices]</span></code> and returns <code class="docutils literal notranslate"><span class="pre">images</span></code>. Method’s name must start with ‘_’ and end with ‘_all’.</p></li>
+</ol>
+</div></blockquote>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>In the last two approaches, actual action’s name doesn’t include mentioned suffices and prefixes. For example, if you define method <code class="docutils literal notranslate"><span class="pre">_method_name_</span></code> then in a pipeline you should call <code class="docutils literal notranslate"><span class="pre">method_name</span></code>. For more details, see below.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Last two methods’ names must not be surrounded by double ‘_’ (like <cite>__init__</cite>) otherwise they will be ignored.</p>
+</div>
+<p>Let’s take a closer look on the two last approaches:</p>
+<section id="method-name">
+<h3><code class="docutils literal notranslate"><span class="pre">_method_name_</span></code><a class="headerlink" href="#method-name" title="Link to this heading"></a></h3>
+<p>It must have the following signature:</p>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">_method_name_(image,</span> <span class="pre">...)</span></code></p>
+</div></blockquote>
+<p>This method is actually wrapped with <code class="xref py py-meth docutils literal notranslate"><span class="pre">apply_transform()</span></code>. And (usually) executed in parallel for each image.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If you define these actions in a child class then you must decorate it with <code class="docutils literal notranslate"><span class="pre">&#64;transform_actions(prefix='_',</span> <span class="pre">suffix='_',</span> <span class="pre">wrapper='apply_transform')</span></code></p>
+</div>
+<p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@transform_actions</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="n">wrapper</span><span class="o">=</span><span class="s1">&#39;apply_transform&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">MyImagesBatch</span><span class="p">(</span><span class="n">ImagesBatch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">_flip_</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">mode</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Flips an image.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;lr&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageOps</span><span class="o">.</span><span class="n">mirror</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageOps</span><span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>To use this action in a pipeline you must write:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">...</span>
+<span class="p">(</span><span class="n">Pipeline</span><span class="p">()</span><span class="o">.</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s1">&#39;lr&#39;</span><span class="p">)</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Note that prefix ‘_’ and suffix ‘_’ are removed from the action’s name.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>All actions written in this way can be applied with given probability to every image. To achieve this, pass parameter <code class="docutils literal notranslate"><span class="pre">p</span></code> to an action, like <code class="docutils literal notranslate"><span class="pre">flip(mode='lr',</span> <span class="pre">p=0.5)</span></code></p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>These actions are performed for every image each in its own thread. To change it (for example, execute in asynchronous mode), pass parameter <cite>target</cite> (<code class="docutils literal notranslate"><span class="pre">.flip(mode='lr',</span> <span class="pre">target='a')</span></code>). For more detail, see <a class="reference internal" href="parallel.html"><span class="doc">parallel</span></a>.</p>
+</div>
+</section>
+<section id="method-name-all">
+<h3><code class="docutils literal notranslate"><span class="pre">_method_name_all</span></code><a class="headerlink" href="#method-name-all" title="Link to this heading"></a></h3>
+<p>It must have the following signature:</p>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">_method_name_all(images,</span> <span class="pre">indices,</span> <span class="pre">...)</span></code></p>
+</div></blockquote>
+<p>This method is actually wrapped with <code class="xref py py-meth docutils literal notranslate"><span class="pre">apply_transform_all()</span></code>. And executed once with the whole batch passed. <code class="docutils literal notranslate"><span class="pre">indices</span></code> parameter declares images that must be transformed (it is needed, for example, if you want to perform action only to the subset of the elements. See below for more details)</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If you define these actions in a child class then you must decorate it with <code class="docutils literal notranslate"><span class="pre">&#64;transform_actions(prefix='_',</span> <span class="pre">suffix='_all',</span> <span class="pre">wrapper='apply_transform_all')</span></code></p>
+</div>
+<p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@transform_actions</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="n">wrapper</span><span class="o">=</span><span class="s1">&#39;apply_transform_all&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">MyImagesBatch</span><span class="p">(</span><span class="n">ImagesBatch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">_flip_all</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">indices</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;lr&#39;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Flips images at given indices.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">for</span> <span class="n">ind</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">:</span>
+          <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;lr&#39;</span><span class="p">:</span>
+              <span class="n">images</span><span class="p">[</span><span class="n">ind</span><span class="p">]</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageOps</span><span class="o">.</span><span class="n">mirror</span><span class="p">(</span><span class="n">images</span><span class="p">[</span><span class="n">ind</span><span class="p">])</span>
+          <span class="n">images</span><span class="p">[</span><span class="n">ind</span><span class="p">]</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageOps</span><span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="n">images</span><span class="p">[</span><span class="n">ind</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">images</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>To use this action in a pipeline you must write:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">...</span>
+<span class="p">(</span><span class="n">Pipeline</span><span class="p">()</span><span class="o">.</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s1">&#39;lr&#39;</span><span class="p">)</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Note that prefix ‘_’ and suffix ‘_all’ are removed from the action’s name.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>All actions written in this way can be applied with given probability to every image. To achieve this, pass parameter <code class="docutils literal notranslate"><span class="pre">p</span></code> to an action, like <code class="docutils literal notranslate"><span class="pre">flip(mode='lr',</span> <span class="pre">p=0.5)</span></code></p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>These actions are performed once for all batch. Please note that you can’t pass <code class="docutils literal notranslate"><span class="pre">P(R())</span></code> named expression as an argument.</p>
+</div>
+</section>
+</section>
+<section id="assembling-after-parallel-execution">
+<h2>Assembling after parallel execution<a class="headerlink" href="#assembling-after-parallel-execution" title="Link to this heading"></a></h2>
+<p>Note that if images have different shapes after an action then there are two ways to tackle it:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>Do nothing. Then images will be stored in <cite>np.ndarray</cite> with <cite>dtype=object</cite>.</p></li>
+<li><p>Pass <cite>preserve_shape=True</cite> to an action which changes the shape of an image. Then image
+is cropped from the left upper corner (unless action has <cite>origin</cite> parameter).</p></li>
+</ol>
+</div></blockquote>
+</section>
+<section id="cropping-to-patches">
+<h2>Cropping to patches<a class="headerlink" href="#cropping-to-patches" title="Link to this heading"></a></h2>
+<p>If you have a very big image then you can compose little patches from it.
+See <a class="reference internal" href="../api/batchflow.batch_image.html#batchflow.ImagesBatch.split_to_patches" title="batchflow.ImagesBatch.split_to_patches"><code class="xref py py-meth docutils literal notranslate"><span class="pre">split_to_patches</span></code></a> and tutorial for more details.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="batch.html" class="btn btn-neutral float-left" title="Batch class" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pipeline.html" class="btn btn-neutral float-right" title="Pipeline" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

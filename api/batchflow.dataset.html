@@ -1,0 +1,538 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dataset &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Batch" href="batchflow.batch.html" />
+    <link rel="prev" title="Index" href="batchflow.index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="batchflow.html">API</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="batchflow.core.html">batchflow</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="batchflow.index.html">Index</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Dataset</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.batch.html">Batch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.batch_image.html">ImagesBatch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.pipeline.html">Pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.once_pipeline.html">Once pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html">Named expressions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.sampler.html">Sampler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html">Decorators</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.exceptions.html">Exceptions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.utils.html">Utilities</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.opensets.html">batchflow.opensets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.html">batchflow.models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html">batchflow.research</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="batchflow.html">API</a></li>
+          <li class="breadcrumb-item"><a href="batchflow.core.html">batchflow</a></li>
+      <li class="breadcrumb-item active">Dataset</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/batchflow.dataset.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="dataset">
+<h1>Dataset<a class="headerlink" href="#dataset" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<dl class="py class">
+<dt class="sig sig-object py">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_class=&lt;class</span> <span class="pre">'batchflow.batch.Batch'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preloaded=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cast_to_array=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">**kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>The Dataset holds an index of all data items
+(e.g. customers, transactions, etc)
+and a specific action class to process a small subset of data (batch).</p>
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">batch_class</span></span></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="batchflow.batch.html#batchflow.Batch" title="batchflow.Batch">Batch</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">index</span></span></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex" title="batchflow.DatasetIndex">DatasetIndex</a> or <a class="reference internal" href="batchflow.index.html#batchflow.FilesIndex" title="batchflow.FilesIndex">FilesIndex</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">indices</span></span></dt>
+<dd><p>an array with the indices</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>class:<cite>numpy.ndarray</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">p</span></span></dt>
+<dd><p>Actions which will be applied to this dataset</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline" title="batchflow.Pipeline">Pipeline</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">preloaded</span></span></dt>
+<dd><p>For small dataset it could be convenient to preload data at first</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>data-type</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">train</span></span></dt>
+<dd><p>The train part of this dataset. It appears after splitting</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dataset</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">test</span></span></dt>
+<dd><p>The test part of this dataset. It appears after splitting</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dataset</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">validation</span></span></dt>
+<dd><p>The validation part of this dataset. It appears after splitting</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dataset</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">CV</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset.CV"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Return a dataset which corresponds to the fold defined as NamedExpression</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<em class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_index</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">index</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset.build_index"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Check if instance of the index is DatasetIndex
+if it is not - create DatasetIndex from inputs</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>index</strong> (<a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex" title="batchflow.DatasetIndex"><em>DatasetIndex</em></a><em> or </em><em>any</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex" title="batchflow.DatasetIndex">DatasetIndex</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">calc_split</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shares</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.8</span></span></em><span class="sig-paren">)</span></dt>
+<dd><p>Calculate split into train, test and validation subsets</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>shares</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em> or </em><em>a sequence</em><em> of </em><em>floats</em>) – A share of train, test and validation subset respectively.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>a tuple which contains number of items in train, test and validation subsets</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – <ul class="simple">
+<li><p>if shares has more than 3 items
+    * if sum of shares is greater than 1
+    * if this set does not have enough items to split</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Split into train / test in 80/20 ratio</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">some_set</span><span class="o">.</span><span class="n">calc_split</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Split into train / test / validation in 60/30/10 ratio</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">some_set</span><span class="o">.</span><span class="n">calc_split</span><span class="p">([</span><span class="mf">0.6</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>Split into train / test / validation in 50/30/20 ratio</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">some_set</span><span class="o">.</span><span class="n">calc_split</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">copy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset.copy"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Make a shallow copy of the dataset object</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">create_attrs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset.create_attrs"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Create attributes from kwargs</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">create_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset.create_batch"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Create a batch from given indices.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>index</strong> (<a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex" title="batchflow.DatasetIndex"><em>DatasetIndex</em></a>) – Indices of dataset objects that should be included into batch</p></li>
+<li><p><strong>pos</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether <cite>index</cite> contains elements positions. Defaults to False</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="batchflow.batch.html#batchflow.Batch" title="batchflow.Batch">Batch</a></p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>If <cite>pos</cite> is <cite>False</cite>, then <cite>index</cite> should contain the indices
+that should be included in the batch, otherwise <cite>index</cite>
+should contain their positions in current index.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">create_subset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">index</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset.create_subset"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Create a dataset based on the given subset of indices</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>index</strong> (<a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex" title="batchflow.DatasetIndex"><em>DatasetIndex</em></a><em> or </em><em>np.array</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dataset</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#IndexError" title="(in Python v3.13)"><strong>IndexError</strong></a> – When a user wants to create a subset from source dataset it is necessary to be confident
+    that the index of new subset lies in the range of source dataset’s index.
+    If the index lies out of the source dataset index’s range, the IndexError is raised.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">cv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset.cv"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Return a dataset which corresponds to n-th CV split</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">cv_split</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'kfold'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_splits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shuffle</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset.cv_split"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Create datasets for cross-validation</p>
+<p>Datasets are available as <cite>cv0</cite>, <cite>cv1</cite> and so on. And they are already split into train and test parts.</p>
+<p>Another way to access these splits is <cite>train.cv0</cite>, <cite>train.cv1</cite>, …, <cite>test.cv0</cite>, <cite>test.cv1</cite>, …</p>
+<p>Note that each pair (e.g. <cite>cv0.train</cite> and <cite>train.cv0</cite>) refers to the very same instance of a dataset,
+i.e. if you change <cite>train.cv0</cite>, <cite>cv0.train</cite> will also change.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>method</strong> (<em>{'kfold'}</em>) – a splitting method (only <cite>kfold</cite> is supported)</p></li>
+<li><p><strong>n_splits</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – a number of folds</p></li>
+<li><p><strong>shuffle</strong> – specifies the order of items (see <a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex.shuffle" title="batchflow.DatasetIndex.shuffle"><code class="xref py py-meth docutils literal notranslate"><span class="pre">shuffle()</span></code></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span> <span class="o">=</span> <span class="n">Dataset</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">dataset</span><span class="o">.</span><span class="n">cv_split</span><span class="p">(</span><span class="n">n_splits</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">cv0</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">indices</span><span class="p">)</span> <span class="c1"># [0, 1, 2, 3]</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">cv1</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">indices</span><span class="p">)</span> <span class="c1"># [4, 5, 6]</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">cv2</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">indices</span><span class="p">)</span> <span class="c1"># [7, 8, 9]</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">cv0</span><span class="o">.</span><span class="n">indices</span><span class="p">)</span> <span class="c1"># [0, 1, 2, 3]</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">cv1</span><span class="o">.</span><span class="n">indices</span><span class="p">)</span> <span class="c1"># [4, 5, 6]</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">cv2</span><span class="o">.</span><span class="n">indices</span><span class="p">)</span> <span class="c1"># [7, 8, 9]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">data</span></span></dt>
+<dd><p>Return preloaded data</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset.from_dataset"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Create a Dataset object from another dataset with a new index
+(usually a subset of the source dataset index)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset</strong> (<em>Dataset</em>) – Source dataset</p></li>
+<li><p><strong>index</strong> (<a class="reference internal" href="batchflow.index.html#batchflow.DatasetIndex" title="batchflow.DatasetIndex"><em>DatasetIndex</em></a>) – Set of items from source dataset which should be in the new Dataset</p></li>
+<li><p><strong>batch_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.13)"><em>type</em></a>) – a subclass of Batch class</p></li>
+<li><p><strong>copy</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – whether to create a copy of the dataset or use the same instance wherever possible</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dataset</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">gen_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shuffle</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_last</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">notifier</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span></dt>
+<dd><p>Generate batches</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">get_attrs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset.get_attrs"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Return additional attrs as kwargs</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_default_iter_params</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span></dt>
+<dd><p>Return iteration params with default values to start iteration from scratch</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">index</span></span></dt>
+<dd><p>the dataset’s index</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">dataset.DatasetIndex</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">indices</span></span></dt>
+<dd><p>an array with the indices</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.3)"><code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.ndarray</span></code></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_split</span></span></dt>
+<dd><p>True if dataset has been split into train / test / validation subsets</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">next_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shuffle</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_last</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iter_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span></dt>
+<dd><p>Return a batch</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">p</span></span></dt>
+<dd><p>A short alias for <cite>pipeline()</cite></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">pipeline</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/dataset.html#Dataset.pipeline"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Start a new data processing workflow</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>config</strong> (<em>Config</em><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a>) – Config lets you initialize variables in the Pipeline object, e.g. for the augmentation task
+<a class="reference external" href="https://analysiscenter.github.io/batchflow/intro/pipeline.html#initializing-a-variable">https://analysiscenter.github.io/batchflow/intro/pipeline.html#initializing-a-variable</a></p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="batchflow.pipeline.html#batchflow.Pipeline" title="batchflow.Pipeline">Pipeline</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">what</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'iter'</span></span></em><span class="sig-paren">)</span></dt>
+<dd><p>Clear all iteration metadata in order to start iterating from scratch</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">reset_iter</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">size</span></span></dt>
+<dd><p>int - number of items in the set</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">split</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shares</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shuffle</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span></dt>
+<dd><p>Split the dataset into train, test and validation sub-datasets.
+Subsets are available as <cite>.train</cite>, <cite>.test</cite> and <cite>.validation</cite> respectively.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>shares</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a><em> of </em><em>2 floats</em><em>, or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a><em> of </em><em>3 floats</em>) – train/test/validation shares. Default is 0.8.</p></li>
+<li><p><strong>shuffle</strong> (bool, <a class="reference external" href="https://numpy.org/doc/stable/reference/random/legacy.html#numpy.random.RandomState" title="(in NumPy v2.3)"><code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.random.RandomState</span></code></a>, int or callable) – <p>whether to randomize items order before splitting into subsets. Default is <cite>False</cite>. Can be</p>
+<ul>
+<li><dl>
+<dt><cite>bool</cite><span class="classifier"><cite>False</cite> - to make subsets in the order of indices in the index,</span></dt><dd><p><cite>True</cite> - to make random subsets.</p>
+</dd>
+</dl>
+</li>
+<li><p>a <a class="reference external" href="https://numpy.org/doc/stable/reference/random/legacy.html#numpy.random.RandomState" title="(in NumPy v2.3)"><code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.random.RandomState</span></code></a> object which has an inplace shuffle method.</p></li>
+<li><dl class="simple">
+<dt><cite>int</cite> - a random seed number which will be used internally to create</dt><dd><p>a <a class="reference external" href="https://numpy.org/doc/stable/reference/random/legacy.html#numpy.random.RandomState" title="(in NumPy v2.3)"><code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.random.RandomState</span></code></a> object.</p>
+</dd>
+</dl>
+</li>
+<li><p>callable - a function which gets an order and returns a shuffled order.</p></li>
+</ul>
+</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Split into train / test in 80/20 ratio</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Split into train / test / validation in 60/30/10 ratio</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span><span class="o">.</span><span class="n">split</span><span class="p">([</span><span class="mf">0.6</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>Split into train / test / validation in 50/30/20 ratio</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span><span class="o">.</span><span class="n">split</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="batchflow.index.html" class="btn btn-neutral float-left" title="Index" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="batchflow.batch.html" class="btn btn-neutral float-right" title="Batch" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

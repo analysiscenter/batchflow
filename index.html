@@ -1,0 +1,282 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to BatchFlow documentation! &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=0e439607"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="A short introduction" href="intro/intro.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="#" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Welcome to BatchFlow documentation!</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="welcome-to-batchflow-documentation">
+<h1>Welcome to BatchFlow documentation!<a class="headerlink" href="#welcome-to-batchflow-documentation" title="Link to this heading"></a></h1>
+<p><cite>BatchFlow</cite> helps you conveniently work with random or sequential batches of your data
+and define data processing and machine learning workflows even for datasets that do not fit into memory.</p>
+<p>Main features:</p>
+<ul class="simple">
+<li><p>flexible batch generaton</p></li>
+<li><p>deterministic and stochastic pipelines</p></li>
+<li><p>datasets and pipelines joins and merges</p></li>
+<li><p>data processing actions</p></li>
+<li><p>flexible model configuration</p></li>
+<li><p>within batch parallelism</p></li>
+<li><p>batch prefetching</p></li>
+<li><p>ready to use ML models and proven NN architectures</p></li>
+<li><p>convenient layers and helper functions to build custom models</p></li>
+<li><p>a powerful research engine with parallel model training and extended experiment logging.</p></li>
+</ul>
+<section id="contents">
+<h2>Contents<a class="headerlink" href="#contents" title="Link to this heading"></a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="intro/classes.html">Classes and capabilities</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="intro/dsindex.html">Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intro/dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intro/batch.html">Batch class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intro/images_batch.html">Batch class for handling images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intro/pipeline.html">Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intro/named_expr.html">Named expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intro/parallel.html">Within batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intro/prefetch.html">Inter-batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intro/models.html">Working with models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intro/torch_models.html">Torch models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intro/research.html">Research</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intro/model_zoo.html">Model zoo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/batchflow.html">API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/batchflow.core.html">batchflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/batchflow.opensets.html">batchflow.opensets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/batchflow.models.html">batchflow.models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/batchflow.research.html">batchflow.research</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+<section id="basic-usage">
+<h2>Basic usage<a class="headerlink" href="#basic-usage" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_workflow</span> <span class="o">=</span> <span class="n">my_dataset</span><span class="o">.</span><span class="n">pipeline</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">do_something</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">do_something_else</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">some_additional_action</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s1">&#39;/to/other/path&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The trick here is that all the processing actions are lazy. They are not executed until their results are needed, e.g. when you request a preprocessed batch:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_workflow</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>or</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">my_workflow</span><span class="o">.</span><span class="n">gen_batch</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+    <span class="c1"># only now the actions are fired and data is being changed with the workflow defined earlier</span>
+    <span class="c1"># actions are executed one by one and here you get a fully processed batch</span>
+</pre></div>
+</div>
+<p>or</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">NUM_ITERS</span> <span class="o">=</span> <span class="mi">1000</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">NUM_ITERS</span><span class="p">):</span>
+    <span class="n">processed_batch</span> <span class="o">=</span> <span class="n">my_workflow</span><span class="o">.</span><span class="n">next_batch</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">n_epochs</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+    <span class="c1"># only now the actions are fired and data is changed with the workflow defined earlier</span>
+</pre></div>
+</div>
+</section>
+<section id="train-a-neural-network">
+<h2>Train a neural network<a class="headerlink" href="#train-a-neural-network" title="Link to this heading"></a></h2>
+<p>BatchFlow includes ready-to-use proven architectures like VGG, Inception, ResNet and many others.
+To apply them to your data just choose a model, specify the inputs (like the number of classes or images shape)
+and call <code class="docutils literal notranslate"><span class="pre">train_model</span></code>. Of course, you can also choose a loss function, an optimizer and many other parameters, if you want.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow.models.torch</span> <span class="kn">import</span> <span class="n">ResNet34</span>
+
+<span class="n">my_workflow</span> <span class="o">=</span> <span class="n">my_dataset</span><span class="o">.</span><span class="n">pipeline</span><span class="p">()</span>
+              <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">ResNet34</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span>
+                          <span class="s1">&#39;inputs/images/shape&#39;</span><span class="p">:</span> <span class="n">B</span><span class="p">(</span><span class="s1">&#39;image_shape&#39;</span><span class="p">),</span>
+                          <span class="s1">&#39;labels/classes&#39;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+                          <span class="s1">&#39;initial_block/inputs&#39;</span><span class="p">:</span> <span class="s1">&#39;images&#39;</span><span class="p">})</span>
+              <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>
+              <span class="o">.</span><span class="n">some_transform</span><span class="p">()</span>
+              <span class="o">.</span><span class="n">another_transform</span><span class="p">()</span>
+              <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="s1">&#39;ResNet34&#39;</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">),</span> <span class="n">labels</span><span class="o">=</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;labels&#39;</span><span class="p">))</span>
+              <span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">BATCH_SIZE</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
+<section id="python-package">
+<h3>Python package<a class="headerlink" href="#python-package" title="Link to this heading"></a></h3>
+<p>With modern <a class="reference external" href="https://docs.pipenv.org/">pipenv</a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipenv</span> <span class="n">install</span> <span class="n">git</span><span class="o">+</span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">analysiscenter</span><span class="o">/</span><span class="n">batchflow</span><span class="o">.</span><span class="n">git</span><span class="c1">#egg=batchflow</span>
+</pre></div>
+</div>
+<p>With old-fashioned <a class="reference external" href="https://pip.pypa.io/en/stable/">pip</a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip3</span> <span class="n">install</span> <span class="n">git</span><span class="o">+</span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">analysiscenter</span><span class="o">/</span><span class="n">batchflow</span><span class="o">.</span><span class="n">git</span>
+</pre></div>
+</div>
+<p>After that just import <cite>batchflow</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">batchflow</span> <span class="k">as</span> <span class="nn">bf</span>
+</pre></div>
+</div>
+</section>
+<section id="git-submodule">
+<h3>Git submodule<a class="headerlink" href="#git-submodule" title="Link to this heading"></a></h3>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><cite>BatchFlow</cite> module is in the beta stage. Your suggestions and improvements are very welcome.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><cite>BatchFlow</cite> supports Python 3.8 or higher.</p>
+</div>
+<p>In many cases it is much more convenient to install <cite>batchflow</cite> as a submodule in your project repository than as a python package:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">submodule</span> <span class="n">add</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">analysiscenter</span><span class="o">/</span><span class="n">batchflow</span><span class="o">.</span><span class="n">git</span>
+<span class="n">git</span> <span class="n">submodule</span> <span class="n">init</span>
+<span class="n">git</span> <span class="n">submodule</span> <span class="n">update</span>
+</pre></div>
+</div>
+<p>If your python file is located in another directory, you might need to add a path to <cite>batchflow</cite> submodule location:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">sys</span>
+<span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;/path/to/batchflow&quot;</span><span class="p">)</span>
+<span class="kn">import</span> <span class="nn">batchflow</span> <span class="k">as</span> <span class="nn">bf</span>
+</pre></div>
+</div>
+<p>What is great about using a submodule is that every commit in your project can be linked to its own commit of a submodule.
+This is extremely convenient in a fast paced research environment.</p>
+<p>Relative import is also possible:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">.batchflow</span> <span class="kn">import</span> <span class="n">Dataset</span>
+</pre></div>
+</div>
+</section>
+<section id="requirements">
+<h3>Requirements<a class="headerlink" href="#requirements" title="Link to this heading"></a></h3>
+<p>BatchFlow has the following strict requirments:</p>
+<ul class="simple">
+<li><p>numpy</p></li>
+<li><p>dill</p></li>
+<li><p>tqdm</p></li>
+<li><p>matplotlib</p></li>
+</ul>
+<p>Some BatchFlow modules also depend on other mandatory packages:</p>
+<ul class="simple">
+<li><p>pandas and multiprocess for <code class="docutils literal notranslate"><span class="pre">batchflow.research</span></code></p></li>
+<li><p>torch for <code class="docutils literal notranslate"><span class="pre">batchflow.models.torch</span></code></p></li>
+</ul>
+</section>
+</section>
+<section id="citing-batchflow">
+<h2>Citing BatchFlow<a class="headerlink" href="#citing-batchflow" title="Link to this heading"></a></h2>
+<p>Please cite BatchFlow in your publications if it helps your research.</p>
+<a class="reference external image-reference" href="https://doi.org/10.5281/zenodo.1041203"><img alt="https://zenodo.org/badge/DOI/10.5281/zenodo.1041203.svg" src="https://zenodo.org/badge/DOI/10.5281/zenodo.1041203.svg" />
+</a>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Roman</span> <span class="n">Khudorozhkov</span> <span class="n">et</span> <span class="n">al</span><span class="o">.</span> <span class="n">BatchFlow</span> <span class="n">library</span> <span class="k">for</span> <span class="n">fast</span> <span class="n">ML</span> <span class="n">workflows</span><span class="o">.</span> <span class="mf">2017.</span> <span class="n">doi</span><span class="p">:</span><span class="mf">10.5281</span><span class="o">/</span><span class="n">zenodo</span><span class="mf">.1041203</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@misc</span><span class="p">{</span><span class="n">roman_kh_2017_1041203</span><span class="p">,</span>
+  <span class="n">author</span>       <span class="o">=</span> <span class="p">{</span><span class="n">Khudorozhkov</span><span class="p">,</span> <span class="n">Roman</span> <span class="ow">and</span> <span class="n">others</span><span class="p">},</span>
+  <span class="n">title</span>        <span class="o">=</span> <span class="p">{</span><span class="n">BatchFlow</span> <span class="n">library</span> <span class="k">for</span> <span class="n">fast</span> <span class="n">ML</span> <span class="n">workflows</span><span class="p">},</span>
+  <span class="n">year</span>         <span class="o">=</span> <span class="mi">2017</span><span class="p">,</span>
+  <span class="n">doi</span>          <span class="o">=</span> <span class="p">{</span><span class="mf">10.5281</span><span class="o">/</span><span class="n">zenodo</span><span class="mf">.1041203</span><span class="p">},</span>
+  <span class="n">url</span>          <span class="o">=</span> <span class="p">{</span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">doi</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="mf">10.5281</span><span class="o">/</span><span class="n">zenodo</span><span class="mf">.1041203</span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="intro/intro.html" class="btn btn-neutral float-right" title="A short introduction" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

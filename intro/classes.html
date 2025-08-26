@@ -1,0 +1,253 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Classes and capabilities &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Index" href="dsindex.html" />
+    <link rel="prev" title="A short introduction" href="intro.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">A short introduction</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Classes and capabilities</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="dsindex.html">Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html">Batch class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html">Batch class for handling images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html">Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html">Named expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html">Within batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="prefetch.html">Inter-batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html">Working with models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html">Torch models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="research.html">Research</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_zoo.html">Model zoo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Classes and capabilities</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/intro/classes.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="classes-and-capabilities">
+<h1>Classes and capabilities<a class="headerlink" href="#classes-and-capabilities" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="dsindex.html">Index</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="dsindex.html#why-the-index-is-needed">Why the index is needed?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dsindex.html#datasetindex">DatasetIndex</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dsindex.html#filesindex">FilesIndex</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="dataset.html">Dataset</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html#creating-a-dataset">Creating a dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html#preloading-data">Preloading data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html#adding-custom-data">Adding custom data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html#splitting-a-dataset">Splitting a dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html#cross-validation">Cross-validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html#iterating-over-a-dataset">Iterating over a dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html#custom-batch-class">Custom batch class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html#api">API</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="batch.html">Batch class</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="batch.html#index">Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html#data">Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html#dataset">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html#action-methods">Action methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html#models-and-model-based-actions">Models and model-based actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html#running-methods-in-parallel">Running methods in parallel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html#writing-your-own-batch">Writing your own Batch</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="images_batch.html">Batch class for handling images</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html#components">Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html#conversion-between-formats">Conversion between formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html#augmentation">Augmentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html#loading-from-files">Loading from files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html#saving">Saving</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html#transform-actions-decorator"><cite>transform_actions</cite> decorator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html#defining-custom-actions">Defining custom actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html#assembling-after-parallel-execution">Assembling after parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html#cropping-to-patches">Cropping to patches</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pipeline.html">Pipeline</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#actions">Actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#before-and-after-pipelines">Before and after pipelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#algebra-of-pipelines">Algebra of pipelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#creating-pipelines">Creating pipelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#running-pipelines">Running pipelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#pipeline-variables">Pipeline variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#update">Update</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#pipeline-locks">Pipeline locks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#join-and-merge">Join and merge</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#rebatch">Rebatch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#exceptions">Exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#models">Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#debugging">Debugging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html#api">API</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="named_expr.html">Named expressions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#using-in-pipelines">Using in pipelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#using-outside-of-pipelines">Using outside of pipelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#operations-with-expressions">Operations with expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#b-batch-component">B - batch component</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#v-pipeline-variable">V - pipeline variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#c-config-option">C - config option</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#d-dataset-attribute">D - dataset attribute</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#i-iterations-counter">I - iterations counter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#f-callable">F - callable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#r-random-value">R - random value</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#w-a-wrapper">W - a wrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#p-a-parallel-wrapper">P - a parallel wrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html#pp-a-parallel-wrapper">PP - a parallel wrapper</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="parallel.html">Within batch parallelism</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html#parallelized-methods">Parallelized methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html#decorator-arguments">Decorator arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html#additional-decorator-arguments">Additional decorator arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html#init-function">Init function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html#post-function">Post function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html#targets">Targets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html#arguments-with-default-values">Arguments with default values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html#number-of-parallel-jobs">Number of parallel jobs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html#writing-numba-methods">Writing numba-methods</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="prefetch.html">Inter-batch parallelism</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="prefetch.html#blocked-method">Blocked method</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="models.html">Working with models</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="models.html#model-class">Model class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#model-types">Model types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#adding-a-model-to-a-pipeline">Adding a model to a pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#configuring-a-model">Configuring a model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#training-a-model">Training a model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#predicting-with-a-model">Predicting with a model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#loading-a-model">Loading a model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#saving-a-model">Saving a model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#models-and-template-pipelines">Models and template pipelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#importing-models">Importing models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#parallel-training">Parallel training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#ready-to-use-models">Ready to use models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html#model-metrics">Model metrics</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="torch_models.html">Torch models</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html#getting-started">Getting started</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html#model-structure">Model structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html#how-to-configure-a-model">How to configure a model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html#how-to-write-a-custom-model">How to write a custom model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html#ready-to-use-models">Ready to use models</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="research.html">Research</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="research.html#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="research.html#flexible-way-to-define-parameters-domain">Flexible way to define parameters domain</a></li>
+<li class="toctree-l2"><a class="reference internal" href="research.html#more-details">More details</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="model_zoo.html">Model zoo</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="model_zoo_torch.html">Torch</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="intro.html" class="btn btn-neutral float-left" title="A short introduction" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="dsindex.html" class="btn btn-neutral float-right" title="Index" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

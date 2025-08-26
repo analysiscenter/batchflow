@@ -1,0 +1,561 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Within batch parallelism &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Inter-batch parallelism" href="prefetch.html" />
+    <link rel="prev" title="Named expressions" href="named_expr.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">A short introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes and capabilities</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="dsindex.html">Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html">Batch class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html">Batch class for handling images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html">Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html">Named expressions</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Within batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="prefetch.html">Inter-batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html">Working with models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html">Torch models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="research.html">Research</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_zoo.html">Model zoo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="classes.html">Classes and capabilities</a></li>
+      <li class="breadcrumb-item active">Within batch parallelism</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/intro/parallel.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="within-batch-parallelism">
+<h1>Within batch parallelism<a class="headerlink" href="#within-batch-parallelism" title="Link to this heading"></a></h1>
+<section id="basic-usage">
+<h2>Basic usage<a class="headerlink" href="#basic-usage" title="Link to this heading"></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">inbatch_parallel</span></code> decorator allows to run a method in parallel:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow</span> <span class="kn">import</span> <span class="n">Batch</span><span class="p">,</span> <span class="n">inbatch_parallel</span><span class="p">,</span> <span class="n">action</span>
+
+<span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_fn&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_fn&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;threads&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">):</span>
+        <span class="c1"># process just one item</span>
+        <span class="k">return</span> <span class="n">some_value</span>
+</pre></div>
+</div>
+</section>
+<section id="parallelized-methods">
+<h2>Parallelized methods<a class="headerlink" href="#parallelized-methods" title="Link to this heading"></a></h2>
+<p>You can parallelize actions as well as ordinary methods.</p>
+</section>
+<section id="decorator-arguments">
+<h2>Decorator arguments<a class="headerlink" href="#decorator-arguments" title="Link to this heading"></a></h2>
+<section id="init-some-method">
+<h3>init=’some_method’<a class="headerlink" href="#init-some-method" title="Link to this heading"></a></h3>
+<p>Required.
+The only required argument which contains a method name to be called to initialize the parallel execution.</p>
+</section>
+<section id="post-other-method">
+<h3>post=’other_method’<a class="headerlink" href="#post-other-method" title="Link to this heading"></a></h3>
+<p>Optional.
+A method name which is called after all parallelized tasks are finished.</p>
+</section>
+<section id="target-threads">
+<h3>target=’threads’<a class="headerlink" href="#target-threads" title="Link to this heading"></a></h3>
+<p>Optional.
+Specifies a parallelization engine, should be one of <code class="docutils literal notranslate"><span class="pre">threads</span></code>, <code class="docutils literal notranslate"><span class="pre">async</span></code>, <code class="docutils literal notranslate"><span class="pre">mpc</span></code>, <code class="docutils literal notranslate"><span class="pre">for</span></code>.</p>
+</section>
+</section>
+<section id="additional-decorator-arguments">
+<h2>Additional decorator arguments<a class="headerlink" href="#additional-decorator-arguments" title="Link to this heading"></a></h2>
+<p>You can pass any other arguments to the decorator and they will be passed further to <code class="docutils literal notranslate"><span class="pre">init</span></code> and <code class="docutils literal notranslate"><span class="pre">post</span></code> functions.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+<span class="o">...</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_default&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_default&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;threads&#39;</span><span class="p">,</span> <span class="n">clear_data</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="c1"># process just one item</span>
+        <span class="k">return</span> <span class="n">some_value</span>
+
+    <span class="k">def</span> <span class="nf">_init_default</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clear_data</span><span class="p">):</span>
+        <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">_post_default</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">list_of_res</span><span class="p">,</span> <span class="n">clear_data</span><span class="p">):</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+<p>All these arguments should be named argments only. So you should not write like this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="s1">&#39;_init_default&#39;</span><span class="p">,</span> <span class="s1">&#39;_post_default&#39;</span><span class="p">,</span> <span class="s1">&#39;threads&#39;</span><span class="p">,</span> <span class="n">clear_data</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>It might sometimes works though. But no guarantees.</p>
+<p>The preferred way is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_default&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_default&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;threads&#39;</span><span class="p">,</span> <span class="n">clear_data</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Using this technique you can pass an action name to the <code class="docutils literal notranslate"><span class="pre">init</span></code> function:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+<span class="o">...</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_default&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_default&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;threads&#39;</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;one_method&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">one_method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="c1"># process just one item</span>
+        <span class="k">return</span> <span class="n">some_value</span>
+
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_default&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_default&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;threads&#39;</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;some_other_method&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_other_method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="c1"># process just one item</span>
+        <span class="k">return</span> <span class="n">some_value</span>
+</pre></div>
+</div>
+<p>However, usually you might consider writing specific init / post functions for different actions.</p>
+</section>
+<section id="init-function">
+<h2>Init function<a class="headerlink" href="#init-function" title="Link to this heading"></a></h2>
+<p>Init function defines how to parallelize the decorated method. It returns a list of arguments for each invocation of the parallelized action.
+So if you want to run 10 parallel copies of the method, <code class="docutils literal notranslate"><span class="pre">init</span></code> should return a list of 10 items. Usually you run the method once for each item in the batch. However you might also run one method per 10 or 100 or any other number of items if it is beneficial for your specific circumstances (memory, performance, etc.)</p>
+<p>The simplest <code class="docutils literal notranslate"><span class="pre">init</span></code> just returns a sequence of indices:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+<span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;indices&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item_id</span><span class="p">)</span>
+        <span class="c1"># process an item and return a value for that item</span>
+        <span class="k">return</span> <span class="n">proc_value</span>
+</pre></div>
+</div>
+<p>For a batch of 10 items <code class="docutils literal notranslate"><span class="pre">some_action</span></code> will be called 10 times as <code class="docutils literal notranslate"><span class="pre">some_action(index1)</span></code>, <code class="docutils literal notranslate"><span class="pre">some_action(index2)</span></code>, …, <code class="docutils literal notranslate"><span class="pre">some_action(index10)</span></code>.</p>
+<p>You may define as many arguments as you need:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+<span class="o">...</span>
+    <span class="k">def</span> <span class="nf">_init_fn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">another_arg</span><span class="p">,</span> <span class="n">one_more_arg</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Here the action will be fired as:</p>
+<p><code class="docutils literal notranslate"><span class="pre">some_action(self._data,</span> <span class="pre">index1,</span> <span class="pre">another_arg,</span> <span class="pre">one_more_arg)</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">some_action(self._data,</span> <span class="pre">index2,</span> <span class="pre">another_arg,</span> <span class="pre">one_more_arg)</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">...</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">item_args</span></code> does not have to be strictly a list, but any sequence - tuple, numpy array, etc - that supports the unpacking operation (<code class="docutils literal notranslate"><span class="pre">*seq</span></code> &lt;<a class="reference external" href="https://docs.python.org/3/tutorial/controlflow.html#unpacking-argument-lists">https://docs.python.org/3/tutorial/controlflow.html#unpacking-argument-lists</a>&gt;`_):</p>
+<p><strong>Attention!</strong> It cannot be a tuple of 2 arguments (see below why).</p>
+<p>You can also pass named arguments:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+<span class="o">...</span>
+    <span class="k">def</span> <span class="nf">_init_fn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="nb">dict</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">,</span> <span class="n">item</span><span class="o">=</span><span class="n">item</span><span class="p">,</span> <span class="n">arg1</span><span class="o">=</span><span class="n">another_arg</span><span class="p">,</span> <span class="n">arg2</span><span class="o">=</span><span class="n">one_more_arg</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>And the action will be fired as:</p>
+<p><code class="docutils literal notranslate"><span class="pre">some_action(data=self._data,</span> <span class="pre">item=index1,</span> <span class="pre">arg1=another_arg,</span> <span class="pre">arg2=one_more_arg)</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">some_action(data=self._data,</span> <span class="pre">item=index2,</span> <span class="pre">arg1=another_arg,</span> <span class="pre">arg2=one_more_arg)</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">...</span></code></p>
+<p>And you can also combine positional and named arguments:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+<span class="o">...</span>
+    <span class="k">def</span> <span class="nf">_init_fn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">,</span> <span class="n">item</span><span class="p">),</span> <span class="nb">dict</span><span class="p">(</span><span class="n">arg1</span><span class="o">=</span><span class="n">another_arg</span><span class="p">,</span> <span class="n">arg2</span><span class="o">=</span><span class="n">one_more_arg</span><span class="p">))</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>So the action will be fired as:</p>
+<p><code class="docutils literal notranslate"><span class="pre">some_action(self._data,</span> <span class="pre">index1,</span> <span class="pre">arg1=another_arg,</span> <span class="pre">arg2=one_more_arg)</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">some_action(self._data,</span> <span class="pre">index2,</span> <span class="pre">arg1=another_arg,</span> <span class="pre">arg2=one_more_arg)</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">...</span></code></p>
+<p>Thus, 2-items tuple is reserved for this situation (1st item is a list of positional arguments and 2nd is a dict of named arguments).</p>
+<p>That is why you cannot pass a tuple of 2 arguments:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">...</span>
+<span class="n">item_args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">some_arg</span><span class="p">,</span> <span class="n">some_other_arg</span><span class="p">)</span>
+<span class="o">...</span>
+</pre></div>
+</div>
+<p>Instead make it a list:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">...</span>
+<span class="n">item_args</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">some_arg</span><span class="p">,</span> <span class="n">some_other_arg</span><span class="p">)</span>
+<span class="o">...</span>
+</pre></div>
+</div>
+<section id="init-s-additional-arguments">
+<h3>Init’s additional arguments<a class="headerlink" href="#init-s-additional-arguments" title="Link to this heading"></a></h3>
+<p>Take into account that all arguments passed into actions are also passed into the <code class="docutils literal notranslate"><span class="pre">init</span></code> function. So when you call:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">some_pipeline</span><span class="o">.</span><span class="n">some_parallel_action</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="n">my_arg</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">init</span></code> function will be called like that:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">init_function</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="n">my_arg</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This is convenient when you need to initialize some additional variables depending on the arguments. For instance, to create a numpy array of a certain shape filled with specific values or set up a random state or even pass additional arguments back to action methods.</p>
+<p>If you have specified <a class="reference external" href="#additional-decorator-arguments">additional decorator arguments</a>,
+they are also passed to the <code class="docutils literal notranslate"><span class="pre">init</span></code> function:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">init_function</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="n">my_arg</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">arg_from_parallel_decorator</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="standard-init-functions">
+<h3>Standard init functions<a class="headerlink" href="#standard-init-functions" title="Link to this heading"></a></h3>
+<p>Most of the times you don’t need to write your own init function as you might use standard ones:</p>
+<section id="indices">
+<h4><code class="docutils literal notranslate"><span class="pre">indices</span></code><a class="headerlink" href="#indices" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;indices&#39;</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">some_method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">):</span>
+</pre></div>
+</div>
+<p>The first argument (after <code class="docutils literal notranslate"><span class="pre">self</span></code>) contains an id (from index) of each data item.</p>
+</section>
+<section id="items">
+<h4><code class="docutils literal notranslate"><span class="pre">items</span></code><a class="headerlink" href="#items" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;items&#39;</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">some_method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">):</span>
+</pre></div>
+</div>
+<p>The first argument (after <code class="docutils literal notranslate"><span class="pre">self</span></code>) contains an item itself (i.e. i-th element of batch - <code class="docutils literal notranslate"><span class="pre">batch[i]</span></code>).</p>
+</section>
+<section id="run-once">
+<h4><code class="docutils literal notranslate"><span class="pre">run_once</span></code><a class="headerlink" href="#run-once" title="Link to this heading"></a></h4>
+<p>You cannot call an <code class="docutils literal notranslate"><span class="pre">async</span></code> action in pipelines, because <code class="docutils literal notranslate"><span class="pre">async</span></code>-methods should be <code class="docutils literal notranslate"><span class="pre">awaited</span></code> for. This is where <code class="docutils literal notranslate"><span class="pre">&#64;inbatch_parallel</span></code> might be helpful without any parallelism whatsoever. All you need is <code class="docutils literal notranslate"><span class="pre">run_once</span></code> init-function:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;run_once&#39;</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">read_some_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;raw&#39;</span><span class="p">):</span>
+        <span class="o">...</span>
+<span class="o">...</span>
+<span class="n">some_pipeline</span>
+    <span class="o">.</span><span class="n">do_whatever_you_want</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">read_some_data</span><span class="p">(</span><span class="s1">&#39;/some/path&#39;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">do_something_else</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>No additional arguments is passed to <code class="docutils literal notranslate"><span class="pre">read_some_data</span></code> and it will be executed only once.</p>
+</section>
+<section id="data-components">
+<h4>data components<a class="headerlink" href="#data-components" title="Link to this heading"></a></h4>
+<p>If data components are defined, they might be used as init-functions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;images&#39;</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">some_method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">):</span>
+</pre></div>
+</div>
+<p>The first argument (after <code class="docutils literal notranslate"><span class="pre">self</span></code>) contains an i-th image (i.e. <code class="docutils literal notranslate"><span class="pre">batch.images[i]</span></code>).</p>
+</section>
+</section>
+</section>
+<section id="post-function">
+<h2>Post function<a class="headerlink" href="#post-function" title="Link to this heading"></a></h2>
+<p>When all parallelized tasks are finished, the <code class="docutils literal notranslate"><span class="pre">post</span></code> function is called.</p>
+<p>The first argument it receives is the list of results from each parallel task.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">_post_default</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">list_of_res</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="o">...</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;indices&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_default&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item_id</span><span class="p">)</span>
+        <span class="c1"># process an item and return a value for that item</span>
+        <span class="k">return</span> <span class="n">proc_value</span>
+</pre></div>
+</div>
+<p>Here <code class="docutils literal notranslate"><span class="pre">_post_default</span></code> will be called as</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">_post_default</span><span class="p">([</span><span class="n">proc_value_from_1</span><span class="p">,</span> <span class="n">proc_value_from_2</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="n">proc_value_from_last</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>If anything went wrong, then instead of <code class="docutils literal notranslate"><span class="pre">proc_value</span></code>, there would be an instance of some <code class="docutils literal notranslate"><span class="pre">Exception</span></code> caught in the parallel tasks.</p>
+<p>This is where <code class="docutils literal notranslate"><span class="pre">any_action_failed</span></code> might come in handy:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow</span> <span class="kn">import</span> <span class="n">Batch</span><span class="p">,</span> <span class="n">action</span><span class="p">,</span> <span class="n">inbatch_parallel</span><span class="p">,</span> <span class="n">any_action_failed</span>
+
+<span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">_post_fn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">list_of_res</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">any_action_failed</span><span class="p">(</span><span class="n">list_of_res</span><span class="p">):</span>
+            <span class="c1"># something went wrong</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># process the results</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;indices&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_fn&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item_id</span><span class="p">)</span>
+        <span class="c1"># process an item and return a value for that item</span>
+        <span class="k">return</span> <span class="n">proc_value</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Post</span></code>-function should return an instance of a batch class (not necessarily the same). Most of the time it would be just <code class="docutils literal notranslate"><span class="pre">self</span></code>.</p>
+<p>If an action-method changes data directly, you don’t need a <code class="docutils literal notranslate"><span class="pre">post</span></code>-function.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow</span> <span class="kn">import</span> <span class="n">Batch</span><span class="p">,</span> <span class="n">action</span><span class="p">,</span> <span class="n">inbatch_parallel</span><span class="p">,</span> <span class="n">any_action_failed</span>
+
+<span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;indices&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item_id</span><span class="p">)</span>
+        <span class="c1"># process an item and return a value for that item</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="n">item_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_value</span>
+</pre></div>
+</div>
+<p>Don’t forget about GIL. A python function with <code class="docutils literal notranslate"><span class="pre">target=threads</span></code> won’t give any performance increase, though this might simplify your code.
+However, <code class="docutils literal notranslate"><span class="pre">numba</span></code> or <code class="docutils literal notranslate"><span class="pre">cython</span></code> allow for a real multithreading.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow</span> <span class="kn">import</span> <span class="n">Batch</span><span class="p">,</span> <span class="n">action</span><span class="p">,</span> <span class="n">inbatch_parallel</span><span class="p">,</span> <span class="n">any_action_failed</span>
+<span class="kn">from</span> <span class="nn">numba</span> <span class="kn">import</span> <span class="n">njit</span>
+
+<span class="nd">@njit</span><span class="p">(</span><span class="n">nogil</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">change_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+    <span class="c1"># data is a numpy array</span>
+    <span class="n">data</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_value</span>
+
+
+<span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">_init_numba</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">]</span>
+
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_numba&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;threads&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">item_id</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">change_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">item_id</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here all batch items will be updated simultaneously.</p>
+</section>
+<section id="targets">
+<h2>Targets<a class="headerlink" href="#targets" title="Link to this heading"></a></h2>
+<p>There are 4 targets available: <code class="docutils literal notranslate"><span class="pre">threads</span></code>, <code class="docutils literal notranslate"><span class="pre">async</span></code>, <code class="docutils literal notranslate"><span class="pre">mpc</span></code>, <code class="docutils literal notranslate"><span class="pre">for</span></code>.</p>
+<section id="threads">
+<h3>threads<a class="headerlink" href="#threads" title="Link to this heading"></a></h3>
+<p>A method will be parallelized with <a class="reference external" href="https://docs.python.org/3/library/concurrent.futures.html#threadpoolexecutor">concurrent.futures.ThreadPoolExecutor</a>.
+Take into account that due to <a class="reference external" href="https://wiki.python.org/moin/GlobalInterpreterLock">GIL</a> only one python thread is executed in any given moment (pseudo-parallelism). <a class="reference external" href="http://cython.org/">Cython</a> and <a class="reference external" href="http://numba.pydata.org/">numba</a> might help overcome this limitation.
+However, a usual python function with intensive I/O processing or waiting for some synchronization might get a considerable performance increase even with threads.</p>
+<p>This is the default engine which is used if <code class="docutils literal notranslate"><span class="pre">target</span></code> is not specified in the <code class="docutils literal notranslate"><span class="pre">inbatch_parallel</span></code> decorator.</p>
+</section>
+<section id="async">
+<h3>async<a class="headerlink" href="#async" title="Link to this heading"></a></h3>
+<p>For I/O-intensive processing you might want to consider writing an <code class="docutils literal notranslate"><span class="pre">`async</span></code> method &lt;<a class="reference external" href="https://docs.python.org/3/library/asyncio-task.html">https://docs.python.org/3/library/asyncio-task.html</a>&gt;`_.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_default&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_default&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;async&#39;</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">some_arg</span><span class="p">)</span>
+        <span class="c1"># do something</span>
+        <span class="n">proc_value</span> <span class="o">=</span> <span class="k">await</span> <span class="n">other_async_function</span><span class="p">(</span><span class="n">some_arg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">proc_value</span>
+</pre></div>
+</div>
+<p>Specifying <code class="docutils literal notranslate"><span class="pre">target='async'</span></code> for methods declared as <code class="docutils literal notranslate"><span class="pre">async</span></code> is not necessary,
+since in this case the decorator can determine that you need an <code class="docutils literal notranslate"><span class="pre">async</span></code>-parallelism.
+However, for a not <code class="docutils literal notranslate"><span class="pre">async</span></code> method returning awaitable objects you have to explicitly use <code class="docutils literal notranslate"><span class="pre">target='async'</span></code>.</p>
+</section>
+<section id="mpc">
+<h3>mpc<a class="headerlink" href="#mpc" title="Link to this heading"></a></h3>
+<p>With <code class="docutils literal notranslate"><span class="pre">mpc</span></code> you might run calculations in separate processes thus removing GIL restrictions. For this <a class="reference external" href="https://docs.python.org/3/library/concurrent.futures.html#processpoolexecutor">concurrent.futures.ProcessPoolExecutor</a> is used. The decorated method should just return a function which will be executed in a separate process.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">batchflow</span> <span class="kn">import</span> <span class="n">Batch</span><span class="p">,</span> <span class="n">action</span><span class="p">,</span> <span class="n">inbatch_parallel</span>
+
+<span class="k">def</span> <span class="nf">mpc_fn</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">arg</span><span class="p">):</span>
+    <span class="c1"># do something</span>
+    <span class="k">return</span> <span class="n">new_data</span>
+
+<span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_default&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_default&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;mpc&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span>
+        <span class="c1"># do not process anything, just return a function which will be run as a separate process</span>
+        <span class="k">return</span> <span class="n">mpc_fn</span>
+</pre></div>
+</div>
+<p>Multiprocessing requires all code and data to be serialized (with <a class="reference external" href="https://docs.python.org/3/library/pickle.html">pickle</a>) in order to be sent to another process. And many classes and methods are not so easy (or even impossible) to pickle. That is why functions might be a better choice for parallelism. Nevertheless, with all these thoughts in mind you should carefully consider your parallelized function and the arguments it receives.</p>
+<p>Besides, you might want to implement a thorough logging mechanism as multiprocessing configurations are susceptible to hanging up. Without logging it would be quite hard to understand what happened and debug your code.</p>
+</section>
+<section id="for">
+<h3>for<a class="headerlink" href="#for" title="Link to this heading"></a></h3>
+<p>When parallelism is not needed at all, you might still create actions which process single items, but they will be called one after another in a loop.
+This is not only convenient but also might have a much better performance than <code class="docutils literal notranslate"><span class="pre">mpc</span></code>-parallelism (e.g. when data is small, a lot of time is wasted to inter-process data flows).</p>
+<p>It is also useful for debugging: you can replace <code class="docutils literal notranslate"><span class="pre">mpc</span></code> or <code class="docutils literal notranslate"><span class="pre">threads</span></code> with <code class="docutils literal notranslate"><span class="pre">for</span></code> in order to debug the code in a simple single-threaded fasion and then switch to parallel invocations.</p>
+</section>
+</section>
+<section id="arguments-with-default-values">
+<h2>Arguments with default values<a class="headerlink" href="#arguments-with-default-values" title="Link to this heading"></a></h2>
+<p>If you have a function with default arguments, you may call it without passing those arguments.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_default&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_default&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;mpc&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">,</span> <span class="n">arg3</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+        <span class="o">...</span>
+
+<span class="c1"># arg3 takes the default value = 3</span>
+<span class="n">batch</span><span class="o">.</span><span class="n">some_action</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>However, when you call it this way, the default arguments are not available externally (in particular, in decorators).
+This is the problem for <code class="docutils literal notranslate"><span class="pre">mpc</span></code> parallelism.</p>
+<p>The best solutions would be not to use default values at all, but if you really need them, you should copy them into parallelized functions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">mpc_fn</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">,</span> <span class="n">arg3</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+    <span class="c1"># ...</span>
+
+<span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_default&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_default&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;mpc&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">,</span> <span class="n">arg3</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">mpc_fn</span>
+</pre></div>
+</div>
+<p>You might also return a <a class="reference external" href="https://docs.python.org/3/library/functools.html#functools.partial">partial</a> with these arguments:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span>
+
+<span class="k">def</span> <span class="nf">mpc_fn</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">,</span> <span class="n">arg3</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+    <span class="c1"># ...</span>
+
+<span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;_init_default&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_post_default&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;mpc&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">some_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">,</span> <span class="n">arg3</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">partial</span><span class="p">(</span><span class="n">mpc_fn</span><span class="p">,</span> <span class="n">arg3</span><span class="o">=</span><span class="n">arg3</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="number-of-parallel-jobs">
+<h2>Number of parallel jobs<a class="headerlink" href="#number-of-parallel-jobs" title="Link to this heading"></a></h2>
+<p>By default each action runs as many parallel tasks as the number of cores your computer/server has. That is why sometimes you might want to run fewer or more tasks. Then you can specify this number in each action call with <code class="docutils literal notranslate"><span class="pre">n_workers</span></code> option:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">some_pipeline</span><span class="o">.</span><span class="n">parallel_action</span><span class="p">(</span><span class="n">some_arg</span><span class="p">,</span> <span class="n">n_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here <code class="docutils literal notranslate"><span class="pre">parallel_action</span></code> will have only 3 parallel tasks being executed simultaneously. Others will wait in the queue.</p>
+<p>However, implicitly specifying <code class="docutils literal notranslate"><span class="pre">n_workers</span></code> is rarely needed in practice and thus highly discouraged.</p>
+<p><strong>Attention!</strong> You cannot use <code class="docutils literal notranslate"><span class="pre">n_workers</span></code> with <code class="docutils literal notranslate"><span class="pre">target=async</span></code>.</p>
+</section>
+<section id="writing-numba-methods">
+<h2>Writing numba-methods<a class="headerlink" href="#writing-numba-methods" title="Link to this heading"></a></h2>
+<p>When you need an extremely fast processing, <a class="reference external" href="http://numba.pydata.org/">numba</a> might come in handy.
+However, it works only with functions, but not with methods. It is not a big issue as you can write
+a method which calls a function. It is not convenient, though. And code becomes not so easy to follow.</p>
+<p>That is why you’ll love <cite>&#64;mjit</cite> decorator. It looks absolutely like <a class="reference external" href="https://numba.pydata.org/numba-doc/latest/user/jit.html/">&#64;jit</a>, but it works with methods.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="nd">@action</span>
+    <span class="nd">@mjit</span>
+    <span class="k">def</span> <span class="nf">fast_loop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+           <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">)</span>
+    <span class="nd">@mjit</span>
+    <span class="k">def</span> <span class="nf">fast_parallel_loop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                <span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">image</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]))</span>
+
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="s1">&#39;images&#39;</span><span class="p">)</span>
+    <span class="nd">@mjit</span>
+    <span class="k">def</span> <span class="nf">fast_parallel_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">):</span>
+        <span class="n">image</span><span class="p">[:]</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">image</span><span class="p">))</span>
+</pre></div>
+</div>
+<p><cite>mjit</cite> just takes a method body and compiles it with <cite>numba.jit</cite>. So the method should comply with all numba requirements.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><cite>self</cite> cannot be used within <cite>&#64;mjit</cite> methods. It will always be None.
+As a result, you have no access to any class attributes and methods.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>By default, a method is compiled with <cite>nopython=True</cite> and <cite>nogil=True</cite>.
+You can redefine these parameters when needed.</p>
+</div>
+<p><a class="reference external" href="https://numba.pydata.org/numba-doc/latest/user/parallel.html">prange</a> is also allowed within <cite>&#64;mjit</cite> methods.
+<cite>&#64;inbatch_parallel</cite> works as fast, though. So choose freely what is more convenient in each case.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="named_expr.html" class="btn btn-neutral float-left" title="Named expressions" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="prefetch.html" class="btn btn-neutral float-right" title="Inter-batch parallelism" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

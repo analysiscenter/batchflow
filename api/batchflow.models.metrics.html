@@ -1,0 +1,506 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dataset.models.metrics &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="batchflow.models.torch" href="batchflow.models.torch.html" />
+    <link rel="prev" title="batchflow.models" href="batchflow.models.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="batchflow.html">API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="batchflow.core.html">batchflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.opensets.html">batchflow.opensets</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="batchflow.models.html">batchflow.models</a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#">dataset.models.metrics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.models.torch.html">batchflow.models.torch</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html">batchflow.research</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="batchflow.html">API</a></li>
+          <li class="breadcrumb-item"><a href="batchflow.models.html">batchflow.models</a></li>
+      <li class="breadcrumb-item active">dataset.models.metrics</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/batchflow.models.metrics.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="dataset-models-metrics">
+<h1>dataset.models.metrics<a class="headerlink" href="#dataset-models-metrics" title="Link to this heading"></a></h1>
+<section id="metrics">
+<h2>Metrics<a class="headerlink" href="#metrics" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.models.metrics.Metrics">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/base.html#Metrics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.Metrics" title="Link to this definition"></a></dt>
+<dd><p>Base metrics evaluation class</p>
+<p>This class is not supposed to be instantiated.
+Use specific children classes instead (e.g. <a class="reference internal" href="#batchflow.models.metrics.ClassificationMetrics" title="batchflow.models.metrics.ClassificationMetrics"><code class="xref py py-class docutils literal notranslate"><span class="pre">ClassificationMetrics</span></code></a>).</p>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">ClassificationMetrics</span><span class="p">(</span><span class="n">targets</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;labels&#39;</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">evaluate</span><span class="p">([</span><span class="s1">&#39;sensitivity&#39;</span><span class="p">,</span> <span class="s1">&#39;specificity&#39;</span><span class="p">],</span> <span class="n">multiclass</span><span class="o">=</span><span class="s1">&#39;micro&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.Metrics.evaluate">
+<span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metrics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">agg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'mean'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/base.html#Metrics.evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.Metrics.evaluate" title="Link to this definition"></a></dt>
+<dd><p>Calculates metrics</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>metrics</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – metric names</p></li>
+<li><p><strong>agg</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – inter-batch aggregation type</p></li>
+<li><p><strong>args</strong> – metric-specific parameters</p></li>
+<li><p><strong>kwargs</strong> – metric-specific parameters</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>if metrics is a list, then a dict is returned::</dt><dd><ul class="simple">
+<li><p>key - metric name</p></li>
+<li><p>value - metric value</p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>metric value or <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="classificationmetrics">
+<h2>ClassificationMetrics<a class="headerlink" href="#classificationmetrics" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ClassificationMetrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predictions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'proba'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_bg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">calc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#batchflow.models.metrics.Metrics" title="batchflow.models.metrics.base.Metrics"><code class="xref py py-class docutils literal notranslate"><span class="pre">Metrics</span></code></a></p>
+<p>Metrics to assess classification models</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>targets</strong> (<em>np.array</em>) – Ground-truth labels / probabilities / logits</p></li>
+<li><p><strong>predictions</strong> (<em>np.array</em>) – Predicted labels / probabilites / logits</p></li>
+<li><p><strong>num_classes</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – the number of classes (default is None)</p></li>
+<li><p><strong>fmt</strong> (<em>'proba'</em><em>, </em><em>'logits'</em><em>, </em><em>'labels'</em>) – whether arrays contain probabilities, logits or labels</p></li>
+<li><p><strong>axis</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – a class axis (default is None)</p></li>
+<li><p><strong>threshold</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – A probability level for binarization (lower values become 0, equal or greater values become 1)</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Input arrays (<cite>targets</cite> and <cite>predictions</cite>) might be vectors or multidimensional arrays,
+where the first dimension represents batch items. The latter is useful for pixel-level metrics.</p></li>
+<li><p>Both <cite>targets</cite> and <cite>predictions</cite> usually contain the same data (labels, probabilities or logits).
+However, <cite>targets</cite> might be labels, while <cite>predictions</cite> are probabilities / logits.
+For that to work:</p>
+<ul>
+<li><p><cite>targets</cite> should have the shape which exactly 1 dimension smaller, than <cite>predictions</cite> shape;</p></li>
+<li><p><cite>axis</cite> should point to that dimension;</p></li>
+<li><p><cite>fmt</cite> should contain format of <cite>predictions</cite>.</p></li>
+</ul>
+</li>
+<li><p>When <cite>axis</cite> is specified, <cite>predictions</cite> should be a one-hot array with class information provided
+in the given axis (class probabilities or logits). In this case <cite>targets</cite> can contain labels (see above)
+or probabilities / logits in the very same axis.</p></li>
+<li><p>If <cite>fmt</cite> is ‘labels’, <cite>num_classes</cite> should be specified. Due to randomness any given batch may not
+contain items of some classes, so all the labels cannot be inferred as simply as <cite>labels.max()</cite>.</p></li>
+<li><p>If <cite>fmt</cite> is ‘proba’ or ‘logits’, then <cite>axis</cite> points to the one-hot dimension.
+However, if <cite>axis</cite> is None, two class classification is assumed and <cite>targets</cite> / <cite>predictions</cite>
+should contain probabilities or logits for a positive class only.</p></li>
+</ul>
+<p><strong>Metrics</strong>
+All metrics return:</p>
+<ul class="simple">
+<li><p>a single value if input is a vector for a 2-class task.</p></li>
+<li><p>a single value if input is a vector for a multiclass task and multiclass averaging is enabled.</p></li>
+<li><p>a vector with batch size items if input is a multidimensional array (e.g. images or sequences)
+and there are just 2 classes or multiclass averaging is on.</p></li>
+<li><p>a vector with <cite>num_classes</cite> items if input is a vector for multiclass case without averaging.</p></li>
+<li><p>a 2d array <cite>(batch_items, num_classes)</cite> for multidimensional inputs in a multiclass case without averaging.</p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Count-based metrics (<cite>true_positive</cite>, <cite>false_positive</cite>, etc.) do not support mutliclass averaging.
+They always return counts for each class separately.
+For multiclass tasks rate metrics, such as <cite>true_positive_rate</cite>, <cite>false_positive_rate</cite>, etc.,
+might seem more convenient.</p>
+</div>
+<p><strong>Multiclass metrics</strong></p>
+<p>In a multiclass case metrics might be calculated with or without class averaging.</p>
+<p>Available methods are:</p>
+<ul class="simple">
+<li><p><cite>None</cite> - no averaging, calculate metrics for each class individually (one-vs-all)</p></li>
+<li><dl class="simple">
+<dt><cite>‘micro’</cite> - calculate metrics globally by counting the total true positives,</dt><dd><p>false negatives, false positives, etc. across all classes</p>
+</dd>
+</dl>
+</li>
+<li><p><cite>‘macro’</cite> - calculate metrics for each class, and take their mean.</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">metrics</span> <span class="o">=</span> <span class="n">ClassificationMetrics</span><span class="p">(</span><span class="n">targets</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;labels&#39;</span><span class="p">)</span>
+<span class="n">metrics</span><span class="o">.</span><span class="n">evaluate</span><span class="p">([</span><span class="s1">&#39;sensitivity&#39;</span><span class="p">,</span> <span class="s1">&#39;specificity&#39;</span><span class="p">],</span> <span class="n">multiclass</span><span class="o">=</span><span class="s1">&#39;macro&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.accuracy">
+<span class="sig-name descname"><span class="pre">accuracy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.accuracy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.accuracy" title="Link to this definition"></a></dt>
+<dd><p>An accuracy of detecting all the classes combined</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.append">
+<span class="sig-name descname"><span class="pre">append</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metrics</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.append"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.append" title="Link to this definition"></a></dt>
+<dd><p>Append confusion matrix with data from another metrics</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.condition_negative">
+<span class="sig-name descname"><span class="pre">condition_negative</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.condition_negative"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.condition_negative" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.condition_positive">
+<span class="sig-name descname"><span class="pre">condition_positive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.condition_positive"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.condition_positive" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.confusion_matrix">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">confusion_matrix</span></span><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.confusion_matrix" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.copy">
+<span class="sig-name descname"><span class="pre">copy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.copy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.copy" title="Link to this definition"></a></dt>
+<dd><p>Return a duplicate containing only the confusion matrix</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.diagnostics_odds_ratio">
+<span class="sig-name descname"><span class="pre">diagnostics_odds_ratio</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(inf,</span> <span class="pre">0)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.diagnostics_odds_ratio"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.diagnostics_odds_ratio" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.f1_score">
+<span class="sig-name descname"><span class="pre">f1_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.f1_score"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.f1_score" title="Link to this definition"></a></dt>
+<dd><p>Compute f1-score</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.false_discovery_rate">
+<span class="sig-name descname"><span class="pre">false_discovery_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1,</span> <span class="pre">0)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.false_discovery_rate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.false_discovery_rate" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.false_negative">
+<span class="sig-name descname"><span class="pre">false_negative</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.false_negative"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.false_negative" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.false_negative_rate">
+<span class="sig-name descname"><span class="pre">false_negative_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1,</span> <span class="pre">0)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.false_negative_rate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.false_negative_rate" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.false_omission_rate">
+<span class="sig-name descname"><span class="pre">false_omission_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1,</span> <span class="pre">0)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.false_omission_rate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.false_omission_rate" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.false_positive">
+<span class="sig-name descname"><span class="pre">false_positive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.false_positive"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.false_positive" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.false_positive_rate">
+<span class="sig-name descname"><span class="pre">false_positive_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1,</span> <span class="pre">0)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.false_positive_rate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.false_positive_rate" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.free">
+<span class="sig-name descname"><span class="pre">free</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.free"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.free" title="Link to this definition"></a></dt>
+<dd><p>Free memory allocated for intermediate data</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.jaccard">
+<span class="sig-name descname"><span class="pre">jaccard</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.jaccard"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.jaccard" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.negative_likelihood_ratio">
+<span class="sig-name descname"><span class="pre">negative_likelihood_ratio</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(inf,</span> <span class="pre">0)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.negative_likelihood_ratio"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.negative_likelihood_ratio" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.negative_predictive_value">
+<span class="sig-name descname"><span class="pre">negative_predictive_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(0,</span> <span class="pre">1)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.negative_predictive_value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.negative_predictive_value" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.one_hot">
+<span class="sig-name descname"><span class="pre">one_hot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.one_hot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.one_hot" title="Link to this definition"></a></dt>
+<dd><p>Convert an array of labels into a one-hot array</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.plot_confusion_matrix">
+<span class="sig-name descname"><span class="pre">plot_confusion_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.plot_confusion_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.plot_confusion_matrix" title="Link to this definition"></a></dt>
+<dd><p>Plot confusion matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>classes</strong> (<em>sequence</em><em>, </em><em>optional</em>) – Sequence of classes labels.</p></li>
+<li><p><strong>normalize</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether to normalize confusion matrix over target classes.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.positive_likelihood_ratio">
+<span class="sig-name descname"><span class="pre">positive_likelihood_ratio</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(inf,</span> <span class="pre">0)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.positive_likelihood_ratio"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.positive_likelihood_ratio" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.positive_predictive_value">
+<span class="sig-name descname"><span class="pre">positive_predictive_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(0,</span> <span class="pre">1)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.positive_predictive_value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.positive_predictive_value" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.prediction_negative">
+<span class="sig-name descname"><span class="pre">prediction_negative</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.prediction_negative"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.prediction_negative" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.prediction_positive">
+<span class="sig-name descname"><span class="pre">prediction_positive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.prediction_positive"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.prediction_positive" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.prevalence">
+<span class="sig-name descname"><span class="pre">prevalence</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(0,</span> <span class="pre">0)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.prevalence"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.prevalence" title="Link to this definition"></a></dt>
+<dd><p class="rubric">Notes</p>
+<p>Parameter when_zero doesn’t really matter in this case,
+since total_population is never zero, when targets are not empty.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.total_population">
+<span class="sig-name descname"><span class="pre">total_population</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.total_population"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.total_population" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.true_negative">
+<span class="sig-name descname"><span class="pre">true_negative</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.true_negative"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.true_negative" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.true_negative_rate">
+<span class="sig-name descname"><span class="pre">true_negative_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(0,</span> <span class="pre">1)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.true_negative_rate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.true_negative_rate" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.true_positive">
+<span class="sig-name descname"><span class="pre">true_positive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.true_positive"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.true_positive" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.true_positive_rate">
+<span class="sig-name descname"><span class="pre">true_positive_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when_zero</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(0,</span> <span class="pre">1)</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.true_positive_rate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.true_positive_rate" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.ClassificationMetrics.update">
+<span class="sig-name descname"><span class="pre">update</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metrics</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/classify.html#ClassificationMetrics.update"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.ClassificationMetrics.update" title="Link to this definition"></a></dt>
+<dd><p>Update confusion matrix with data from another metrics</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="segmentationmetricsbypixels">
+<h2>SegmentationMetricsByPixels<a class="headerlink" href="#segmentationmetricsbypixels" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.models.metrics.SegmentationMetricsByPixels">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">SegmentationMetricsByPixels</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predictions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'proba'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_bg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">calc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/segment.html#SegmentationMetricsByPixels"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.SegmentationMetricsByPixels" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#batchflow.models.metrics.ClassificationMetrics" title="batchflow.models.metrics.classify.ClassificationMetrics"><code class="xref py py-class docutils literal notranslate"><span class="pre">ClassificationMetrics</span></code></a></p>
+<p>Metrics to assess segmentation models pixel-wise</p>
+<p class="rubric">Notes</p>
+<p>Rate metrics are evaluated for each item independently. So there are two levels of metrics aggregation:</p>
+<ul class="simple">
+<li><p>multi-class averaging</p></li>
+<li><p>dataset aggregation.</p></li>
+</ul>
+<p>For instance, if you have a dataset of 100 pictures (each having size of 256x256) of 10 classes and
+you need to calculate an accuracy of semantic segmentation, then:</p>
+<ul class="simple">
+<li><p><cite>evaluate([‘accuracy’], agg=None, multiclass=None)</cite> will return an array of shape (100, 10) containing accuracy
+of each class for each image separately.</p></li>
+<li><p><cite>evaluate([‘accuracy’], agg=’mean’, multiclass=None)</cite> will return a vector of shape (10,) containing
+an accuracy of each class averaged across all images.</p></li>
+<li><p><cite>evaluate([‘accuracy’], agg=None, multiclass=’macro’)</cite> will return a vector of shape (100,) containing
+an accuracy of each image separately averaged across all classes.</p></li>
+<li><p><cite>evaluate([‘accuracy’], agg=’mean’, multiclass=’macro’)</cite> will return a single value of
+an average accuracy of all classes and images combined.</p></li>
+</ul>
+<p>The default values are <cite>agg=’mean’, multiclass=’macro’</cite>.</p>
+<p>For multi-class averaging see <a class="reference internal" href="#batchflow.models.metrics.ClassificationMetrics" title="batchflow.models.metrics.ClassificationMetrics"><code class="xref py py-class docutils literal notranslate"><span class="pre">ClassificationMetrics</span></code></a>.</p>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">metrics</span> <span class="o">=</span> <span class="n">SegmentationMetricsByPixels</span><span class="p">(</span><span class="n">targets</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;labels&#39;</span><span class="p">)</span>
+<span class="n">metrics</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s1">&#39;specificity&#39;</span><span class="p">)</span>
+<span class="n">metrics</span><span class="o">.</span><span class="n">evaluate</span><span class="p">([</span><span class="s1">&#39;sensitivity&#39;</span><span class="p">,</span> <span class="s1">&#39;jaccard&#39;</span><span class="p">],</span> <span class="n">agg</span><span class="o">=</span><span class="s1">&#39;mean&#39;</span><span class="p">,</span> <span class="n">multiclass</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</section>
+<section id="segmentationmetricsbyinstances">
+<h2>SegmentationMetricsByInstances<a class="headerlink" href="#segmentationmetricsbyinstances" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.models.metrics.SegmentationMetricsByInstances">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">SegmentationMetricsByInstances</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predictions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'proba'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_bg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">calc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/segment.html#SegmentationMetricsByInstances"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.SegmentationMetricsByInstances" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#batchflow.models.metrics.ClassificationMetrics" title="batchflow.models.metrics.classify.ClassificationMetrics"><code class="xref py py-class docutils literal notranslate"><span class="pre">ClassificationMetrics</span></code></a></p>
+<p>Metrics to assess segmentation models by instances (i.e. connected components of one class,
+e.g. cancer nodules, faces, )</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>iot</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – if the ratio of a predicted instance size to the corresponding target size &gt;= <cite>iot</cite>,
+then instance is considered correctly predicted (true postitive).</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>For other parameters see <a class="reference internal" href="#batchflow.models.metrics.ClassificationMetrics" title="batchflow.models.metrics.ClassificationMetrics"><code class="xref py py-class docutils literal notranslate"><span class="pre">ClassificationMetrics</span></code></a>.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.SegmentationMetricsByInstances.condition_positive">
+<span class="sig-name descname"><span class="pre">condition_positive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/segment.html#SegmentationMetricsByInstances.condition_positive"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.SegmentationMetricsByInstances.condition_positive" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.SegmentationMetricsByInstances.free">
+<span class="sig-name descname"><span class="pre">free</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/segment.html#SegmentationMetricsByInstances.free"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.SegmentationMetricsByInstances.free" title="Link to this definition"></a></dt>
+<dd><p>Free memory allocated for intermediate data</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.SegmentationMetricsByInstances.prediction_positive">
+<span class="sig-name descname"><span class="pre">prediction_positive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/segment.html#SegmentationMetricsByInstances.prediction_positive"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.SegmentationMetricsByInstances.prediction_positive" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.SegmentationMetricsByInstances.total_population">
+<span class="sig-name descname"><span class="pre">total_population</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/segment.html#SegmentationMetricsByInstances.total_population"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.SegmentationMetricsByInstances.total_population" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.SegmentationMetricsByInstances.true_negative">
+<span class="sig-name descname"><span class="pre">true_negative</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/segment.html#SegmentationMetricsByInstances.true_negative"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.SegmentationMetricsByInstances.true_negative" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.models.metrics.SegmentationMetricsByInstances.true_positive">
+<span class="sig-name descname"><span class="pre">true_positive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/models/metrics/segment.html#SegmentationMetricsByInstances.true_positive"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.models.metrics.SegmentationMetricsByInstances.true_positive" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="batchflow.models.html" class="btn btn-neutral float-left" title="batchflow.models" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="batchflow.models.torch.html" class="btn btn-neutral float-right" title="batchflow.models.torch" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

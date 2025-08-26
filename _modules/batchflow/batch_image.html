@@ -1,0 +1,1316 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>batchflow.batch_image &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">batchflow.batch_image</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for batchflow.batch_image</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot; Contains Batch classes for images &quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">from</span> <span class="nn">numbers</span> <span class="kn">import</span> <span class="n">Number</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">PIL</span>
+    <span class="kn">import</span> <span class="nn">PIL.ImageOps</span>
+    <span class="kn">import</span> <span class="nn">PIL.ImageChops</span>
+    <span class="kn">import</span> <span class="nn">PIL.ImageFilter</span>
+    <span class="kn">import</span> <span class="nn">PIL.ImageEnhance</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="k">pass</span>
+
+<span class="kn">from</span> <span class="nn">scipy.ndimage.filters</span> <span class="kn">import</span> <span class="n">gaussian_filter</span>
+<span class="kn">from</span> <span class="nn">scipy.ndimage.interpolation</span> <span class="kn">import</span> <span class="n">map_coordinates</span>
+
+<span class="kn">from</span> <span class="nn">.batch</span> <span class="kn">import</span> <span class="n">Batch</span>
+<span class="kn">from</span> <span class="nn">.decorators</span> <span class="kn">import</span> <span class="n">action</span><span class="p">,</span> <span class="n">apply_parallel</span><span class="p">,</span> <span class="n">inbatch_parallel</span>
+<span class="kn">from</span> <span class="nn">.dsindex</span> <span class="kn">import</span> <span class="n">FilesIndex</span>
+
+
+<span class="k">class</span> <span class="nc">BaseImagesBatch</span><span class="p">(</span><span class="n">Batch</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Batch class for 2D images.</span>
+
+<span class="sd">    Note, that if any class method is wrapped with `@apply_parallel` decorator</span>
+<span class="sd">    than for inner calls (i.e. from other class methods) should be used version</span>
+<span class="sd">    of desired method with underscores. (For example, if there is a decorated</span>
+<span class="sd">    `method` than you need to call `_method_` from inside of `other_method`).</span>
+<span class="sd">    Same is applicable for all child classes of :class:`batch.Batch`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">components</span> <span class="o">=</span> <span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="s2">&quot;labels&quot;</span><span class="p">,</span> <span class="s2">&quot;masks&quot;</span>
+    <span class="c1"># Class-specific defaults for :meth:`.Batch.apply_parallel`</span>
+    <span class="n">apply_defaults</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="s1">&#39;for&#39;</span><span class="p">,</span>
+                          <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_assemble&#39;</span><span class="p">,</span>
+                          <span class="n">src</span><span class="o">=</span><span class="s1">&#39;images&#39;</span><span class="p">,</span>
+                          <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;images&#39;</span><span class="p">,</span>
+                          <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_make_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Compose path.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        ix : str</span>
+<span class="sd">            element&#39;s index (filename)</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Path to folder with images. Used if `self.index` is not `FilesIndex`.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        path : str</span>
+<span class="sd">            Full path to an element.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">FilesIndex</span><span class="p">):</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">get_fullpath</span><span class="p">(</span><span class="n">ix</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">FilesIndex</span><span class="p">):</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">get_fullpath</span><span class="p">(</span><span class="n">ix</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">ix</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">path</span>
+
+    <span class="k">def</span> <span class="nf">_load_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="s2">&quot;images&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Loads image.</span>
+
+<span class="sd">        .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        src : str, dataset.FilesIndex, None</span>
+<span class="sd">            path to the folder with an image. If src is None then it is determined from the index.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to.</span>
+<span class="sd">        fmt : str</span>
+<span class="sd">            Format of the an image</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        NotImplementedError</span>
+<span class="sd">            If this method is not defined in a child class</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">fmt</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Must be implemented in a child class&quot;</span><span class="p">)</span>
+
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Load data.</span>
+
+<span class="sd">        .. note:: if `fmt=&#39;images&#39;` than ``components`` must be a single component (str).</span>
+<span class="sd">        .. note:: All parameters must be named only.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        src : str, None</span>
+<span class="sd">            Path to the folder with data. If src is None then path is determined from the index.</span>
+<span class="sd">        fmt : {&#39;image&#39;, &#39;blosc&#39;, &#39;csv&#39;, &#39;hdf5&#39;, &#39;feather&#39;}</span>
+<span class="sd">            Format of the file to download.</span>
+<span class="sd">        dst : str, sequence</span>
+<span class="sd">            components to download.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;image&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dst</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">src</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dst</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+
+    <span class="k">def</span> <span class="nf">_dump_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Saves image to dst.</span>
+
+<span class="sd">        .. note:: Please note that ``src`` must be ``str`` only, sequence is not allowed here.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Folder where to dump. If dst is None then it is determined from index.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        NotImplementedError</span>
+<span class="sd">            If this method is not defined in a child class</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">fmt</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Must be implemented in a child class&quot;</span><span class="p">)</span>
+
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Dump data.</span>
+
+<span class="sd">        .. note:: If `fmt=&#39;images&#39;` than ``dst`` must be a single component (str).</span>
+
+<span class="sd">        .. note:: All parameters must be named only.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        dst : str, None</span>
+<span class="sd">            Path to the folder where to dump. If dst is None then path is determined from the index.</span>
+<span class="sd">        fmt : {&#39;image&#39;, &#39;blosc&#39;, &#39;csv&#39;, &#39;hdf5&#39;, &#39;feather&#39;}</span>
+<span class="sd">            Format of the file to save.</span>
+<span class="sd">        components : str, sequence</span>
+<span class="sd">            Components to save.</span>
+<span class="sd">        ext: str</span>
+<span class="sd">            Format to save images to.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        self</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;image&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dump_image</span><span class="p">(</span><span class="n">components</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;ext&#39;</span><span class="p">))</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">dst</span><span class="o">=</span><span class="n">dst</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="n">components</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ImagesBatch">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch">[docs]</a>
+<span class="k">class</span> <span class="nc">ImagesBatch</span><span class="p">(</span><span class="n">BaseImagesBatch</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Batch class for 2D images.</span>
+
+<span class="sd">    Images are stored as numpy arrays of PIL.Image.</span>
+
+<span class="sd">    PIL.Image has the following system of coordinates::</span>
+
+<span class="sd">                           X</span>
+<span class="sd">          0 -------------- &gt;</span>
+<span class="sd">          |</span>
+<span class="sd">          |</span>
+<span class="sd">          |  images&#39;s pixels</span>
+<span class="sd">          |</span>
+<span class="sd">          |</span>
+<span class="sd">        Y v</span>
+
+<span class="sd">    Pixel&#39;s position is defined as (x, y)</span>
+
+<span class="sd">    Note, that if any class method is wrapped with `@apply_parallel` decorator</span>
+<span class="sd">    than for inner calls (i.e. from other class methods) should be used version</span>
+<span class="sd">    of desired method with underscores. (For example, if there is a decorated</span>
+<span class="sd">    `method` than you need to call `_method_` from inside of `other_method`).</span>
+<span class="sd">    Same is applicable for all child classes of :class:`batch.Batch`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_get_image_shape</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">image</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">Image</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span>
+        <span class="k">return</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">image_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;: tuple - shape of the image&quot;&quot;&quot;</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">shapes_count</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">([</span><span class="n">image</span><span class="o">.</span><span class="n">size</span> <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">images</span><span class="p">],</span> <span class="n">return_counts</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shapes_count</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">Image</span><span class="p">):</span>
+                <span class="k">return</span> <span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">getbands</span><span class="p">()))</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;Images have different shapes&#39;</span><span class="p">)</span>
+
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;indices&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_assemble&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_load_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="s2">&quot;images&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Loads image</span>
+
+<span class="sd">        .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        src : str, dataset.FilesIndex, None</span>
+<span class="sd">            Path to the folder with an image. If src is None then it is determined from the index.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to.</span>
+<span class="sd">        fmt : str</span>
+<span class="sd">            Format of an image.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_make_path</span><span class="p">(</span><span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="p">))</span>
+
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;indices&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_dump_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Saves image to dst.</span>
+
+<span class="sd">        .. note:: Please note that ``src`` must be ``str`` only, sequence is not allowed here.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Folder where to dump.</span>
+<span class="sd">        fmt : str</span>
+<span class="sd">            Format of saved image.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">dst</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;You must specify `dst`&#39;</span><span class="p">)</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="p">)</span>
+        <span class="n">ix</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ix</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">fmt</span> <span class="k">if</span> <span class="n">fmt</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">ix</span><span class="p">)</span>
+        <span class="n">image</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">ix</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">_assemble_component</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">component</span><span class="o">=</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assemble one component after parallel execution.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        result : sequence, array_like</span>
+<span class="sd">            Results after inbatch_parallel.</span>
+<span class="sd">        component : str</span>
+<span class="sd">            component to assemble</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">Image</span><span class="p">):</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">component</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">component</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">result</span><span class="p">))</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="n">array_result</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+                <span class="n">array_result</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">result</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">component</span><span class="p">,</span> <span class="n">array_result</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ImagesBatch.to_pil">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.to_pil">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">to_pil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;converts images in Batch to PIL format</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">Image</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">image</span>
+
+        <span class="k">if</span> <span class="n">mode</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">mode</span> <span class="o">=</span> <span class="s1">&#39;L&#39;</span>
+            <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                    <span class="n">mode</span> <span class="o">=</span> <span class="s1">&#39;RGB&#39;</span>
+                <span class="k">elif</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">mode</span> <span class="o">=</span> <span class="s1">&#39;L&#39;</span>
+                    <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span>
+                <span class="k">elif</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                    <span class="n">mode</span> <span class="o">=</span> <span class="s1">&#39;LA&#39;</span>
+                <span class="k">elif</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+                    <span class="n">mode</span> <span class="o">=</span> <span class="s1">&#39;RGBA&#39;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Unknown image type as image has&#39;</span><span class="p">,</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="s1">&#39;channels&#39;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;L&#39;</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">mode</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch._calc_origin">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch._calc_origin">[docs]</a>
+    <span class="k">def</span> <span class="nf">_calc_origin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image_shape</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">background_shape</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Calculate coordinate of the input image with respect to the background.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        image_shape : sequence</span>
+<span class="sd">            shape of the input image.</span>
+<span class="sd">        origin : array_like, sequence, {&#39;center&#39;, &#39;top_left&#39;, &#39;top_right&#39;, &#39;bottom_left&#39;, &#39;bottom_right&#39;, &#39;random&#39;}</span>
+<span class="sd">            Position of the input image with respect to the background. Can be one of:</span>
+<span class="sd">                - &#39;center&#39; - place the center of the input image on the center of the background and crop</span>
+<span class="sd">                  the input image accordingly.</span>
+<span class="sd">                - &#39;top_left&#39; - place the upper-left corner of the input image on the upper-left of the background</span>
+<span class="sd">                  and crop the input image accordingly.</span>
+<span class="sd">                - &#39;top_right&#39; - crop an image such that upper-right corners of</span>
+<span class="sd">                  an image and the cropping box coincide</span>
+<span class="sd">                - &#39;bottom_left&#39; - crop an image such that lower-left corners of</span>
+<span class="sd">                  an image and the cropping box coincide</span>
+<span class="sd">                - &#39;bottom_right&#39; - crop an image such that lower-right corners of</span>
+<span class="sd">                  an image and the cropping box coincide</span>
+<span class="sd">                - &#39;random&#39; - place the upper-left corner of the input image on the randomly sampled position</span>
+<span class="sd">                  in the background. Position is sampled uniformly such that there is no need for cropping.</span>
+<span class="sd">                - other - sequence of ints or sequence of floats in [0, 1) interval;</span>
+<span class="sd">                  place the upper-left corner of the input image on the given position in the background.</span>
+<span class="sd">                  If `origin` is a sequence of floats in [0, 1), it defines a relative position of</span>
+<span class="sd">                  the origin in a valid region of image.</span>
+
+<span class="sd">        background_shape : sequence</span>
+<span class="sd">            shape of the background image.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        sequence : calculated origin in the form (column, row)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">origin</span> <span class="o">==</span> <span class="s1">&#39;top_left&#39;</span><span class="p">:</span>
+                <span class="n">origin</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+            <span class="k">elif</span> <span class="n">origin</span> <span class="o">==</span> <span class="s1">&#39;top_right&#39;</span><span class="p">:</span>
+                <span class="n">origin</span> <span class="o">=</span> <span class="p">(</span><span class="n">background_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">origin</span> <span class="o">==</span> <span class="s1">&#39;bottom_left&#39;</span><span class="p">:</span>
+                <span class="n">origin</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">background_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">origin</span> <span class="o">==</span> <span class="s1">&#39;bottom_right&#39;</span><span class="p">:</span>
+                <span class="n">origin</span> <span class="o">=</span> <span class="p">(</span><span class="n">background_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span>
+                          <span class="n">background_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">origin</span> <span class="o">==</span> <span class="s1">&#39;center&#39;</span><span class="p">:</span>
+                <span class="n">origin</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">background_shape</span><span class="p">)</span> <span class="o">-</span> <span class="n">image_shape</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+            <span class="k">elif</span> <span class="n">origin</span> <span class="o">==</span> <span class="s1">&#39;random&#39;</span><span class="p">:</span>
+                <span class="n">origin</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">background_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span>
+                          <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">background_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;If string, origin should be one of [&#39;center&#39;, &#39;top_left&#39;, &#39;top_right&#39;, &quot;</span>\
+                      <span class="sa">f</span><span class="s2">&quot;&#39;bottom_left&#39;, &#39;bottom_right&#39;, &#39;random&#39;]. Got &#39;</span><span class="si">{</span><span class="n">origin</span><span class="si">}</span><span class="s2">&#39;.&quot;</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">all</span><span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">elem</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">elem</span> <span class="ow">in</span> <span class="n">origin</span><span class="p">):</span>
+            <span class="n">region</span> <span class="o">=</span> <span class="p">((</span><span class="n">background_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span>
+                      <span class="p">(</span><span class="n">background_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">))</span>
+            <span class="n">origin</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">origin</span><span class="p">)</span> <span class="o">*</span> <span class="n">region</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">elem</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">elem</span> <span class="ow">in</span> <span class="n">origin</span><span class="p">):</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;If not a string, origin should be either a sequence of ints or &quot;</span>\
+                  <span class="sa">f</span><span class="s2">&quot;sequence of floats in [0, 1) interval. Got </span><span class="si">{</span><span class="n">origin</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.scale">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.scale">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">scale</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">factor</span><span class="p">,</span> <span class="n">preserve_shape</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">origin</span><span class="o">=</span><span class="s1">&#39;center&#39;</span><span class="p">,</span> <span class="n">resample</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Scale the content of each image in the batch.</span>
+
+<span class="sd">        Resulting shape is obtained as original_shape * factor.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        -----------</span>
+<span class="sd">        factor : float, sequence</span>
+<span class="sd">            resulting shape is obtained as original_shape * factor</span>
+
+<span class="sd">            - float - scale all axes with the given factor</span>
+<span class="sd">            - sequence (factor_1, factort_2, ...) - scale each axis with the given factor separately</span>
+
+<span class="sd">        preserve_shape : bool</span>
+<span class="sd">            whether to preserve the shape of the image after scaling</span>
+
+<span class="sd">        origin : array-like, {&#39;center&#39;, &#39;top_left&#39;, &#39;top_right&#39;, &#39;bottom_left&#39;, &#39;bottom_right&#39;, &#39;random&#39;}</span>
+<span class="sd">            Relevant only if `preserve_shape` is True.</span>
+<span class="sd">            If `scale` &lt; 1, defines position of the scaled image with respect to the original one&#39;s shape.</span>
+<span class="sd">            If `scale` &gt; 1, defines position of cropping box.</span>
+
+<span class="sd">            Can be one of:</span>
+
+<span class="sd">            - &#39;center&#39; - place the center of the input image on the center of the background and crop</span>
+<span class="sd">              the input image accordingly.</span>
+<span class="sd">            - &#39;top_left&#39; - place the upper-left corner of the input image on the upper-left of the background</span>
+<span class="sd">              and crop the input image accordingly.</span>
+<span class="sd">            - &#39;top_right&#39; - crop an image such that upper-right corners of</span>
+<span class="sd">              an image and the cropping box coincide</span>
+<span class="sd">            - &#39;bottom_left&#39; - crop an image such that lower-left corners of</span>
+<span class="sd">              an image and the cropping box coincide</span>
+<span class="sd">            - &#39;bottom_right&#39; - crop an image such that lower-right corners of</span>
+<span class="sd">              an image and the cropping box coincide</span>
+<span class="sd">            - &#39;random&#39; - place the upper-left corner of the input image on the randomly sampled position</span>
+<span class="sd">              in the background. Position is sampled uniformly such that there is no need for cropping.</span>
+<span class="sd">            - array_like - sequence of ints or sequence of floats in [0, 1) interval;</span>
+<span class="sd">              place the upper-left corner of the input image on the given position in the background.</span>
+<span class="sd">              If `origin` is a sequence of floats in [0, 1), it defines a relative position</span>
+<span class="sd">              of the origin in a valid region of image.</span>
+
+<span class="sd">        resample: int</span>
+<span class="sd">            Parameter passed to PIL.Image.resize. Interpolation order</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        Using &#39;random&#39; option for origin with `src` as list with multiple elements will not result in same crop for each</span>
+<span class="sd">        element, as origin will be sampled independently for each `src` element.</span>
+<span class="sd">        To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        self</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">src</span><span class="p">,</span> <span class="n">dst</span>
+
+        <span class="n">original_shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_image_shape</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+        <span class="n">rescaled_shape</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">original_shape</span><span class="p">)</span><span class="o">*</span><span class="n">factor</span><span class="p">)))</span>
+        <span class="n">rescaled_image</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">rescaled_shape</span><span class="p">,</span> <span class="n">resample</span><span class="o">=</span><span class="n">resample</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">preserve_shape</span><span class="p">:</span>
+            <span class="n">rescaled_image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_preserve_shape</span><span class="p">(</span><span class="n">original_shape</span><span class="p">,</span> <span class="n">rescaled_image</span><span class="p">,</span> <span class="n">origin</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">rescaled_image</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.crop">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.crop">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">crop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">crop_boundaries</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Crop an image.</span>
+
+<span class="sd">        Extract image data from the window of the size given by `shape` and placed at `origin`.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        origin : sequence, str</span>
+<span class="sd">            Location of the cropping box. See :meth:`.ImagesBatch._calc_origin` for details.</span>
+<span class="sd">        shape : sequence</span>
+<span class="sd">            crop size in the form of (rows, columns)</span>
+<span class="sd">        crop_boundaries : bool</span>
+<span class="sd">            If `True` then crop is got only from image&#39;s area. Shape of the crop might diverge with the passed one</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        Using &#39;random&#39; origin with `src` as list with multiple elements will not result in same crop for each</span>
+<span class="sd">        element, as origin will be sampled independently for each `src` element.</span>
+<span class="sd">        To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">src</span><span class="p">,</span> <span class="n">dst</span>
+
+        <span class="n">origin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_calc_origin</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+        <span class="n">right_bottom</span> <span class="o">=</span> <span class="n">origin</span> <span class="o">+</span> <span class="n">shape</span>
+
+        <span class="k">if</span> <span class="n">crop_boundaries</span><span class="p">:</span>
+            <span class="n">out_of_boundaries</span> <span class="o">=</span> <span class="n">origin</span> <span class="o">&lt;</span> <span class="mi">0</span>
+            <span class="n">origin</span><span class="p">[</span><span class="n">out_of_boundaries</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+
+            <span class="n">image_shape</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+            <span class="n">out_of_boundaries</span> <span class="o">=</span> <span class="n">right_bottom</span> <span class="o">&gt;</span> <span class="n">image_shape</span>
+            <span class="n">right_bottom</span><span class="p">[</span><span class="n">out_of_boundaries</span><span class="p">]</span> <span class="o">=</span> <span class="n">image_shape</span><span class="p">[</span><span class="n">out_of_boundaries</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">image</span><span class="o">.</span><span class="n">crop</span><span class="p">((</span><span class="o">*</span><span class="n">origin</span><span class="p">,</span> <span class="o">*</span><span class="n">right_bottom</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.put_on_background">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.put_on_background">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">put_on_background</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">background</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Put an image on a background at given origin</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        background : PIL.Image, np.ndarray of np.uint8</span>
+<span class="sd">            Blank background to put image on.</span>
+<span class="sd">        origin : sequence, str</span>
+<span class="sd">            Location of the cropping box. See :meth:`.ImagesBatch._calc_origin` for details.</span>
+<span class="sd">        mask : None, PIL.Image, np.ndarray of np.uint8</span>
+<span class="sd">            mask passed to PIL.Image.paste</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        Using &#39;random&#39; origin with `src` as list with multiple elements will not result in same crop for each</span>
+<span class="sd">        element, as origin will be sampled independently for each `src` element.</span>
+<span class="sd">        To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">background</span><span class="p">,</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">Image</span><span class="p">):</span>
+            <span class="n">background</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">background</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">background</span> <span class="o">=</span> <span class="n">background</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">Image</span><span class="p">):</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span> <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+
+        <span class="n">origin</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_calc_origin</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_image_shape</span><span class="p">(</span><span class="n">image</span><span class="p">),</span> <span class="n">origin</span><span class="p">,</span>
+                                        <span class="bp">self</span><span class="o">.</span><span class="n">_get_image_shape</span><span class="p">(</span><span class="n">background</span><span class="p">)))</span>
+
+        <span class="n">background</span><span class="o">.</span><span class="n">paste</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">background</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_preserve_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">,</span> <span class="n">transformed_image</span><span class="p">,</span> <span class="n">origin</span><span class="o">=</span><span class="s1">&#39;center&#39;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Change the transformed image&#39;s shape by cropping and adding empty pixels to fit the shape of original image.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        original_shape : sequence</span>
+<span class="sd">        transformed_image : np.ndarray</span>
+<span class="sd">        input_origin : array-like, {&#39;center&#39;, &#39;top_left&#39;, &#39;random&#39;}</span>
+<span class="sd">            Position of the scaled image with respect to the original one&#39;s shape.</span>
+<span class="sd">            - &#39;center&#39; - place the center of the input image on the center of the background and crop</span>
+<span class="sd">                         the input image accordingly.</span>
+<span class="sd">            - &#39;top_left&#39; - place the upper-left corner of the input image on the upper-left of the background</span>
+<span class="sd">                           and crop the input image accordingly.</span>
+<span class="sd">            - &#39;top_right&#39; - crop an image such that upper-right corners of</span>
+<span class="sd">                            an image and the cropping box coincide</span>
+<span class="sd">            - &#39;bottom_left&#39; - crop an image such that lower-left corners of</span>
+<span class="sd">                              an image and the cropping box coincide</span>
+<span class="sd">            - &#39;bottom_right&#39; - crop an image such that lower-right corners of</span>
+<span class="sd">                               an image and the cropping box coincide</span>
+<span class="sd">            - &#39;random&#39; - place the upper-left corner of the input image on the randomly sampled position</span>
+<span class="sd">                         in the background. Position is sampled uniformly such that there is no need for cropping.</span>
+<span class="sd">            - array_like - sequence of ints or sequence of floats in [0, 1) interval;</span>
+<span class="sd">                           place the upper-left corner of the input image on the given position in the background.</span>
+<span class="sd">                           If `origin` is a sequence of floats in [0, 1), it defines a relative position</span>
+<span class="sd">                           of the origin in a valid region of image.</span>
+<span class="sd">        crop_origin: array-like, {&#39;center&#39;, &#39;top_left&#39;, &#39;random&#39;}</span>
+<span class="sd">            Position of crop from transformed image.</span>
+<span class="sd">            Has same values as `input_origin`.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        np.ndarray : image after described actions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">transformed_shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_image_shape</span><span class="p">(</span><span class="n">transformed_image</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">transformed_shape</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">original_shape</span><span class="p">)):</span>
+            <span class="n">n_channels</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">transformed_image</span><span class="o">.</span><span class="n">getbands</span><span class="p">())</span>
+            <span class="k">if</span> <span class="n">n_channels</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">background</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">original_shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">background</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="o">*</span><span class="n">original_shape</span><span class="p">,</span> <span class="n">n_channels</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_put_on_background_</span><span class="p">(</span><span class="n">transformed_image</span><span class="p">,</span> <span class="n">background</span><span class="p">,</span> <span class="n">origin</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_crop_</span><span class="p">(</span><span class="n">transformed_image</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ImagesBatch.filter">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.filter">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">filter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">mode</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Filters an image. Calls ``image.filter(getattr(PIL.ImageFilter, mode)(*args, **kwargs))``.</span>
+
+<span class="sd">        For more details see `ImageFilter &lt;http://pillow.readthedocs.io/en/stable/reference/ImageFilter.html&gt;_`.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        mode : str</span>
+<span class="sd">            Name of the filter.</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">image</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">PIL</span><span class="o">.</span><span class="n">ImageFilter</span><span class="p">,</span> <span class="n">mode</span><span class="p">)(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.transform">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.transform">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Calls ``image.transform(*args, **kwargs)``.</span>
+
+<span class="sd">        For more information see</span>
+<span class="sd">        `&lt;http://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.transform&gt;_`.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">size</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;size&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_image_shape</span><span class="p">(</span><span class="n">image</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">image</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.resize">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.resize">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">resize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Calls ``image.resize(*args, **kwargs)``.</span>
+
+<span class="sd">        For more details see `&lt;https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.resize&gt;_`.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        size : tuple</span>
+<span class="sd">            the resulting size of the image. If one of the components of tuple is None,</span>
+<span class="sd">            corresponding dimension will be proportionally resized.</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">src</span><span class="p">,</span> <span class="n">dst</span>
+
+        <span class="k">if</span> <span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;At least one component of the parameter &quot;size&quot; must be a number.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">new_size</span> <span class="o">=</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">new_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">int</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">new_size</span> <span class="o">=</span> <span class="n">size</span>
+
+        <span class="k">return</span> <span class="n">image</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">new_size</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.shift">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.shift">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">shift</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;const&#39;</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Shifts an image.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        offset : (Number, Number)</span>
+<span class="sd">        mode : {&#39;const&#39;, &#39;wrap&#39;}</span>
+<span class="sd">            How to fill borders</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">src</span><span class="p">,</span> <span class="n">dst</span>
+
+        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;const&#39;</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">,</span>
+                                    <span class="n">method</span><span class="o">=</span><span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">AFFINE</span><span class="p">,</span>
+                                    <span class="n">data</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="n">offset</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="n">offset</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+        <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;wrap&#39;</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageChops</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="o">*</span><span class="n">offset</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;mode must be one of [&#39;const&#39;, &#39;wrap&#39;]&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">image</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.pad">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.pad">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">pad</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Calls ``PIL.ImageOps.expand``.</span>
+
+<span class="sd">        For more details see `&lt;http://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.expand&gt;`_.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        offset : sequence</span>
+<span class="sd">            Size of the borders in pixels. The order is (left, top, right, bottom).</span>
+<span class="sd">        mode : {&#39;const&#39;, &#39;wrap&#39;}</span>
+<span class="sd">            Filling mode</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageOps</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.rotate">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.rotate">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">rotate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Rotates an image.</span>
+
+<span class="sd">            kwargs are passed to PIL.Image.rotate</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        angle: Number</span>
+<span class="sd">            In degrees counter clockwise.</span>
+<span class="sd">        resample: int</span>
+<span class="sd">            Interpolation order</span>
+<span class="sd">        expand: bool</span>
+<span class="sd">            Whether to expand the output to hold the whole image. Default is False.</span>
+<span class="sd">        center: (Number, Number)</span>
+<span class="sd">            Center of rotation. Default is the center of the image.</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">image</span><span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.flip">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.flip">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">flip</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;lr&#39;</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Flips image.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        mode : {&#39;lr&#39;, &#39;ud&#39;}</span>
+
+<span class="sd">            - &#39;lr&#39; - apply the left/right flip</span>
+<span class="sd">            - &#39;ud&#39; - apply the upside/down flip</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">src</span><span class="p">,</span> <span class="n">dst</span>
+
+        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;lr&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageOps</span><span class="o">.</span><span class="n">mirror</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageOps</span><span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="n">image</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.invert">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.invert">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">invert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">channels</span><span class="o">=</span><span class="s1">&#39;all&#39;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Invert givn channels.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        channels : int, sequence</span>
+<span class="sd">            Indices of the channels to invert.</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">channels</span> <span class="o">==</span> <span class="s1">&#39;all&#39;</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageChops</span><span class="o">.</span><span class="n">invert</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">bands</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+            <span class="n">channels</span> <span class="o">=</span> <span class="p">(</span><span class="n">channels</span><span class="p">,)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">channels</span><span class="p">,</span> <span class="n">Number</span><span class="p">)</span> <span class="k">else</span> <span class="n">channels</span>
+            <span class="k">for</span> <span class="n">channel</span> <span class="ow">in</span> <span class="n">channels</span><span class="p">:</span>
+                <span class="n">bands</span><span class="p">[</span><span class="n">channel</span><span class="p">]</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageChops</span><span class="o">.</span><span class="n">invert</span><span class="p">(</span><span class="n">bands</span><span class="p">[</span><span class="n">channel</span><span class="p">])</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="s1">&#39;RGB&#39;</span><span class="p">,</span> <span class="n">bands</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">image</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.salt">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.salt">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">salt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">p_noise</span><span class="o">=</span><span class="mf">.015</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="mi">255</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Set random pixel on image to givan value.</span>
+
+<span class="sd">        Every pixel will be set to ``color`` value with probability ``p_noise``.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        p_noise : float</span>
+<span class="sd">            Probability of salting a pixel.</span>
+<span class="sd">        color : float, int, sequence, callable</span>
+<span class="sd">            Color&#39;s value.</span>
+
+<span class="sd">            - int, float, sequence -- value of color</span>
+<span class="sd">            - callable -- color is sampled for every chosen pixel (rules are the same as for int, float and sequence)</span>
+<span class="sd">        size : int, sequence of int, callable</span>
+<span class="sd">            Size of salt</span>
+
+<span class="sd">            - int -- square salt with side ``size``</span>
+<span class="sd">            - sequence -- recangular salt in the form (row, columns)</span>
+<span class="sd">            - callable -- size is sampled for every chosen pixel (rules are the same as for int and sequence)</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">mask_size</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_image_shape</span><span class="p">(</span><span class="n">image</span><span class="p">))</span>
+        <span class="n">mask_salt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">p_noise</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">mask_size</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">bool</span><span class="p">)</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">int</span><span class="p">))</span> <span class="ow">and</span> <span class="n">size</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">color</span><span class="p">):</span>
+            <span class="n">image</span><span class="p">[</span><span class="n">mask_salt</span><span class="p">]</span> <span class="o">=</span> <span class="n">color</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">size_lambda</span> <span class="o">=</span> <span class="n">size</span> <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">size</span><span class="p">)</span> <span class="k">else</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">size</span>
+            <span class="n">color_lambda</span> <span class="o">=</span> <span class="n">color</span> <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">color</span><span class="p">)</span> <span class="k">else</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">color</span>
+            <span class="n">mask_salt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">mask_salt</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">mask_salt</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+                <span class="n">current_size</span> <span class="o">=</span> <span class="n">size_lambda</span><span class="p">()</span>
+                <span class="n">current_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">current_size</span><span class="p">,</span> <span class="n">current_size</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">current_size</span><span class="p">,</span> <span class="n">Number</span><span class="p">)</span> <span class="k">else</span> <span class="n">current_size</span>
+                <span class="n">left_top</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">((</span><span class="n">mask_salt</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">i</span><span class="p">],</span> <span class="n">mask_salt</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">i</span><span class="p">]))</span>
+                <span class="n">right_bottom</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">left_top</span> <span class="o">+</span> <span class="n">current_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_image_shape</span><span class="p">(</span><span class="n">image</span><span class="p">))</span>
+                <span class="n">image</span><span class="p">[</span><span class="n">left_top</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">right_bottom</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">left_top</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span><span class="n">right_bottom</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">color_lambda</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">image</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.clip">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.clip">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">clip</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">low</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">high</span><span class="o">=</span><span class="mi">255</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Truncate image&#39;s pixels.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        low : int, float, sequence</span>
+<span class="sd">            Actual pixel&#39;s value is equal max(value, low). If sequence is given, then its length must coincide</span>
+<span class="sd">            with the number of channels in an image and each channel is thresholded separately</span>
+<span class="sd">        high : int, float, sequence</span>
+<span class="sd">            Actual pixel&#39;s value is equal min(value, high). If sequence is given, then its length must coincide</span>
+<span class="sd">            with the number of channels in an image and each channel is thresholded separately</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">low</span><span class="p">,</span> <span class="n">Number</span><span class="p">):</span>
+            <span class="n">low</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">low</span><span class="p">]</span><span class="o">*</span><span class="mi">3</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">high</span><span class="p">,</span> <span class="n">Number</span><span class="p">):</span>
+            <span class="n">high</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">high</span><span class="p">]</span><span class="o">*</span><span class="mi">3</span><span class="p">)</span>
+
+        <span class="n">high</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s1">&#39;RGB&#39;</span><span class="p">,</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">high</span><span class="p">)</span>
+        <span class="n">low</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s1">&#39;RGB&#39;</span><span class="p">,</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">low</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageChops</span><span class="o">.</span><span class="n">lighter</span><span class="p">(</span><span class="n">PIL</span><span class="o">.</span><span class="n">ImageChops</span><span class="o">.</span><span class="n">darker</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">high</span><span class="p">),</span> <span class="n">low</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.enhance">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.enhance">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">enhance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="s1">&#39;hcbs&#39;</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Apply enhancements from PIL.ImageEnhance to the image.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        layout : str</span>
+<span class="sd">            defines layout of operations, default is `hcbs`:</span>
+<span class="sd">            h - color</span>
+<span class="sd">            c - contrast</span>
+<span class="sd">            b - brightness</span>
+<span class="sd">            s - sharpness</span>
+
+<span class="sd">        factor : float or tuple of float</span>
+<span class="sd">            factor of enhancement for each operation listed in `layout`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">enhancements</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;h&#39;</span><span class="p">:</span> <span class="s1">&#39;Color&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;c&#39;</span><span class="p">:</span> <span class="s1">&#39;Contrast&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;b&#39;</span><span class="p">:</span> <span class="s1">&#39;Brightness&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;s&#39;</span><span class="p">:</span> <span class="s1">&#39;Sharpness&#39;</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">factor</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
+            <span class="n">factor</span> <span class="o">=</span> <span class="p">(</span><span class="n">factor</span><span class="p">,)</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">factor</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;layout&#39; and &#39;factor&#39; should be of same length!&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">alias</span><span class="p">,</span> <span class="n">multiplier</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">layout</span><span class="p">,</span> <span class="n">factor</span><span class="p">):</span>
+            <span class="n">enhancement</span> <span class="o">=</span> <span class="n">enhancements</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">alias</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">enhancement</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Unknown enhancement alias: &#39;</span><span class="p">,</span> <span class="n">alias</span><span class="p">)</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">PIL</span><span class="o">.</span><span class="n">ImageEnhance</span><span class="p">,</span> <span class="n">enhancement</span><span class="p">)(</span><span class="n">image</span><span class="p">)</span><span class="o">.</span><span class="n">enhance</span><span class="p">(</span><span class="n">multiplier</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">image</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.multiply">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.multiply">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">multiply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">multiplier</span><span class="o">=</span><span class="mf">1.</span><span class="p">,</span> <span class="n">clip</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">preserve_type</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Multiply each pixel by the given multiplier.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        multiplier : float, sequence</span>
+<span class="sd">        clip : bool</span>
+<span class="sd">            whether to force image&#39;s pixels to be in [0, 255] or [0, 1.]</span>
+<span class="sd">        preserve_type : bool</span>
+<span class="sd">            Whether to preserve ``dtype`` of transformed images.</span>
+<span class="sd">            If ``False`` is given then the resulting type will be ``np.float``.</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">src</span><span class="p">,</span> <span class="n">dst</span>
+
+        <span class="n">multiplier</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="n">multiplier</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">Image</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">preserve_type</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;Note that some info might be lost during `multiply` transformation since PIL.image &quot;</span>
+                              <span class="s2">&quot;stores data as `np.uint8`. To suppress this warning, use `preserve_type=True` or &quot;</span>
+                              <span class="s2">&quot;consider using `to_array` action before multiplication.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">multiplier</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">image</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">))</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">dtype</span> <span class="k">if</span> <span class="n">preserve_type</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span>
+        <span class="k">if</span> <span class="n">clip</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">multiplier</span><span class="o">*</span><span class="n">image</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span> <span class="k">if</span> <span class="n">dtype</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">uint8</span> <span class="k">else</span> <span class="mf">1.</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">multiplier</span> <span class="o">*</span> <span class="n">image</span>
+        <span class="k">return</span> <span class="n">image</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.add">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.add">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">term</span><span class="o">=</span><span class="mf">1.</span><span class="p">,</span> <span class="n">clip</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">preserve_type</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Add term to each pixel.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        term : float, sequence</span>
+<span class="sd">        clip : bool</span>
+<span class="sd">            whether to force image&#39;s pixels to be in [0, 255] or [0, 1.]</span>
+<span class="sd">        preserve_type : bool</span>
+<span class="sd">            Whether to preserve ``dtype`` of transformed images.</span>
+<span class="sd">            If ``False`` is given then the resulting type will be ``np.float``.</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">term</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="n">term</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">Image</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">term</span><span class="o">+</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">image</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">))</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">dtype</span> <span class="k">if</span> <span class="n">preserve_type</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span>
+        <span class="k">if</span> <span class="n">clip</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">term</span><span class="o">+</span><span class="n">image</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span> <span class="k">if</span> <span class="n">dtype</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">uint8</span> <span class="k">else</span> <span class="mf">1.</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">term</span> <span class="o">+</span> <span class="n">image</span>
+        <span class="k">return</span> <span class="n">image</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.pil_convert">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.pil_convert">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">pil_convert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;L&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Convert image. Actually calls ``image.convert(mode)``.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        mode : str</span>
+<span class="sd">            Pass &#39;L&#39; to convert to grayscale</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">image</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="n">mode</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.posterize">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.posterize">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">posterize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">bits</span><span class="o">=</span><span class="mi">4</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Posterizes image.</span>
+
+<span class="sd">        More concretely, it quantizes pixels&#39; values so that they have``2^bits`` colors</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        bits : int</span>
+<span class="sd">            Number of bits used to store a color&#39;s component.</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">ImageOps</span><span class="o">.</span><span class="n">posterize</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">bits</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.cutout">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.cutout">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">cutout</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">color</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Fills given areas with color</span>
+
+<span class="sd">        .. note:: It is assumed that ``origins``, ``shapes`` and ``colors`` have the same length.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        origin : sequence, str</span>
+<span class="sd">            Location of the cropping box. See :meth:`.ImagesBatch._calc_origin` for details.</span>
+<span class="sd">        shape : sequence, int</span>
+<span class="sd">            Shape of a filled box. Can be one of:</span>
+<span class="sd">                - sequence - crop size in the form of (rows, columns)</span>
+<span class="sd">                - int - shape has squared form</span>
+
+<span class="sd">        color : sequence, number</span>
+<span class="sd">            Color of a filled box. Can be one of:</span>
+
+<span class="sd">            - sequence - (r,g,b) form</span>
+<span class="sd">            - number - grayscale</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        Using &#39;random&#39; origin with `src` as list with multiple elements will not result in same crop for each</span>
+<span class="sd">        element, as origin will be sampled independently for each `src` element.</span>
+<span class="sd">        To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">Number</span><span class="p">)</span> <span class="k">else</span> <span class="n">shape</span>
+        <span class="n">origin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_calc_origin</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_image_shape</span><span class="p">(</span><span class="n">image</span><span class="p">))</span>
+        <span class="n">color</span> <span class="o">=</span> <span class="p">(</span><span class="n">color</span><span class="p">,</span> <span class="n">color</span><span class="p">,</span> <span class="n">color</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">color</span><span class="p">,</span> <span class="n">Number</span><span class="p">)</span> <span class="k">else</span> <span class="n">color</span>
+        <span class="n">image</span><span class="o">.</span><span class="n">paste</span><span class="p">(</span><span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s1">&#39;RGB&#39;</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">shape</span><span class="p">),</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">color</span><span class="p">)),</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">origin</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">image</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_assemble_patches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">patches</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assembles patches after parallel execution.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        patches : sequence</span>
+<span class="sd">            Patches to gather. pathces.shape must be like (batch.size, patches_i, patch_height, patch_width, n_channels)</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to put patches in.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="n">new_items</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">patches</span><span class="p">)</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">new_items</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+<div class="viewcode-block" id="ImagesBatch.split_to_patches">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.split_to_patches">[docs]</a>
+    <span class="nd">@action</span>
+    <span class="nd">@inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;indices&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_assemble_patches&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">split_to_patches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">patch_shape</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Splits image to patches.</span>
+
+<span class="sd">        Small images with the same shape (``patch_shape``) are cropped from the original one with stride ``stride``.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        patch_shape : int, sequence</span>
+<span class="sd">            Patch&#39;s shape in the from (rows, columns). If int is given then patches have square shape.</span>
+<span class="sd">        stride : int, square</span>
+<span class="sd">            Step of the moving window from which patches are cropped. If int is given then the window has square shape.</span>
+<span class="sd">        drop_last : bool</span>
+<span class="sd">            Whether to drop patches whose window covers area out of the image.</span>
+<span class="sd">            If False is passed then these patches are cropped from the edge of an image. See more in tutorials.</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">dst</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="p">)</span>
+        <span class="n">image_shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_image_shape</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+        <span class="n">stride</span> <span class="o">=</span> <span class="p">(</span><span class="n">stride</span><span class="p">,</span> <span class="n">stride</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stride</span><span class="p">,</span> <span class="n">Number</span><span class="p">)</span> <span class="k">else</span> <span class="n">stride</span>
+        <span class="n">patch_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">patch_shape</span><span class="p">,</span> <span class="n">patch_shape</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">patch_shape</span><span class="p">,</span> <span class="n">Number</span><span class="p">)</span> <span class="k">else</span> <span class="n">patch_shape</span>
+        <span class="n">patches</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">def</span> <span class="nf">_iterate_columns</span><span class="p">(</span><span class="n">row_from</span><span class="p">,</span> <span class="n">row_to</span><span class="p">):</span>
+            <span class="n">column</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">while</span> <span class="n">column</span> <span class="o">&lt;</span> <span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">patch_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span>
+                <span class="n">patches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">image</span><span class="p">[</span><span class="n">column</span><span class="p">:</span><span class="n">column</span><span class="o">+</span><span class="n">patch_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">row_from</span><span class="p">:</span><span class="n">row_to</span><span class="p">]))</span>
+                <span class="n">column</span> <span class="o">+=</span> <span class="n">stride</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">drop_last</span> <span class="ow">and</span> <span class="n">column</span> <span class="o">+</span> <span class="n">patch_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+                <span class="n">patches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">image</span><span class="p">[</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">patch_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                                                         <span class="n">row_from</span><span class="p">:</span><span class="n">row_to</span><span class="p">]))</span>
+
+        <span class="n">row</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="n">row</span> <span class="o">&lt;</span> <span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">patch_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span>
+            <span class="n">_iterate_columns</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">row</span><span class="o">+</span><span class="n">patch_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">row</span> <span class="o">+=</span> <span class="n">stride</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">drop_last</span> <span class="ow">and</span> <span class="n">row</span> <span class="o">+</span> <span class="n">patch_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+            <span class="n">_iterate_columns</span><span class="p">(</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">patch_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="n">array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">patches</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">patch</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">patches</span><span class="p">):</span>
+            <span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">patch</span>
+        <span class="k">return</span> <span class="n">array</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.additive_noise">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.additive_noise">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">additive_noise</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">noise</span><span class="p">,</span> <span class="n">clip</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">preserve_type</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Add additive noise to an image.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        noise : callable</span>
+<span class="sd">            Distribution. Must have ``size`` parameter.</span>
+<span class="sd">        clip : bool</span>
+<span class="sd">            whether to force image&#39;s pixels to be in [0, 255] or [0, 1.]</span>
+<span class="sd">        preserve_type : bool</span>
+<span class="sd">            Whether to preserve ``dtype`` of transformed images.</span>
+<span class="sd">            If ``False`` is given then the resulting type will be ``np.float``.</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">noise</span> <span class="o">=</span> <span class="n">noise</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="o">*</span><span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">getbands</span><span class="p">()))</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">Image</span><span class="p">)</span> <span class="k">else</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_add_</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">noise</span><span class="p">,</span> <span class="n">clip</span><span class="p">,</span> <span class="n">preserve_type</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.multiplicative_noise">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.multiplicative_noise">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">multiplicative_noise</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">noise</span><span class="p">,</span> <span class="n">clip</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">preserve_type</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Add multiplicative noise to an image.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        noise : callable</span>
+<span class="sd">            Distribution. Must have ``size`` parameter.</span>
+<span class="sd">        clip : bool</span>
+<span class="sd">            whether to force image&#39;s pixels to be in [0, 255] or [0, 1.]</span>
+<span class="sd">        preserve_type : bool</span>
+<span class="sd">            Whether to preserve ``dtype`` of transformed images.</span>
+<span class="sd">            If ``False`` is given then the resulting type will be ``np.float``.</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">noise</span> <span class="o">=</span> <span class="n">noise</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="o">*</span><span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">getbands</span><span class="p">()))</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">Image</span><span class="p">)</span> <span class="k">else</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_multiply_</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">noise</span><span class="p">,</span> <span class="n">clip</span><span class="p">,</span> <span class="n">preserve_type</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ImagesBatch.elastic_transform">
+<a class="viewcode-back" href="../../api/batchflow.batch_image.html#batchflow.ImagesBatch.elastic_transform">[docs]</a>
+    <span class="nd">@apply_parallel</span>
+    <span class="k">def</span> <span class="nf">elastic_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Deformation of images as described by Simard, Steinkraus and Platt, `Best Practices for Convolutional</span>
+<span class="sd">        Neural Networks applied to Visual Document Analysis &lt;http://cognitivemedium.com/assets/rmnist/Simard.pdf&gt;_`.</span>
+
+<span class="sd">        Code slightly differs from `&lt;https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a&gt;`_.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        alpha : number</span>
+<span class="sd">            maximum of vectors&#39; norms.</span>
+<span class="sd">        sigma : number</span>
+<span class="sd">            Smooth factor.</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        p : float</span>
+<span class="sd">            Probability of applying the transform. Default is 1.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+        <span class="c1"># full shape is needed</span>
+        <span class="n">shape</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span>
+
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s1">&#39;mode&#39;</span><span class="p">,</span> <span class="s1">&#39;constant&#39;</span><span class="p">)</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s1">&#39;cval&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+        <span class="n">column_shift</span> <span class="o">=</span> <span class="n">gaussian_filter</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">shape</span><span class="p">),</span> <span class="n">sigma</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">*</span> <span class="n">alpha</span>
+        <span class="n">row_shift</span> <span class="o">=</span> <span class="n">gaussian_filter</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">shape</span><span class="p">),</span> <span class="n">sigma</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">*</span> <span class="n">alpha</span>
+
+        <span class="n">row</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">channel</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">range</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="nb">range</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+
+        <span class="n">indices</span> <span class="o">=</span> <span class="p">(</span><span class="n">column</span> <span class="o">+</span> <span class="n">column_shift</span><span class="p">,</span> <span class="n">row</span> <span class="o">+</span> <span class="n">row_shift</span><span class="p">,</span> <span class="n">channel</span><span class="p">)</span>
+
+        <span class="n">distored_image</span> <span class="o">=</span> <span class="n">map_coordinates</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;reflect&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">(</span><span class="n">distored_image</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">))[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">(</span><span class="n">distored_image</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">)))</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

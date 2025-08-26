@@ -1,0 +1,217 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Index &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Dataset" href="dataset.html" />
+    <link rel="prev" title="Classes and capabilities" href="classes.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">A short introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes and capabilities</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html">Batch class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html">Batch class for handling images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html">Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="named_expr.html">Named expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html">Within batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="prefetch.html">Inter-batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html">Working with models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html">Torch models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="research.html">Research</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_zoo.html">Model zoo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="classes.html">Classes and capabilities</a></li>
+      <li class="breadcrumb-item active">Index</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/intro/dsindex.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="index">
+<h1>Index<a class="headerlink" href="#index" title="Link to this heading"></a></h1>
+<section id="why-the-index-is-needed">
+<h2>Why the index is needed?<a class="headerlink" href="#why-the-index-is-needed" title="Link to this heading"></a></h2>
+<p>A dataset may be so large that it does not fit into memory and thus you cannot process it at once. That is why each data item in the <cite>Dataset</cite> should have an unique id. It does not have to be meaningful (like a card number or a transaction id), sometimes it may be just a hash or an ordered number. However, each index item should address exactly one data item (which in turn can have a complex structure, like a list, an array, a dataframe, or even a graph).</p>
+<p>The value of ids in the index is important only in 2 situations:</p>
+<ul class="simple">
+<li><p>in <cite>load</cite> <a class="reference external" href="batch#action-methods">action-method</a> , when batch gets data from some external source like <cite>batch_items = external_source[batch.indices]</cite> and thus the external source should contain those indices, otherwise <cite>load</cite> will fail. Similarly, when data is loaded from files, indices usually point to those files and their full paths (see <a class="reference internal" href="#filesindex">FilesIndex</a> below).</p></li>
+<li><p>in item selection - <cite>batch[some_item_id]</cite> - so the index should contain the id you’re referring to.</p></li>
+</ul>
+<p>Evereywhere else the particular id value is pretty meaningless as all operations use an item position in the index, not its id.</p>
+</section>
+<section id="datasetindex">
+<span id="id1"></span><h2>DatasetIndex<a class="headerlink" href="#datasetindex" title="Link to this heading"></a></h2>
+<p><cite>DatasetIndex</cite> is a base index class which stores a sequence of unique ids for your data items. In the simplest case it might be just an ordered sequence of numbers (0, 1, 2, 3,…, e.g. <cite>numpy.arange(len(dataset))</cite>).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset_index</span> <span class="o">=</span> <span class="n">DatasetIndex</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">my_array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+</pre></div>
+</div>
+<p>In other cases it can be a list of domain-specific identificators (e.g. client ids, product codes, serial numbers, timestamps, etc).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset_index</span> <span class="o">=</span> <span class="n">DatasetIndex</span><span class="p">(</span><span class="n">dataframe</span><span class="p">[</span><span class="s1">&#39;client_id&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>You will rarely need to work with an index directly, but if you want to do something specific you may use its <a class="reference internal" href="../api/batchflow.index.html"><span class="doc">public API</span></a>.</p>
+</section>
+<section id="filesindex">
+<span id="id2"></span><h2>FilesIndex<a class="headerlink" href="#filesindex" title="Link to this heading"></a></h2>
+<p>When data comes from a file system, it might be convenient to use <cite>FilesIndex</cite>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">files_index</span> <span class="o">=</span> <span class="n">FilesIndex</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;/path/to/some/files/*.csv&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Thus <cite>files_index</cite> will contain the list of filenames that match a given mask.
+The details of mask specification may be found in the <a class="reference external" href="https://docs.python.org/3/library/glob.html#glob.glob" title="(in Python v3.13)"><code class="xref py py-func docutils literal notranslate"><span class="pre">glob()</span></code></a> documentation.</p>
+<section id="no-file-extensions">
+<h3>No file extensions<a class="headerlink" href="#no-file-extensions" title="Link to this heading"></a></h3>
+<p>When filenames contain extensions which are not a part of the id, then they may be stripped with an option <cite>no_ext</cite></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">dataset_index</span> <span class="o">=</span> <span class="n">FilesIndex</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;/path/to/some/files/*.csv&quot;</span><span class="p">,</span> <span class="n">no_ext</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="sorting">
+<h3>Sorting<a class="headerlink" href="#sorting" title="Link to this heading"></a></h3>
+<p>Since order may be random, you may want to sort your index items:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">dataset_index</span> <span class="o">=</span> <span class="n">FilesIndex</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;/path/to/some/files/*.csv&quot;</span><span class="p">,</span> <span class="n">sort</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>However, this rarely makes any sense.</p>
+</section>
+<section id="directories">
+<h3>Directories<a class="headerlink" href="#directories" title="Link to this heading"></a></h3>
+<p>Sometimes you need directories, not files. For instance, a CT images dataset includes one subdirectory per each patient, it is named with patient id and contains many images of that patient. So the index should be built from these subdirectories, and not separate images.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dirs_index</span> <span class="o">=</span> <span class="n">FilesIndex</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;/path/to/archive/2016-*/scans/*&quot;</span><span class="p">,</span> <span class="n">dirs</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here <cite>dirs_index</cite> will contain a list of all subdirectories names.</p>
+</section>
+<section id="numerous-sources">
+<h3>Numerous sources<a class="headerlink" href="#numerous-sources" title="Link to this heading"></a></h3>
+<p>If files you are interested in are located in different places you may still build one united index:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">dataset_index</span> <span class="o">=</span> <span class="n">FilesIndex</span><span class="p">([</span><span class="s2">&quot;/current/year/data/*&quot;</span><span class="p">,</span> <span class="s2">&quot;/path/to/archive/2016/*&quot;</span><span class="p">,</span> <span class="s2">&quot;/previous/years/*&quot;</span><span class="p">])</span>
+</pre></div>
+</div>
+<section id="creating-your-own-index-class">
+<h4>Creating your own index class<a class="headerlink" href="#creating-your-own-index-class" title="Link to this heading"></a></h4>
+</section>
+</section>
+<section id="constructor">
+<h3>Constructor<a class="headerlink" href="#constructor" title="Link to this heading"></a></h3>
+<p>We highly recommend to use the following pattern:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyIndex</span><span class="p">(</span><span class="n">DatasetIndex</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">my_arg</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="c1"># initialize new properties</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">my_arg</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="c1"># do whatever you need</span>
+</pre></div>
+</div>
+<p>So to summarize:</p>
+<ol class="arabic simple">
+<li><p>the parent class should be <cite>DatasetIndex</cite> or its child</p></li>
+<li><p>include <cite>*args</cite> and <cite>**kwargs</cite> in the constructor definition</p></li>
+<li><p>pass all the arguments to the parent constructor</p></li>
+</ol>
+</section>
+<section id="build-index">
+<h3>build_index<a class="headerlink" href="#build-index" title="Link to this heading"></a></h3>
+<p>You might want to redefine <cite>build_index</cite> method which actually creates the index.
+It takes all the arguments from the constructor and returns a numpy array with index items.
+This method is called automatically from the <a class="reference internal" href="../api/batchflow.index.html#batchflow.DatasetIndex" title="batchflow.DatasetIndex"><code class="xref py py-class docutils literal notranslate"><span class="pre">DatasetIndex</span></code></a> constructor.</p>
+<section id="api">
+<h4>API<a class="headerlink" href="#api" title="Link to this heading"></a></h4>
+<p>See <a class="reference internal" href="../api/batchflow.index.html"><span class="doc">Index API</span></a>.</p>
+</section>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="classes.html" class="btn btn-neutral float-left" title="Classes and capabilities" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="dataset.html" class="btn btn-neutral float-right" title="Dataset" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

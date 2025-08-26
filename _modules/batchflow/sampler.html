@@ -1,0 +1,883 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>batchflow.sampler &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">batchflow.sampler</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for batchflow.sampler</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot; Contains Sampler-classes. &quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">copy</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">scipy.stats</span> <span class="k">as</span> <span class="nn">ss</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="k">pass</span>
+
+<span class="kn">from</span> <span class="nn">.utils_random</span> <span class="kn">import</span> <span class="n">make_rng</span>
+
+
+<span class="c1"># aliases for Numpy, Scipy-Stats, TensorFlow-samplers</span>
+<span class="n">ALIASES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;n&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;normal&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;norm&#39;</span><span class="p">,</span> <span class="s1">&#39;tf&#39;</span><span class="p">:</span> <span class="s1">&#39;Normal&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;u&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;uniform&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;uniform&#39;</span><span class="p">,</span> <span class="s1">&#39;tf&#39;</span><span class="p">:</span> <span class="s1">&#39;Uniform&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;mvn&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;multivariate_normal&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;multivariate_normal&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;e&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;exponential&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;expon&#39;</span><span class="p">,</span> <span class="s1">&#39;tf&#39;</span><span class="p">:</span> <span class="s1">&#39;Exponential&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;g&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;gamma&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;gamma&#39;</span><span class="p">,</span> <span class="s1">&#39;tf&#39;</span><span class="p">:</span> <span class="s1">&#39;Gamma&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;be&#39;</span> <span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;beta&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;beta&#39;</span><span class="p">,</span> <span class="s1">&#39;tf&#39;</span><span class="p">:</span> <span class="s1">&#39;Beta&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;mnm&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;multinomial&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;multinomial&#39;</span><span class="p">,</span> <span class="s1">&#39;tf&#39;</span><span class="p">:</span> <span class="s1">&#39;Multinomial&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;f&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;f&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;f&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;p&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;poisson&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;poisson&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;w&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;weibull&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;dweibull&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;ln&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;lognormal&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;lognorm&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;b&#39;</span> <span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;binomial&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;binom&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;chi2&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;chisquare&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="s1">&#39;chi2&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;c&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="s1">&#39;choice&#39;</span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">def</span> <span class="nf">_get_method_by_alias</span><span class="p">(</span><span class="n">alias</span><span class="p">,</span> <span class="n">module</span><span class="p">,</span> <span class="n">tf_distributions</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Fetch fullname of a randomizer from ``scipy.stats``, ``tensorflow`` or</span>
+<span class="sd">    ``numpy`` by its alias or fullname.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">rnd_submodules</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;np&#39;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="p">,</span>
+                      <span class="s1">&#39;tf&#39;</span><span class="p">:</span> <span class="n">tf_distributions</span><span class="p">,</span>
+                      <span class="s1">&#39;ss&#39;</span><span class="p">:</span> <span class="n">ss</span><span class="p">}</span>
+    <span class="c1"># fetch fullname</span>
+    <span class="n">fullname</span> <span class="o">=</span> <span class="n">ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">alias</span><span class="p">,</span> <span class="p">{</span><span class="n">module</span><span class="p">:</span> <span class="n">alias</span> <span class="k">for</span> <span class="n">module</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;np&#39;</span><span class="p">,</span> <span class="s1">&#39;tf&#39;</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">]})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">fullname</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Distribution </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2"> has no implementaion in module </span><span class="si">{</span><span class="n">module</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># check that the randomizer is implemented in corresponding module</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">rnd_submodules</span><span class="p">[</span><span class="n">module</span><span class="p">],</span> <span class="n">fullname</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Distribution </span><span class="si">{</span><span class="n">fullname</span><span class="si">}</span><span class="s2"> has no implementaion in module </span><span class="si">{</span><span class="n">module</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">fullname</span>
+
+
+<div class="viewcode-block" id="arithmetize">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.arithmetize">[docs]</a>
+<span class="k">def</span> <span class="nf">arithmetize</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Add arithmetic operations to Sampler-class.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">oper</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;__add__&#39;</span><span class="p">,</span> <span class="s1">&#39;__mul__&#39;</span><span class="p">,</span> <span class="s1">&#39;__truediv__&#39;</span><span class="p">,</span> <span class="s1">&#39;__sub__&#39;</span><span class="p">,</span> <span class="s1">&#39;__pow__&#39;</span><span class="p">,</span> <span class="s1">&#39;__floordiv__&#39;</span><span class="p">,</span> <span class="s1">&#39;__mod__&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;__radd__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rmul__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rtruediv__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rsub__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rpow__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rfloordiv__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rmod__&#39;</span><span class="p">]:</span>
+        <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">fake</span><span class="o">=</span><span class="n">oper</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot; Arithmetic operation on couple of Samplers.</span>
+
+<span class="sd">            Implemented via corresponding operation in ndarrays.</span>
+
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+<span class="sd">            other : Sampler</span>
+<span class="sd">                second Sampler, the operation is applied to.</span>
+
+<span class="sd">            Returns</span>
+<span class="sd">            -------</span>
+<span class="sd">            Sampler</span>
+<span class="sd">                resulting sampler.</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="n">_class</span> <span class="o">=</span> <span class="n">classes</span><span class="p">[</span><span class="n">fake</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">_class</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">oper</span><span class="p">,</span> <span class="n">transform</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="bp">cls</span></div>
+
+
+<div class="viewcode-block" id="Sampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.Sampler">[docs]</a>
+<span class="nd">@arithmetize</span>
+<span class="k">class</span> <span class="nc">Sampler</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Base class Sampler that implements algebra of Samplers.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    weight : float</span>
+<span class="sd">        weight of Sampler self in mixtures.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__array_priority__</span> <span class="o">=</span> <span class="mi">100</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="mf">1.0</span>
+
+        <span class="c1"># if dim is supplied, redefine sampling method</span>
+        <span class="k">if</span> <span class="s1">&#39;dim&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="c1"># assemble stacked sampler</span>
+            <span class="n">dim</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;dim&#39;</span><span class="p">)</span>
+            <span class="n">stacked</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dim</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">stacked</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">stacked</span>
+
+            <span class="c1"># redefine sample of self</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sample</span> <span class="o">=</span> <span class="n">stacked</span><span class="o">.</span><span class="n">sample</span>
+
+<div class="viewcode-block" id="Sampler.sample">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.Sampler.sample">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Sampling method of a sampler.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        size : int</span>
+<span class="sd">            lentgh of sample to be generated.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        np.ndarray</span>
+<span class="sd">            Array of size (len, Sampler&#39;s dimension).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s1">&#39;The method should be implemented in child-classes!&#39;</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__or__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Implementation of &#39;|&#39; operation for two instances of Sampler-class.</span>
+
+<span class="sd">        The result is the mixture of two samplers. Weights are taken from</span>
+<span class="sd">        samplers&#39; weight-attributes.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        other : Sampler</span>
+<span class="sd">            the sampler to be added to self.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Sampler</span>
+<span class="sd">            resulting mixture of two samplers.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">OrSampler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__and__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Implementation of &#39;&amp;&#39; operation for instance of Sampler-class.</span>
+
+<span class="sd">        Two cases are possible: if ``other`` is numeric, then &quot;&amp;&quot;-operation changes</span>
+<span class="sd">        the weight of a sampler. Otherwise, if ``other`` is also a Sampler, the resulting</span>
+<span class="sd">        Sampler is a multidimensional sampler, with starting coordinates being sampled from</span>
+<span class="sd">        ``self``, and trailing - from ``other``.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        other : int or float or Sampler</span>
+<span class="sd">            the sampler/weight for multiplication.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Sampler</span>
+<span class="sd">            result of the multiplication.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="n">WeightedSampler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">*</span> <span class="n">other</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">AndSampler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__rand__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Implementation of &#39;&amp;&#39; operation on a weight for instance of Sampler-class.</span>
+<span class="sd">        see docstring of Sampler.__and__.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span> <span class="o">&amp;</span> <span class="n">other</span>
+
+<div class="viewcode-block" id="Sampler.apply">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.Sampler.apply">[docs]</a>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transform</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Apply a transformation to the sampler.</span>
+<span class="sd">        Build new sampler, which sampling function is given by `transform(self.sample(size))``.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        transform : callable</span>
+<span class="sd">            function, that takes ndarray of shape (size, dim_sampler) and produces</span>
+<span class="sd">            ndarray of shape (size, new_dim_sampler).</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Sampler</span>
+<span class="sd">            instance of class Sampler with redefined method `sample`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">ApplySampler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transform</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Sampler.truncate">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.Sampler.truncate">[docs]</a>
+    <span class="k">def</span> <span class="nf">truncate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">high</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">low</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">expr</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prob</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">max_iters</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">sample_anyways</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Truncate a sampler. Resulting sampler produces points satisfying ``low &lt;= pts &lt;= high``.</span>
+<span class="sd">        If ``expr`` is suplied, the condition is ``low &lt;= expr(pts) &lt;= high``.</span>
+
+<span class="sd">        Uses while-loop to obtain a sample from the region of interest of needed size. The behaviour</span>
+<span class="sd">        of the while loop is controlled by parameters ``max_iters`` and ``sample_anyways``-parameters.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        high : ndarray, list, float</span>
+<span class="sd">            upper truncation-bound.</span>
+<span class="sd">        low : ndarray, list, float</span>
+<span class="sd">            lower truncation-bound.</span>
+<span class="sd">        expr : callable, optional.</span>
+<span class="sd">            Some vectorized function. Accepts points of sampler, returns either bool or float.</span>
+<span class="sd">            In case of float, either high or low should also be supplied.</span>
+<span class="sd">        prob : float, optional</span>
+<span class="sd">            estimate of P(truncation-condtion is satisfied). When supplied,</span>
+<span class="sd">            can improve the performance of sampling-method of truncated sampler.</span>
+<span class="sd">        max_iters : float, optional</span>
+<span class="sd">            if the number of iterations needed for obtaining the sample exceeds this number,</span>
+<span class="sd">            either a warning or error is raised. By default is set to 1e7 (constant of TruncateSampler-class).</span>
+<span class="sd">        sample_anyways : bool, optional</span>
+<span class="sd">            If set to True, when exceeding `self.max_iters` number of iterations the procedure throws a warning</span>
+<span class="sd">            but continues. If set to False, the error is raised.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Sampler</span>
+<span class="sd">            new Sampler-instance, truncated version of self.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">TruncateSampler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="n">low</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">prob</span><span class="p">,</span> <span class="n">max_iters</span><span class="p">,</span> <span class="n">sample_anyways</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OrSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.OrSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">OrSampler</span><span class="p">(</span><span class="n">Sampler</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Class for implementing `|` (mixture) operation on `Sampler`-instances.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bases</span> <span class="o">=</span> <span class="p">[</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">]</span>
+
+        <span class="c1"># calculate probs of samplers in mixture</span>
+        <span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">weight</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">normed</span> <span class="o">=</span> <span class="n">weights</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OrSampler.sample">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.OrSampler.sample">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Sampling procedure of a mixture of two samplers. Samples points with probabilities</span>
+<span class="sd">        defined by weights (`self.weight`-attr) from two samplers invoked (`self.bases`-attr) and</span>
+<span class="sd">        mixes them in one sample of needed size.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">up_size</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">normed</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">low_size</span> <span class="o">=</span> <span class="n">size</span> <span class="o">-</span> <span class="n">up_size</span>
+
+        <span class="n">up_sample</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">up_size</span><span class="p">)</span>
+        <span class="n">low_sample</span>  <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">low_size</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">up_sample</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">low_sample</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">sample_points</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">up_sample</span><span class="p">,</span> <span class="n">low_sample</span><span class="p">])</span>
+            <span class="n">sample_points</span> <span class="o">=</span> <span class="n">sample_points</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="n">size</span><span class="p">)]</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">up_sample</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">sample_points</span> <span class="o">=</span> <span class="n">low_sample</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sample_points</span> <span class="o">=</span> <span class="n">up_sample</span>
+
+        <span class="k">return</span> <span class="n">sample_points</span></div>
+</div>
+
+
+<div class="viewcode-block" id="AndSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.AndSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">AndSampler</span><span class="p">(</span><span class="n">Sampler</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Class for implementing `&amp;` (coordinates stacking) operation on `Sampler`-instances.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bases</span> <span class="o">=</span> <span class="p">[</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">]</span>
+
+<div class="viewcode-block" id="AndSampler.sample">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.AndSampler.sample">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Sampling procedure of a product of two samplers. Check out the docstring of</span>
+<span class="sd">        `Sampler.__and__` for more info.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">left_sample</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+        <span class="n">right_sample</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">left_sample</span><span class="p">,</span> <span class="n">right_sample</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></div>
+</div>
+
+
+<div class="viewcode-block" id="ApplySampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.ApplySampler">[docs]</a>
+<span class="k">class</span> <span class="nc">ApplySampler</span><span class="p">(</span><span class="n">Sampler</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Class for implementing `apply` (adding transform) operation on `Sampler`-instances.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sampler</span><span class="p">,</span> <span class="n">transform</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bases</span> <span class="o">=</span> <span class="p">[</span><span class="n">sampler</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transform</span> <span class="o">=</span> <span class="n">transform</span>
+
+<div class="viewcode-block" id="ApplySampler.sample">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.ApplySampler.sample">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Sampling procedure of a sampler subjugated to a transform. Check out the docstring of</span>
+<span class="sd">        `Sampler.apply` for more info.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">size</span><span class="p">))</span></div>
+</div>
+
+
+<div class="viewcode-block" id="TruncateSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.TruncateSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">TruncateSampler</span><span class="p">(</span><span class="n">Sampler</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Class for implementing `truncate` (truncation by a condition) operation on `Sampler`-instances.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Used when truncating a Sampler. If we cannot obtain a needed amount of points</span>
+    <span class="c1"># from the region of interest using this number of iterations, we throw a Warning or ValueError</span>
+    <span class="n">max_iters</span> <span class="o">=</span> <span class="mf">1e7</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sampler</span><span class="p">,</span> <span class="n">high</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">low</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">expr</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prob</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">max_iters</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                 <span class="n">sample_anyways</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bases</span> <span class="o">=</span> <span class="p">[</span><span class="n">sampler</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">high</span> <span class="o">=</span> <span class="n">high</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">low</span> <span class="o">=</span> <span class="n">low</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">expr</span> <span class="o">=</span> <span class="n">expr</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prob</span> <span class="o">=</span> <span class="n">prob</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sample_anyways</span> <span class="o">=</span> <span class="n">sample_anyways</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_iters</span> <span class="o">=</span> <span class="n">max_iters</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_iters</span>
+
+<div class="viewcode-block" id="TruncateSampler.sample">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.TruncateSampler.sample">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Sampling method of a sampler subjugated to truncation. Check out the docstring of</span>
+<span class="sd">        `Sampler.truncation` for more info.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="n">high</span><span class="p">,</span> <span class="n">low</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">prob</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">high</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">low</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prob</span>
+        <span class="c1"># set batch-size</span>
+        <span class="n">expectation</span> <span class="o">=</span> <span class="n">size</span> <span class="o">/</span> <span class="n">prob</span>
+        <span class="n">sigma</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">size</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">prob</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">prob</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+        <span class="n">batch_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">expectation</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">sigma</span><span class="p">)</span>
+
+        <span class="c1"># sample, filter out, concat</span>
+        <span class="n">ctr</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">cumulated</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">samples</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">while</span> <span class="n">cumulated</span> <span class="o">&lt;</span> <span class="n">size</span><span class="p">:</span>
+            <span class="c1"># sample points and compute condition-vector</span>
+            <span class="n">sample</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">)</span>
+            <span class="n">cond</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="n">batch_size</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">low</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">expr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">cond</span> <span class="o">&amp;=</span> <span class="n">np</span><span class="o">.</span><span class="n">greater_equal</span><span class="p">(</span><span class="n">expr</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">low</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">cond</span> <span class="o">&amp;=</span> <span class="n">np</span><span class="o">.</span><span class="n">greater_equal</span><span class="p">(</span><span class="n">sample</span><span class="p">,</span> <span class="n">low</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">high</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">expr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">cond</span> <span class="o">&amp;=</span> <span class="n">np</span><span class="o">.</span><span class="n">less_equal</span><span class="p">(</span><span class="n">expr</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">high</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">cond</span> <span class="o">&amp;=</span> <span class="n">np</span><span class="o">.</span><span class="n">less_equal</span><span class="p">(</span><span class="n">sample</span><span class="p">,</span> <span class="n">high</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">high</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">low</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">cond</span> <span class="o">&amp;=</span> <span class="n">expr</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+            <span class="c1"># check if we reached max_iters-number of iterations</span>
+            <span class="k">if</span> <span class="n">ctr</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_iters</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">sample_anyways</span><span class="p">:</span>
+                    <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Already took </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">max_iters</span><span class="si">}</span><span class="s2"> number of iteration to make a sample. &quot;</span>\
+                          <span class="s2">&quot;Yet, `sample_anyways` is set to true, so going on. Kill the process manually if needed.&quot;</span>
+                    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;The number of iterations needed to obtain the sample exceeds </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">max_iters</span><span class="si">}</span><span class="s2">. &quot;</span>\
+                          <span class="s2">&quot;Stopping the process.&quot;</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+
+            <span class="c1"># get points from region of interest</span>
+            <span class="n">samples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="n">cond</span><span class="p">])</span>
+            <span class="n">cumulated</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">cond</span><span class="p">)</span>
+            <span class="n">ctr</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">samples</span><span class="p">)[:</span><span class="n">size</span><span class="p">]</span></div>
+</div>
+
+
+<div class="viewcode-block" id="WeightedSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.WeightedSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">WeightedSampler</span><span class="p">(</span><span class="n">Sampler</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Class for implementing `&amp;` (weighting) operation on a number and a `Sampler` instance.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">weight</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bases</span> <span class="o">=</span> <span class="p">[</span><span class="n">base</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="n">weight</span>
+
+<div class="viewcode-block" id="WeightedSampler.sample">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.WeightedSampler.sample">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Sampling procedure of a product of the number and the sampler instance. Check out the docstring of</span>
+<span class="sd">        `Sampler.sample` for more info.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">size</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="BaseOperationSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.BaseOperationSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">BaseOperationSampler</span><span class="p">(</span><span class="n">Sampler</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Base class for implementing all arithmetic operations on `Sampler`-instances.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bases</span> <span class="o">=</span> <span class="p">[</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">]</span>
+
+<div class="viewcode-block" id="BaseOperationSampler.sample">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.BaseOperationSampler.sample">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">Sampler</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">size</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">operation</span><span class="p">)(</span><span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">size</span><span class="p">))</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">size</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">operation</span><span class="p">)(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bases</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="AddSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.AddSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">AddSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__add__&#39;</span></div>
+
+
+<div class="viewcode-block" id="MulSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.MulSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">MulSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__mul__&#39;</span></div>
+
+
+<div class="viewcode-block" id="TruedivSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.TruedivSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">TruedivSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__truediv__&#39;</span></div>
+
+
+<div class="viewcode-block" id="SubSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.SubSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">SubSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__sub__&#39;</span></div>
+
+
+<div class="viewcode-block" id="PowSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.PowSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">PowSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__pow__&#39;</span></div>
+
+
+<div class="viewcode-block" id="FloordivSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.FloordivSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">FloordivSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__floordiv__&#39;</span></div>
+
+
+<div class="viewcode-block" id="ModSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.ModSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">ModSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__mod__&#39;</span></div>
+
+
+<div class="viewcode-block" id="RAddSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.RAddSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">RAddSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__radd__&#39;</span></div>
+
+
+<div class="viewcode-block" id="RMulSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.RMulSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">RMulSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__rmul__&#39;</span></div>
+
+
+<div class="viewcode-block" id="RTruedivSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.RTruedivSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">RTruedivSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__rtruediv__&#39;</span></div>
+
+
+<div class="viewcode-block" id="RSubSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.RSubSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">RSubSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__rsub__&#39;</span></div>
+
+
+<div class="viewcode-block" id="RPowSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.RPowSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">RPowSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__rpow__&#39;</span></div>
+
+
+<div class="viewcode-block" id="RFloordivSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.RFloordivSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">RFloordivSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__rfloordiv__&#39;</span></div>
+
+
+<div class="viewcode-block" id="RModSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.RModSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">RModSampler</span><span class="p">(</span><span class="n">BaseOperationSampler</span><span class="p">):</span>
+    <span class="n">operation</span> <span class="o">=</span> <span class="s1">&#39;__rmod__&#39;</span></div>
+
+
+<span class="n">classes</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">([</span><span class="s1">&#39;__add__&#39;</span><span class="p">,</span> <span class="s1">&#39;__mul__&#39;</span><span class="p">,</span> <span class="s1">&#39;__truediv__&#39;</span><span class="p">,</span> <span class="s1">&#39;__sub__&#39;</span><span class="p">,</span> <span class="s1">&#39;__pow__&#39;</span><span class="p">,</span> <span class="s1">&#39;__floordiv__&#39;</span><span class="p">,</span> <span class="s1">&#39;__mod__&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;__radd__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rmul__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rtruediv__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rsub__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rpow__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rfloordiv__&#39;</span><span class="p">,</span> <span class="s1">&#39;__rmod__&#39;</span><span class="p">],</span>
+                   <span class="p">[</span><span class="n">AddSampler</span><span class="p">,</span> <span class="n">MulSampler</span><span class="p">,</span> <span class="n">TruedivSampler</span><span class="p">,</span> <span class="n">SubSampler</span><span class="p">,</span> <span class="n">PowSampler</span><span class="p">,</span> <span class="n">FloordivSampler</span><span class="p">,</span> <span class="n">ModSampler</span><span class="p">,</span>
+                    <span class="n">RAddSampler</span><span class="p">,</span> <span class="n">RMulSampler</span><span class="p">,</span> <span class="n">RTruedivSampler</span><span class="p">,</span> <span class="n">RSubSampler</span><span class="p">,</span> <span class="n">RPowSampler</span><span class="p">,</span> <span class="n">RFloordivSampler</span><span class="p">,</span>
+                    <span class="n">RModSampler</span><span class="p">]))</span>
+
+
+<div class="viewcode-block" id="ConstantSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.ConstantSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">ConstantSampler</span><span class="p">(</span><span class="n">Sampler</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Sampler of a constant.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    constant : int, str, float, list</span>
+<span class="sd">        constant, associated with the Sampler. Can be multidimensional,</span>
+<span class="sd">        e.g. list or np.ndarray.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    constant : np.array</span>
+<span class="sd">        vectorized constant, associated with the Sampler.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">constant</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">constant</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">constant</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">constant</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ConstantSampler.sample">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.ConstantSampler.sample">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Sampling method of ``ConstantSampler``.</span>
+<span class="sd">        Repeats sampler&#39;s constant ``size`` times.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        size : int</span>
+<span class="sd">            the size of sample to be generated.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        np.ndarray</span>
+<span class="sd">            array of shape (size, 1) containing Sampler&#39;s constant.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">constant</span><span class="p">,</span> <span class="n">repeats</span><span class="o">=</span><span class="n">size</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="NumpySampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.NumpySampler">[docs]</a>
+<span class="k">class</span> <span class="nc">NumpySampler</span><span class="p">(</span><span class="n">Sampler</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Sampler based on a distribution from `numpy random`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    name : str</span>
+<span class="sd">        a distribution name (a method from `numpy random`) or its alias.</span>
+<span class="sd">    seed : int</span>
+<span class="sd">        random seed for setting up sampler&#39;s state (see :func:`~.make_rng`).</span>
+<span class="sd">    **kwargs</span>
+<span class="sd">        additional keyword-arguments defining properties of specific</span>
+<span class="sd">        distribution (e.g. ``loc`` for &#39;normal&#39;).</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    name : str</span>
+<span class="sd">        a distribution name (a method from `numpy random`).</span>
+<span class="sd">    state : numpy.random.Generator</span>
+<span class="sd">        a random number generator</span>
+<span class="sd">    _params : dict</span>
+<span class="sd">        dict of args for Sampler&#39;s distribution.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">seed</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">_get_method_by_alias</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;np&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_params</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">make_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="NumpySampler.sample">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.NumpySampler.sample">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Generates random samples from distribution ``self.name``.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        size : int</span>
+<span class="sd">            the size of sample to be generated.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        np.ndarray</span>
+<span class="sd">            array of shape (size, Sampler&#39;s dimension).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">sampler</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">sample</span> <span class="o">=</span> <span class="n">sampler</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sample</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">sample</span> <span class="o">=</span> <span class="n">sample</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sample</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ScipySampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.ScipySampler">[docs]</a>
+<span class="k">class</span> <span class="nc">ScipySampler</span><span class="p">(</span><span class="n">Sampler</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Sampler based on a distribution from `scipy.stats`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    name : str</span>
+<span class="sd">        a distribution name, a class from `scipy.stats`, or its alias.</span>
+<span class="sd">    seed : int</span>
+<span class="sd">        random seed for setting up sampler&#39;s state (see :func:`~.make_rng`).</span>
+<span class="sd">    **kwargs</span>
+<span class="sd">        additional parameters for specification of the distribution.</span>
+<span class="sd">        For instance, `scale` for name=&#39;gamma&#39;.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    name : str</span>
+<span class="sd">        a distribution name (a class from `scipy.stats`).</span>
+<span class="sd">    state : numpy.random.Generator</span>
+<span class="sd">        a random number generator</span>
+<span class="sd">    distr</span>
+<span class="sd">        a distribution class</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">seed</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">_get_method_by_alias</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;ss&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">make_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">distr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ss</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ScipySampler.sample">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.ScipySampler.sample">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Sampling method of ``ScipySampler``.</span>
+<span class="sd">        Generates random samples from distribution ``self.name``.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        size : int</span>
+<span class="sd">            the size of sample to be generated.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        np.ndarray</span>
+<span class="sd">            array of shape (size, Sampler&#39;s dimension).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">sampler</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">distr</span><span class="o">.</span><span class="n">rvs</span>
+        <span class="n">sample</span> <span class="o">=</span> <span class="n">sampler</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sample</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">sample</span> <span class="o">=</span> <span class="n">sample</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sample</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="HistoSampler">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.HistoSampler">[docs]</a>
+<span class="k">class</span> <span class="nc">HistoSampler</span><span class="p">(</span><span class="n">Sampler</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Sampler based on a histogram, output of `np.histogramdd`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    histo : tuple</span>
+<span class="sd">        histogram, on which the sampler is based.</span>
+<span class="sd">        Make sure that it is unnormalized (`normed=False` in `np.histogramdd`).</span>
+<span class="sd">    edges : list</span>
+<span class="sd">        list of len=histo_dimension, contains edges of bins along axes.</span>
+<span class="sd">    seed : int</span>
+<span class="sd">        random seed for setting up sampler&#39;s state (see :func:`~.make_rng`).</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    bins : np.ndarray</span>
+<span class="sd">        bins of base-histogram (see `np.histogramdd`).</span>
+<span class="sd">    edges : list</span>
+<span class="sd">        edges of base-histogram.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">        The sampler should be based on unnormalized histogram.</span>
+<span class="sd">        if `histo`-arg is supplied, it is used for histo-initilization.</span>
+<span class="sd">        Otherwise, edges should be supplied. In this case all bins are empty.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">histo</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">edges</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">histo</span><span class="p">,</span> <span class="n">edges</span><span class="p">,</span> <span class="n">seed</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">histo</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bins</span> <span class="o">=</span> <span class="n">histo</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">edges</span> <span class="o">=</span> <span class="n">histo</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="n">edges</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">edges</span> <span class="o">=</span> <span class="n">edges</span>
+            <span class="n">bins_shape</span> <span class="o">=</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">axis_edge</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">axis_edge</span> <span class="ow">in</span> <span class="n">edges</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bins</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="n">bins_shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Either `histo` or `edges` should be specified.&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">l_all</span> <span class="o">=</span> <span class="n">cart_prod</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="n">range_dim</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">range_dim</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">edges</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">h_all</span> <span class="o">=</span> <span class="n">cart_prod</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="n">range_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="k">for</span> <span class="n">range_dim</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">edges</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">probs</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bins</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bins</span><span class="p">))</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nonzero_probs_idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">probs</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">)</span><span class="o">.</span><span class="n">nonzero</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nonzero_probs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">probs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">nonzero_probs_idx</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">make_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state_sampler</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">uniform</span>
+
+<div class="viewcode-block" id="HistoSampler.sample">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.HistoSampler.sample">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Sampling method of ``HistoSampler``.</span>
+<span class="sd">        Generates random samples from distribution, represented by</span>
+<span class="sd">        histogram (self.bins, self.edges).</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        size : int</span>
+<span class="sd">            the size of sample to be generated.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        np.ndarray</span>
+<span class="sd">            array of shape (size, histo dimension).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Choose bins to use according to non-zero probabilities</span>
+        <span class="n">bin_nums</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nonzero_probs_idx</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">nonzero_probs</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">)</span>
+
+        <span class="c1"># uniformly generate samples from selected boxes</span>
+        <span class="n">low</span><span class="p">,</span> <span class="n">high</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">l_all</span><span class="p">[</span><span class="n">bin_nums</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">h_all</span><span class="p">[</span><span class="n">bin_nums</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">state_sampler</span><span class="p">(</span><span class="n">low</span><span class="o">=</span><span class="n">low</span><span class="p">,</span> <span class="n">high</span><span class="o">=</span><span class="n">high</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="HistoSampler.update">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.HistoSampler.update">[docs]</a>
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">points</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Update bins of sampler&#39;s histogram by throwing in additional points.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        points : np.ndarray</span>
+<span class="sd">            Array of points of shape (n_points, histo_dimension).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">histo_update</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">histogramdd</span><span class="p">(</span><span class="n">sample</span><span class="o">=</span><span class="n">points</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">edges</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bins</span> <span class="o">+=</span> <span class="n">histo_update</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="cart_prod">
+<a class="viewcode-back" href="../../api/batchflow.sampler.html#batchflow.sampler.cart_prod">[docs]</a>
+<span class="k">def</span> <span class="nf">cart_prod</span><span class="p">(</span><span class="o">*</span><span class="n">arrs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Get array of cartesian tuples from arbitrary number of arrays.</span>
+<span class="sd">    Faster version of itertools.product. The order of tuples is lexicographic.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    arrs : tuple, list or ndarray.</span>
+<span class="sd">        Any sequence of ndarrays.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    ndarray</span>
+<span class="sd">        2d-array with rows (arr[0][i], arr[2][j],...,arr[n][k]).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">grids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="o">*</span><span class="n">arrs</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s1">&#39;ij&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">grids</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">arrs</span><span class="p">))</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

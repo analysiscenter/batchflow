@@ -1,0 +1,1201 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>batchflow.batch &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">batchflow.batch</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for batchflow.batch</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot; Contains basic Batch classes &quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">import</span> <span class="nn">functools</span>
+
+<span class="kn">import</span> <span class="nn">dill</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+
+<span class="kn">from</span> <span class="nn">.dsindex</span> <span class="kn">import</span> <span class="n">DatasetIndex</span><span class="p">,</span> <span class="n">FilesIndex</span>
+<span class="c1"># renaming apply_parallel decorator is needed as Batch.apply_parallel method is also in the same namespace</span>
+<span class="c1"># and can serve as a decorator too</span>
+<span class="kn">from</span> <span class="nn">.decorators</span> <span class="kn">import</span> <span class="n">action</span><span class="p">,</span> <span class="n">inbatch_parallel</span><span class="p">,</span> <span class="n">any_action_failed</span><span class="p">,</span> <span class="n">apply_parallel</span> <span class="k">as</span> <span class="n">apply_parallel_</span>
+<span class="kn">from</span> <span class="nn">.components</span> <span class="kn">import</span> <span class="n">create_item_class</span><span class="p">,</span> <span class="n">BaseComponents</span>
+<span class="kn">from</span> <span class="nn">.named_expr</span> <span class="kn">import</span> <span class="n">P</span><span class="p">,</span> <span class="n">R</span>
+<span class="kn">from</span> <span class="nn">.utils_random</span> <span class="kn">import</span> <span class="n">make_rng</span>
+
+<span class="kn">from</span> <span class="nn">.utils_import</span> <span class="kn">import</span> <span class="n">make_delayed_import</span>
+<span class="n">blosc</span> <span class="o">=</span> <span class="n">make_delayed_import</span><span class="p">(</span><span class="s1">&#39;blosc&#39;</span><span class="p">)</span>
+<span class="n">pd</span> <span class="o">=</span> <span class="n">make_delayed_import</span><span class="p">(</span><span class="s1">&#39;pandas&#39;</span><span class="p">)</span>
+<span class="n">feather</span> <span class="o">=</span> <span class="n">make_delayed_import</span><span class="p">(</span><span class="s1">&#39;feather&#39;</span><span class="p">)</span>
+<span class="n">dd</span> <span class="o">=</span> <span class="n">make_delayed_import</span><span class="p">(</span><span class="s1">&#39;dask.dataframe&#39;</span><span class="p">)</span> <span class="c1"># import dask.dataframe as dd</span>
+
+
+
+<span class="k">class</span> <span class="nc">MethodsTransformingMeta</span><span class="p">(</span><span class="nb">type</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; A metaclass to transform all class methods in the way described below:</span>
+
+<span class="sd">        1. Methods decorated with `@apply_parallel` are wrapped with `apply_parallel` method.</span>
+
+<span class="sd">        2. Add the original version of the method (i.e. unwrapped) to a class</span>
+<span class="sd">           namespace using name with underscores: `&#39;_{}_&#39;.format(name)`. This</span>
+<span class="sd">           is necessary in order to allow inner calls of untransformed versions</span>
+<span class="sd">           (e.g. `ImagesBatch.scale` calls `ImagesBatch.crop` under the hood).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">namespace</span><span class="p">):</span>
+        <span class="n">namespace_</span> <span class="o">=</span> <span class="n">namespace</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">object_name</span><span class="p">,</span> <span class="n">object_</span> <span class="ow">in</span> <span class="n">namespace</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">transform_kwargs</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">object_</span><span class="p">,</span> <span class="s1">&#39;apply_kwargs&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">transform_kwargs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">namespace_</span><span class="p">[</span><span class="n">object_name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">use_apply_parallel</span><span class="p">(</span><span class="n">object_</span><span class="p">,</span> <span class="o">**</span><span class="n">transform_kwargs</span><span class="p">)</span>
+
+                <span class="n">disclaimer</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;This is an untransformed version of `</span><span class="si">{</span><span class="n">object_</span><span class="o">.</span><span class="vm">__qualname__</span><span class="si">}</span><span class="s2">`.</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+                <span class="n">object_</span><span class="o">.</span><span class="vm">__doc__</span> <span class="o">=</span> <span class="n">disclaimer</span> <span class="o">+</span> <span class="p">(</span><span class="n">object_</span><span class="o">.</span><span class="vm">__doc__</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+                <span class="n">object_</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">=</span> <span class="s1">&#39;_&#39;</span> <span class="o">+</span> <span class="n">object_name</span> <span class="o">+</span> <span class="s1">&#39;_&#39;</span>
+                <span class="n">object_</span><span class="o">.</span><span class="vm">__qualname__</span> <span class="o">=</span> <span class="s1">&#39;.&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">object_</span><span class="o">.</span><span class="vm">__qualname__</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="n">object_</span><span class="o">.</span><span class="vm">__name__</span><span class="p">])</span>
+                <span class="n">namespace_</span><span class="p">[</span><span class="n">object_</span><span class="o">.</span><span class="vm">__name__</span><span class="p">]</span> <span class="o">=</span> <span class="n">object_</span>
+
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">namespace_</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">use_apply_parallel</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="o">**</span><span class="n">apply_kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Wrap passed `method` in accordance with `all` arg value &quot;&quot;&quot;</span>
+        <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">method</span><span class="p">)</span>
+        <span class="k">def</span> <span class="nf">apply_parallel_wrapper</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="n">transform</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_parallel</span>
+
+            <span class="c1"># Bound method to class:</span>
+            <span class="n">method_</span> <span class="o">=</span> <span class="n">method</span><span class="o">.</span><span class="fm">__get__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+
+            <span class="n">kwargs_full</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">apply_defaults</span><span class="p">,</span> <span class="o">**</span><span class="n">apply_kwargs</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">}</span>
+            <span class="k">return</span> <span class="n">transform</span><span class="p">(</span><span class="n">method_</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs_full</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">action</span><span class="p">(</span><span class="n">apply_parallel_wrapper</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Batch">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch">[docs]</a>
+<span class="k">class</span> <span class="nc">Batch</span><span class="p">(</span><span class="n">metaclass</span><span class="o">=</span><span class="n">MethodsTransformingMeta</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; The core Batch class</span>
+
+<span class="sd">    Note, that if any method is wrapped with `@apply_parallel` decorator</span>
+<span class="sd">    than for inner calls (i.e. from other methods) should be used version</span>
+<span class="sd">    of desired method with underscores. (For example, if there is a decorated</span>
+<span class="sd">    `method` than you need to call `_method_` from inside of `other_method`).</span>
+<span class="sd">    Same is applicable for all child classes of :class:`batch.Batch`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">components</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="c1"># Class-specific defaults for :meth:`.Batch.apply_parallel`</span>
+    <span class="n">apply_defaults</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="s1">&#39;threads&#39;</span><span class="p">,</span>
+                          <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_assemble&#39;</span><span class="p">,</span>
+                          <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                          <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                          <span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">pipeline</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">preloaded</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span>
+        <span class="k">if</span>  <span class="bp">self</span><span class="o">.</span><span class="n">components</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;components should be a tuple of strings with components names&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">index</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_preloaded_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_preloaded</span> <span class="o">=</span> <span class="n">preloaded</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_copy</span> <span class="o">=</span> <span class="n">copy</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_local</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">local</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dataset</span> <span class="o">=</span> <span class="n">dataset</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span> <span class="o">=</span> <span class="n">pipeline</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">iteration</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_attrs</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Batch.create_attrs">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.create_attrs">[docs]</a>
+    <span class="k">def</span> <span class="nf">create_attrs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Create attributes from kwargs &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="k">for</span> <span class="n">attr</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Batch.get_attrs">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.get_attrs">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_attrs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return additional attrs as kwargs &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">attr</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attrs</span><span class="p">}</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;: tuple or named components - batch data &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_preloaded</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># load data the first time it&#39;s requested</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_preloaded_lock</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_preloaded</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_preloaded</span><span class="p">)</span>
+            <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span> <span class="c1"># noqa: BLE001, blind-except</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Exception:&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="n">traceback</span><span class="o">.</span><span class="n">print_tb</span><span class="p">(</span><span class="n">exc</span><span class="o">.</span><span class="n">__traceback__</span><span class="p">)</span>
+            <span class="k">raise</span>
+        <span class="k">return</span> <span class="n">res</span>
+
+    <span class="nd">@data</span><span class="o">.</span><span class="n">setter</span>
+    <span class="k">def</span> <span class="nf">data_setter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;: tuple or named components - batch data &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;: Dataset - a dataset the batch has been taken from &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">dataset</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dataset</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">pipeline</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;: Pipeline - a pipeline the batch is being used in &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">pipeline</span>
+
+    <span class="nd">@pipeline</span><span class="o">.</span><span class="n">setter</span>
+    <span class="k">def</span> <span class="nf">pipeline</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Store the pipeline in a thread-local storage &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">pipeline</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">random</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; A random number generator :class:`numpy.random.Generator`.</span>
+<span class="sd">        Use it instead of `np.random` for reproducibility.</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+
+<span class="sd">        ::</span>
+
+<span class="sd">            x = self.random.normal(0, 1)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># if RNG is set for the batch (e.g. in @inbatch_parallel), use it</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="p">,</span> <span class="s1">&#39;random&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">random</span>
+        <span class="c1"># otherwise use RNG from the pipeline</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">random</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">random</span>
+
+        <span class="c1"># if there is none (e.g. when the batch is created manually), make a random one</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">random</span> <span class="o">=</span> <span class="n">make_rng</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">random_seed</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">random</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">random_seed</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; : SeedSequence for random number generation &quot;&quot;&quot;</span>
+        <span class="c1"># if RNG is set for the batch (e.g. in @inbatch_parallel), use it</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="p">,</span> <span class="s1">&#39;random_seed&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">random_seed</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">random_seed</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline</span><span class="o">.</span><span class="n">random_seed</span>
+
+        <span class="c1"># if there is none (e.g. when the batch is created manually), make a random seed</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">random_seed</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">SeedSequence</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">random_seed</span>
+
+    <span class="nd">@random_seed</span><span class="o">.</span><span class="n">setter</span>
+    <span class="k">def</span> <span class="nf">random_seed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; : SeedSequence for random number generation &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">random_seed</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">random</span> <span class="o">=</span> <span class="n">make_rng</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__copy__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">dump_batch</span> <span class="o">=</span> <span class="n">dill</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">restored_batch</span> <span class="o">=</span> <span class="n">dill</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">dump_batch</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">restored_batch</span>
+
+<div class="viewcode-block" id="Batch.deepcopy">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.deepcopy">[docs]</a>
+    <span class="k">def</span> <span class="nf">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a deep copy of the batch. &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__copy__</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="Batch.from_data">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.from_data">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_data</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Create a batch from data given &quot;&quot;&quot;</span>
+        <span class="c1"># this is roughly equivalent to self.data = data</span>
+        <span class="k">if</span> <span class="n">index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">preloaded</span><span class="o">=</span><span class="n">data</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Batch.merge">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.merge">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">merge</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">batches</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">batch_class</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Merge several batches to form a new batch of a given size</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        batches : tuple of batches</span>
+
+<span class="sd">        batch_size : int or None</span>
+<span class="sd">            if `None`, just merge all batches into one batch (the rest will be `None`),</span>
+<span class="sd">            if `int`, then make one batch of `batch_size` and a batch with the rest of data.</span>
+
+<span class="sd">        components : str, tuple or None</span>
+<span class="sd">            if `None`, all components from initial batches will be created,</span>
+<span class="sd">            if `str` or `tuple`, then create these components in new batches.</span>
+
+<span class="sd">        batch_class : Batch or None</span>
+<span class="sd">            if `None`, created batches will be of the same class as initial batch,</span>
+<span class="sd">            if `Batch`, created batches will be of that class.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        batch, rest : tuple of two batches</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        ValueError</span>
+<span class="sd">            If component is `None` in some batches and not `None` in others.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">batch_class</span> <span class="o">=</span> <span class="n">batch_class</span> <span class="ow">or</span> <span class="bp">cls</span>
+        <span class="k">def</span> <span class="nf">_make_index</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">DatasetIndex</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span>
+
+        <span class="k">def</span> <span class="nf">_make_batch</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="n">_make_index</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">batch</span> <span class="o">=</span> <span class="n">batch_class</span><span class="o">.</span><span class="n">from_data</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">data</span><span class="p">))</span> <span class="k">if</span> <span class="n">index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">batch</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">batch</span><span class="o">.</span><span class="n">components</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">components</span><span class="p">)</span>
+                <span class="n">_</span> <span class="o">=</span> <span class="n">batch</span><span class="o">.</span><span class="n">data</span>
+            <span class="k">return</span> <span class="n">batch</span>
+
+        <span class="k">if</span> <span class="n">batch_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">break_point</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">batches</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+            <span class="n">last_batch_len</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">cur_size</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">batches</span><span class="p">):</span>
+                <span class="n">cur_batch_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">cur_size</span> <span class="o">+</span> <span class="n">cur_batch_len</span> <span class="o">&gt;=</span> <span class="n">batch_size</span><span class="p">:</span>
+                    <span class="n">break_point</span> <span class="o">=</span> <span class="n">i</span>
+                    <span class="n">last_batch_len</span> <span class="o">=</span> <span class="n">batch_size</span> <span class="o">-</span> <span class="n">cur_size</span>
+                    <span class="k">break</span>
+
+                <span class="n">cur_size</span> <span class="o">+=</span> <span class="n">cur_batch_len</span>
+                <span class="n">last_batch_len</span> <span class="o">=</span> <span class="n">cur_batch_len</span>
+
+        <span class="k">if</span> <span class="n">components</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">components</span> <span class="o">=</span> <span class="n">batches</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">components</span> <span class="ow">or</span> <span class="p">(</span><span class="kc">None</span><span class="p">,)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">components</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">components</span> <span class="o">=</span> <span class="p">(</span><span class="n">components</span><span class="p">,</span> <span class="p">)</span>
+        <span class="n">new_data</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="kc">None</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">components</span><span class="p">)</span>
+        <span class="n">rest_data</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="kc">None</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">components</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">comp</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">components</span><span class="p">):</span>
+            <span class="n">none_components_in_batches</span> <span class="o">=</span> <span class="p">[</span><span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">component</span><span class="o">=</span><span class="n">comp</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">batches</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">none_components_in_batches</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">none_components_in_batches</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Component </span><span class="si">{</span><span class="n">comp</span><span class="si">}</span><span class="s1"> is None in some batches&#39;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">batch_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">new_comp</span> <span class="o">=</span> <span class="p">[</span><span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">component</span><span class="o">=</span><span class="n">comp</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">batches</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">last_batch</span> <span class="o">=</span> <span class="n">batches</span><span class="p">[</span><span class="n">break_point</span><span class="p">]</span>
+                <span class="n">new_comp</span> <span class="o">=</span> <span class="p">[</span><span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">component</span><span class="o">=</span><span class="n">comp</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">batches</span><span class="p">[:</span><span class="n">break_point</span><span class="p">]]</span> <span class="o">+</span> \
+                           <span class="p">[</span><span class="n">last_batch</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">component</span><span class="o">=</span><span class="n">comp</span><span class="p">)[:</span><span class="n">last_batch_len</span><span class="p">]]</span>
+
+            <span class="n">new_data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">merge_component</span><span class="p">(</span><span class="n">comp</span><span class="p">,</span> <span class="n">new_comp</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">batch_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">rest_comp</span> <span class="o">=</span> <span class="p">[</span><span class="n">last_batch</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">component</span><span class="o">=</span><span class="n">comp</span><span class="p">)[</span><span class="n">last_batch_len</span><span class="p">:]]</span> <span class="o">+</span> \
+                            <span class="p">[</span><span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">component</span><span class="o">=</span><span class="n">comp</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">batches</span><span class="p">[</span><span class="n">break_point</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:]]</span>
+                <span class="n">rest_data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">merge_component</span><span class="p">(</span><span class="n">comp</span><span class="p">,</span> <span class="n">rest_comp</span><span class="p">)</span>
+
+        <span class="n">new_batch</span> <span class="o">=</span> <span class="n">_make_batch</span><span class="p">(</span><span class="n">new_data</span><span class="p">)</span>
+        <span class="n">rest_batch</span> <span class="o">=</span> <span class="n">_make_batch</span><span class="p">(</span><span class="n">rest_data</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">new_batch</span><span class="p">,</span> <span class="n">rest_batch</span></div>
+
+
+<div class="viewcode-block" id="Batch.merge_component">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.merge_component">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">merge_component</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">component</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Merge the same component data from several batches &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">component</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Unknown data type&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span></div>
+
+
+<div class="viewcode-block" id="Batch.as_dataset">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.as_dataset">[docs]</a>
+    <span class="k">def</span> <span class="nf">as_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Makes a new dataset from batch data</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        dataset</span>
+<span class="sd">            an instance or a subclass of Dataset</span>
+
+<span class="sd">        copy : bool</span>
+<span class="sd">            whether to copy batch data to allow for further inplace transformations</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        an instance of a class specified by `dataset` arg, preloaded with this batch data</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dataset</span>
+        <span class="k">if</span> <span class="n">dataset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;dataset can be an instance of Dataset (sub)class or the class itself, but not None&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+            <span class="n">dataset_class</span> <span class="o">=</span> <span class="n">dataset</span>
+            <span class="n">attrs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">dataset_class</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="vm">__class__</span>
+            <span class="n">attrs</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">get_attrs</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">dataset_class</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">batch_class</span><span class="o">=</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="n">preloaded</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="o">**</span><span class="n">attrs</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">indices</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;: numpy array - an array with the indices &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">DatasetIndex</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">indices</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span>
+
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;: int - number of items in the batch &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Batch.add_components">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.add_components">[docs]</a>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">add_components</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">components</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Add new components</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        components : str or list</span>
+<span class="sd">            new component names</span>
+<span class="sd">        init : array-like</span>
+<span class="sd">            initial component data</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        ValueError</span>
+<span class="sd">            If a component or an attribute with the given name already exists</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">components</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">components</span> <span class="o">=</span> <span class="p">(</span><span class="n">components</span><span class="p">,)</span>
+            <span class="n">init</span> <span class="o">=</span> <span class="p">(</span><span class="n">init</span><span class="p">,)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">components</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">)):</span>
+            <span class="n">components</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">components</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">init</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">init</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span><span class="p">,)</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">components</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">init</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">init</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">comp</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">components</span><span class="p">,</span> <span class="n">init</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comp</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;An attribute &#39;</span><span class="si">{</span><span class="n">comp</span><span class="si">}</span><span class="s2">&#39; already exists&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">comp</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;A components &#39;</span><span class="si">{</span><span class="n">comp</span><span class="si">}</span><span class="s2">&#39; already exists&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">components</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">comp</span><span class="p">])</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;All batch data is erased&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">components</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span> <span class="o">+</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">comp</span><span class="p">])</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comp</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> not found in class </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;_data&quot;</span><span class="p">:</span>
+                <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">,</span> <span class="n">BaseComponents</span><span class="p">):</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span> <span class="o">=</span> <span class="n">create_item_class</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">)</span>
+                <span class="k">return</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">:</span>
+                <span class="c1"># preload data if needed</span>
+                <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span><span class="o">.</span><span class="n">components</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span> <span class="o">=</span> <span class="n">create_item_class</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">)</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+                <span class="c1"># update _data with with new component values</span>
+                <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="s1">&#39;_data&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_named</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+                <span class="k">return</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__getstate__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">state</span><span class="p">[</span><span class="s1">&#39;_local&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;_local&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="n">state</span><span class="p">[</span><span class="s1">&#39;_preloaded_lock&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">state</span>
+
+    <span class="k">def</span> <span class="nf">__setstate__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="n">state</span><span class="p">[</span><span class="s1">&#39;_preloaded_lock&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span> <span class="k">if</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;_preloaded_lock&#39;</span><span class="p">]</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">state</span><span class="p">[</span><span class="s1">&#39;_local&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">local</span><span class="p">()</span> <span class="k">if</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;_local&#39;</span><span class="p">]</span> <span class="k">else</span> <span class="kc">None</span>
+
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">state</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="c1"># this warrants that all hidden objects are reconstructed upon unpickling</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">array_of_nones</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;1-D ndarray: ``NumPy`` array with ``None`` values.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="p">))</span>
+
+<div class="viewcode-block" id="Batch.get">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.get">[docs]</a>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">component</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return an item from the batch or the component &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">item</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">component</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">component</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">component</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">item</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">item</span><span class="p">],</span> <span class="n">component</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">res</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">item</span><span class="p">]</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="k">def</span> <span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="bp">self</span><span class="p">[</span><span class="n">item</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">items</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;: list - batch items &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="bp">self</span><span class="p">[</span><span class="n">ix</span><span class="p">]]</span> <span class="k">for</span> <span class="n">ix</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Batch.run_once">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.run_once">[docs]</a>
+    <span class="k">def</span> <span class="nf">run_once</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Init function for no parallelism</span>
+<span class="sd">        Useful for async action-methods (will wait till the method finishes)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="k">return</span> <span class="p">[[]]</span></div>
+
+
+<div class="viewcode-block" id="Batch.get_errors">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.get_errors">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_errors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">all_res</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return a list of errors from a parallel action &quot;&quot;&quot;</span>
+        <span class="n">all_errors</span> <span class="o">=</span> <span class="p">[</span><span class="n">error</span> <span class="k">for</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">all_res</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="n">all_errors</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">all_errors</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="Batch.do_nothing">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.do_nothing">[docs]</a>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">do_nothing</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; An empty action (might be convenient in complicated pipelines) &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+
+<div class="viewcode-block" id="Batch.apply_parallel">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.apply_parallel">[docs]</a>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">apply_parallel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span>
+                       <span class="n">p</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;for&#39;</span><span class="p">,</span> <span class="n">requires_rng</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">rng_seeds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Apply a function to each item in the container, returned by `init`, and assemble results by `post`.</span>
+<span class="sd">        Depending on the `target` parameter, different parallelization engines may be used: for, threads, MPC, async.</span>
+
+<span class="sd">        Roughly, under the hood we perform the following:</span>
+<span class="sd">            - compute parameters, individual for each worker. Currently, these are:</span>
+<span class="sd">                - `p` to indicate whether the function should be applied</span>
+<span class="sd">                - worker id and a seed for random generator, if required</span>
+<span class="sd">            - call `init` function, which outputs a container of items, passed directly to the `func`.</span>
+<span class="sd">            The simplest example is the `init` funciton that returns batch indices, and the function works off of each.</span>
+<span class="sd">            - wrap the `func` call into parallelization engine of choice.</span>
+<span class="sd">            - compute results of `func` calls for each item, returned by `init`</span>
+<span class="sd">            - assemble results by `post` function, e.g. stack the obtained numpy arrays.</span>
+
+<span class="sd">        In the simplest possible case of `init=None`, `src=images`, `dst=images_transformed`, `post=None`,</span>
+<span class="sd">        this function is almost equivalent to:</span>
+<span class="sd">            container = [func(item, *args, **kwargs) for item in self.images]</span>
+<span class="sd">            self.images_transformed = container</span>
+
+<span class="sd">        If `src` is a list and `dst` is a list, then this function is applied recursively to each pair of src, dst.</span>
+<span class="sd">        If `src` is a tuple, then this tuple is used as a whole.</span>
+<span class="sd">        This allows to make functions that work on multiple components.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        func : callable</span>
+<span class="sd">            A function to apply to each item from the source.</span>
+<span class="sd">            Should accept `src` and `dst` parameters, or be written in a way that accepts variable args.</span>
+<span class="sd">        target : str</span>
+<span class="sd">            Parallelization engine:</span>
+<span class="sd">                - &#39;f&#39;, &#39;for&#39; for executing each worker sequentially, like in a for-loop.</span>
+<span class="sd">                - &#39;t&#39;, &#39;threads&#39; for using threads.</span>
+<span class="sd">                - &#39;m&#39;, &#39;mpc&#39; for using processes. Note the bigger overhead for process initialization.</span>
+<span class="sd">                - &#39;a&#39;, &#39;async&#39; for asynchronous execution.</span>
+<span class="sd">        init : str, callable or container</span>
+<span class="sd">            Function to init data for individual workers: must return a container of items.</span>
+
+<span class="sd">            If &#39;data&#39;, then use `src` components as the init.</span>
+<span class="sd">            If other str, then must be a name of the attribute of the batch to use as the init.</span>
+<span class="sd">            If callable or any previous returned a callable, then result of this callable is used as the init.</span>
+<span class="sd">            Note that in the last case callable should accept `src` and `dst` parameters, and `kwargs` are also passed.</span>
+<span class="sd">            If not any of the above, then the object is used directly, for example, np.ndarray.</span>
+
+<span class="sd">        post : str or callable</span>
+<span class="sd">            Function to apply to the results of function evaluation on each item.</span>
+<span class="sd">            Must accept `src` and `dst` parameters, as well as `kwargs`.</span>
+
+<span class="sd">        src : str, sequence, list of str</span>
+<span class="sd">            The source to get data from:</span>
+<span class="sd">            - None</span>
+<span class="sd">            - str - a component name, e.g. &#39;images&#39; or &#39;masks&#39;</span>
+<span class="sd">            - tuple or list of str - several component names</span>
+<span class="sd">            - sequence - data as a numpy-array, data frame, etc</span>
+
+<span class="sd">        dst : str or array</span>
+<span class="sd">            the destination to put the result in, can be:</span>
+<span class="sd">            - None - in this case dst is set to be same as src</span>
+<span class="sd">            - str - a component name, e.g. &#39;images&#39; or &#39;masks&#39;</span>
+<span class="sd">            - tuple or list of str, e.g. [&#39;images&#39;, &#39;masks&#39;]</span>
+<span class="sd">            If not provided, uses `src`.</span>
+
+<span class="sd">        p : float or None</span>
+<span class="sd">            Probability of applying func to an element in the batch.</span>
+
+<span class="sd">        requires_rng : bool</span>
+<span class="sd">            Whether the `func` requires RNG. Should be used for correctly initialized seeds for reproducibility.</span>
+<span class="sd">            If True, then a pre-initialized RNG will be passed to the function call as `rng` keyword parameter.</span>
+
+<span class="sd">        args, kwargs</span>
+<span class="sd">            Other parameters passed to ``func``.</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        apply_parallel does the following (but in parallel)::</span>
+
+<span class="sd">            for item in range(len(batch)):</span>
+<span class="sd">                self.dst[item] = func(self.src[item], *args, **kwargs)</span>
+
+<span class="sd">        `apply_parallel(func, src=[&#39;images&#39;, &#39;masks&#39;])` is equal to</span>
+<span class="sd">        `apply_parallel(func, src=[&#39;images&#39;, &#39;masks&#39;], dst=[&#39;images&#39;, &#39;masks&#39;])`,</span>
+<span class="sd">        which in turn equals to two subsequent calls::</span>
+
+<span class="sd">            images = func(images)</span>
+<span class="sd">            masks = func(masks)</span>
+
+<span class="sd">        However, named expressions will be evaluated only once before the first call.</span>
+
+<span class="sd">        Whereas `apply_parallel(func, src=(&#39;images&#39;, &#39;masks&#39;))` (i.e. when `src` takes a tuple of component names,</span>
+<span class="sd">        not the list as in the previous example) passes both components data into `func` simultaneously::</span>
+
+<span class="sd">            images, masks = func((images, masks))</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+<span class="sd">        ::</span>
+
+<span class="sd">            apply_parallel(make_masks_fn, src=&#39;images&#39;, dst=&#39;masks&#39;)</span>
+<span class="sd">            apply_parallel(apply_mask, src=(&#39;images&#39;, &#39;masks&#39;), dst=&#39;images_with_masks&#39;)</span>
+<span class="sd">            apply_parallel(rotate, src=[&#39;images&#39;, &#39;masks&#39;], dst=[&#39;images&#39;, &#39;masks&#39;], p=.2)</span>
+<span class="sd">            apply_parallel(MyBatch.some_static_method, p=.5)</span>
+<span class="sd">            apply_parallel(B.some_method, src=&#39;features&#39;, p=.5)</span>
+
+<span class="sd">        TODO: move logic of applying `post` function from `inbatch_parallel` here, as well as remove `use_self` arg.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Parse parameters: fill with class-wide defaults</span>
+        <span class="n">init</span> <span class="o">=</span> <span class="n">init</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_defaults</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;init&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">post</span> <span class="o">=</span> <span class="n">post</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_defaults</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;post&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">target</span> <span class="o">=</span> <span class="n">target</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_defaults</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+        <span class="c1"># Prepare parameters, individual for each worker: probability of applying, RNG seed, id</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">P</span><span class="p">(</span><span class="n">R</span><span class="p">(</span><span class="s1">&#39;binomial&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">random</span><span class="p">))</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">batch</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">requires_rng</span> <span class="ow">and</span> <span class="n">rng_seeds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">rng_seeds</span> <span class="o">=</span> <span class="n">P</span><span class="p">(</span><span class="n">R</span><span class="p">(</span><span class="s1">&#39;integers&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">9223372036854775807</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">random</span><span class="p">))</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">batch</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="n">worker_ids</span> <span class="o">=</span> <span class="n">P</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">))</span>
+
+        <span class="c1"># Case of list `src`: recursively call for each pair of src/dst</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">dst</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">src</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">dst</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;src and dst must have equal length&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">dst</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">src</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">dst</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">dst</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">dst</span> <span class="o">=</span> <span class="n">src</span>
+
+            <span class="k">for</span> <span class="n">src_</span><span class="p">,</span> <span class="n">dst_</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">apply_parallel</span><span class="p">(</span><span class="n">func</span><span class="o">=</span><span class="n">func</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="n">init</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="n">post</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="n">src_</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dst_</span><span class="p">,</span>
+                                    <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">p</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="n">target</span><span class="p">,</span> <span class="n">rng_seeds</span><span class="o">=</span><span class="n">rng_seeds</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span>
+
+        <span class="c1"># Actual computation</span>
+        <span class="k">if</span> <span class="n">init</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">init</span> <span class="ow">is</span> <span class="kc">False</span> <span class="ow">or</span> <span class="n">init</span> <span class="o">==</span> <span class="s1">&#39;data&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">init</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">component</span><span class="o">=</span><span class="n">src</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">)):</span>
+                <span class="n">init</span> <span class="o">=</span> <span class="nb">list</span><span class="p">((</span><span class="n">x</span><span class="p">,)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">component</span><span class="o">=</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">src</span><span class="p">]))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">init</span> <span class="o">=</span> <span class="n">src</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">init</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="c1"># No hasattr check: if it is False, then an error would (and should) be raised</span>
+            <span class="n">init</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">init</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">init</span><span class="p">):</span>
+                <span class="n">init</span> <span class="o">=</span> <span class="n">init</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dst</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">p</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="n">target</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="c1"># Compute result. Unbind the method to pass self explicitly</span>
+        <span class="n">parallel</span> <span class="o">=</span> <span class="n">inbatch_parallel</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="n">init</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="n">post</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="n">target</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dst</span><span class="p">)</span>
+        <span class="n">transform</span> <span class="o">=</span> <span class="n">parallel</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">_apply_once</span><span class="p">)</span>  <span class="c1"># noqa: SLF001; private-member-access</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">func</span><span class="o">=</span><span class="n">func</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">p</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dst</span><span class="p">,</span>
+                           <span class="n">apply_parallel_id</span><span class="o">=</span><span class="n">worker_ids</span><span class="p">,</span> <span class="n">apply_parallel_seeds</span><span class="o">=</span><span class="n">rng_seeds</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_apply_once</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">func</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">apply_parallel_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">apply_parallel_seeds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Apply a function to each item in the batch.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        item</span>
+<span class="sd">            An item from `init` function.</span>
+<span class="sd">        func : callable</span>
+<span class="sd">            A function to apply to each item.</span>
+<span class="sd">        p : None or {0, 1}</span>
+<span class="sd">            Whether to apply func to an element in the batch. If not specified, counts as 1.</span>
+<span class="sd">            Created and distributed to individual items by :meth:``.apply_parallel`.</span>
+<span class="sd">        apply_parallel_id : None, int</span>
+<span class="sd">            Index of the current item in the overall `init`.</span>
+<span class="sd">            Created and distributed to individual items by :meth:``.apply_parallel`.</span>
+<span class="sd">        apply_parallel_seeds : None, int</span>
+<span class="sd">            If provided, then the seed to create RNG for this given worker.</span>
+<span class="sd">            If provided, then supplied to a function call as `rng` keyword parameter.</span>
+<span class="sd">            Created and distributed to individual items by :meth:``.apply_parallel`.</span>
+<span class="sd">        args, kwargs</span>
+<span class="sd">            Other parameters passed to ``func``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">apply_parallel_id</span>
+
+        <span class="k">if</span> <span class="n">p</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">p</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">apply_parallel_seeds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">SFC64</span><span class="p">(</span><span class="n">apply_parallel_seeds</span><span class="p">))</span>
+                <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;rng&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rng</span>
+            <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">item</span>
+
+    <span class="k">def</span> <span class="nf">_get_file_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Get full path file name corresponding to the current index.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        src : str, FilesIndex or None</span>
+<span class="sd">            if None, full path to the indexed item will be returned.</span>
+<span class="sd">            if FilesIndex it must contain the same indices values as in the self.index.</span>
+<span class="sd">            if str, behavior depends on wheter self.index.dirs is True. If self.index.dirs is True</span>
+<span class="sd">            then src will be appended to the end of the full paths from self.index. Else if</span>
+<span class="sd">            self.index.dirs is False then src is considered as a directory name and the basenames</span>
+<span class="sd">            from self.index will be appended to the end of src.</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+<span class="sd">        Let folder &quot;/some/path/*.dcm&quot; contain files &quot;001.png&quot;, &quot;002.png&quot;, etc. Then if self.index</span>
+<span class="sd">        was built as</span>
+
+<span class="sd">        &gt;&gt;&gt; index = FilesIndex(path=&quot;/some/path/*.png&quot;, no_ext=True)</span>
+
+<span class="sd">        Then _get_file_name(ix, src=&quot;augmented_images/&quot;) will return filenames:</span>
+<span class="sd">        &quot;augmented_images/001.png&quot;, &quot;augmented_images/002.png&quot;, etc.</span>
+
+
+<span class="sd">        Let folder &quot;/some/path/*&quot; contain folders &quot;001&quot;, &quot;002&quot;, etc. Then if self.index</span>
+<span class="sd">        was built as</span>
+
+<span class="sd">        &gt;&gt;&gt; index = FilesIndex(path=&quot;/some/path/*&quot;, dirs=True)</span>
+
+<span class="sd">        Then _get_file_name(ix, src=&quot;masks.png&quot;) will return filenames:</span>
+<span class="sd">        &quot;/some/path/001/masks.png&quot;, &quot;/some/path/002/masks.png&quot;, etc.</span>
+
+
+<span class="sd">        If you have two directories &quot;images/*.png&quot;, &quot;labels/*png&quot; with identical filenames,</span>
+<span class="sd">        you can build two instances of FilesIndex and use the first one to biuld your Dataset</span>
+
+<span class="sd">        &gt;&gt;&gt; index_images = FilesIndex(path=&quot;/images/*.png&quot;, no_ext=True)</span>
+<span class="sd">        &gt;&gt;&gt; index_labels = FilesIndex(path=&quot;/labels/*.png&quot;, no_ext=True)</span>
+<span class="sd">        &gt;&gt;&gt; dset = Dataset(index=index_images, batch_class=Batch)</span>
+
+<span class="sd">        Then build dataset using the first one</span>
+<span class="sd">        _get_file_name(ix, src=index_labels) to reach corresponding files in the second path.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">FilesIndex</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;File locations must be specified to dump/load data&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">dirs</span><span class="p">:</span>
+                <span class="n">fullpath</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">get_fullpath</span><span class="p">(</span><span class="n">ix</span><span class="p">)</span>
+                <span class="n">file_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fullpath</span><span class="p">,</span> <span class="n">src</span><span class="p">)</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">file_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">get_fullpath</span><span class="p">(</span><span class="n">ix</span><span class="p">))</span>
+                <span class="n">file_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">src</span><span class="p">),</span> <span class="n">file_name</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">FilesIndex</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">file_name</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">get_fullpath</span><span class="p">(</span><span class="n">ix</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File </span><span class="si">{</span><span class="n">ix</span><span class="si">}</span><span class="s2"> is not indexed in the received index&quot;</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span>
+
+        <span class="k">elif</span> <span class="n">src</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">file_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">get_fullpath</span><span class="p">(</span><span class="n">ix</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Src must be either str, FilesIndex or None&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">file_name</span>
+
+    <span class="k">def</span> <span class="nf">_assemble_component</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">component</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assemble one component after parallel execution.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        result : sequence, np.ndarray</span>
+<span class="sd">            Values to put into ``component``</span>
+<span class="sd">        component : str</span>
+<span class="sd">            Component to assemble.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">new_items</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s2">&quot;must have the same shape&quot;</span> <span class="ow">in</span> <span class="n">message</span><span class="p">:</span>
+                <span class="n">new_items</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+                <span class="n">new_items</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">result</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">e</span>
+
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">component</span><span class="p">):</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">component</span><span class="p">,</span> <span class="n">new_items</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_components</span><span class="p">(</span><span class="n">component</span><span class="p">,</span> <span class="n">new_items</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_assemble</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">all_results</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Assembles the batch after a parallel action.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        all_results : sequence</span>
+<span class="sd">            Results after inbatch_parallel.</span>
+<span class="sd">        dst : str, sequence, np.ndarray</span>
+<span class="sd">            Components to assemble</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        self</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span>
+        <span class="k">if</span> <span class="n">any_action_failed</span><span class="p">(</span><span class="n">all_results</span><span class="p">):</span>
+            <span class="n">all_errors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_errors</span><span class="p">(</span><span class="n">all_results</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">all_errors</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">traceback</span><span class="o">.</span><span class="n">print_tb</span><span class="p">(</span><span class="n">all_errors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">__traceback__</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Could not assemble the batch&quot;</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">all_errors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">dst</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dst_default</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dst_default&#39;</span><span class="p">,</span> <span class="s1">&#39;src&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">dst_default</span> <span class="o">==</span> <span class="s1">&#39;src&#39;</span><span class="p">:</span>
+                <span class="n">dst</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;src&#39;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">dst_default</span> <span class="o">==</span> <span class="s1">&#39;components&#39;</span><span class="p">:</span>
+                <span class="n">dst</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
+            <span class="n">dst</span> <span class="o">=</span> <span class="p">[</span><span class="n">dst</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dst</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">all_results</span> <span class="o">=</span> <span class="p">[</span><span class="n">all_results</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">all_results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">all_results</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">component</span><span class="p">,</span> <span class="n">result</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">all_results</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_assemble_component</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">component</span><span class="o">=</span><span class="n">component</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="nd">@apply_parallel_</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;indices&#39;</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="s1">&#39;_assemble&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;f&#39;</span><span class="p">,</span> <span class="n">dst_default</span><span class="o">=</span><span class="s1">&#39;components&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_load_blosc</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Load data from a blosc packed file &quot;&quot;&quot;</span>
+        <span class="n">file_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_file_name</span><span class="p">(</span><span class="n">ix</span><span class="p">,</span> <span class="n">src</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">file_name</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">dill</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">blosc</span><span class="o">.</span><span class="n">decompress</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()))</span>
+            <span class="n">components</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">dst</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">item</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">components</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span> <span class="c1"># noqa: BLE001, blind-except</span>
+                <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;Cannot find components in corresponfig file&#39;</span><span class="p">,</span> <span class="n">file_name</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span>
+        <span class="k">return</span> <span class="n">item</span>
+
+    <span class="nd">@apply_parallel_</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="s1">&#39;indices&#39;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s1">&#39;f&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_dump_blosc</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ix</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Save blosc packed data to file &quot;&quot;&quot;</span>
+        <span class="n">file_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_file_name</span><span class="p">(</span><span class="n">ix</span><span class="p">,</span> <span class="n">dst</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">file_name</span><span class="p">,</span> <span class="s1">&#39;w+b&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">components</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span><span class="p">,)</span>
+                <span class="n">item</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">ix</span><span class="p">],)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">components</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">components</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">)</span>
+                <span class="n">item</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">ix</span><span class="p">]</span><span class="o">.</span><span class="n">as_tuple</span><span class="p">(</span><span class="n">components</span><span class="p">)</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">components</span><span class="p">,</span> <span class="n">item</span><span class="p">))</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">blosc</span><span class="o">.</span><span class="n">compress</span><span class="p">(</span><span class="n">dill</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">data</span><span class="p">)))</span>
+
+    <span class="k">def</span> <span class="nf">_load_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">fmt</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Load a data frame from table formats: csv, hdf5, feather &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;csv&#39;</span><span class="p">:</span>
+            <span class="n">_data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;feather&#39;</span><span class="p">:</span>
+            <span class="n">_data</span> <span class="o">=</span> <span class="n">feather</span><span class="o">.</span><span class="n">read_dataframe</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;hdf5&#39;</span><span class="p">:</span>
+            <span class="n">_data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_hdf</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="c1"># Put into this batch only part of it (defined by index)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_data</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+            <span class="n">_data</span> <span class="o">=</span> <span class="n">_data</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_data</span><span class="p">,</span> <span class="n">dd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+            <span class="c1"># dask.DataFrame.loc supports advanced indexing only with lists</span>
+            <span class="n">_data</span> <span class="o">=</span> <span class="n">_data</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">)]</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">post</span><span class="p">):</span>
+            <span class="n">_data</span> <span class="o">=</span> <span class="n">post</span><span class="p">(</span><span class="n">_data</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="n">src</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dst</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">_data</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dst</span><span class="p">)</span>
+
+
+    <span class="nd">@action</span><span class="p">(</span><span class="n">use_lock</span><span class="o">=</span><span class="s1">&#39;__dump_table_lock&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_dump_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;feather&#39;</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Save batch data to table formats</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">          dst: str - a path to dump into</span>
+<span class="sd">          fmt: str - format: feather, hdf5, csv</span>
+<span class="sd">          components: str or tuple - one or several component names</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">filename</span> <span class="o">=</span> <span class="n">dst</span>
+
+        <span class="n">components</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">components</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">)</span>
+        <span class="n">data_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">comp</span> <span class="ow">in</span> <span class="n">components</span><span class="p">:</span>
+            <span class="n">comp_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">component</span><span class="o">=</span><span class="n">comp</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">comp_data</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+                <span class="n">data_dict</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">comp_data</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="s1">&#39;series&#39;</span><span class="p">))</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">comp_data</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">comp_data</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="n">comp</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">comp_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])]</span>
+                    <span class="n">comp_dict</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">columns</span><span class="p">,</span> <span class="p">(</span><span class="n">comp_data</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">comp_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])))</span>
+                    <span class="n">data_dict</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">comp</span><span class="p">:</span> <span class="n">comp_dict</span><span class="p">})</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">data_dict</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">comp</span><span class="p">:</span> <span class="n">comp_data</span><span class="p">})</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">data_dict</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">comp</span><span class="p">:</span> <span class="n">comp_data</span><span class="p">})</span>
+        <span class="n">_data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data_dict</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;feather&#39;</span><span class="p">:</span>
+            <span class="n">feather</span><span class="o">.</span><span class="n">write_dataframe</span><span class="p">(</span><span class="n">_data</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;hdf5&#39;</span><span class="p">:</span>
+            <span class="n">_data</span><span class="o">.</span><span class="n">to_hdf</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;csv&#39;</span><span class="p">:</span>
+            <span class="n">_data</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Unknown format </span><span class="si">{</span><span class="n">fmt</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span> <span class="nf">_load_from_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">src</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Load data from a memory object (tuple, ndarray, pd.DataFrame, etc) &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">dst</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="o">=</span> <span class="n">create_item_class</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">src</span><span class="p">,</span> <span class="n">indices</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">,</span>
+                                           <span class="n">crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_copy</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">dst</span> <span class="o">=</span> <span class="p">(</span><span class="n">dst</span><span class="p">,)</span>
+                <span class="n">src</span> <span class="o">=</span> <span class="p">(</span><span class="n">src</span><span class="p">,)</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="n">create_item_class</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">src</span><span class="p">,</span> <span class="n">indices</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_copy</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">comp</span> <span class="ow">in</span> <span class="n">dst</span><span class="p">:</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comp</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">comp</span><span class="p">))</span>
+
+<div class="viewcode-block" id="Batch.load">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.load">[docs]</a>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Load data from another array or a file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        src :</span>
+<span class="sd">            a source (e.g. an array or a file name)</span>
+
+<span class="sd">        fmt : str</span>
+<span class="sd">            a source format, one of None, &#39;blosc&#39;, &#39;csv&#39;, &#39;hdf5&#39;, &#39;feather&#39;</span>
+
+<span class="sd">        dst : None or str or tuple of str</span>
+<span class="sd">            components to load `src` to</span>
+
+<span class="sd">        **kwargs :</span>
+<span class="sd">            other parameters to pass to format-specific loaders</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        Loading creates new components if necessary.</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+<span class="sd">        Load data from a pandas dataframe&#39;s columns into all batch components::</span>
+
+<span class="sd">            batch.load(src=dataframe)</span>
+
+<span class="sd">        Load data from dataframe&#39;s columns `features` and `labels` into components `features` and `labels`::</span>
+
+<span class="sd">            batch.load(src=dataframe, dst=(&#39;features&#39;, &#39;labels&#39;))</span>
+
+<span class="sd">        Load a dataframe into a component `features`::</span>
+
+<span class="sd">            batch.load(src=dataframe, dst=&#39;features&#39;)</span>
+
+<span class="sd">        Load data from a dict into components `images` and `masks`::</span>
+
+<span class="sd">            batch.load(src=dict(images=images_array, masks=masks_array), dst=(&#39;images&#39;, &#39;masks&#39;))</span>
+
+<span class="sd">        Load data from a tuple into components `images` and `masks`::</span>
+
+<span class="sd">            batch.load(src=(images_array, masks_array), dst=(&#39;images&#39;, &#39;masks&#39;))</span>
+
+<span class="sd">        Load data from an array into a component `images`::</span>
+
+<span class="sd">            batch.load(src=images_array, dst=&#39;images&#39;)</span>
+
+<span class="sd">        Load data from a CSV file columns into components `features` and `labels`::</span>
+
+<span class="sd">            batch.load(fmt=&#39;csv&#39;, src=&#39;/path/to/file.csv&#39;, dst=(&#39;features&#39;, &#39;labels`), index_col=0)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span>
+
+        <span class="k">if</span> <span class="n">dst</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_components</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">setdiff1d</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">components</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+
+        <span class="k">if</span> <span class="n">fmt</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_load_from_source</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dst</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;blosc&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_load_blosc</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dst</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">fmt</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;csv&#39;</span><span class="p">,</span> <span class="s1">&#39;hdf5&#39;</span><span class="p">,</span> <span class="s1">&#39;feather&#39;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_load_table</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">src</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="n">dst</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unknown format &quot;</span> <span class="o">+</span> <span class="n">fmt</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="Batch.dump">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.dump">[docs]</a>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Save data to another array or a file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        dst :</span>
+<span class="sd">            a destination (e.g. an array or a file name)</span>
+
+<span class="sd">        fmt : str</span>
+<span class="sd">            a destination format, one of None, &#39;blosc&#39;, &#39;csv&#39;, &#39;hdf5&#39;, &#39;feather&#39;</span>
+
+<span class="sd">        components : None or str or tuple of str</span>
+<span class="sd">            components to load</span>
+
+<span class="sd">        *args :</span>
+<span class="sd">            other parameters are passed to format-specific writers</span>
+
+<span class="sd">        *kwargs :</span>
+<span class="sd">            other parameters are passed to format-specific writers</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">components</span> <span class="o">=</span> <span class="p">[</span><span class="n">components</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">components</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">components</span>
+        <span class="k">if</span> <span class="n">fmt</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">components</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">components</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Only one component can be dumped into a memory array: components =&quot;</span><span class="p">,</span> <span class="n">components</span><span class="p">)</span>
+            <span class="n">components</span> <span class="o">=</span> <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">components</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="n">dst</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">component</span><span class="o">=</span><span class="n">components</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s1">&#39;blosc&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_dump_blosc</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="n">components</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">fmt</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;csv&#39;</span><span class="p">,</span> <span class="s1">&#39;hdf5&#39;</span><span class="p">,</span> <span class="s1">&#39;feather&#39;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_dump_table</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">fmt</span><span class="p">,</span> <span class="n">components</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unknown format &quot;</span> <span class="o">+</span> <span class="n">fmt</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="Batch.save">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.save">[docs]</a>
+    <span class="nd">@action</span>
+    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Save batch data to a file (an alias for dump method)&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Batch.to_array">
+<a class="viewcode-back" href="../../api/batchflow.batch.html#batchflow.Batch.to_array">[docs]</a>
+    <span class="nd">@apply_parallel_</span>
+    <span class="k">def</span> <span class="nf">to_array</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comp</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">channels</span><span class="o">=</span><span class="s1">&#39;last&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Converts batch components to np.ndarray format</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        src : str</span>
+<span class="sd">            Component to get images from. Default is &#39;images&#39;.</span>
+<span class="sd">        dst : str</span>
+<span class="sd">            Component to write images to. Default is &#39;images&#39;.</span>
+<span class="sd">        dtype : str or np.dtype</span>
+<span class="sd">            Data type</span>
+<span class="sd">        channels : None, &#39;first&#39; or &#39;last&#39;</span>
+<span class="sd">            the dimension for channels axis</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">kwargs</span>
+        <span class="n">comp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">comp</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">comp</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="c1"># a special treatment for 2d arrays with images - add a new dimension for channels</span>
+            <span class="k">if</span> <span class="n">channels</span> <span class="o">==</span> <span class="s1">&#39;first&#39;</span><span class="p">:</span>
+                <span class="n">comp</span> <span class="o">=</span> <span class="n">comp</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+            <span class="k">elif</span> <span class="n">channels</span> <span class="o">==</span> <span class="s1">&#39;last&#39;</span><span class="p">:</span>
+                <span class="n">comp</span> <span class="o">=</span> <span class="n">comp</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># we assume that channels is &#39;last&#39; by default</span>
+            <span class="c1"># so move channels from the last to the first axis if needed</span>
+            <span class="k">if</span> <span class="n">channels</span> <span class="o">==</span> <span class="s1">&#39;first&#39;</span><span class="p">:</span>
+                <span class="n">comp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">moveaxis</span><span class="p">(</span><span class="n">comp</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">comp</span> <span class="o">=</span> <span class="n">comp</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">comp</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

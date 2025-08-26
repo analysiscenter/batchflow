@@ -1,0 +1,272 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>batchflow.models.metrics.segment &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">batchflow.models.metrics.segment</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for batchflow.models.metrics.segment</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot; Contains metrics for segmentation &quot;&quot;&quot;</span>
+<span class="c1"># ruff : noqa: E741; ambiguous-variable-name</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">ClassificationMetrics</span><span class="p">,</span> <span class="n">get_components</span>
+
+
+<div class="viewcode-block" id="SegmentationMetricsByPixels">
+<a class="viewcode-back" href="../../../../api/batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByPixels">[docs]</a>
+<span class="k">class</span> <span class="nc">SegmentationMetricsByPixels</span><span class="p">(</span><span class="n">ClassificationMetrics</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Metrics to assess segmentation models pixel-wise</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    Rate metrics are evaluated for each item independently. So there are two levels of metrics aggregation:</span>
+
+<span class="sd">    - multi-class averaging</span>
+<span class="sd">    - dataset aggregation.</span>
+
+<span class="sd">    For instance, if you have a dataset of 100 pictures (each having size of 256x256) of 10 classes and</span>
+<span class="sd">    you need to calculate an accuracy of semantic segmentation, then:</span>
+
+<span class="sd">    - `evaluate([&#39;accuracy&#39;], agg=None, multiclass=None)` will return an array of shape (100, 10) containing accuracy</span>
+<span class="sd">      of each class for each image separately.</span>
+
+<span class="sd">    - `evaluate([&#39;accuracy&#39;], agg=&#39;mean&#39;, multiclass=None)` will return a vector of shape (10,) containing</span>
+<span class="sd">      an accuracy of each class averaged across all images.</span>
+
+<span class="sd">    - `evaluate([&#39;accuracy&#39;], agg=None, multiclass=&#39;macro&#39;)` will return a vector of shape (100,) containing</span>
+<span class="sd">      an accuracy of each image separately averaged across all classes.</span>
+
+<span class="sd">    - `evaluate([&#39;accuracy&#39;], agg=&#39;mean&#39;, multiclass=&#39;macro&#39;)` will return a single value of</span>
+<span class="sd">      an average accuracy of all classes and images combined.</span>
+
+<span class="sd">    The default values are `agg=&#39;mean&#39;, multiclass=&#39;macro&#39;`.</span>
+
+<span class="sd">    For multi-class averaging see :class:`~.ClassificationMetrics`.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    ::</span>
+
+<span class="sd">        metrics = SegmentationMetricsByPixels(targets, predictions, num_classes=10, fmt=&#39;labels&#39;)</span>
+<span class="sd">        metrics.evaluate(&#39;specificity&#39;)</span>
+<span class="sd">        metrics.evaluate([&#39;sensitivity&#39;, &#39;jaccard&#39;], agg=&#39;mean&#39;, multiclass=None)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="SegmentationMetricsByInstances">
+<a class="viewcode-back" href="../../../../api/batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances">[docs]</a>
+<span class="k">class</span> <span class="nc">SegmentationMetricsByInstances</span><span class="p">(</span><span class="n">ClassificationMetrics</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; Metrics to assess segmentation models by instances (i.e. connected components of one class,</span>
+<span class="sd">    e.g. cancer nodules, faces, )</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    iot : float</span>
+<span class="sd">        if the ratio of a predicted instance size to the corresponding target size &gt;= `iot`,</span>
+<span class="sd">        then instance is considered correctly predicted (true postitive).</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    For other parameters see :class:`~.ClassificationMetrics`.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;proba&#39;</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                 <span class="n">skip_bg</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">.5</span><span class="p">,</span> <span class="n">iot</span><span class="o">=</span><span class="mf">.5</span><span class="p">,</span> <span class="n">calc</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">targets</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="n">fmt</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">,</span> <span class="n">axis</span><span class="p">,</span> <span class="n">threshold</span><span class="p">,</span> <span class="n">skip_bg</span><span class="p">,</span> <span class="n">calc</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">iot</span> <span class="o">=</span> <span class="n">iot</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target_instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_instances</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">targets</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">predicted_instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_instances</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">predictions</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">calc</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_calc</span><span class="p">()</span>
+
+<div class="viewcode-block" id="SegmentationMetricsByInstances.free">
+<a class="viewcode-back" href="../../../../api/batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.free">[docs]</a>
+    <span class="k">def</span> <span class="nf">free</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Free memory allocated for intermediate data &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">free</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target_instances</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">predicted_instances</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_get_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Find instances of each class within inputs</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        inputs : np.ndarray</span>
+<span class="sd">            labels</span>
+<span class="sd">        axis : int</span>
+<span class="sd">            a class axis</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        nested list with ndarray of coords</span>
+<span class="sd">            num_classes - 1, batch_items, num_instances, inputs.shape, number of pixels</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">instances</span> <span class="o">=</span> <span class="p">[</span><span class="n">get_components</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">batch</span><span class="o">=</span><span class="kc">True</span><span class="p">)]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">instances</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">inputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+            <span class="n">class_slice</span> <span class="o">=</span> <span class="p">[</span><span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)]</span> <span class="o">*</span> <span class="n">inputs</span><span class="o">.</span><span class="n">ndim</span>
+            <span class="k">for</span> <span class="n">class_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">):</span>
+                <span class="n">class_slice</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">class_index</span>
+                <span class="n">one_class</span> <span class="o">=</span> <span class="n">get_components</span><span class="p">(</span><span class="n">inputs</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">class_slice</span><span class="p">)],</span> <span class="n">batch</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">instances</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">one_class</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">instances</span>
+
+    <span class="k">def</span> <span class="nf">_calc</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_confusion_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">targets</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">intp</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">item_instances</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">target_instances</span><span class="p">[</span><span class="n">k</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+                <span class="k">for</span> <span class="n">coords</span> <span class="ow">in</span> <span class="n">item_instances</span><span class="p">:</span>
+                    <span class="n">targ</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">coords</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="n">pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">coords</span><span class="p">]</span> <span class="o">==</span> <span class="n">k</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span> <span class="o">/</span> <span class="n">targ</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">iot</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_confusion_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">k</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_confusion_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">k</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">item_instances</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">predicted_instances</span><span class="p">[</span><span class="n">k</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+                <span class="k">for</span> <span class="n">coords</span> <span class="ow">in</span> <span class="n">item_instances</span><span class="p">:</span>
+                    <span class="n">pred</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">coords</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="n">targ</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">targets</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">coords</span><span class="p">]</span> <span class="o">==</span> <span class="n">k</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">targ</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">pred</span> <span class="o">/</span> <span class="n">targ</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">iot</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_confusion_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">k</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+
+<div class="viewcode-block" id="SegmentationMetricsByInstances.true_positive">
+<a class="viewcode-back" href="../../../../api/batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.true_positive">[docs]</a>
+    <span class="k">def</span> <span class="nf">true_positive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_count</span><span class="p">(</span><span class="k">lambda</span> <span class="n">l</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_confusion_matrix</span><span class="p">[:,</span> <span class="n">l</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">label</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SegmentationMetricsByInstances.true_negative">
+<a class="viewcode-back" href="../../../../api/batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.true_negative">[docs]</a>
+    <span class="k">def</span> <span class="nf">true_negative</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;True negative is inapplicable for instance-based metrics&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SegmentationMetricsByInstances.condition_positive">
+<a class="viewcode-back" href="../../../../api/batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.condition_positive">[docs]</a>
+    <span class="k">def</span> <span class="nf">condition_positive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_count</span><span class="p">(</span><span class="k">lambda</span> <span class="n">l</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_confusion_matrix</span><span class="p">[:,</span> <span class="n">l</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">label</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SegmentationMetricsByInstances.prediction_positive">
+<a class="viewcode-back" href="../../../../api/batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.prediction_positive">[docs]</a>
+    <span class="k">def</span> <span class="nf">prediction_positive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_count</span><span class="p">(</span><span class="k">lambda</span> <span class="n">l</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_confusion_matrix</span><span class="p">[:,</span> <span class="n">l</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">label</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SegmentationMetricsByInstances.total_population">
+<a class="viewcode-back" href="../../../../api/batchflow.models.metrics.html#batchflow.models.metrics.SegmentationMetricsByInstances.total_population">[docs]</a>
+    <span class="k">def</span> <span class="nf">total_population</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_count</span><span class="p">(</span><span class="k">lambda</span> <span class="n">l</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_confusion_matrix</span><span class="p">[:,</span> <span class="n">l</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)),</span> <span class="n">label</span><span class="p">)</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

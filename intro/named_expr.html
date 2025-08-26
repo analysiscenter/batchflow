@@ -1,0 +1,383 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Named expressions &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Within batch parallelism" href="parallel.html" />
+    <link rel="prev" title="Pipeline" href="pipeline.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">A short introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes and capabilities</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="dsindex.html">Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batch.html">Batch class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="images_batch.html">Batch class for handling images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipeline.html">Pipeline</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Named expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel.html">Within batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="prefetch.html">Inter-batch parallelism</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models.html">Working with models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="torch_models.html">Torch models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="research.html">Research</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_zoo.html">Model zoo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api/batchflow.html">API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="classes.html">Classes and capabilities</a></li>
+      <li class="breadcrumb-item active">Named expressions</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/intro/named_expr.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="named-expressions">
+<h1>Named expressions<a class="headerlink" href="#named-expressions" title="Link to this heading"></a></h1>
+<p>As pipelines are declarative you might need a way to address data which exists only when the pipeline is executed.
+For instance, model training takes batch data, but you don’t have any batches when you declare a pipeline.
+Batches appear only when the pipeline is run. This is where <strong>named expressions</strong> come into play.</p>
+<p>A named expression specifies a substitution rule. When the pipeline is being executed,
+a named expression is replaced with the value calculated according to that rule.</p>
+<p>There are several types of named expressions:</p>
+<ul class="simple">
+<li><p>B(‘name’) - a batch class attribute or component name</p></li>
+<li><p>V(‘name’) - a pipeline variable name</p></li>
+<li><p>C(‘name’) - a pipeline config option</p></li>
+<li><p>D(‘name’) - a dataset attribute</p></li>
+<li><p>F(…) - a callable</p></li>
+<li><p>R(…) - a random value</p></li>
+<li><p>W(…) - a wrapper for a named expression</p></li>
+<li><p>P(…) - a wrapper for parallel actions that calculates its expression as a batch-sized vector</p></li>
+<li><p>PP(…) - a wrapper for parallel actions that calculate its expression batch-size times in a cycle</p></li>
+<li><p>I(…) - an iteration counter</p></li>
+</ul>
+<p>Named expressions can be defined in two ways:</p>
+<ul class="simple">
+<li><p>through instance creation, e.g. B(‘attr’), V(‘name’), C(‘option’)</p></li>
+<li><p>through attribution, e.g. B.attr, V.name, C.option.</p></li>
+</ul>
+<p>The only difference is that the former allows for assignment mode, V(‘name’, mode=’append’),
+while the latter requires fewer letters to type (so the default mode is implied).</p>
+<section id="using-in-pipelines">
+<h2>Using in pipelines<a class="headerlink" href="#using-in-pipelines" title="Link to this heading"></a></h2>
+<p>Named expressions can be used in pipelines as variables to get data from and to store data into them.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="n">C</span><span class="p">(</span><span class="s1">&#39;model_name&#39;</span><span class="p">),</span> <span class="n">features</span><span class="o">=</span><span class="n">B</span><span class="o">.</span><span class="n">features</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">B</span><span class="o">.</span><span class="n">labels</span><span class="p">,</span>
+                 <span class="n">fetches</span><span class="o">=</span><span class="s1">&#39;predictions&#39;</span><span class="p">,</span> <span class="n">save_to</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;predictions&#39;</span><span class="p">))</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>Each named expression is calculated on each iteration and then its current value will be passed into action.
+Therefore, <a class="reference internal" href="batch.html#actions"><span class="std std-ref">actions</span></a> get usual parameter values, not named expressions.</p>
+</section>
+<section id="using-outside-of-pipelines">
+<h2>Using outside of pipelines<a class="headerlink" href="#using-outside-of-pipelines" title="Link to this heading"></a></h2>
+<p>You may also use <a class="reference internal" href="../api/batchflow.named_expressions.html"><span class="doc">named expressions</span></a> in your custom methods.</p>
+<p>There are two main methods: <a class="reference internal" href="../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.get" title="batchflow.named_expr.NamedExpression.get"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get()</span></code></a> and <a class="reference internal" href="../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.set" title="batchflow.named_expr.NamedExpression.set"><code class="xref py py-func docutils literal notranslate"><span class="pre">set()</span></code></a>.</p>
+</section>
+<section id="operations-with-expressions">
+<h2>Operations with expressions<a class="headerlink" href="#operations-with-expressions" title="Link to this heading"></a></h2>
+<p>Named expressions support basic arithmetic operations like <cite>+</cite>, <cite>-</cite>, etc.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s1">&#39;Iterations per epoch:&#39;</span><span class="p">,</span> <span class="n">D</span><span class="o">.</span><span class="n">size</span> <span class="o">//</span> <span class="n">B</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To convert a named expression value to a string use <a class="reference internal" href="../api/batchflow.named_expressions.html#batchflow.named_expr.NamedExpression.str" title="batchflow.named_expr.NamedExpression.str"><code class="xref py py-meth docutils literal notranslate"><span class="pre">str()</span></code></a> method:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s1">&#39;Dataset contains &#39;</span> <span class="o">+</span> <span class="n">D</span><span class="p">(</span><span class="s1">&#39;size&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="p">()</span> <span class="o">+</span> <span class="s1">&#39; items&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Formatting is also possible:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;variable&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s1">&#39;Value of the variable is </span><span class="si">{:7.7}</span><span class="s1">&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Slicing is often useful:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s1">&#39;Current loss:&#39;</span><span class="p">,</span> <span class="n">V</span><span class="p">(</span><span class="s1">&#39;loss_history&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>As well as getting attributes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s1">&#39;Size in bytes:&#39;</span><span class="p">,</span> <span class="n">B</span><span class="o">.</span><span class="n">images</span><span class="o">.</span><span class="n">nbytes</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>And calling a function:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s1">&#39;Accuracy:&#39;</span><span class="p">,</span> <span class="n">C</span><span class="o">.</span><span class="n">custom_accuracy</span><span class="p">(</span><span class="n">targets</span><span class="o">=</span><span class="n">B</span><span class="o">.</span><span class="n">labels</span><span class="p">,</span> <span class="n">predictions</span><span class="o">=</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;predictions&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+</section>
+<section id="b-batch-component">
+<h2>B - batch component<a class="headerlink" href="#b-batch-component" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="n">model_name</span><span class="p">,</span> <span class="n">features</span><span class="o">=</span><span class="n">B</span><span class="o">.</span><span class="n">features</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">B</span><span class="o">.</span><span class="n">labels</span><span class="p">)</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>At each iteration <code class="docutils literal notranslate"><span class="pre">B('features')</span></code> and <code class="docutils literal notranslate"><span class="pre">B('labels')</span></code> will be replaced with <code class="docutils literal notranslate"><span class="pre">current_batch.features</span></code>
+and <code class="docutils literal notranslate"><span class="pre">current_batch.labels</span></code>, i.e. <a class="reference external" href="components">batch components</a> or attributes.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">B()</span></code> (i.e. without a component name) returns the batch itself.
+To avoid unexpected changes of the batch, the copy can be created with <code class="docutils literal notranslate"><span class="pre">B(copy=True)</span></code>.</p>
+</div>
+</section>
+<section id="v-pipeline-variable">
+<h2>V - pipeline variable<a class="headerlink" href="#v-pipeline-variable" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;model_name&#39;</span><span class="p">),</span> <span class="o">...</span><span class="p">)</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>At each iteration <code class="docutils literal notranslate"><span class="pre">V('model_name')</span></code> will be replaced with the current value of <code class="docutils literal notranslate"><span class="pre">pipeline.get_variable('model_name')</span></code>.</p>
+<p>Thus, you can even change the model trained (or any other pipeline parameter) during pipeline execution.</p>
+</section>
+<section id="c-config-option">
+<h2>C - config option<a class="headerlink" href="#c-config-option" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="n">ResNet34</span><span class="p">,</span> <span class="n">model_config</span><span class="o">=</span><span class="n">model_config</span><span class="p">)</span>
+
+<span class="n">train_pipeline</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">pipeline</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">C</span><span class="p">(</span><span class="s1">&#39;model&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">ResNet18</span><span class="p">),</span> <span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">C</span><span class="o">.</span><span class="n">model_config</span><span class="p">)</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>At each iteration <code class="docutils literal notranslate"><span class="pre">C('model')</span></code> will be replaced with the current value of <code class="docutils literal notranslate"><span class="pre">pipeline.config['model']</span></code>.</p>
+<p>If there is no <code class="docutils literal notranslate"><span class="pre">model</span></code> key in the pipeline config, a default value will be used.
+If default is not set, <code class="docutils literal notranslate"><span class="pre">KeyError</span></code> is raised.</p>
+<p>This is an example of a model independent pipeline which allows to change models, for instance,
+to assess performance of various models.</p>
+</section>
+<section id="d-dataset-attribute">
+<h2>D - dataset attribute<a class="headerlink" href="#d-dataset-attribute" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">D</span><span class="o">.</span><span class="n">data_path</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>At each iteration <code class="docutils literal notranslate"><span class="pre">D('data_path')</span></code> will be replaced with the current value of <code class="docutils literal notranslate"><span class="pre">pipeline.dataset.data_path</span></code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><cite>D()</cite> (i.e. without an attribute name) returns the dataset itself.</p>
+</div>
+</section>
+<section id="i-iterations-counter">
+<h2>I - iterations counter<a class="headerlink" href="#i-iterations-counter" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s1">&#39;Iteration:&#39;</span><span class="p">,</span> <span class="n">I</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="s1">&#39; out of &#39;</span><span class="p">,</span> <span class="n">I</span><span class="o">.</span><span class="n">max</span><span class="p">)</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p><cite>I(‘ratio’)</cite> returns the ratio <cite>current / max</cite> and thus allows to control the iteration progress.
+For instance, at each iteration dataset items can be rotated at a random angle which increases with time:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="n">I</span><span class="p">(</span><span class="s1">&#39;ratio&#39;</span><span class="p">)</span><span class="o">*</span><span class="mi">45</span><span class="p">)</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+</section>
+<section id="f-callable">
+<h2>F - callable<a class="headerlink" href="#f-callable" title="Link to this heading"></a></h2>
+<p>A function which might take arguments.</p>
+<p>The callable can be a lambda function:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;dynamic&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;inputs/images/shape&#39;</span><span class="p">:</span> <span class="n">F</span><span class="p">(</span><span class="k">lambda</span> <span class="n">image_shape</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,)</span> <span class="o">+</span> <span class="n">image_shape</span><span class="p">)(</span><span class="n">B</span><span class="o">.</span><span class="n">image_shape</span><span class="p">)}}</span>
+    <span class="p">})</span>
+</pre></div>
+</div>
+<p>or a batch class method:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">train_model</span><span class="p">(</span><span class="n">model_name</span><span class="p">,</span> <span class="n">make_data</span><span class="o">=</span><span class="n">F</span><span class="p">(</span><span class="n">MyBatch</span><span class="o">.</span><span class="n">pack_to_feed_dict</span><span class="p">)(</span><span class="n">B</span><span class="p">(),</span> <span class="n">task</span><span class="o">=</span><span class="s1">&#39;segmentation&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>or an arbitrary function:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">get_boxes</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
+    <span class="n">x_coords</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">y_coords</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">batch</span><span class="o">.</span><span class="n">images</span><span class="p">[:,</span> <span class="n">y_coords</span><span class="p">,</span> <span class="n">x_coords</span><span class="p">]</span>
+
+<span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">update_variable</span><span class="p">(</span><span class="n">var_name</span><span class="p">,</span> <span class="n">F</span><span class="p">(</span><span class="n">get_boxes</span><span class="p">)(</span><span class="n">B</span><span class="p">(),</span> <span class="n">C</span><span class="p">(</span><span class="s1">&#39;image_shape&#39;</span><span class="p">)))</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>or any other Python callable.</p>
+<p>As static models are initialized before a pipeline is run (i.e. before any batch is created),
+all <code class="docutils literal notranslate"><span class="pre">F</span></code>-functions specified in static <code class="docutils literal notranslate"><span class="pre">init_model</span></code> cannot get <code class="docutils literal notranslate"><span class="pre">batch</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">init_model</span><span class="p">(</span><span class="s1">&#39;static&#39;</span><span class="p">,</span> <span class="n">MyModel</span><span class="p">,</span> <span class="s1">&#39;my_model&#39;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;inputs/images/shape&#39;</span><span class="p">:</span> <span class="n">F</span><span class="p">(</span><span class="n">get_shape</span><span class="p">)(</span><span class="n">C</span><span class="o">.</span><span class="n">input_shape</span><span class="p">)}}</span>
+    <span class="p">})</span>
+</pre></div>
+</div>
+<p>It can also be an arbitrary function with arbitrary arguments:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">...</span>
+    <span class="o">.</span><span class="n">init_variable</span><span class="p">(</span><span class="s1">&#39;logfile&#39;</span><span class="p">,</span> <span class="n">F</span><span class="p">(</span><span class="nb">open</span><span class="p">)(</span><span class="s1">&#39;file.log&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">))</span>
+<span class="o">...</span>
+</pre></div>
+</div>
+</section>
+<section id="r-random-value">
+<h2>R - random value<a class="headerlink" href="#r-random-value" title="Link to this heading"></a></h2>
+<p>A sample from a random distribution. All <a class="reference external" href="https://docs.scipy.org/doc/numpy/reference/routines.random.html#distributions">numpy distributions</a> are supported:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">some_action</span><span class="p">(</span><span class="n">R</span><span class="p">(</span><span class="s1">&#39;uniform&#39;</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">other_action</span><span class="p">(</span><span class="n">R</span><span class="p">(</span><span class="s1">&#39;beta&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">14</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">yet_other_action</span><span class="p">(</span><span class="n">R</span><span class="p">(</span><span class="s1">&#39;poisson&#39;</span><span class="p">,</span> <span class="n">lam</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">)))</span>
+    <span class="o">.</span><span class="n">one_more_action</span><span class="p">(</span><span class="n">R</span><span class="p">([</span><span class="s1">&#39;opera&#39;</span><span class="p">,</span> <span class="s1">&#39;ballet&#39;</span><span class="p">,</span> <span class="s1">&#39;musical&#39;</span><span class="p">],</span> <span class="n">p</span><span class="o">=</span><span class="p">[</span><span class="mf">.1</span><span class="p">,</span> <span class="mf">.15</span><span class="p">,</span> <span class="mf">.75</span><span class="p">],</span> <span class="n">size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">))</span>
+</pre></div>
+</div>
+</section>
+<section id="w-a-wrapper">
+<h2>W - a wrapper<a class="headerlink" href="#w-a-wrapper" title="Link to this heading"></a></h2>
+<p>To pass a named expression to an action without evaluating it within a pipeline you can wrap it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">some_action</span><span class="p">(</span><span class="n">arg</span><span class="o">=</span><span class="n">W</span><span class="p">(</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;variable&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>As a result <code class="docutils literal notranslate"><span class="pre">some_action</span></code> will get not a current value of a pipeline variable, but a <code class="docutils literal notranslate"><span class="pre">V</span></code>-expression itself.</p>
+</section>
+<section id="p-a-parallel-wrapper">
+<h2>P - a parallel wrapper<a class="headerlink" href="#p-a-parallel-wrapper" title="Link to this heading"></a></h2>
+<p>It comes in handy for parallel actions so that <a class="reference internal" href="parallel.html"><span class="doc">&#64;inbatch_parallel</span></a> could determine that
+different values should be passed to parallel invocations of the action.</p>
+<p>For instance, each item in the batch will be rotated at its own angle:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="n">P</span><span class="p">(</span><span class="n">R</span><span class="p">(</span><span class="s1">&#39;uniform&#39;</span><span class="p">,</span> <span class="o">-</span><span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">)))</span>
+</pre></div>
+</div>
+<p>Without <code class="docutils literal notranslate"><span class="pre">P</span></code> all images in the batch will be rotated at the same angle,
+since an angle randomized across batches only:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="n">R</span><span class="p">(</span><span class="s1">&#39;normal&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Every image in the batch gets a noise of the same intensity (7%), but of a different color:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span>
+    <span class="o">.</span><span class="n">add_color_noise</span><span class="p">(</span><span class="n">p_noise</span><span class="o">=</span><span class="mf">.07</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">P</span><span class="p">(</span><span class="n">R</span><span class="p">(</span><span class="s1">&#39;uniform&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">3</span><span class="p">)))</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">P</span></code> can be used not only with <code class="docutils literal notranslate"><span class="pre">R</span></code>-expressions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span>
+    <span class="o">.</span><span class="n">some_action</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="n">V</span><span class="p">(</span><span class="s1">&#39;loss_history&#39;</span><span class="p">)))</span>
+    <span class="o">.</span><span class="n">other_action</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="n">C</span><span class="p">(</span><span class="s1">&#39;apriori_info&#39;</span><span class="p">)))</span>
+    <span class="o">.</span><span class="n">yet_other_action</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="n">B</span><span class="p">(</span><span class="s1">&#39;sensor_data&#39;</span><span class="p">)))</span>
+    <span class="o">.</span><span class="n">do_something</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="n">P</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">]))</span>
+</pre></div>
+</div>
+<p>However, more often <code class="docutils literal notranslate"><span class="pre">P</span></code> is applied to <code class="docutils literal notranslate"><span class="pre">R</span></code>-expressions.</p>
+</section>
+<section id="pp-a-parallel-wrapper">
+<h2>PP - a parallel wrapper<a class="headerlink" href="#pp-a-parallel-wrapper" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">PP(expr)</span></code> is essentially <code class="docutils literal notranslate"><span class="pre">P([expr</span> <span class="pre">for</span> <span class="pre">_</span> <span class="pre">in</span> <span class="pre">batch.indices])</span></code>.</p>
+<p>It comes in handy for shape-specific operations (e.g. <cite>&#64;</cite> - matrix multiplication) or external functions which return single values.</p>
+<p>As far as <code class="docutils literal notranslate"><span class="pre">R</span></code> is concerned, <code class="docutils literal notranslate"><span class="pre">P(R(...))</span></code> is more efficient as it evaluates only once (as <code class="docutils literal notranslate"><span class="pre">R(...,</span> <span class="pre">size=batch.size)</span></code>).
+Whereas <code class="docutils literal notranslate"><span class="pre">PP(R(...))</span></code> will evaluate <code class="docutils literal notranslate"><span class="pre">R</span></code> multiple times (once for each batch item).</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pipeline.html" class="btn btn-neutral float-left" title="Pipeline" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="parallel.html" class="btn btn-neutral float-right" title="Within batch parallelism" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

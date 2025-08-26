@@ -1,0 +1,725 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sampler &mdash; BatchFlow 0.9.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ba56f93a" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=0e439607"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Decorators" href="batchflow.decorators.html" />
+    <link rel="prev" title="Named expressions" href="batchflow.named_expressions.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            BatchFlow
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../intro/intro.html">A short introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../intro/classes.html">Classes and capabilities</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="batchflow.html">API</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="batchflow.core.html">batchflow</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="batchflow.index.html">Index</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.dataset.html">Dataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.batch.html">Batch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.batch_image.html">ImagesBatch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.pipeline.html">Pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.once_pipeline.html">Once pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.named_expressions.html">Named expressions</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Sampler</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.decorators.html">Decorators</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.exceptions.html">Exceptions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="batchflow.utils.html">Utilities</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.opensets.html">batchflow.opensets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.models.html">batchflow.models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="batchflow.research.html">batchflow.research</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">BatchFlow</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="batchflow.html">API</a></li>
+          <li class="breadcrumb-item"><a href="batchflow.core.html">batchflow</a></li>
+      <li class="breadcrumb-item active">Sampler</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/batchflow.sampler.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="sampler">
+<h1>Sampler<a class="headerlink" href="#sampler" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<p id="module-batchflow.sampler">Contains Sampler-classes.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="batchflow.sampler.arithmetize">
+<span class="sig-name descname"><span class="pre">arithmetize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#arithmetize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.arithmetize" title="Link to this definition"></a></dt>
+<dd><p>Add arithmetic operations to Sampler-class.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.Sampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Sampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#Sampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.Sampler" title="Link to this definition"></a></dt>
+<dd><p>Base class Sampler that implements algebra of Samplers.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.Sampler.weight">
+<span class="sig-name descname"><span class="pre">weight</span></span><a class="headerlink" href="#batchflow.sampler.Sampler.weight" title="Link to this definition"></a></dt>
+<dd><p>weight of Sampler self in mixtures.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.Sampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#Sampler.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.Sampler.sample" title="Link to this definition"></a></dt>
+<dd><p>Sampling method of a sampler.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – lentgh of sample to be generated.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Array of size (len, Sampler’s dimension).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.Sampler.apply">
+<span class="sig-name descname"><span class="pre">apply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">transform</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#Sampler.apply"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.Sampler.apply" title="Link to this definition"></a></dt>
+<dd><p>Apply a transformation to the sampler.
+Build new sampler, which sampling function is given by <cite>transform(self.sample(size))`</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>transform</strong> (<em>callable</em>) – function, that takes ndarray of shape (size, dim_sampler) and produces
+ndarray of shape (size, new_dim_sampler).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>instance of class Sampler with redefined method <cite>sample</cite>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#batchflow.sampler.Sampler" title="batchflow.sampler.Sampler">Sampler</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.Sampler.truncate">
+<span class="sig-name descname"><span class="pre">truncate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">high</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">low</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prob</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_iters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_anyways</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#Sampler.truncate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.Sampler.truncate" title="Link to this definition"></a></dt>
+<dd><p>Truncate a sampler. Resulting sampler produces points satisfying <code class="docutils literal notranslate"><span class="pre">low</span> <span class="pre">&lt;=</span> <span class="pre">pts</span> <span class="pre">&lt;=</span> <span class="pre">high</span></code>.
+If <code class="docutils literal notranslate"><span class="pre">expr</span></code> is suplied, the condition is <code class="docutils literal notranslate"><span class="pre">low</span> <span class="pre">&lt;=</span> <span class="pre">expr(pts)</span> <span class="pre">&lt;=</span> <span class="pre">high</span></code>.</p>
+<p>Uses while-loop to obtain a sample from the region of interest of needed size. The behaviour
+of the while loop is controlled by parameters <code class="docutils literal notranslate"><span class="pre">max_iters</span></code> and <code class="docutils literal notranslate"><span class="pre">sample_anyways</span></code>-parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>high</strong> (<em>ndarray</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – upper truncation-bound.</p></li>
+<li><p><strong>low</strong> (<em>ndarray</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – lower truncation-bound.</p></li>
+<li><p><strong>expr</strong> (<em>callable</em><em>, </em><em>optional.</em>) – Some vectorized function. Accepts points of sampler, returns either bool or float.
+In case of float, either high or low should also be supplied.</p></li>
+<li><p><strong>prob</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><em>optional</em>) – estimate of P(truncation-condtion is satisfied). When supplied,
+can improve the performance of sampling-method of truncated sampler.</p></li>
+<li><p><strong>max_iters</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><em>optional</em>) – if the number of iterations needed for obtaining the sample exceeds this number,
+either a warning or error is raised. By default is set to 1e7 (constant of TruncateSampler-class).</p></li>
+<li><p><strong>sample_anyways</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a><em>, </em><em>optional</em>) – If set to True, when exceeding <cite>self.max_iters</cite> number of iterations the procedure throws a warning
+but continues. If set to False, the error is raised.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>new Sampler-instance, truncated version of self.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#batchflow.sampler.Sampler" title="batchflow.sampler.Sampler">Sampler</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.OrSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">OrSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#OrSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.OrSampler" title="Link to this definition"></a></dt>
+<dd><p>Class for implementing <cite>|</cite> (mixture) operation on <cite>Sampler</cite>-instances.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.OrSampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#OrSampler.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.OrSampler.sample" title="Link to this definition"></a></dt>
+<dd><p>Sampling procedure of a mixture of two samplers. Samples points with probabilities
+defined by weights (<cite>self.weight</cite>-attr) from two samplers invoked (<cite>self.bases</cite>-attr) and
+mixes them in one sample of needed size.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.AndSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">AndSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#AndSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.AndSampler" title="Link to this definition"></a></dt>
+<dd><p>Class for implementing <cite>&amp;</cite> (coordinates stacking) operation on <cite>Sampler</cite>-instances.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.AndSampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#AndSampler.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.AndSampler.sample" title="Link to this definition"></a></dt>
+<dd><p>Sampling procedure of a product of two samplers. Check out the docstring of
+<cite>Sampler.__and__</cite> for more info.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.ApplySampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ApplySampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sampler</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transform</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#ApplySampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.ApplySampler" title="Link to this definition"></a></dt>
+<dd><p>Class for implementing <cite>apply</cite> (adding transform) operation on <cite>Sampler</cite>-instances.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.ApplySampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#ApplySampler.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.ApplySampler.sample" title="Link to this definition"></a></dt>
+<dd><p>Sampling procedure of a sampler subjugated to a transform. Check out the docstring of
+<cite>Sampler.apply</cite> for more info.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.TruncateSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">TruncateSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sampler</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">high</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">low</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prob</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_iters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_anyways</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#TruncateSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.TruncateSampler" title="Link to this definition"></a></dt>
+<dd><p>Class for implementing <cite>truncate</cite> (truncation by a condition) operation on <cite>Sampler</cite>-instances.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.TruncateSampler.max_iters">
+<span class="sig-name descname"><span class="pre">max_iters</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">10000000.0</span></em><a class="headerlink" href="#batchflow.sampler.TruncateSampler.max_iters" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.TruncateSampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#TruncateSampler.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.TruncateSampler.sample" title="Link to this definition"></a></dt>
+<dd><p>Sampling method of a sampler subjugated to truncation. Check out the docstring of
+<cite>Sampler.truncation</cite> for more info.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.WeightedSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">WeightedSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#WeightedSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.WeightedSampler" title="Link to this definition"></a></dt>
+<dd><p>Class for implementing <cite>&amp;</cite> (weighting) operation on a number and a <cite>Sampler</cite> instance.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.WeightedSampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#WeightedSampler.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.WeightedSampler.sample" title="Link to this definition"></a></dt>
+<dd><p>Sampling procedure of a product of the number and the sampler instance. Check out the docstring of
+<cite>Sampler.sample</cite> for more info.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.BaseOperationSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">BaseOperationSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#BaseOperationSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.BaseOperationSampler" title="Link to this definition"></a></dt>
+<dd><p>Base class for implementing all arithmetic operations on <cite>Sampler</cite>-instances.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.BaseOperationSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#batchflow.sampler.BaseOperationSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.BaseOperationSampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#BaseOperationSampler.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.BaseOperationSampler.sample" title="Link to this definition"></a></dt>
+<dd><p>Sampling method of a sampler.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – lentgh of sample to be generated.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Array of size (len, Sampler’s dimension).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.AddSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">AddSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#AddSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.AddSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.AddSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__add__'</span></em><a class="headerlink" href="#batchflow.sampler.AddSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.MulSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">MulSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#MulSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.MulSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.MulSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__mul__'</span></em><a class="headerlink" href="#batchflow.sampler.MulSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.TruedivSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">TruedivSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#TruedivSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.TruedivSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.TruedivSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__truediv__'</span></em><a class="headerlink" href="#batchflow.sampler.TruedivSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.SubSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">SubSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#SubSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.SubSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.SubSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__sub__'</span></em><a class="headerlink" href="#batchflow.sampler.SubSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.PowSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">PowSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#PowSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.PowSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.PowSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__pow__'</span></em><a class="headerlink" href="#batchflow.sampler.PowSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.FloordivSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">FloordivSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#FloordivSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.FloordivSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.FloordivSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__floordiv__'</span></em><a class="headerlink" href="#batchflow.sampler.FloordivSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.ModSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ModSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#ModSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.ModSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.ModSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__mod__'</span></em><a class="headerlink" href="#batchflow.sampler.ModSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.RAddSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">RAddSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#RAddSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.RAddSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.RAddSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__radd__'</span></em><a class="headerlink" href="#batchflow.sampler.RAddSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.RMulSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">RMulSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#RMulSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.RMulSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.RMulSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__rmul__'</span></em><a class="headerlink" href="#batchflow.sampler.RMulSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.RTruedivSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">RTruedivSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#RTruedivSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.RTruedivSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.RTruedivSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__rtruediv__'</span></em><a class="headerlink" href="#batchflow.sampler.RTruedivSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.RSubSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">RSubSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#RSubSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.RSubSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.RSubSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__rsub__'</span></em><a class="headerlink" href="#batchflow.sampler.RSubSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.RPowSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">RPowSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#RPowSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.RPowSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.RPowSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__rpow__'</span></em><a class="headerlink" href="#batchflow.sampler.RPowSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.RFloordivSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">RFloordivSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#RFloordivSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.RFloordivSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.RFloordivSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__rfloordiv__'</span></em><a class="headerlink" href="#batchflow.sampler.RFloordivSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.RModSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">RModSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">left</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">right</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#RModSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.RModSampler" title="Link to this definition"></a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.RModSampler.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'__rmod__'</span></em><a class="headerlink" href="#batchflow.sampler.RModSampler.operation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.ConstantSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ConstantSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">constant</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#ConstantSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.ConstantSampler" title="Link to this definition"></a></dt>
+<dd><p>Sampler of a constant.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>constant</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a>) – constant, associated with the Sampler. Can be multidimensional,
+e.g. list or np.ndarray.</p>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.ConstantSampler.constant">
+<span class="sig-name descname"><span class="pre">constant</span></span><a class="headerlink" href="#batchflow.sampler.ConstantSampler.constant" title="Link to this definition"></a></dt>
+<dd><p>vectorized constant, associated with the Sampler.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.ConstantSampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#ConstantSampler.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.ConstantSampler.sample" title="Link to this definition"></a></dt>
+<dd><p>Sampling method of <code class="docutils literal notranslate"><span class="pre">ConstantSampler</span></code>.
+Repeats sampler’s constant <code class="docutils literal notranslate"><span class="pre">size</span></code> times.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – the size of sample to be generated.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>array of shape (size, 1) containing Sampler’s constant.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.NumpySampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">NumpySampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#NumpySampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.NumpySampler" title="Link to this definition"></a></dt>
+<dd><p>Sampler based on a distribution from <cite>numpy random</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – a distribution name (a method from <cite>numpy random</cite>) or its alias.</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – random seed for setting up sampler’s state (see <code class="xref py py-func docutils literal notranslate"><span class="pre">make_rng()</span></code>).</p></li>
+<li><p><strong>**kwargs</strong> – additional keyword-arguments defining properties of specific
+distribution (e.g. <code class="docutils literal notranslate"><span class="pre">loc</span></code> for ‘normal’).</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.NumpySampler.name">
+<span class="sig-name descname"><span class="pre">name</span></span><a class="headerlink" href="#batchflow.sampler.NumpySampler.name" title="Link to this definition"></a></dt>
+<dd><p>a distribution name (a method from <cite>numpy random</cite>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.NumpySampler.state">
+<span class="sig-name descname"><span class="pre">state</span></span><a class="headerlink" href="#batchflow.sampler.NumpySampler.state" title="Link to this definition"></a></dt>
+<dd><p>a random number generator</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://numpy.org/doc/stable/reference/random/generator.html#numpy.random.Generator" title="(in NumPy v2.3)">numpy.random.Generator</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.NumpySampler._params">
+<span class="sig-name descname"><span class="pre">_params</span></span><a class="headerlink" href="#batchflow.sampler.NumpySampler._params" title="Link to this definition"></a></dt>
+<dd><p>dict of args for Sampler’s distribution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.NumpySampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#NumpySampler.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.NumpySampler.sample" title="Link to this definition"></a></dt>
+<dd><p>Generates random samples from distribution <code class="docutils literal notranslate"><span class="pre">self.name</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – the size of sample to be generated.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>array of shape (size, Sampler’s dimension).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.ScipySampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ScipySampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#ScipySampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.ScipySampler" title="Link to this definition"></a></dt>
+<dd><p>Sampler based on a distribution from <cite>scipy.stats</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – a distribution name, a class from <cite>scipy.stats</cite>, or its alias.</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – random seed for setting up sampler’s state (see <code class="xref py py-func docutils literal notranslate"><span class="pre">make_rng()</span></code>).</p></li>
+<li><p><strong>**kwargs</strong> – additional parameters for specification of the distribution.
+For instance, <cite>scale</cite> for name=’gamma’.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.ScipySampler.name">
+<span class="sig-name descname"><span class="pre">name</span></span><a class="headerlink" href="#batchflow.sampler.ScipySampler.name" title="Link to this definition"></a></dt>
+<dd><p>a distribution name (a class from <cite>scipy.stats</cite>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.ScipySampler.state">
+<span class="sig-name descname"><span class="pre">state</span></span><a class="headerlink" href="#batchflow.sampler.ScipySampler.state" title="Link to this definition"></a></dt>
+<dd><p>a random number generator</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://numpy.org/doc/stable/reference/random/generator.html#numpy.random.Generator" title="(in NumPy v2.3)">numpy.random.Generator</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.ScipySampler.distr">
+<span class="sig-name descname"><span class="pre">distr</span></span><a class="headerlink" href="#batchflow.sampler.ScipySampler.distr" title="Link to this definition"></a></dt>
+<dd><p>a distribution class</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.ScipySampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#ScipySampler.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.ScipySampler.sample" title="Link to this definition"></a></dt>
+<dd><p>Sampling method of <code class="docutils literal notranslate"><span class="pre">ScipySampler</span></code>.
+Generates random samples from distribution <code class="docutils literal notranslate"><span class="pre">self.name</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – the size of sample to be generated.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>array of shape (size, Sampler’s dimension).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="batchflow.sampler.HistoSampler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">HistoSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">histo</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edges</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#HistoSampler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.HistoSampler" title="Link to this definition"></a></dt>
+<dd><p>Sampler based on a histogram, output of <cite>np.histogramdd</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>histo</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a>) – histogram, on which the sampler is based.
+Make sure that it is unnormalized (<cite>normed=False</cite> in <cite>np.histogramdd</cite>).</p></li>
+<li><p><strong>edges</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a>) – list of len=histo_dimension, contains edges of bins along axes.</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – random seed for setting up sampler’s state (see <code class="xref py py-func docutils literal notranslate"><span class="pre">make_rng()</span></code>).</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.HistoSampler.bins">
+<span class="sig-name descname"><span class="pre">bins</span></span><a class="headerlink" href="#batchflow.sampler.HistoSampler.bins" title="Link to this definition"></a></dt>
+<dd><p>bins of base-histogram (see <cite>np.histogramdd</cite>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="batchflow.sampler.HistoSampler.edges">
+<span class="sig-name descname"><span class="pre">edges</span></span><a class="headerlink" href="#batchflow.sampler.HistoSampler.edges" title="Link to this definition"></a></dt>
+<dd><p>edges of base-histogram.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)">list</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<p class="rubric">Notes</p>
+<p>The sampler should be based on unnormalized histogram.
+if <cite>histo</cite>-arg is supplied, it is used for histo-initilization.
+Otherwise, edges should be supplied. In this case all bins are empty.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.HistoSampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#HistoSampler.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.HistoSampler.sample" title="Link to this definition"></a></dt>
+<dd><p>Sampling method of <code class="docutils literal notranslate"><span class="pre">HistoSampler</span></code>.
+Generates random samples from distribution, represented by
+histogram (self.bins, self.edges).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – the size of sample to be generated.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>array of shape (size, histo dimension).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="batchflow.sampler.HistoSampler.update">
+<span class="sig-name descname"><span class="pre">update</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">points</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#HistoSampler.update"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.HistoSampler.update" title="Link to this definition"></a></dt>
+<dd><p>Update bins of sampler’s histogram by throwing in additional points.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>points</strong> (<em>np.ndarray</em>) – Array of points of shape (n_points, histo_dimension).</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="batchflow.sampler.cart_prod">
+<span class="sig-name descname"><span class="pre">cart_prod</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">arrs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/batchflow/sampler.html#cart_prod"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#batchflow.sampler.cart_prod" title="Link to this definition"></a></dt>
+<dd><p>Get array of cartesian tuples from arbitrary number of arrays.
+Faster version of itertools.product. The order of tuples is lexicographic.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>arrs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a><em> or </em><em>ndarray.</em>) – Any sequence of ndarrays.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>2d-array with rows (arr[0][i], arr[2][j],…,arr[n][k]).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="batchflow.named_expressions.html" class="btn btn-neutral float-left" title="Named expressions" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="batchflow.decorators.html" class="btn btn-neutral float-right" title="Decorators" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2017-2021, Analysis Center.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
