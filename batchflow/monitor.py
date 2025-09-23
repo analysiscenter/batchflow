@@ -318,7 +318,7 @@ class GPUResourceMonitor(ResourceMonitor):
     """ If the `CUDA_VISIBLE_DEVICES` is set, check it and return device numbers. Otherwise, return [0]. """
     def __init__(self, function=None, frequency=0.1, gpu_list=None, **kwargs):
         if pynvml is None:
-            raise ImportError('Install Python interface for pynvml')
+            raise ImportError('Install nvidia-ml-py to use GPU monitoring functionality')
         super().__init__(function=function, frequency=frequency, **kwargs)
 
         # Fallback to env variable
