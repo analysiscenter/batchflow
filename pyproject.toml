@@ -42,7 +42,7 @@ research = [
 
 monitor = [
     "psutil",
-    "pynvml"
+    "nvidia-ml-py"
 ]
 
 nn = [
