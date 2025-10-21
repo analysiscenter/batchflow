@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ github.event_name == 'workflow_dispatch' && fromJson('["ubuntu-latest","macos-latest","windows-latest"]') || fromJson('["ubuntu-latest"]') }}
-        python-version: [3.9, '3.10', 3.11, 3.12, 3.13]
+        python-version: ['3.10', 3.11, 3.12, 3.13]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
@@ -49,7 +49,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ github.event_name == 'workflow_dispatch' && fromJson('["ubuntu-latest","macos-latest","windows-latest"]') || fromJson('["ubuntu-latest"]') }}
-        python-version: [3.9, '3.10', 3.11, 3.12, 3.13]
+        python-version: ['3.10', 3.11, 3.12, 3.13]
     runs-on: ${{ matrix.os }}
     steps:
     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
@@ -81,7 +81,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ github.event_name == 'workflow_dispatch' && fromJson('["ubuntu-latest","macos-latest","windows-latest"]') || fromJson('["ubuntu-latest"]') }}
-        python-version: [3.9, '3.10', 3.11, 3.12, 3.13]
+        python-version: ['3.10', 3.11, 3.12, 3.13]
     runs-on: ${{ matrix.os }}
     steps:
     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
@@ -142,7 +142,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ github.event_name == 'workflow_dispatch' && fromJson('["ubuntu-latest","macos-latest","windows-latest"]') || fromJson('["ubuntu-latest"]') }}
-        python-version: [3.9, '3.10', 3.11, 3.12, 3.13]
+        python-version: ['3.10', 3.11, 3.12, 3.13]
     runs-on: ${{ matrix.os }}
     steps:
     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
