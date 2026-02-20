@@ -1,0 +1,251 @@
+name: Release Cycle
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  #  Create GitHub release and tag; optionally create next minor branch
+  # ---------------------------------------------------------------------------
+  release:
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'r')
+    runs-on: ubuntu-latest
+    outputs:
+      new_branch: ${{ steps.create_next_branch.outputs.new_branch }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from branch
+        id: get_version
+        run: |
+          VERSION=$(echo "${{ github.event.pull_request.head.ref }}" | sed -e 's/^r//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release and Tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ steps.get_version.outputs.tag_name }} \
+            --generate-notes \
+            --title "${{ steps.get_version.outputs.tag_name }}"
+
+      - name: Create next release branch if major/minor
+        id: create_next_branch
+        if: endsWith(steps.get_version.outputs.version, '.0')
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          NEW_MINOR=$((MINOR + 1))
+          NEW_BRANCH="r$MAJOR.$NEW_MINOR.0"
+          git checkout -b "$NEW_BRANCH" "${{ github.sha }}"
+          git push -u origin "$NEW_BRANCH"
+          echo "new_branch=$NEW_BRANCH" >> $GITHUB_OUTPUT
+
+  # ---------------------------------------------------------------------------
+  #  Publish to Test PyPI
+  # ---------------------------------------------------------------------------
+  pypi-test:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build
+        run: uv build
+
+      - name: Publish to Test PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  # ---------------------------------------------------------------------------
+  #  Publish to PyPI
+  # ---------------------------------------------------------------------------
+  pypi:
+    needs: pypi-test
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  # ---------------------------------------------------------------------------
+  #  Prepare the next release branch (version bump + lock + PR)
+  # ---------------------------------------------------------------------------
+  prepare-next:
+    needs: release
+    if: needs.release.outputs.new_branch != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.new_branch }}
+          fetch-depth: 0
+
+      - name: Get version from branch
+        id: get_version
+        run: |
+          VERSION=$(echo "${{ needs.release.outputs.new_branch }}" | sed -e 's/^r//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update version in pyproject.toml
+        run: |
+          sed -i "s/^version = \".*\"/version = \"${{ steps.get_version.outputs.version }}\"/" pyproject.toml
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.11"
+
+      - name: Update lock file
+        run: uv lock --python 3.11
+
+      - name: Commit and push changes
+        id: autocommit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update version to ${{ steps.get_version.outputs.version }}"
+          branch: ${{ needs.release.outputs.new_branch }}
+          file_pattern: "pyproject.toml uv.lock"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Pull Request
+        if: steps.autocommit.outputs.changes_detected == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base master \
+            --head ${{ needs.release.outputs.new_branch }} \
+            --title "Release ${{ needs.release.outputs.new_branch }}" \
+            --body "This PR contains the changes for release ${{ needs.release.outputs.new_branch }}." \
+            --draft
+
+  # ---------------------------------------------------------------------------
+  #  Propagate hotfix to the next open release branch (patch releases only)
+  # ---------------------------------------------------------------------------
+  propagate-hotfix:
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'r')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Check if hotfix propagation is needed
+        id: check
+        run: |
+          MERGED_BRANCH="${{ github.event.pull_request.head.ref }}"
+          if [[ ! $MERGED_BRANCH =~ ^r([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Branch $MERGED_BRANCH is not a valid release branch. Skipping."
+            echo "should_propagate=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          MAJOR=${BASH_REMATCH[1]}
+          MINOR=${BASH_REMATCH[2]}
+          PATCH=${BASH_REMATCH[3]}
+
+          if [[ $PATCH -eq 0 ]]; then
+            echo "Not a patch release (Z=0). No forward-merge needed."
+            echo "should_propagate=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          NEXT_MINOR=$((MINOR + 1))
+          TARGET_VERSION="$MAJOR.$NEXT_MINOR.0"
+          TARGET_BRANCH="r$TARGET_VERSION"
+
+          if ! git ls-remote --exit-code --heads origin "$TARGET_BRANCH"; then
+            echo "Target branch $TARGET_BRANCH does not exist. No forward-merge needed."
+            echo "should_propagate=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "should_propagate=true" >> $GITHUB_OUTPUT
+          echo "target_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+          echo "target_version=$TARGET_VERSION" >> $GITHUB_OUTPUT
+          echo "merged_version=$MAJOR.$MINOR.$PATCH" >> $GITHUB_OUTPUT
+
+      - name: Install uv
+        if: steps.check.outputs.should_propagate == 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+          python-version: "3.11"
+
+      - name: Propagate hotfix
+        if: steps.check.outputs.should_propagate == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TARGET_BRANCH="${{ steps.check.outputs.target_branch }}"
+          TARGET_VERSION="${{ steps.check.outputs.target_version }}"
+          MERGED_VERSION="${{ steps.check.outputs.merged_version }}"
+          TEMP_BRANCH="hotfix-propagate-v$MERGED_VERSION-to-$TARGET_BRANCH"
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+
+          echo "Propagating hotfix v$MERGED_VERSION to $TARGET_BRANCH"
+          git checkout -b "$TEMP_BRANCH" "origin/$DEFAULT_BRANCH"
+
+          # Update version in pyproject.toml
+          sed -i "s/^version = \".*\"/version = \"$TARGET_VERSION\"/" pyproject.toml
+
+          # Update lock file
+          uv lock --python 3.11
+
+          # Commit and push
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml uv.lock
+          git commit -m "Align version to $TARGET_VERSION for hotfix propagation"
+          git push -u origin "$TEMP_BRANCH"
+
+          # Create PR
+          gh pr create \
+            --base "$TARGET_BRANCH" \
+            --head "$TEMP_BRANCH" \
+            --title "Merge hotfix changes from $DEFAULT_BRANCH into $TARGET_BRANCH" \
+            --body "This PR propagates hotfix changes from v$MERGED_VERSION into the next release branch ($TARGET_BRANCH)."
