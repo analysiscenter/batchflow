@@ -633,7 +633,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                             if device not in self.devices[:i]]
             self.device = self.devices[0]
 
-        if self.device.type != 'cuda':
+        if self.device.type == 'cpu':
             #TODO: maybe, we should add warning
             self.amp = False
         if torch.cuda.is_available():
