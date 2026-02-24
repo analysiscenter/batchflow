@@ -606,11 +606,16 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         if devices is None:
             if torch.cuda.is_available():
                 self.device = torch.device('cuda:0')
+            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                self.device = torch.device('mps')
             else:
                 self.device = torch.device('cpu')
         else:
             devices = devices if isinstance(devices, list) else [devices]
-            available_devices = [f'cuda:{i}' for i in range(torch.cuda.device_count())] + ['cpu']
+            available_devices = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
+            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                available_devices.append('mps')
+            available_devices.append('cpu')
             for dev in devices:
                 if isinstance(dev, torch.device):
                     self.devices.append(dev)
@@ -628,10 +633,11 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
                             if device not in self.devices[:i]]
             self.device = self.devices[0]
 
-        if self.device.type == 'cpu':
+        if self.device.type != 'cuda':
             #TODO: maybe, we should add warning
             self.amp = False
-        torch.backends.cudnn.benchmark = config.get('benchmark', 'cuda' in self.device.type)
+        if torch.cuda.is_available():
+            torch.backends.cudnn.benchmark = config.get('benchmark', self.device.type == 'cuda')
 
     def _parse_placeholder_shapes(self):
         """ Extract `inputs_shapes`, `targets_shapes`, `classes` from config. """
@@ -685,7 +691,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         self.make_loss()
         self.make_optimizer()
         self.make_decay()
-        self.scaler = torch.GradScaler("cuda")
+        self.scaler = torch.GradScaler(self.device.type)
 
         self.setup_gradient_clipping()
         self.setup_weights_averaging()
@@ -884,7 +890,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self.model_to_device()
 
             self.make_optimizer()
-            self.scaler = torch.cuda.amp.GradScaler()
+            self.scaler = torch.GradScaler(self.device.type)
 
             self.wa_finalized = True
 
@@ -1215,7 +1221,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         targets = self.transfer_to_device(targets, non_blocking=True)
 
         # Compute predictions; store shapes for introspection
-        with torch.amp.autocast('cuda', enabled=self.amp):
+        with torch.amp.autocast(self.device.type, enabled=self.amp):
             predictions = self.model(inputs)
 
         # SAM: store grads from previous microbatches
@@ -1223,7 +1229,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
             self._train_sam_store_gradients()
 
         # Compute loss and gradients; store loss value for every microbatch
-        with torch.amp.autocast('cuda', enabled=self.amp):
+        with torch.amp.autocast(self.device.type, enabled=self.amp):
             loss = self.loss(predictions, targets)
             loss_ = loss / sync_frequency
 
@@ -1314,7 +1320,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         params_with_grads = [p + eps for p, eps in zip(params_with_grads, epsilons)]
 
         # Compute new gradients: direction to move to minimize the local maxima
-        with torch.amp.autocast('cuda', enabled=self.amp):
+        with torch.amp.autocast(self.device.type, enabled=self.amp):
             predictions_inner = self.model(inputs)
             loss_inner = self.loss(predictions_inner, targets) / sync_frequency
         (self.scaler.scale(loss_inner) if self.amp else loss_inner).backward()
@@ -1470,7 +1476,7 @@ class TorchModel(BaseModel, ExtractionMixin, OptimalBatchSizeMixin, Visualizatio
         inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs, list) else inputs
         targets = targets[0] if len(targets) == 1 and isinstance(targets, list) else targets
 
-        with (torch.no_grad() if no_grad else nullcontext()), torch.amp.autocast('cuda', enabled=amp):
+        with (torch.no_grad() if no_grad else nullcontext()), torch.amp.autocast(self.device.type, enabled=amp):
             inputs = self.transfer_to_device(inputs)
             predictions = self.model(inputs)
 
