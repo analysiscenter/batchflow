@@ -59,6 +59,8 @@ jobs:
   # ---------------------------------------------------------------------------
   pypi-test:
     needs: release
+    permissions:
+      id-token: write
     uses: ./.github/workflows/release-check.yml
     with:
       ref: ${{ github.sha }}
@@ -68,6 +70,8 @@ jobs:
   # ---------------------------------------------------------------------------
   pypi:
     needs: pypi-test
+    permissions:
+      id-token: write
     uses: ./.github/workflows/release.yml
     with:
       ref: ${{ github.sha }}
