@@ -1,6 +1,6 @@
 [project]
 name = "batchflow"
-version = "0.10.0"
+version = "0.10.1"
 description = "ML pipelines, model configuration and batch management"
 authors = [{ name = "Roman Kh", email = "rhudor@gmail.com" }]
 license = {text = "Apache License 2.0"}
@@ -31,7 +31,7 @@ dependencies = [
 [project.optional-dependencies]
 
 image = [
-    "pillow>=9.4,<11.0",
+    "pillow>=9.4,<13.0",
     "matplotlib>=3.7"
 ]
 
@@ -71,7 +71,7 @@ jupyter = [
 ]
 
 telegram = [
-    "pillow>=9.4,<11.0",
+    "pillow>=9.4,<13.0",
 ]
 
 safetensors = [
