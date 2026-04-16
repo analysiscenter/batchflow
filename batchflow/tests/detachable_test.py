@@ -12,7 +12,6 @@ import os
 import tempfile
 
 import numpy as np
-import pytest
 
 
 def test_detachable_plot_with_detach():
@@ -54,5 +53,5 @@ def test_detachable_plot_without_detach():
     data = np.random.rand(10, 10)
     with tempfile.TemporaryDirectory() as tmpdir:
         savepath = os.path.join(tmpdir, "test_no_detach.png")
-        p = Plot(data=data, mode="image", show=False, savepath=savepath)
+        Plot(data=data, mode="image", show=False, savepath=savepath)
         assert os.path.exists(savepath)
