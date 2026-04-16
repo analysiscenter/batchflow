@@ -23,13 +23,13 @@ def _wait_for_file(path, timeout=5):
 
 
 def test_detachable_plot_with_detach():
-    """Plot.plot with detach=True should complete without PicklingError."""
+    """Plot.plot with detach='save' should complete without PicklingError."""
     from batchflow.plotter.plot import Plot
 
     data = np.random.rand(10, 10)
     with tempfile.TemporaryDirectory() as tmpdir:
         savepath = os.path.join(tmpdir, "test_detach.png")
-        p = Plot(data=data, mode="image", show=False, detach=True, savepath=savepath)
+        p = Plot(data=data, mode="image", show=False, detach='save', savepath=savepath)
         _wait_for_file(savepath)
         assert p is not None
         assert os.path.exists(savepath)
