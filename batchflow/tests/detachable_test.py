@@ -10,8 +10,16 @@ process isolation.
 
 import os
 import tempfile
+import time
 
 import numpy as np
+
+
+def _wait_for_file(path, timeout=5):
+    """Poll until `path` exists or `timeout` seconds elapse."""
+    deadline = time.monotonic() + timeout
+    while not os.path.exists(path) and time.monotonic() < deadline:
+        time.sleep(0.05)
 
 
 def test_detachable_plot_with_detach():
@@ -22,11 +30,9 @@ def test_detachable_plot_with_detach():
     with tempfile.TemporaryDirectory() as tmpdir:
         savepath = os.path.join(tmpdir, "test_detach.png")
         p = Plot(data=data, mode="image", show=False, detach=True, savepath=savepath)
-        # detach=True runs in a daemon thread — give it a moment to finish
-        import time
-        time.sleep(1)
-        # The plot object should have been created without error
+        _wait_for_file(savepath)
         assert p is not None
+        assert os.path.exists(savepath)
 
 
 def test_plot_save_with_detach():
@@ -41,10 +47,7 @@ def test_plot_save_with_detach():
 
         savepath2 = os.path.join(tmpdir, "test_save_detach2.png")
         p.save(savepath=savepath2, detach=True)
-        import time
-        deadline = time.monotonic() + 5
-        while not os.path.exists(savepath2) and time.monotonic() < deadline:
-            time.sleep(0.05)
+        _wait_for_file(savepath2)
         assert os.path.exists(savepath2)
 
 

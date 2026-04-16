@@ -27,7 +27,7 @@ from ..utils import to_list
 
 # Decorators
 def detachable(func):
-    """ Run `func` in a daemon process without result return.
+    """ Run `func` in a daemon thread without result return.
 
     Note, the decorator intercept the `detach` argument from the `func`.
     """
