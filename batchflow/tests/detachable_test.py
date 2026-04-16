@@ -42,7 +42,9 @@ def test_plot_save_with_detach():
         savepath2 = os.path.join(tmpdir, "test_save_detach2.png")
         p.save(savepath=savepath2, detach=True)
         import time
-        time.sleep(1)
+        deadline = time.monotonic() + 5
+        while not os.path.exists(savepath2) and time.monotonic() < deadline:
+            time.sleep(0.05)
         assert os.path.exists(savepath2)
 
 
