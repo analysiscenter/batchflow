@@ -1,0 +1,6 @@
+.wy-nav-content {
+max-width: 90vw !important;
+/*max-width: 1400px !important;*/
+max-height: 100%;
+overflow-y: auto;
+}
