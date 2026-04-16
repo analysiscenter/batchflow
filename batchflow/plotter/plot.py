@@ -5,7 +5,7 @@ from functools import wraps
 from itertools import cycle
 from numbers import Number
 from warnings import warn
-from multiprocessing import Process
+from threading import Thread
 
 import numpy as np
 
@@ -27,7 +27,7 @@ from ..utils import to_list
 
 # Decorators
 def detachable(func):
-    """ Run `func` in a daemon process without result return.
+    """ Run `func` in a daemon thread without result return.
 
     Note, the decorator intercept the `detach` argument from the `func`.
     """
@@ -36,9 +36,9 @@ def detachable(func):
         detach = kwargs.get('detach', False)
 
         if detach is True:
-            process = Process(target=func, args=args, kwargs=kwargs,
-                              daemon=True, name=f'daemon_for_{func.__qualname__}')
-            process.start()
+            thread = Thread(target=func, args=args, kwargs=kwargs,
+                            daemon=True, name=f'daemon_for_{func.__qualname__}')
+            thread.start()
             return None
 
         result = func(*args, **kwargs)
@@ -952,10 +952,10 @@ class Plot:
         If False, every time `plot` is called update config with provided keyword arguments, replacing older parameters.
         If True, fix plotter config as provided on initialization. Usefull, if one want to reuse this config on updates.
     detach : {True, False, 'save'}, default: False
-        Whether to use run `plot` in a daemon process.
-        If False, then don't use any daemon processes.
-        If True, then run :meth:`~.plot` in a daemon process.
-        If 'save', then run :meth:`~.save` (called from the :meth:`~.plot`) in a daemon process.
+        Whether to use run `plot` in a daemon thread.
+        If False, then don't use any daemon threads.
+        If True, then run :meth:`~.plot` in a daemon thread.
+        If 'save', then run :meth:`~.save` (called from the :meth:`~.plot`) in a daemon thread.
     kwargs :
         - For one of `image`, `histogram`, `curve`, `loss` methods of `Layer` (depending on chosen mode).
             Parameters and data nestedness levels must match if they are lists meant for differents subplots/layers.
@@ -1691,9 +1691,9 @@ class Plot:
 
         if savepath:
             if detach:
-                process = Process(target=self.figure.savefig, kwargs={'fname': savepath, **save_config},
-                                  daemon=True, name=f'daemon_for_{self.save.__qualname__}')
-                process.start()
+                thread = Thread(target=self.figure.savefig, kwargs={'fname': savepath, **save_config},
+                                daemon=True, name=f'daemon_for_{self.save.__qualname__}')
+                thread.start()
             else:
                 self.figure.savefig(fname=savepath, **save_config)
 

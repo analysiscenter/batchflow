@@ -31,7 +31,7 @@ dependencies = [
 [project.optional-dependencies]
 
 image = [
-    "pillow>=9.4,<11.0",
+    "pillow>=9.4,<13.0",
     "matplotlib>=3.7"
 ]
 
@@ -71,7 +71,7 @@ jupyter = [
 ]
 
 telegram = [
-    "pillow>=9.4,<11.0",
+    "pillow>=9.4,<13.0",
 ]
 
 safetensors = [
