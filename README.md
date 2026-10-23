@@ -28,12 +28,12 @@ Main features:
 ## Basic usage
 
 ```python
-my_workflow = my_dataset.pipeline()
+my_workflow = (my_dataset.pipeline()
               .load('/some/path')
               .do_something()
               .do_something_else()
               .some_additional_action()
-              .save('/to/other/path')
+              .save('/to/other/path'))
 ```
 The trick here is that all the processing actions are lazy. They are not executed until their results are needed, e.g. when you request a preprocessed batch:
 ```python
@@ -62,13 +62,13 @@ and call `train_model`. Of course, you can also choose a loss function, an optim
 ```python
 from batchflow.models.torch import ResNet34
 
-my_workflow = my_dataset.pipeline()
+my_workflow = (my_dataset.pipeline()
               .init_model('model', ResNet34, config={'loss': 'ce', 'classes': 10})
               .load('/some/path')
               .some_transform()
               .another_transform()
-              .train_model('ResNet34', inputs=B.images, targets=B.labels)
-              .run(BATCH_SIZE, shuffle=True)
+              .train_model('model', inputs=B.images, targets=B.labels)
+              .run(BATCH_SIZE, shuffle=True))
 ```
 
 For more advanced cases and detailed API see [the documentation](https://analysiscenter.github.io/batchflow/).
